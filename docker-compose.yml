@@ -1,0 +1,56 @@
+# ============================================
+# Plasma AI — Docker Compose (Full Stack)
+# ============================================
+
+services:
+  # ---- Database ----
+  db:
+    image: postgres:15
+    container_name: plasma_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-plasma}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-plasma_secure_dev_pass_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-plasma_ai}
+    ports:
+      - "6543:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ---- Redis (Auth Codes) ----
+  redis:
+    image: redis:alpine
+    container_name: plasma_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # ---- Backend (FastAPI) ----
+  backend:
+    build: ./backend
+    container_name: plasma_backend
+    restart: always
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    environment:
+      # Override to point at Docker service names
+      POSTGRES_SERVER: db
+      POSTGRES_PORT: 5432
+    ports:
+      - "8000:8000"
+
+  # ---- Frontend (Next.js) ----
+  frontend:
+    build: ./frontend
+    container_name: plasma_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
