@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
+        "http://65.109.226.208:3000",
+        "http://65.109.226.208",
         "https://plasmaos.uz",
     ]
     
