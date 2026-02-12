@@ -13,6 +13,7 @@ from sqlalchemy import text
 from app.api.endpoints import auth, proposals, tenders, users
 from app.core.config import settings
 from app.db.session import engine
+from app.models.all_models import Base
 
 
 @asynccontextmanager
@@ -27,6 +28,14 @@ async def lifespan(app: FastAPI):
         print("--- DB CONNECTION SUCCESS ---")
     except Exception as e:
         print(f"--- DB CONNECTION FAILED: {e} ---")
+    
+    # Auto-create tables if they don't exist
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print("--- TABLES CREATED/VERIFIED ---")
+    except Exception as e:
+        print(f"--- TABLE CREATION FAILED: {e} ---")
     
     yield  # App runs here
     

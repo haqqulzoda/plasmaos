@@ -8,6 +8,8 @@ No-password authentication flow:
 4. Frontend polls /verify to get JWT token
 """
 
+import logging
+import traceback
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -19,6 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import create_access_token
 from app.db.session import get_db
 from app.models.all_models import AuthSession, AuthSessionStatus, User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -67,37 +71,45 @@ async def init_auth_session(
     Creates a PENDING session with the provided 4-digit code.
     If code already exists, updates the existing session.
     """
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
-    
-    # Check if code already exists
-    result = await db.execute(
-        select(AuthSession).where(AuthSession.code == request.code)
-    )
-    existing_session = result.scalar_one_or_none()
-    
-    if existing_session:
-        # Update existing session
-        existing_session.ip_address = request.ip
-        existing_session.status = AuthSessionStatus.PENDING
-        existing_session.expires_at = expires_at
-        existing_session.user_id = None
-    else:
-        # Create new session
-        new_session = AuthSession(
+    try:
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+        
+        # Check if code already exists
+        result = await db.execute(
+            select(AuthSession).where(AuthSession.code == request.code)
+        )
+        existing_session = result.scalar_one_or_none()
+        
+        if existing_session:
+            # Update existing session
+            existing_session.ip_address = request.ip
+            existing_session.status = AuthSessionStatus.PENDING
+            existing_session.expires_at = expires_at
+            existing_session.user_id = None
+        else:
+            # Create new session
+            new_session = AuthSession(
+                code=request.code,
+                ip_address=request.ip,
+                status=AuthSessionStatus.PENDING,
+                expires_at=expires_at,
+            )
+            db.add(new_session)
+        
+        await db.commit()
+        
+        return AuthInitResponse(
             code=request.code,
-            ip_address=request.ip,
-            status=AuthSessionStatus.PENDING,
+            status="pending",
             expires_at=expires_at,
         )
-        db.add(new_session)
-    
-    await db.commit()
-    
-    return AuthInitResponse(
-        code=request.code,
-        status="pending",
-        expires_at=expires_at,
-    )
+    except Exception as e:
+        logger.error(f"AUTH INIT ERROR: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Auth init failed: {type(e).__name__}: {str(e)}",
+        )
 
 
 @router.post("/verify", response_model=AuthVerifyResponse)
