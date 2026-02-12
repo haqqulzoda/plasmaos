@@ -262,14 +262,15 @@ async def refresh_tenders(
     Returns count of new and updated tenders.
     """
     import traceback
-    from app.core.telegram import broadcast_new_tender
-    from app.models.all_models import User
     
     new_count = 0
     updated_count = 0
     new_tenders_data: list[dict] = []  # Track new tenders for notification
     
     try:
+        from app.core.telegram import broadcast_new_tender
+        from app.models.all_models import User
+        
         logger.info("Starting tender refresh from UzEx portal...")
         scraper = UzExScraper(headless=True, timeout=30000)
         scraped_tenders = await scraper.fetch_latest_tenders(limit=10)
