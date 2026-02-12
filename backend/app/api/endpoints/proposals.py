@@ -74,7 +74,7 @@ class PDFGenerateRequest(BaseModel):
 @router.post("/", response_model=ProposalResponse, status_code=status.HTTP_201_CREATED)
 async def create_proposal(
     proposal_data: ProposalCreate,
-    current_user: User = Depends(require_tier(SubscriptionTier.AGENT)),
+    current_user: User = Depends(require_tier(SubscriptionTier.SCOUT)),
     db: AsyncSession = Depends(get_db),
 ) -> ProposalResponse:
     """
