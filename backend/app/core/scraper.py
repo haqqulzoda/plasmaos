@@ -576,9 +576,10 @@ class UzExScraper:
     
     async def fetch_latest_tenders(self, limit: int = 20) -> list[ScrapedTender]:
         """
-        Fetch latest tenders from UzEx portal.
+        Fetch latest tenders from UzEx portal via direct API call.
         
-        Scrapes the main tender list and categorizes by keyword detection.
+        Uses the discovered JSON API at apietender.uzex.uz instead of 
+        Playwright browser scraping, making it reliable in Docker.
         
         Args:
             limit: Max tenders to return (default 20)
@@ -586,11 +587,95 @@ class UzExScraper:
         Returns:
             List of ScrapedTender objects with category assigned.
         """
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            _executor,
-            partial(self._sync_fetch_all_tenders, limit)
-        )
+        import httpx
+        
+        API_URL = "https://apietender.uzex.uz/api/common/TradeList"
+        
+        # Region name mapping (Russian -> English)
+        REGION_MAP = {
+            'ташкент': 'Tashkent',
+            'навои': 'Navoi',
+            'самарканд': 'Samarkand',
+            'бухар': 'Bukhara',
+            'ферган': 'Fergana',
+            'андижан': 'Andijan',
+            'наманган': 'Namangan',
+            'хорезм': 'Khorezm',
+            'сурхандар': 'Surkhandarya',
+            'кашкадар': 'Kashkadarya',
+            'джизак': 'Jizzakh',
+            'сырдар': 'Sirdarya',
+            'каракалпак': 'Karakalpakstan',
+        }
+        
+        tenders: list[ScrapedTender] = []
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    API_URL,
+                    json={"TypeId": 2, "From": 1, "To": limit, "System_Id": 0},
+                    headers={"Content-Type": "application/json"},
+                )
+                response.raise_for_status()
+                lots = response.json()
+            
+            logger.info(f"[API] Received {len(lots)} lots from TradeList API")
+            
+            for lot in lots:
+                try:
+                    lot_id = str(lot.get("id", ""))
+                    title = lot.get("name", "").strip()
+                    cost = float(lot.get("cost", 0) or 0)
+                    currency = lot.get("currency_codeabc", "UZS") or "UZS"
+                    
+                    # Parse deadline
+                    deadline = None
+                    end_date_str = lot.get("end_date")
+                    if end_date_str:
+                        try:
+                            deadline = datetime.fromisoformat(end_date_str).replace(tzinfo=timezone.utc)
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # Map region from Russian to English
+                    region_raw = lot.get("region_name", "") or ""
+                    region = None
+                    for ru_key, en_name in REGION_MAP.items():
+                        if ru_key in region_raw.lower():
+                            region = en_name
+                            break
+                    if not region and region_raw:
+                        region = region_raw  # Keep original if no mapping found
+                    
+                    # Detect category from title
+                    category = detect_category(title)
+                    
+                    source_url = f"{self.BASE_URL}/lot/{lot_id}"
+                    
+                    tender = ScrapedTender(
+                        external_id=lot_id,
+                        title=title,
+                        budget=cost,
+                        currency=currency,
+                        region=region,
+                        source_url=source_url,
+                        category=category,
+                        deadline=deadline,
+                    )
+                    tenders.append(tender)
+                    logger.info(f"[API] [{category}] {lot_id}: {title[:50]}...")
+                    
+                except Exception as e:
+                    logger.warning(f"[API] Failed to parse lot: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"[API] TradeList fetch failed: {e}")
+            raise
+        
+        logger.info(f"[API] Processed {len(tenders)} tenders")
+        return tenders
 
 
 def test_scraper():

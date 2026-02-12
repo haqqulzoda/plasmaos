@@ -445,77 +445,179 @@ async def seed_tenders(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
-    [DEV ONLY] Seed the database with dummy tenders for demo.
+    [DEV ONLY] Seed the database with realistic tenders for demo.
+    Skips tenders that already exist (by external_id).
     """
     now = datetime.now(timezone.utc)
     
     dummy_tenders = [
+        # === Construction (4) ===
         {
-            "id": uuid4(),
-            "external_id": "UZEX-2026-00145",
-            "source_url": "https://etender.uzex.uz/lot/145",
-            "title": "Repair of School #45 Roof",
-            "description": "Complete roof replacement for secondary school #45 including waterproofing, insulation, and drainage system installation.",
+            "external_id": "467201",
+            "source_url": "https://etender.uzex.uz/lot/467201",
+            "title": "45-sonli umumta'lim maktabi tomini ta'mirlash ishlari (kapital ta'mir)",
+            "description": "Tom qoplama materiallarini almashtirish, gidroizolyatsiya, issiqlik izolyatsiyasi va suv oqish tizimini o'rnatish.",
             "budget": 450_000_000.0,
             "currency": "UZS",
             "deadline": now + timedelta(days=14),
             "region": "Tashkent",
+            "category": "Construction",
             "status": TenderStatus.OPEN,
         },
         {
-            "id": uuid4(),
-            "external_id": "UZEX-2026-00238",
-            "source_url": "https://etender.uzex.uz/lot/238",
-            "title": "Supply of Desktop Computers (i5/16GB)",
-            "description": "Procurement of 50 desktop computers for regional tax office. Specs: Intel i5 12th gen, 16GB RAM, 512GB SSD, 24\" monitor.",
-            "budget": 120_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=7),
-            "region": "Samarkand",
-            "status": TenderStatus.OPEN,
-        },
-        {
-            "id": uuid4(),
-            "external_id": "UZEX-2026-00312",
-            "source_url": "https://etender.uzex.uz/lot/312",
-            "title": "Construction of Children's Playground",
-            "description": "Full construction of outdoor playground with safety flooring, swings, slides, and climbing structures for kindergarten #12.",
-            "budget": 800_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=21),
-            "region": "Bukhara",
-            "status": TenderStatus.OPEN,
-        },
-        {
-            "id": uuid4(),
-            "external_id": "UZEX-2026-00089",
-            "source_url": "https://etender.uzex.uz/lot/089",
-            "title": "Medical Equipment for District Hospital",
-            "description": "Supply of MRI machine, X-ray equipment, and ultrasound devices for district hospital modernization project.",
-            "budget": 2_500_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=30),
-            "region": "Fergana",
-            "status": TenderStatus.OPEN,
-        },
-        {
-            "id": uuid4(),
-            "external_id": "UZEX-2026-00401",
-            "source_url": "https://etender.uzex.uz/lot/401",
-            "title": "Road Repair Works - M39 Highway Section",
-            "description": "Asphalt resurfacing for 12km section of M39 highway including drainage improvements and road markings.",
+            "external_id": "467215",
+            "source_url": "https://etender.uzex.uz/lot/467215",
+            "title": "M39 avtomobil yo'lining 12 km qismini asfalt qoplama ta'mirlash ishlari",
+            "description": "Asfalt yuzasini yangilash, drenaj tizimini takomillashtirish va yo'l belgilarini chizish ishlari.",
             "budget": 1_200_000_000.0,
             "currency": "UZS",
             "deadline": now + timedelta(days=10),
             "region": "Navoi",
+            "category": "Construction",
+            "status": TenderStatus.OPEN,
+        },
+        {
+            "external_id": "467230",
+            "source_url": "https://etender.uzex.uz/lot/467230",
+            "title": "Bolalar bog'chasi №12 uchun o'yin maydonchasi qurilishi",
+            "description": "Xavfsizlik qoplamasi, arqonli tirmashish, sirpanish va atraktsionlarni o'z ichiga olgan to'liq qurilish ishlari.",
+            "budget": 800_000_000.0,
+            "currency": "UZS",
+            "deadline": now + timedelta(days=21),
+            "region": "Bukhara",
+            "category": "Construction",
+            "status": TenderStatus.OPEN,
+        },
+        {
+            "external_id": "467245",
+            "source_url": "https://etender.uzex.uz/lot/467245",
+            "title": "Tuman hokimligi binosi ichki va tashqi remont ishlari",
+            "description": "Bino ichki devorlarini suvash, bo'yash, pol yotqizish, tashqi fasadni yangilash va elektr tarmoqlarini almashtirish.",
+            "budget": 680_000_000.0,
+            "currency": "UZS",
+            "deadline": now + timedelta(days=18),
+            "region": "Kashkadarya",
+            "category": "Construction",
+            "status": TenderStatus.OPEN,
+        },
+        # === IT & Tech (3) ===
+        {
+            "external_id": "467260",
+            "source_url": "https://etender.uzex.uz/lot/467260",
+            "title": "Soliq boshqarmasi uchun 50 dona kompyuter ta'minoti (i5/16GB/512GB SSD)",
+            "description": "Intel Core i5 12-avlod, 16GB RAM, 512GB SSD, 24 dyuymli monitor va klaviatura/sichqoncha to'plami.",
+            "budget": 1_250_000_000.0,
+            "currency": "UZS",
+            "deadline": now + timedelta(days=7),
+            "region": "Samarkand",
+            "category": "IT & Tech",
+            "status": TenderStatus.OPEN,
+        },
+        {
+            "external_id": "467275",
+            "source_url": "https://etender.uzex.uz/lot/467275",
+            "title": "Server jihozlari va tarmoq infratuzilmasini modernizatsiya qilish",
+            "description": "2 dona rack server, UPS, tarmoq kommutatorlari, patch-panellar va optik tolali kabellar yetkazib berish.",
+            "budget": 890_000_000.0,
+            "currency": "UZS",
+            "deadline": now + timedelta(days=12),
+            "region": "Tashkent",
+            "category": "IT & Tech",
+            "status": TenderStatus.OPEN,
+        },
+        {
+            "external_id": "467290",
+            "source_url": "https://etender.uzex.uz/lot/467290",
+            "title": "Printer va kartridj ta'minoti — HP LaserJet Pro 30 dona",
+            "description": "HP LaserJet Pro MFP M428fdn printerlari va har biriga 3 tadan zaxira kartridjlar.",
+            "budget": 320_000_000.0,
+            "currency": "UZS",
+            "deadline": now + timedelta(days=9),
+            "region": "Fergana",
+            "category": "IT & Tech",
+            "status": TenderStatus.OPEN,
+        },
+        # === Medical (2) ===
+        {
+            "external_id": "467305",
+            "source_url": "https://etender.uzex.uz/lot/467305",
+            "title": "Tuman shifoxonasiga tibbiy asbob-uskunalar yetkazib berish",
+            "description": "MRT apparati, rentgen jihozi, UZI apparati va laboratoriya uskunalarini yetkazib berish va o'rnatish.",
+            "budget": 2_500_000_000.0,
+            "currency": "UZS",
+            "deadline": now + timedelta(days=30),
+            "region": "Fergana",
+            "category": "Medical",
+            "status": TenderStatus.OPEN,
+        },
+        {
+            "external_id": "467320",
+            "source_url": "https://etender.uzex.uz/lot/467320",
+            "title": "Dori-darmon vositalari va tibbiy sarf materiallarini xarid qilish",
+            "description": "Oilaviy poliklinikalar uchun yillik dori-darmon ta'minoti: antibiotiklar, og'riq qoldiruvchilar, shpritslar, maskalar.",
+            "budget": 380_000_000.0,
+            "currency": "UZS",
+            "deadline": now + timedelta(days=15),
+            "region": "Andijan",
+            "category": "Medical",
+            "status": TenderStatus.OPEN,
+        },
+        # === Office (2) ===
+        {
+            "external_id": "467335",
+            "source_url": "https://etender.uzex.uz/lot/467335",
+            "title": "Kantselyariya tovarlari va ofis jihozlari ta'minoti",
+            "description": "A4 qog'oz (500 qadoq), ruchka, papka, shtamp siyohi, steplyer va boshqa kantselyariya buyumlari.",
+            "budget": 85_000_000.0,
+            "currency": "UZS",
+            "deadline": now + timedelta(days=5),
+            "region": "Tashkent",
+            "category": "Office",
+            "status": TenderStatus.OPEN,
+        },
+        {
+            "external_id": "467350",
+            "source_url": "https://etender.uzex.uz/lot/467350",
+            "title": "Maktab partalarini va stullarini xarid qilish — 200 to'plam",
+            "description": "O'quvchi parta va stullari (200 to'plam), o'qituvchi stoli (15 dona), shkaflar (10 dona).",
+            "budget": 240_000_000.0,
+            "currency": "UZS",
+            "deadline": now + timedelta(days=20),
+            "region": "Namangan",
+            "category": "Office",
+            "status": TenderStatus.OPEN,
+        },
+        # === Other (1) ===
+        {
+            "external_id": "467365",
+            "source_url": "https://etender.uzex.uz/lot/467365",
+            "title": "Avtotransport xizmati — oylik reyslar uchun GMS yoqilg'i ta'minoti",
+            "description": "Davlat tashkiloti avtoparki uchun AI-92, AI-95 va dizel yoqilg'isi yillik ta'minot shartnomasi.",
+            "budget": 560_000_000.0,
+            "currency": "UZS",
+            "deadline": now + timedelta(days=25),
+            "region": "Jizzakh",
+            "category": "Other",
             "status": TenderStatus.OPEN,
         },
     ]
     
+    new_count = 0
+    skip_count = 0
+    
     for tender_data in dummy_tenders:
-        tender = Tender(**tender_data)
+        # Check if already exists
+        result = await db.execute(
+            select(Tender).where(Tender.external_id == tender_data["external_id"])
+        )
+        if result.scalar_one_or_none():
+            skip_count += 1
+            continue
+        
+        tender = Tender(id=uuid4(), **tender_data)
         db.add(tender)
+        new_count += 1
     
     await db.commit()
     
-    return {"message": f"Seeded {len(dummy_tenders)} tenders successfully"}
+    return {"message": f"Seeded {new_count} new tenders ({skip_count} already existed)"}
