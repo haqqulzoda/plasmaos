@@ -28,6 +28,7 @@ httpx>=0.27.0
 
 # Telegram Bot
 aiogram>=3.4.0
+python-telegram-bot>=21.0
 
 # Production
 python-multipart>=0.0.12
