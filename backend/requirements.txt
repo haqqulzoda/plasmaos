@@ -22,5 +22,8 @@ reportlab>=4.0
 # AI Integration
 google-generativeai>=0.8.0
 
+# Web Scraping
+playwright>=1.40.0
+
 # Production
 python-multipart>=0.0.12
