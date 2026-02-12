@@ -360,9 +360,11 @@ async def refresh_tenders(
     except Exception as e:
         error_tb = traceback.format_exc()
         logger.error(f"Refresh failed: {e}\n{error_tb}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Portal Unreachable: {type(e).__name__}: {str(e)}",
+        return RefreshResponse(
+            status="partial",
+            new_count=0,
+            updated_count=0,
+            message=f"Portal temporarily unavailable. Existing tenders are still shown. ({type(e).__name__})",
         )
 
 
