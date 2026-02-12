@@ -11,11 +11,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir uvicorn gunicorn
 
-# 2. Copy application code
+# 2. Ensure Playwright browsers match the installed Python package
+RUN playwright install chromium
+
+# 3. Copy application code
 COPY . .
 
-# 3. Expose port
+# 4. Expose port
 EXPOSE 8000
 
-# 4. Run the server
+# 5. Run the server
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
