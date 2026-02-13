@@ -2,14 +2,14 @@
 Plasma AI - Telegram Notification Service
 
 Sends real-time alerts for new tenders to users with Telegram connected.
-Uses python-telegram-bot for async message sending.
+Uses python-telegram-bot for async message sending with InlineKeyboard buttons.
 """
 
 import asyncio
 import logging
 from typing import Optional
 
-from telegram import Bot
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
 from app.core.config import settings
@@ -37,7 +37,7 @@ async def send_tender_alert(
     region: Optional[str] = None,
 ) -> bool:
     """
-    Send a new tender alert to a Telegram user.
+    Send a new tender alert to a Telegram user with interactive buttons.
     
     Args:
         chat_id: User's Telegram chat ID
@@ -70,9 +70,17 @@ async def send_tender_alert(
     if region:
         message += f"📍 *Region:* {region}\n"
     
-    # Add cockpit link (localhost for now)
-    cockpit_url = f"http://localhost:3000/dashboard/tenders/{tender_id}"
-    message += f"\n🔗 [Open in PlasmaOS]({cockpit_url})"
+    # Inline keyboard with action buttons
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            "⚡ Generate Draft Proposal",
+            callback_data=f"gen_proposal:{tender_id}",
+        )],
+        [InlineKeyboardButton(
+            "🔗 Open in PlasmaOS",
+            url=f"http://localhost:3000/dashboard/tenders",
+        )],
+    ])
     
     try:
         await bot.send_message(
@@ -80,6 +88,7 @@ async def send_tender_alert(
             text=message,
             parse_mode="Markdown",
             disable_web_page_preview=True,
+            reply_markup=keyboard,
         )
         logger.info(f"Telegram alert sent to {chat_id} for tender {tender_id}")
         return True
