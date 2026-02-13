@@ -78,7 +78,7 @@ async def send_tender_alert(
         )],
         [InlineKeyboardButton(
             "🔗 Open in PlasmaOS",
-            url=f"http://localhost:3000/dashboard/tenders",
+            url=f"http://65.109.226.208:3000/dashboard/tenders",
         )],
     ])
     
