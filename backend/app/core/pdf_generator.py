@@ -2,22 +2,40 @@
 Plasma AI - Quick PDF Generator
 
 Standalone PDF generator for Telegram bot one-click proposal generation.
-Uses reportlab to create a professional Commercial Proposal PDF.
+Uses reportlab with DejaVu Sans font for full Cyrillic/Unicode support.
 """
 
 import io
 from datetime import datetime
+from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     Paragraph,
     SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
+)
+
+# ── Register DejaVu Sans (Cyrillic-capable Unicode font) ──
+FONTS_DIR = Path(__file__).resolve().parent.parent / "fonts"
+
+pdfmetrics.registerFont(TTFont("DejaVu", str(FONTS_DIR / "DejaVuSans.ttf")))
+pdfmetrics.registerFont(TTFont("DejaVu-Bold", str(FONTS_DIR / "DejaVuSans-Bold.ttf")))
+
+# Tell ReportLab to use DejaVu-Bold when <b> tags are used inside DejaVu
+pdfmetrics.registerFontFamily(
+    "DejaVu",
+    normal="DejaVu",
+    bold="DejaVu-Bold",
+    italic="DejaVu",       # fallback to regular (no italic bundled)
+    boldItalic="DejaVu-Bold",
 )
 
 
@@ -69,10 +87,11 @@ def generate_quick_proposal_pdf(
     
     styles = getSampleStyleSheet()
     
-    # Custom styles
+    # ── Custom styles (all using DejaVu for Cyrillic support) ──
     title_style = ParagraphStyle(
         "KPTitle",
         parent=styles["Heading1"],
+        fontName="DejaVu-Bold",
         fontSize=16,
         spaceAfter=20,
         alignment=1,  # Center
@@ -82,6 +101,7 @@ def generate_quick_proposal_pdf(
     heading_style = ParagraphStyle(
         "KPHeading",
         parent=styles["Heading2"],
+        fontName="DejaVu-Bold",
         fontSize=12,
         spaceBefore=15,
         spaceAfter=8,
@@ -91,6 +111,7 @@ def generate_quick_proposal_pdf(
     body_style = ParagraphStyle(
         "KPBody",
         parent=styles["Normal"],
+        fontName="DejaVu",
         fontSize=10,
         leading=14,
         spaceAfter=6,
@@ -99,6 +120,7 @@ def generate_quick_proposal_pdf(
     small_style = ParagraphStyle(
         "KPSmall",
         parent=styles["Normal"],
+        fontName="DejaVu",
         fontSize=8,
         leading=11,
         textColor=colors.grey,
@@ -109,7 +131,7 @@ def generate_quick_proposal_pdf(
     
     # ── Header ──
     elements.append(Paragraph("КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ", title_style))
-    elements.append(Paragraph(f"(Commercial Proposal)", small_style))
+    elements.append(Paragraph("(Commercial Proposal)", small_style))
     elements.append(Spacer(1, 10))
     
     # ── Date & Company Info ──
@@ -121,6 +143,7 @@ def generate_quick_proposal_pdf(
     
     header_table = Table(header_data, colWidths=[8 * cm, 9 * cm])
     header_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "DejaVu"),
         ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#333333")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -171,10 +194,11 @@ def generate_quick_proposal_pdf(
             # Header row
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1a1a2e")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "DejaVu-Bold"),
             ("FONTSIZE", (0, 0), (-1, 0), 9),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("ALIGN", (0, 0), (-1, 0), "CENTER"),
             # Body rows
+            ("FONTNAME", (0, 1), (-1, -1), "DejaVu"),
             ("FONTSIZE", (0, 1), (-1, -1), 8),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, 1), (0, -1), "CENTER"),
@@ -219,6 +243,7 @@ def generate_quick_proposal_pdf(
     ]
     sig_table = Table(sig_data, colWidths=[10 * cm, 6 * cm])
     sig_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "DejaVu"),
         ("FONTSIZE", (0, 0), (-1, -1), 10),
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
