@@ -20,7 +20,30 @@ _gemini_configured = False
 # Gemini model configuration
 MODEL_NAME = "gemini-3-flash-preview"
 
-TENDER_ANALYSIS_PROMPT = """You are an expert Tender Officer analyzing technical task documents.
+# Company context builder
+def _build_company_context(company_context: dict[str, str] | None = None) -> str:
+    """Build company persona section for AI prompts."""
+    if not company_context:
+        return "You are an Expert Consultant analyzing technical task documents."
+    
+    name = company_context.get("company_name", "")
+    services = company_context.get("core_services", "")
+    experience = company_context.get("past_experience", "")
+    
+    if not name:
+        return "You are an Expert Consultant analyzing technical task documents."
+    
+    parts = [f"You are the Lead Proposal Writer for {name}."]
+    if services:
+        parts.append(f"Your company specializes in: {services}.")
+    if experience:
+        parts.append(f"Key qualifications and past experience: {experience}.")
+    parts.append("Use this context to write relevant, company-specific analysis.")
+    
+    return " ".join(parts)
+
+
+TENDER_ANALYSIS_PROMPT = """{company_persona}
 The document may be in Uzbek (Cyrillic or Latin), Russian, or English.
 
 Analyze the following tender technical task text and extract structured information.
@@ -61,7 +84,7 @@ TEXT TO ANALYZE:
 Return ONLY the JSON object, nothing else."""
 
 
-def analyze_tender_text(text: str) -> dict[str, Any]:
+def analyze_tender_text(text: str, company_context: dict[str, str] | None = None) -> dict[str, Any]:
     """
     Analyze tender document text using Gemini AI.
     
@@ -117,7 +140,8 @@ def analyze_tender_text(text: str) -> dict[str, Any]:
             logger.warning(f"Text truncated from {len(text)} to {max_chars} chars")
             text = text[:max_chars]
         
-        prompt = TENDER_ANALYSIS_PROMPT.format(text=text)
+        company_persona = _build_company_context(company_context)
+        prompt = TENDER_ANALYSIS_PROMPT.format(text=text, company_persona=company_persona)
         
         logger.info(f"Sending {len(text)} chars to Gemini {MODEL_NAME}")
         response = model.generate_content(prompt)
@@ -171,7 +195,7 @@ def analyze_tender_text(text: str) -> dict[str, Any]:
         }
 
 
-async def analyze_tender_text_async(text: str) -> dict[str, Any]:
+async def analyze_tender_text_async(text: str, company_context: dict[str, str] | None = None) -> dict[str, Any]:
     """
     Async wrapper for analyze_tender_text.
     
@@ -181,11 +205,12 @@ async def analyze_tender_text_async(text: str) -> dict[str, Any]:
     from functools import partial
     
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, partial(analyze_tender_text, text))
+    return await loop.run_in_executor(None, partial(analyze_tender_text, text, company_context))
 
 
 # Prompt for file-based analysis (handles scanned PDFs)
-FILE_ANALYSIS_PROMPT = """You are an expert Tender Officer analyzing a Technical Task document.
+FILE_ANALYSIS_PROMPT = """{company_persona}
+You are analyzing a Technical Task document.
 This document may be a SCANNED IMAGE or a text-based PDF. Use your vision capabilities to read it.
 The document may be in Uzbek (Cyrillic or Latin), Russian, or English.
 
@@ -222,7 +247,7 @@ Rules:
 Return ONLY the JSON object, nothing else."""
 
 
-def analyze_tender_file(file_path: str) -> dict[str, Any]:
+def analyze_tender_file(file_path: str, company_context: dict[str, str] | None = None) -> dict[str, Any]:
     """
     Analyze tender document by uploading directly to Gemini.
     
@@ -271,7 +296,9 @@ def analyze_tender_file(file_path: str) -> dict[str, Any]:
         )
         
         print("[AI] Sending to Gemini for analysis...")
-        response = model.generate_content([uploaded_file, FILE_ANALYSIS_PROMPT])
+        company_persona = _build_company_context(company_context)
+        file_prompt = FILE_ANALYSIS_PROMPT.format(company_persona=company_persona)
+        response = model.generate_content([uploaded_file, file_prompt])
         
         # Extract JSON from response
         response_text = response.text.strip()
@@ -329,7 +356,7 @@ def analyze_tender_file(file_path: str) -> dict[str, Any]:
         }
 
 
-async def analyze_tender_file_async(file_path: str) -> dict[str, Any]:
+async def analyze_tender_file_async(file_path: str, company_context: dict[str, str] | None = None) -> dict[str, Any]:
     """
     Async wrapper for analyze_tender_file.
     
@@ -339,5 +366,5 @@ async def analyze_tender_file_async(file_path: str) -> dict[str, Any]:
     from functools import partial
     
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, partial(analyze_tender_file, file_path))
+    return await loop.run_in_executor(None, partial(analyze_tender_file, file_path, company_context))
 

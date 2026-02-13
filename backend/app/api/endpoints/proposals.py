@@ -422,9 +422,16 @@ async def ai_draft_proposal(
             temp_pdf_path = f.name
         print(f"[AI-DRAFT] Saved to temp file: {temp_pdf_path}")
         
+        # Build company context from user profile
+        company_context = {
+            "company_name": current_user.company_name or "",
+            "core_services": getattr(current_user, 'core_services', '') or "",
+            "past_experience": getattr(current_user, 'past_experience', '') or "",
+        }
+        
         # Analyze with Gemini AI (direct file upload - handles scanned PDFs!)
         from app.core.ai import analyze_tender_file_async
-        ai_result = await analyze_tender_file_async(temp_pdf_path)
+        ai_result = await analyze_tender_file_async(temp_pdf_path, company_context)
         
     finally:
         # Cleanup temp file
@@ -590,10 +597,17 @@ async def upload_tender_tz(
     await db.commit()
     await db.refresh(doc)
     
+    # Build company context from user profile
+    company_context = {
+        "company_name": current_user.company_name or "",
+        "core_services": getattr(current_user, 'core_services', '') or "",
+        "past_experience": getattr(current_user, 'past_experience', '') or "",
+    }
+    
     # Analyze with Gemini AI (direct file upload - handles scanned PDFs!)
     print(f"[UPLOAD-TZ] Analyzing file with Gemini: {file_path}")
     from app.core.ai import analyze_tender_file_async
-    ai_result = await analyze_tender_file_async(str(file_path))
+    ai_result = await analyze_tender_file_async(str(file_path), company_context)
     
     # Calculate estimates based on AI analysis
     tender_budget = proposal.tender.budget
