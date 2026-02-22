@@ -291,7 +291,7 @@ async def download_document(
         logger.error(f"Document download failed for {doc_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
-@router.get("/", response_model=list[TenderResponse])
+@router.get("", response_model=list[TenderResponse])
 async def list_tenders(
     db: AsyncSession = Depends(get_db),
 ) -> list[TenderResponse]:

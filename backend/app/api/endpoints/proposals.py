@@ -125,7 +125,7 @@ async def create_proposal(
     return ProposalResponse.model_validate(proposal)
 
 
-@router.get("/", response_model=list[ProposalWithTenderResponse])
+@router.get("", response_model=list[ProposalWithTenderResponse])
 async def list_proposals(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
