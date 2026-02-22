@@ -3,14 +3,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Radar, Clock, MapPin, Banknote, FileText, Loader2, AlertCircle, RefreshCw, CheckCircle, Filter, ShieldCheck } from 'lucide-react';
+import { Radar, Clock, MapPin, Banknote, FileText, Loader2, AlertCircle, RefreshCw, CheckCircle, Filter, ShieldCheck, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
 import { AxiosError } from 'axios';
 
 interface Tender {
     id: string;
     external_id: string;
-    source_url: string;
+    source_url: string | null;
     title: string;
     description: string | null;
     budget: number;
@@ -316,6 +316,7 @@ export default function TendersPage() {
                                     <th className="py-4 px-4 font-medium w-[140px] text-left">Budget</th>
                                     <th className="py-4 px-4 font-medium w-[120px] text-left">Region</th>
                                     <th className="py-4 px-4 font-medium w-[150px] text-left">Deadline</th>
+                                    <th className="py-4 px-4 font-medium w-[90px] text-left">Source</th>
                                     <th className="py-4 px-4 font-medium w-[290px] text-right">Action</th>
                                 </tr>
                             </thead>
@@ -381,6 +382,24 @@ export default function TendersPage() {
                                                         {formatDeadline(tender.deadline)}
                                                     </span>
                                                 </div>
+                                            </td>
+
+                                            {/* Source Column */}
+                                            <td className="py-4 px-4 whitespace-nowrap w-[90px]">
+                                                {tender.source_url ? (
+                                                    <a
+                                                        href={tender.source_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        aria-label="Open source tender page"
+                                                        className="inline-flex items-center gap-1.5 text-slate-500 hover:text-indigo-400 transition-colors"
+                                                    >
+                                                        <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                                                        <span className="hidden sm:inline text-xs font-medium">View</span>
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-zinc-600 text-sm">-</span>
+                                                )}
                                             </td>
 
                                             {/* Action Column */}

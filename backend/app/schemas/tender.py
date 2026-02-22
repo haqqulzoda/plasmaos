@@ -28,7 +28,7 @@ class TenderResponse(TenderBase):
     """Response schema for tender details."""
     id: UUID
     external_id: str
-    source_url: str
+    source_url: str | None = None
     compiled_master_text: str | None = None
     created_at: datetime
     

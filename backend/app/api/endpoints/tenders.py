@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from app.core.ai_analyzer import GapAnalysisResult, analyze_tender_gaps
 from app.core.parser import process_tender_document
@@ -74,6 +75,13 @@ class AnalyzeTenderResponse(BaseModel):
 
     analysis_id: str
     analysis: GapAnalysisResult
+
+
+def _serialize_tender(tender: Tender) -> TenderResponse:
+    payload = TenderResponse.model_validate(tender)
+    if payload.source_url is not None and not payload.source_url.strip():
+        payload.source_url = None
+    return payload
 
 
 @router.post("/{tender_id}/analyze", response_model=AnalyzeTenderResponse)
@@ -302,12 +310,29 @@ async def list_tenders(
     """
     result = await db.execute(
         select(Tender)
+        .options(
+            load_only(
+                Tender.id,
+                Tender.external_id,
+                Tender.source_url,
+                Tender.title,
+                Tender.description,
+                Tender.budget,
+                Tender.currency,
+                Tender.deadline,
+                Tender.region,
+                Tender.status,
+                Tender.category,
+                Tender.compiled_master_text,
+                Tender.created_at,
+            )
+        )
         .order_by(Tender.created_at.desc())
         .limit(20)
     )
     tenders = result.scalars().all()
     
-    return [TenderResponse.model_validate(t) for t in tenders]
+    return [_serialize_tender(t) for t in tenders]
 
 
 @router.get("/{tender_id}", response_model=TenderResponse)
@@ -319,7 +344,25 @@ async def get_tender(
     Get a specific tender by ID.
     """
     result = await db.execute(
-        select(Tender).where(Tender.id == tender_id)
+        select(Tender)
+        .options(
+            load_only(
+                Tender.id,
+                Tender.external_id,
+                Tender.source_url,
+                Tender.title,
+                Tender.description,
+                Tender.budget,
+                Tender.currency,
+                Tender.deadline,
+                Tender.region,
+                Tender.status,
+                Tender.category,
+                Tender.compiled_master_text,
+                Tender.created_at,
+            )
+        )
+        .where(Tender.id == tender_id)
     )
     tender = result.scalar_one_or_none()
     
@@ -329,7 +372,7 @@ async def get_tender(
             detail="Tender not found",
         )
     
-    return TenderResponse.model_validate(tender)
+    return _serialize_tender(tender)
 
 
 @router.post("/refresh", response_model=RefreshResponse)
