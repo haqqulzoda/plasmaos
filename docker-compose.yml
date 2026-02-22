@@ -40,7 +40,7 @@ services:
       POSTGRES_SERVER: db
       POSTGRES_PORT: 5432
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
   # ---- Frontend (Next.js) ----
   frontend:
@@ -53,7 +53,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
   # ---- Telegram Bot ----
   bot:
