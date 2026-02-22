@@ -22,3 +22,13 @@ EXPOSE 8000
 
 # 5. Run the server
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    libtesseract-dev \
+    tesseract-ocr-rus \
+    tesseract-ocr-uzb \
+    poppler-utils \
+    unrar \
+    && rm -rf /var/lib/apt/lists/*

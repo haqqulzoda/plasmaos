@@ -6,15 +6,21 @@ Public tender feed for the Autonomous Tender Officer.
 
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Any
+from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ai_analyzer import GapAnalysisResult, analyze_tender_gaps
+from app.core.parser import process_tender_document
 from app.core.scraper import UzExScraper
 from app.db.session import get_db
+from app.models.audit import TenderAnalysis
 from app.models.all_models import Tender, TenderDocument, TenderStatus
 from app.schemas.tender import TenderResponse
 
@@ -61,6 +67,85 @@ class TestScrapeResponse(BaseModel):
     documents: list[dict]
     count: int
     message: str
+
+
+class AnalyzeTenderResponse(BaseModel):
+    """Response payload for analyze-tender endpoint."""
+
+    analysis_id: str
+    analysis: GapAnalysisResult
+
+
+@router.post("/{tender_id}/analyze", response_model=AnalyzeTenderResponse)
+async def analyze_tender(
+    tender_id: UUID,
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    Analyze pre-scraped tender text and persist analysis result.
+    """
+    try:
+        result = await session.execute(select(Tender).where(Tender.id == tender_id))
+        tender = result.scalar_one_or_none()
+    except SQLAlchemyError as exc:
+        logger.exception("Failed to query tender record")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database query failed: {exc}",
+        ) from exc
+
+    if tender is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
+
+    tender_text = (tender.compiled_master_text or "").strip()
+    if not tender_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tender has no compiled master text. Documents may not be parsed yet.",
+        )
+
+    try:
+        company_profile_dict: dict[str, Any] = {
+            "name": "Extracted Company",
+        }
+        analysis = await analyze_tender_gaps(
+            tender_text=tender_text,
+            company_profile=company_profile_dict,
+        )
+
+        company_name = str(company_profile_dict.get("name") or "Extracted Company")
+        new_analysis = TenderAnalysis(
+            tender_id=tender.id,
+            tender_file_name=f"tender_{tender.external_id}",
+            company_name=company_name,
+            raw_extracted_text=tender_text,
+            analysis_json=analysis.model_dump(mode="json"),
+        )
+        session.add(new_analysis)
+        await session.commit()
+        await session.refresh(new_analysis)
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        logger.exception("Database integrity/persistence failure during tender analysis")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database write failed: {exc}",
+        ) from exc
+    except Exception as exc:
+        await session.rollback()
+        logger.exception("AI analysis failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI analysis failed: {exc}",
+        ) from exc
+
+    return {
+        "analysis_id": str(new_analysis.id),
+        "analysis": analysis,
+    }
 
 
 @router.post("/test-scrape", response_model=TestScrapeResponse)
@@ -391,6 +476,20 @@ async def sync_tender_documents(
             detail="Tender not found",
         )
     
+    def extract_file_path(file_url: str) -> str:
+        """
+        Extract downloadable file path from UzEx URLs.
+
+        Examples:
+        - https://.../DownloadFile?path=/files/2025/..../doc.pdf -> /files/...
+        - /files/2025/.../doc.pdf -> /files/...
+        """
+        parsed = urlparse(file_url)
+        query_path = parse_qs(parsed.query).get("path", [None])[0]
+        if query_path:
+            return unquote(query_path)
+        return file_url
+
     try:
         # Scrape documents from source page
         scraper = UzExScraper(headless=True, timeout=30000)
@@ -401,12 +500,20 @@ async def sync_tender_documents(
             select(TenderDocument).where(TenderDocument.tender_id == tender_id)
         )
         existing_docs = existing_result.scalars().all()
-        existing_urls = {doc.file_url for doc in existing_docs}
+        existing_by_url = {doc.file_url: doc for doc in existing_docs}
         
         # Add new documents
         new_count = 0
+        parsed_count = 0
+        parsed_text_by_url: dict[str, str] = {
+            doc.file_url: doc.parsed_text.strip()
+            for doc in existing_docs
+            if doc.parsed_text and doc.parsed_text.strip()
+        }
+
         for doc_data in scraped_docs:
-            if doc_data["file_url"] not in existing_urls:
+            doc = existing_by_url.get(doc_data["file_url"])
+            if not doc:
                 new_doc = TenderDocument(
                     id=uuid4(),
                     tender_id=tender_id,
@@ -414,7 +521,36 @@ async def sync_tender_documents(
                     file_type=doc_data["file_type"],
                 )
                 db.add(new_doc)
+                doc = new_doc
+                existing_by_url[doc_data["file_url"]] = doc
                 new_count += 1
+
+            # Download and parse every discovered document so master text stays current.
+            file_path = extract_file_path(doc.file_url)
+            try:
+                file_bytes, filename = await scraper.download_file(
+                    tender_url=tender.source_url,
+                    file_path=file_path,
+                )
+                extracted_text = await process_tender_document(
+                    source=file_bytes,
+                    filename=filename,
+                )
+                if extracted_text.strip():
+                    doc.parsed_text = extracted_text
+                    parsed_count += 1
+                    parsed_text_by_url[doc.file_url] = f"[{filename}]\n{extracted_text.strip()}"
+            except Exception as parse_exc:
+                logger.warning(
+                    "Failed to parse tender document '%s' for tender %s: %s",
+                    doc.file_url,
+                    tender_id,
+                    parse_exc,
+                )
+                continue
+
+        compiled_chunks = [text for text in parsed_text_by_url.values() if text.strip()]
+        tender.compiled_master_text = "\n\n".join(compiled_chunks).strip() if compiled_chunks else None
         
         await db.commit()
         
@@ -428,7 +564,10 @@ async def sync_tender_documents(
             status="success",
             documents=[TenderDocumentResponse.model_validate(d) for d in all_docs],
             new_count=new_count,
-            message=f"Synced {new_count} new documents, {len(all_docs)} total",
+            message=(
+                f"Synced {new_count} new documents, parsed {parsed_count} documents, "
+                f"{len(all_docs)} total"
+            ),
         )
         
     except Exception as e:

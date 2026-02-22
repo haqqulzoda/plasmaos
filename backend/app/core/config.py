@@ -48,7 +48,8 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str
     TELEGRAM_BOT_TOKEN: str
-    GOOGLE_API_KEY: str | None = None  # Optional AI integration
+    GEMINI_API_KEY: str | None = None  # Preferred key for compliance analyzer
+    GOOGLE_API_KEY: str | None = None  # Legacy alias used by older AI modules
     
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = [

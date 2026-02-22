@@ -13,6 +13,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from app.core.config import settings
+from app.models import audit as audit_models  # noqa: F401
 from bot.handlers import router
 
 # Configure logging

@@ -5,7 +5,7 @@
 services:
   # ---- Database ----
   db:
-    image: postgres:15
+    image: postgres:16
     container_name: plasma_db
     restart: always
     environment:
@@ -44,7 +44,10 @@ services:
 
   # ---- Frontend (Next.js) ----
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
     container_name: plasma_frontend
     restart: always
     depends_on:

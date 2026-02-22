@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Radar, Clock, MapPin, Banknote, FileText, Loader2, AlertCircle, ExternalLink, RefreshCw, CheckCircle, Filter } from 'lucide-react';
+import { Radar, Clock, MapPin, Banknote, FileText, Loader2, AlertCircle, RefreshCw, CheckCircle, Filter, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { AxiosError } from 'axios';
 
@@ -241,8 +241,8 @@ export default function TendersPage() {
                             key={cat}
                             onClick={() => setCategoryFilter(cat)}
                             className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-all ${categoryFilter === cat
-                                    ? 'bg-indigo-600 border-indigo-500 text-white'
-                                    : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+                                ? 'bg-indigo-600 border-indigo-500 text-white'
+                                : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
                                 }`}
                         >
                             {cat}
@@ -307,16 +307,16 @@ export default function TendersPage() {
                     transition={{ duration: 0.5, delay: 0.1 }}
                     className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden"
                 >
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                                    <th className="text-left text-zinc-400 font-medium px-6 py-4">Tender</th>
-                                    <th className="text-left text-zinc-400 font-medium px-6 py-4">Category</th>
-                                    <th className="text-left text-zinc-400 font-medium px-6 py-4">Budget</th>
-                                    <th className="text-left text-zinc-400 font-medium px-6 py-4">Region</th>
-                                    <th className="text-left text-zinc-400 font-medium px-6 py-4">Deadline</th>
-                                    <th className="text-right text-zinc-400 font-medium px-6 py-4">Action</th>
+                    <div className="w-full overflow-x-auto rounded-lg">
+                        <table className="w-full text-left border-collapse table-fixed">
+                            <thead className="bg-gray-900/50 border-b border-gray-800 text-gray-400 text-sm">
+                                <tr>
+                                    <th className="py-4 px-4 font-medium w-full text-left">Tender</th>
+                                    <th className="py-4 px-4 font-medium w-[110px] text-left">Category</th>
+                                    <th className="py-4 px-4 font-medium w-[140px] text-left">Budget</th>
+                                    <th className="py-4 px-4 font-medium w-[120px] text-left">Region</th>
+                                    <th className="py-4 px-4 font-medium w-[150px] text-left">Deadline</th>
+                                    <th className="py-4 px-4 font-medium w-[290px] text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -330,47 +330,32 @@ export default function TendersPage() {
                                             transition={{ delay: index * 0.05 }}
                                             className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors group"
                                         >
-                                            {/* Title */}
-                                            <td className="px-6 py-4 max-w-md">
-                                                <div className="flex items-start gap-3">
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-white font-semibold truncate group-hover:text-indigo-400 transition-colors">
-                                                            {tender.title}
-                                                        </p>
-                                                        <div className="flex items-center gap-2 mt-1">
-                                                            <span className="text-xs text-zinc-500 font-mono">{tender.external_id}</span>
-                                                            <a
-                                                                href={tender.source_url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-zinc-500 hover:text-indigo-400 transition-colors"
-                                                            >
-                                                                <ExternalLink className="w-3 h-3" />
-                                                            </a>
-                                                        </div>
-                                                    </div>
+                                            {/* Title Column */}
+                                            <td className="py-4 px-4 w-full max-w-0">
+                                                <div className="truncate block font-medium text-gray-200">
+                                                    {tender.title}
                                                 </div>
                                             </td>
 
-                                            {/* Category Badge */}
-                                            <td className="px-6 py-4">
+                                            {/* Category Column */}
+                                            <td className="py-4 px-4 whitespace-nowrap w-[130px]">
                                                 <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
                                                     {tender.category}
                                                 </span>
                                             </td>
 
-                                            {/* Budget */}
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    <Banknote className="w-4 h-4 text-green-400" />
-                                                    <span className="text-green-400 font-semibold">
+                                            {/* Budget Column */}
+                                            <td className="py-4 px-4 whitespace-nowrap w-[140px]">
+                                                <div className="flex items-center gap-2 whitespace-nowrap">
+                                                    <Banknote className="w-4 h-4 text-green-400 flex-shrink-0" />
+                                                    <span className="text-green-400 font-semibold whitespace-nowrap">
                                                         {formatBudget(tender.budget, tender.currency)}
                                                     </span>
                                                 </div>
                                             </td>
 
-                                            {/* Region */}
-                                            <td className="px-6 py-4">
+                                            {/* Region Column */}
+                                            <td className="py-4 px-4 whitespace-nowrap w-[120px]">
                                                 {tender.region ? (
                                                     <span className="inline-flex items-center gap-1 px-3 py-1 bg-zinc-800 rounded-full text-sm text-zinc-300">
                                                         <MapPin className="w-3 h-3" />
@@ -381,14 +366,14 @@ export default function TendersPage() {
                                                 )}
                                             </td>
 
-                                            {/* Deadline */}
-                                            <td className="px-6 py-4">
+                                            {/* Deadline Column */}
+                                            <td className="py-4 px-4 whitespace-nowrap w-[150px] text-gray-300 text-sm">
                                                 <div
-                                                    className={`flex items-center gap-2 ${isPassed(tender.deadline)
-                                                            ? 'text-zinc-500'
-                                                            : isUrgent(tender.deadline)
-                                                                ? 'text-red-400'
-                                                                : 'text-zinc-300'
+                                                    className={`flex items-center gap-2 whitespace-nowrap ${isPassed(tender.deadline)
+                                                        ? 'text-zinc-500'
+                                                        : isUrgent(tender.deadline)
+                                                            ? 'text-red-400'
+                                                            : 'text-zinc-300'
                                                         }`}
                                                 >
                                                     <Clock className="w-4 h-4" />
@@ -398,20 +383,32 @@ export default function TendersPage() {
                                                 </div>
                                             </td>
 
-                                            {/* Action */}
-                                            <td className="px-6 py-4 text-right">
-                                                <button
-                                                    onClick={() => handleDraftProposal(tender)}
-                                                    disabled={isPassed(tender.deadline) || draftingId === tender.id}
-                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-                                                >
-                                                    {draftingId === tender.id ? (
-                                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                                    ) : (
-                                                        <FileText className="w-4 h-4" />
-                                                    )}
-                                                    Draft Proposal
-                                                </button>
+                                            {/* Action Column */}
+                                            <td className="py-4 px-4 whitespace-nowrap text-right w-[290px]">
+                                                <div className="flex items-center justify-end gap-3">
+                                                    {/* Secondary Action: Compliance (Sovereign Shield) */}
+                                                    <button
+                                                        onClick={() => router.push(`/dashboard/tenders/${tender.id}/compliance`)}
+                                                        className="inline-flex min-w-[148px] whitespace-nowrap flex-shrink-0 items-center justify-center gap-2 h-10 px-4 rounded-lg border border-purple-500/20 bg-purple-500/10 text-purple-300 text-sm font-medium transition-all duration-200 hover:bg-purple-500/20 hover:border-purple-500/40 hover:shadow-[0_0_15px_rgba(168,85,247,0.15)]"
+                                                    >
+                                                        <ShieldCheck className="w-4 h-4 flex-shrink-0" />
+                                                        <span>Compliance</span>
+                                                    </button>
+
+                                                    {/* Primary Action: Draft Proposal */}
+                                                    <button
+                                                        onClick={() => handleDraftProposal(tender)}
+                                                        disabled={isPassed(tender.deadline) || draftingId === tender.id}
+                                                        className="inline-flex min-w-[148px] whitespace-nowrap flex-shrink-0 items-center justify-center gap-2 h-10 px-4 rounded-lg bg-purple-600 text-white text-sm font-medium transition-all duration-200 hover:bg-purple-500 hover:shadow-[0_0_15px_rgba(147,51,234,0.3)] focus:ring-2 focus:ring-purple-400/50 disabled:bg-zinc-700 disabled:cursor-not-allowed disabled:hover:shadow-none"
+                                                    >
+                                                        {draftingId === tender.id ? (
+                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                        ) : (
+                                                            <FileText className="w-4 h-4 flex-shrink-0" />
+                                                        )}
+                                                        <span>Draft Proposal</span>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </motion.tr>
                                     );

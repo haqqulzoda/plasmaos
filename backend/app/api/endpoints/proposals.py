@@ -6,9 +6,12 @@ AI-generated proposal management with tier gating.
 
 import asyncio
 import io
+import logging
 from datetime import datetime
 from typing import Any
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from fastapi.responses import StreamingResponse
@@ -596,6 +599,16 @@ async def upload_tender_tz(
     
     await db.commit()
     await db.refresh(doc)
+    
+    # Extract text and update compiled_master_text for the Compliance Engine
+    try:
+        extracted_text = await extract_text_from_file(str(file_path))
+        if extracted_text and extracted_text.strip():
+            proposal.tender.compiled_master_text = extracted_text.strip()
+            await db.commit()
+            logger.info(f"[UPLOAD-TZ] Updated compiled_master_text ({len(extracted_text)} chars)")
+    except Exception as parse_exc:
+        logger.warning(f"[UPLOAD-TZ] Text extraction failed, compiled_master_text not updated: {parse_exc}")
     
     # Build company context from user profile
     company_context = {

@@ -190,6 +190,8 @@ class Tender(Base):
     source_url: Mapped[str] = mapped_column(String(500), nullable=False)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Aggregated NLP-ready text compiled from scraped/parsed documents.
+    compiled_master_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     budget: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     currency: Mapped[str] = mapped_column(String(10), default="UZS", nullable=False)
     deadline: Mapped[datetime | None] = mapped_column(
@@ -221,6 +223,11 @@ class Tender(Base):
     )
     proposals: Mapped[list["Proposal"]] = relationship(
         "Proposal",
+        back_populates="tender",
+        cascade="all, delete-orphan",
+    )
+    analyses: Mapped[list["TenderAnalysis"]] = relationship(
+        "TenderAnalysis",
         back_populates="tender",
         cascade="all, delete-orphan",
     )

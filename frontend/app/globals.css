@@ -9,6 +9,11 @@
   --primary-hover: #4f46e5;
   --success: #22c55e;
   --telegram: #0088cc;
+  --severity-high: #ef4444;
+  --severity-medium: #f59e0b;
+  --severity-low: #3b82f6;
+  --compliant: #22c55e;
+  --non-compliant: #ef4444;
 }
 
 @theme inline {
@@ -33,9 +38,17 @@ body {
 }
 
 @keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 /* Glassmorphism card */
@@ -63,8 +76,15 @@ body {
 }
 
 @keyframes pulseGlow {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 /* Button styles */
