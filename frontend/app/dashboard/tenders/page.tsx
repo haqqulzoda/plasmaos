@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Radar, Clock, MapPin, Banknote, FileText, Loader2, AlertCircle, RefreshCw, CheckCircle, Filter, ShieldCheck, ExternalLink } from 'lucide-react';
+import { Radar, Clock, MapPin, Banknote, FileText, Loader2, AlertCircle, RefreshCw, CheckCircle, Filter, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { AxiosError } from 'axios';
 
@@ -316,7 +316,6 @@ export default function TendersPage() {
                                     <th className="py-4 px-4 font-medium w-[140px] text-left">Budget</th>
                                     <th className="py-4 px-4 font-medium w-[120px] text-left">Region</th>
                                     <th className="py-4 px-4 font-medium w-[150px] text-left">Deadline</th>
-                                    <th className="py-4 px-4 font-medium w-[90px] text-left">Source</th>
                                     <th className="py-4 px-4 font-medium w-[290px] text-right">Action</th>
                                 </tr>
                             </thead>
@@ -333,8 +332,18 @@ export default function TendersPage() {
                                         >
                                             {/* Title Column */}
                                             <td className="py-4 px-4 w-full max-w-0">
-                                                <div className="truncate block font-medium text-gray-200">
-                                                    {tender.title}
+                                                <div className="flex flex-col">
+                                                    <div className="truncate block text-sm font-medium text-white">
+                                                        {tender.title}
+                                                    </div>
+                                                    <a
+                                                        href={`https://etender.uzex.uz/lot/${tender.external_id}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="mt-1 inline-block text-xs text-slate-500 hover:text-indigo-400 underline-offset-2 hover:underline"
+                                                    >
+                                                        ID: {tender.external_id}
+                                                    </a>
                                                 </div>
                                             </td>
 
@@ -382,24 +391,6 @@ export default function TendersPage() {
                                                         {formatDeadline(tender.deadline)}
                                                     </span>
                                                 </div>
-                                            </td>
-
-                                            {/* Source Column */}
-                                            <td className="py-4 px-4 whitespace-nowrap w-[90px]">
-                                                {tender.source_url ? (
-                                                    <a
-                                                        href={tender.source_url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        aria-label="Open source tender page"
-                                                        className="inline-flex items-center gap-1.5 text-slate-500 hover:text-indigo-400 transition-colors"
-                                                    >
-                                                        <ExternalLink className="w-4 h-4 flex-shrink-0" />
-                                                        <span className="hidden sm:inline text-xs font-medium">View</span>
-                                                    </a>
-                                                ) : (
-                                                    <span className="text-zinc-600 text-sm">-</span>
-                                                )}
                                             </td>
 
                                             {/* Action Column */}
