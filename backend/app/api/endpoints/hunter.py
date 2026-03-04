@@ -59,7 +59,8 @@ class DismissResponse(BaseModel):
 # ── Routes ──────────────────────────────────────────────────────
 
 
-@router.get("/", response_model=list[HunterRecommendationPayload])
+@router.get("", response_model=list[HunterRecommendationPayload])
+@router.get("/", response_model=list[HunterRecommendationPayload], include_in_schema=False)
 async def list_recommendations(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

@@ -21,7 +21,7 @@ COPY . .
 EXPOSE 8000
 
 # 5. Run the server
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
 
 
 RUN apt-get update && apt-get install -y \

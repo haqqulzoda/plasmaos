@@ -58,7 +58,7 @@ export default function HunterFeedPage() {
 
     const fetchFeed = useCallback(async () => {
         try {
-            const res = await api.get<HunterRecommendation[]>('/hunter');
+            const res = await api.get<HunterRecommendation[]>('/hunter/');
             setRecommendations(res.data);
         } catch (err) {
             console.error('Failed to fetch hunter feed:', err);
