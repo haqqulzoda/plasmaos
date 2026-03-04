@@ -182,8 +182,24 @@ export default function DashboardPage() {
                                 <div className="flex-1 min-w-0">
                                     <p className="text-lg font-medium text-white line-clamp-2 mb-2">{tender.title}</p>
                                     <div className="text-sm text-gray-400 flex items-center gap-3">
-                                        <span className="font-mono">{tender.external_id}</span>
-                                        <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-medium">{tender.status}</span>
+                                        <a
+                                            href={`https://etender.uzex.uz/lot/${tender.external_id}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="font-mono hover:text-indigo-400 transition-colors"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {tender.external_id}
+                                        </a>
+                                        <a
+                                            href={`https://etender.uzex.uz/lot/${tender.external_id}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-medium hover:bg-indigo-500/20 transition-colors cursor-pointer"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {tender.status} ↗
+                                        </a>
                                     </div>
                                 </div>
 

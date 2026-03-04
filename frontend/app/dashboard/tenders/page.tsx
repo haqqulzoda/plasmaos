@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Radar, Clock, MapPin, Banknote, FileText, Loader2, AlertCircle, RefreshCw, CheckCircle, Filter, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
-import { AxiosError } from 'axios';
+
 
 interface Tender {
     id: string;
@@ -39,7 +39,7 @@ export default function TendersPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [draftingId, setDraftingId] = useState<string | null>(null);
+
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
@@ -89,7 +89,7 @@ export default function TendersPage() {
             // Reload the tenders list
             await fetchTenders();
         } catch (err) {
-            const axiosError = err as AxiosError<{ detail: string }>;
+            const axiosError = err as { response?: { data?: { detail?: string } } };
             const errorMsg = axiosError.response?.data?.detail || 'Failed to refresh feed';
             setError(errorMsg);
             showNotification(`❌ ${errorMsg}`);
@@ -147,24 +147,8 @@ export default function TendersPage() {
     };
 
     // Handle draft proposal
-    const handleDraftProposal = async (tender: Tender) => {
-        setDraftingId(tender.id);
-
-        try {
-            const response = await api.post('/proposals', { tender_id: tender.id });
-            const proposalId = response.data.id;
-            router.push(`/dashboard/bids/${proposalId}`);
-        } catch (err) {
-            const axiosError = err as AxiosError<{ detail: string }>;
-
-            if (axiosError.response?.status === 403) {
-                alert('🔒 UPGRADE REQUIRED\n\nCreating proposals is an Agent feature.\n\nUpgrade to Plasma Agent to unlock AI-powered proposal drafting.');
-            } else {
-                alert(`Failed to create proposal: ${axiosError.response?.data?.detail || 'Unknown error'}`);
-            }
-        } finally {
-            setDraftingId(null);
-        }
+    const handleDraftProposal = (tender: Tender) => {
+        router.push(`/dashboard/bids/${tender.id}`);
     };
 
     if (isLoading) {
@@ -362,14 +346,10 @@ export default function TendersPage() {
                                 <div className="flex flex-row xl:flex-col gap-3 shrink-0">
                                     <button
                                         onClick={() => handleDraftProposal(tender)}
-                                        disabled={isPassed(tender.deadline) || draftingId === tender.id}
+                                        disabled={isPassed(tender.deadline)}
                                         className="bg-indigo-600 hover:bg-indigo-500 text-white w-full px-5 py-2.5 rounded-lg font-medium transition-all text-sm inline-flex items-center justify-center gap-2 disabled:bg-zinc-700 disabled:cursor-not-allowed"
                                     >
-                                        {draftingId === tender.id ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <FileText className="w-4 h-4" />
-                                        )}
+                                        <FileText className="w-4 h-4" />
                                         Draft Proposal
                                     </button>
                                     <button

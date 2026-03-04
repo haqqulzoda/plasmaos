@@ -76,5 +76,39 @@ services:
       POSTGRES_PORT: 5432
     command: [ "python", "-m", "bot.run" ]
 
+  # ---- Celery Worker ----
+  celery_worker:
+    build: ./backend
+    container_name: plasma_celery_worker
+    restart: always
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    environment:
+      POSTGRES_SERVER: db
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "celery,ai_fast_queue,heavy_dl_queue" ]
+
+  # ---- Celery Beat (Scheduler) ----
+  celery_beat:
+    build: ./backend
+    container_name: plasma_celery_beat
+    restart: always
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    environment:
+      POSTGRES_SERVER: db
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    command: [ "celery", "-A", "app.core.celery_app", "beat", "--loglevel=info" ]
+
 volumes:
   postgres_data:
