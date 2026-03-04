@@ -24,11 +24,10 @@ router = APIRouter()
 class UserResponse(BaseModel):
     """Response schema for user details."""
     id: UUID
-    telegram_id: int
-    username: str | None
-    full_name: str
-    phone_number: str | None
-    safety_word: str | None
+    google_id: str
+    email: str
+    name: str
+    avatar_url: str | None
     subscription_tier: SubscriptionTier
     is_admin: bool
     

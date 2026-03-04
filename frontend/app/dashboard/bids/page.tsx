@@ -122,7 +122,7 @@ export default function BidsPage() {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-zinc-900 border border-zinc-800 rounded-2xl p-12 text-center"
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center"
                 >
                     <FileText className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-white mb-2">No proposals yet</h3>
@@ -150,7 +150,7 @@ export default function BidsPage() {
                         >
                             <Link
                                 href={`/dashboard/bids/${proposal.id}`}
-                                className="block bg-zinc-900 border border-zinc-800 rounded-2xl p-6 hover:border-indigo-500/50 transition-colors group"
+                                className="block bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-indigo-500/50 transition-colors group"
                             >
                                 <div className="flex items-start justify-between">
                                     <div className="flex-1 min-w-0">

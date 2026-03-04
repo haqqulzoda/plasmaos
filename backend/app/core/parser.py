@@ -8,7 +8,9 @@ import asyncio
 import io
 import logging
 import os
+import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import BinaryIO, TypedDict
 from urllib.parse import urlparse
@@ -18,6 +20,7 @@ import docx
 import fitz
 import httpx
 import pkgutil
+from google import genai
 
 # --- Python 3.14 compatibility shim ---
 # pkgutil.find_loader was removed in Python 3.14. pytesseract 0.3.10 still
@@ -39,9 +42,58 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 SUPPORTED_DOC_SUFFIXES = {".pdf", ".docx"}
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".rtf"}
 ARCHIVE_SUFFIXES = {".zip", ".rar"}
 OCR_MIN_TEXT_LEN = 50
 OCR_LANGS = "uzb+rus+eng"
+GEMINI_OCR_MODEL = "gemma-3-27b-it"
+GEMINI_OCR_MAX_RETRIES = 3
+GEMINI_OCR_RETRY_BASE_SECONDS = 1.5
+
+_TESSERACT_AVAILABLE: bool | None = None
+_TESSERACT_FALLBACK_WARNING_EMITTED = False
+_GEMINI_OCR_CLIENT: genai.Client | None = None
+_GEMINI_OCR_CLIENT_API_KEY: str | None = None
+
+
+def _resolve_gemini_api_key() -> str | None:
+    try:
+        from app.core.config import settings
+
+        return (
+            settings.GEMINI_API_KEY
+            or settings.GOOGLE_API_KEY
+            or os.environ.get("GEMINI_API_KEY")
+            or os.environ.get("GOOGLE_API_KEY")
+        )
+    except Exception:
+        return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+
+
+def _is_tesseract_available() -> bool:
+    global _TESSERACT_AVAILABLE
+
+    if _TESSERACT_AVAILABLE is not None:
+        return _TESSERACT_AVAILABLE
+
+    try:
+        pytesseract.get_tesseract_version()
+        _TESSERACT_AVAILABLE = True
+    except Exception:
+        _TESSERACT_AVAILABLE = False
+
+    return _TESSERACT_AVAILABLE
+
+
+def _get_gemini_ocr_client(api_key: str) -> genai.Client:
+    global _GEMINI_OCR_CLIENT, _GEMINI_OCR_CLIENT_API_KEY
+
+    if _GEMINI_OCR_CLIENT is not None and _GEMINI_OCR_CLIENT_API_KEY == api_key:
+        return _GEMINI_OCR_CLIENT
+
+    _GEMINI_OCR_CLIENT = genai.Client(api_key=api_key)
+    _GEMINI_OCR_CLIENT_API_KEY = api_key
+    return _GEMINI_OCR_CLIENT
 
 
 class ExtractedArchiveFile(TypedDict):
@@ -109,69 +161,78 @@ def _parse_extracted_documents(files: list[ExtractedArchiveFile]) -> str:
     return "\n\n".join(parsed_chunks).strip()
 
 
-def _is_safe_archive_member(member_name: str) -> bool:
-    member_path = Path(member_name)
-    return not member_path.is_absolute() and ".." not in member_path.parts
+def _is_allowed_archive_member(member_name: str) -> bool:
+    return member_name.lower().endswith(tuple(ALLOWED_EXTENSIONS))
 
 
-def _collect_supported_files_from_directory(root_dir: Path) -> list[ExtractedArchiveFile]:
-    extracted: list[ExtractedArchiveFile] = []
+def _flatten_archive_member_name(member_name: str) -> str:
+    normalized_name = member_name.replace("\\", "/")
+    return Path(normalized_name).name
 
-    for dirpath, _, filenames in os.walk(root_dir):
-        current_dir = Path(dirpath)
-        for filename in filenames:
-            full_path = current_dir / filename
-            if full_path.suffix.lower() not in SUPPORTED_DOC_SUFFIXES:
-                continue
 
-            relative_name = full_path.relative_to(root_dir).as_posix()
-            try:
-                file_bytes = full_path.read_bytes()
-            except Exception as exc:
-                logger.error("Failed to read extracted file '%s': %s", relative_name, exc, exc_info=True)
-                continue
+def _build_unique_flat_path(extract_root: Path, flat_name: str) -> Path:
+    base_name = Path(flat_name).stem
+    suffix = Path(flat_name).suffix
+    target_path = extract_root / flat_name
 
-            extracted.append({"filename": relative_name, "file_bytes": file_bytes})
+    counter = 1
+    while target_path.exists():
+        target_path = extract_root / f"{base_name}_{counter}{suffix}"
+        counter += 1
 
-    return extracted
+    return target_path
 
 
 def _extract_zip_contents_from_path(archive_path: Path) -> list[ExtractedArchiveFile]:
+    extracted: list[ExtractedArchiveFile] = []
     with tempfile.TemporaryDirectory(prefix="zip_extract_") as temp_dir:
         extract_root = Path(temp_dir)
         with ZipFile(archive_path, "r") as zip_file:
             for member in zip_file.infolist():
                 if member.is_dir():
                     continue
-                if not _is_safe_archive_member(member.filename):
-                    logger.warning("Skipping unsafe zip member path: %s", member.filename)
+                if not _is_allowed_archive_member(member.filename):
                     continue
+                flat_name = _flatten_archive_member_name(member.filename)
+                if not flat_name:
+                    logger.warning("Skipping zip member with invalid name: %s", member.filename)
+                    continue
+                target_path = _build_unique_flat_path(extract_root, flat_name)
                 try:
-                    zip_file.extract(member, path=extract_root)
+                    with zip_file.open(member, "r") as source, target_path.open("wb") as target:
+                        shutil.copyfileobj(source, target)
+                    extracted.append({"filename": target_path.name, "file_bytes": target_path.read_bytes()})
                 except Exception as exc:
                     logger.error("Failed to extract zip member '%s': %s", member.filename, exc, exc_info=True)
                     continue
 
-        return _collect_supported_files_from_directory(extract_root)
+    return extracted
 
 
 def _extract_rar_contents_from_path(archive_path: Path) -> list[ExtractedArchiveFile]:
+    extracted: list[ExtractedArchiveFile] = []
     with tempfile.TemporaryDirectory(prefix="rar_extract_") as temp_dir:
         extract_root = Path(temp_dir)
         with rarfile.RarFile(archive_path) as rar_archive:
             for member in rar_archive.infolist():
                 if member.isdir():
                     continue
-                if not _is_safe_archive_member(member.filename):
-                    logger.warning("Skipping unsafe rar member path: %s", member.filename)
+                if not _is_allowed_archive_member(member.filename):
                     continue
+                flat_name = _flatten_archive_member_name(member.filename)
+                if not flat_name:
+                    logger.warning("Skipping rar member with invalid name: %s", member.filename)
+                    continue
+                target_path = _build_unique_flat_path(extract_root, flat_name)
                 try:
-                    rar_archive.extract(member, path=extract_root)
+                    with rar_archive.open(member, "r") as source, target_path.open("wb") as target:
+                        shutil.copyfileobj(source, target)
+                    extracted.append({"filename": target_path.name, "file_bytes": target_path.read_bytes()})
                 except Exception as exc:
                     logger.error("Failed to extract rar member '%s': %s", member.filename, exc, exc_info=True)
                     continue
 
-        return _collect_supported_files_from_directory(extract_root)
+    return extracted
 
 
 def _extract_archive_contents_from_bytes(archive_bytes: bytes, suffix: str) -> list[ExtractedArchiveFile]:
@@ -193,23 +254,31 @@ def _extract_archive_contents_from_bytes(archive_bytes: bytes, suffix: str) -> l
 
 def extract_archive_contents(archive_source: bytes | str | Path | BinaryIO) -> list[ExtractedArchiveFile]:
     """
-    Extract .pdf/.docx files from a ZIP or RAR archive at any directory depth.
-
-    Returns each file with nested path preserved in `filename`.
+    Extract only whitelisted document types from ZIP/RAR archives.
+    Output filenames are flattened to a single temporary directory.
     """
     try:
         if isinstance(archive_source, (str, Path)):
             archive_path = Path(archive_source)
             suffix = archive_path.suffix.lower()
-            if suffix == ".zip":
-                return _extract_zip_contents_from_path(archive_path)
-            if suffix == ".rar":
-                return _extract_rar_contents_from_path(archive_path)
+            archive_bytes = archive_path.read_bytes()
 
             try:
-                return _extract_zip_contents_from_path(archive_path)
-            except BadZipFile:
-                return _extract_rar_contents_from_path(archive_path)
+                if suffix == ".zip" or _looks_like_zip(archive_bytes):
+                    return _extract_archive_contents_from_bytes(archive_bytes, ".zip")
+                if suffix == ".rar" or _looks_like_rar(archive_bytes):
+                    return _extract_archive_contents_from_bytes(archive_bytes, ".rar")
+
+                try:
+                    return _extract_archive_contents_from_bytes(archive_bytes, ".zip")
+                except BadZipFile:
+                    return _extract_archive_contents_from_bytes(archive_bytes, ".rar")
+            finally:
+                if archive_path.exists():
+                    try:
+                        archive_path.unlink()
+                    except OSError:
+                        logger.warning("Failed to remove archive file after extraction: %s", archive_path)
 
         archive_bytes: bytes
         if isinstance(archive_source, (bytes, bytearray)):
@@ -282,7 +351,61 @@ def _page_has_visual_content(page: fitz.Page) -> bool:
     return False
 
 
-def _ocr_pdf_page(pdf_bytes: bytes, page_number: int) -> str:
+def _ocr_pdf_page(image: Image.Image) -> str:
+    global _TESSERACT_AVAILABLE, _TESSERACT_FALLBACK_WARNING_EMITTED
+
+    if _is_tesseract_available():
+        try:
+            return pytesseract.image_to_string(image, lang=OCR_LANGS).strip()
+        except (FileNotFoundError, Exception):
+            _TESSERACT_AVAILABLE = False
+
+    if not _TESSERACT_FALLBACK_WARNING_EMITTED:
+        logger.warning("Tesseract not found. Falling back to Gemini Vision OCR for page.")
+        _TESSERACT_FALLBACK_WARNING_EMITTED = True
+
+    api_key = _resolve_gemini_api_key()
+    if not api_key:
+        logger.error("Gemini Vision OCR fallback is unavailable: GEMINI_API_KEY is not set.")
+        return ""
+
+    prompt = (
+        "Extract all text and tables from this document page precisely as they appear. "
+        "Return strictly the extracted text and nothing else."
+    )
+    client = _get_gemini_ocr_client(api_key)
+
+    for attempt in range(1, GEMINI_OCR_MAX_RETRIES + 1):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_OCR_MODEL,
+                contents=[prompt, image],
+            )
+            return (getattr(response, "text", "") or "").strip()
+        except Exception as exc:
+            if attempt >= GEMINI_OCR_MAX_RETRIES:
+                logger.error(
+                    "Gemini Vision OCR fallback failed after %s attempts: %s",
+                    GEMINI_OCR_MAX_RETRIES,
+                    exc,
+                    exc_info=True,
+                )
+                return ""
+
+            delay_seconds = GEMINI_OCR_RETRY_BASE_SECONDS * attempt
+            logger.warning(
+                "Gemini Vision OCR transient failure, retrying attempt %s/%s in %.1fs: %s",
+                attempt + 1,
+                GEMINI_OCR_MAX_RETRIES,
+                delay_seconds,
+                exc,
+            )
+            time.sleep(delay_seconds)
+
+    return ""
+
+
+def _ocr_pdf_page_from_pdf_bytes(pdf_bytes: bytes, page_number: int) -> str:
     try:
         with tempfile.TemporaryDirectory(prefix="pdf_ocr_page_") as temp_dir:
             image_paths = convert_from_bytes(
@@ -302,7 +425,7 @@ def _ocr_pdf_page(pdf_bytes: bytes, page_number: int) -> str:
             for image_path in image_paths:
                 try:
                     with Image.open(image_path) as image:
-                        text = pytesseract.image_to_string(image, lang=OCR_LANGS).strip()
+                        text = _ocr_pdf_page(image)
                     if text:
                         page_chunks.append(text)
                 except Exception as exc:
@@ -333,7 +456,7 @@ def _ocr_entire_pdf(pdf_bytes: bytes) -> str:
             for index, image_path in enumerate(image_paths, start=1):
                 try:
                     with Image.open(image_path) as image:
-                        text = pytesseract.image_to_string(image, lang=OCR_LANGS).strip()
+                        text = _ocr_pdf_page(image)
                     if text:
                         page_texts.append(text)
                 except Exception as exc:
@@ -351,6 +474,7 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
     Parse PDF bytes using native extraction and OCR fallback for scanned pages.
     """
     page_texts: list[str] = []
+    ocr_fallback_logged = False
 
     try:
         with fitz.open(stream=pdf_bytes, filetype="pdf") as pdf_doc:
@@ -373,8 +497,10 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
 
                 ocr_text = ""
                 if native_text or _page_has_visual_content(page):
-                    logger.info("[SONAR] Empty text detected. Triggering OCR fallback.")
-                    ocr_text = _ocr_pdf_page(pdf_bytes, page_index)
+                    if not ocr_fallback_logged:
+                        logger.info("[SONAR] Empty text detected. Triggering OCR fallback.")
+                        ocr_fallback_logged = True
+                    ocr_text = _ocr_pdf_page_from_pdf_bytes(pdf_bytes, page_index)
 
                 merged = "\n".join(part for part in (native_text, ocr_text) if part).strip()
                 if merged:

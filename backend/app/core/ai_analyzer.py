@@ -4,25 +4,54 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, Literal
+import time
+from typing import Any
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 logger = logging.getLogger(__name__)
 
 MODEL_NAME = "gemini-3-flash-preview"
 MAX_TENDER_TEXT_CHARS = 120_000
+GENAI_MAX_RETRY_ATTEMPTS = 4
+GENAI_RETRY_BACKOFF_BASE_SECONDS = 1.5
+GENAI_RETRY_BACKOFF_MAX_SECONDS = 12.0
+GENAI_RETRYABLE_CODES = {429, 500, 502, 503, 504}
+
+
+class ExtractionError(RuntimeError):
+    def __init__(self, message: str, *, status_code: int = 500):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+class DynamicTenderRequirements(BaseModel):
+    model_config = ConfigDict(strict=False)
+
+    mapped_requirement_uuids: list[str] = []
+    unmapped_custom_requirements: list[str] = []
+
+    @property
+    def required_isos(self) -> list[str]:
+        return []
+
+    @property
+    def min_turnover_uzs(self) -> int | None:
+        return None
+
+    @property
+    def required_licenses(self) -> list[str]:
+        return []
+
+
+ExtractedTenderRequirements = DynamicTenderRequirements
+GapAnalysisResult = DynamicTenderRequirements
 
 
 def _resolve_gemini_api_key() -> str | None:
-    """
-    Resolve Gemini API key from settings first, then env fallback.
-
-    This keeps behavior consistent across Docker and local runs where
-    `.env` may be loaded via Pydantic settings rather than shell exports.
-    """
     from app.core.config import settings
 
     return (
@@ -33,228 +62,166 @@ def _resolve_gemini_api_key() -> str | None:
     )
 
 
-class RiskItem(BaseModel):
-    risk_type: str
-    description: str
-    severity: Literal["High", "Medium", "Low"]
-    source_quote: str
-
-
-class GapAnalysisResult(BaseModel):
-    is_fully_compliant: bool
-    missing_requirements: list[str] = Field(default_factory=list)
-    identified_risks: list[RiskItem] = Field(default_factory=list)
-    recommended_mitigation_strategy: str
-
-
-def _fallback_result(
-    missing: str,
-    risk_type: str,
-    description: str,
-    severity: Literal["High", "Medium", "Low"],
-    mitigation: str,
-) -> GapAnalysisResult:
-    return GapAnalysisResult(
-        is_fully_compliant=False,
-        missing_requirements=[missing],
-        identified_risks=[
-            RiskItem(
-                risk_type=risk_type,
-                description=description,
-                severity=severity,
-                source_quote="No reliable source quote available due to fallback handling.",
-            )
-        ],
-        recommended_mitigation_strategy=mitigation,
-    )
-
-
-def _build_prompt(tender_text: str, company_profile: dict[str, Any]) -> str:
+def _build_extraction_prompt(tender_text: str, available_taxonomy: list[dict]) -> str:
+    taxonomy_json = json.dumps(available_taxonomy)
     return f"""
-You are a strict legal procurement auditor for government tenders.
-Your task is to compare the tender requirements against the company profile and identify compliance gaps.
+You are a strict procurement classifier. Read the tender text. If a requirement matches an item in the Provided Taxonomy, output its exact UUID in the `mapped_requirement_uuids` array. Do not invent UUIDs. If you find a mandatory requirement that does NOT exist in the taxonomy, summarize it as a string in the `unmapped_custom_requirements` array.
 
-Rules:
-- Focus on legal and technical requirements only.
-- Ignore OCR artifacts, garbled symbols, duplicated scan noise, and page footer/header artifacts.
-- Prioritize missing licenses/certifications, bank guarantee gaps, insurance gaps, and unrealistic delivery/completion deadlines.
-- If information is missing from the company profile, treat it as not satisfied.
-- Flag missing mandatory legal documents explicitly (licenses, permits, guarantees, compliance certificates).
-- Output must be valid JSON only. No markdown, no commentary.
-- Do not wrap output in markdown code blocks like ```json.
-- Return exactly one JSON object with these keys only:
-  is_fully_compliant, missing_requirements, identified_risks, recommended_mitigation_strategy
-- Each identified_risks item must include risk_type, description, severity, source_quote.
-- severity must be one of: High, Medium, Low.
-- source_quote must be an exact verbatim sentence or short paragraph copied from tender text.
+Output only valid JSON with exactly these keys:
+- mapped_requirement_uuids (array of strings)
+- unmapped_custom_requirements (array of strings)
 
-Required JSON schema:
-{{
-  "is_fully_compliant": true,
-  "missing_requirements": ["string"],
-  "identified_risks": [
-    {{
-      "risk_type": "string",
-      "description": "string",
-      "severity": "High|Medium|Low",
-      "source_quote": "The exact verbatim sentence or paragraph from the raw text that triggered this risk."
-    }}
-  ],
-  "recommended_mitigation_strategy": "string"
-}}
+Provided Taxonomy (JSON):
+{taxonomy_json}
 
-You MUST return your analysis strictly as a valid JSON object matching this exact structure, with no markdown formatting or extra text:
-{{
-  "is_fully_compliant": false,
-  "missing_requirements": ["list of strings"],
-  "identified_risks": [
-    {{
-      "risk_type": "string",
-      "description": "string",
-      "severity": "High | Medium | Low",
-      "source_quote": "The exact verbatim sentence or paragraph from the raw text that triggered this risk."
-    }}
-  ],
-  "recommended_mitigation_strategy": "string"
-}}
-
-Company Profile (JSON):
-{json.dumps(company_profile, ensure_ascii=False)}
-
-Tender Text:
+Tender text:
 {tender_text}
 """.strip()
 
 
-def _parse_json_text(raw_text: str) -> dict[str, Any]:
-    text = raw_text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
+def _validate_structured_response(response: Any) -> DynamicTenderRequirements:
+    parsed_payload = getattr(response, "parsed", None)
+    if parsed_payload is not None:
+        try:
+            return DynamicTenderRequirements.model_validate(parsed_payload, strict=False)
+        except ValidationError as exc:
+            raise ExtractionError(
+                "LLM response failed DynamicTenderRequirements schema validation."
+            ) from exc
 
-    start = text.find("{")
-    end = text.rfind("}")
-    if start >= 0 and end > start:
-        text = text[start : end + 1]
-
-    return json.loads(text)
-
-
-def _is_rate_limited_error(exc: Exception) -> bool:
-    status_code = getattr(exc, "status_code", None)
-    if status_code == 429:
-        return True
-
-    msg = str(exc).lower()
-    return "429" in msg or "rate limit" in msg or "resource_exhausted" in msg
-
-
-def _sync_generate_gap_analysis(prompt: str, api_key: str) -> GapAnalysisResult:
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.1,
-        ),
-    )
-
-    raw_text = getattr(response, "text", "") or ""
-    if not raw_text.strip():
-        return _fallback_result(
-            missing="Model returned an empty response.",
-            risk_type="SchemaValidation",
-            description="Gemini returned no JSON payload for gap analysis.",
-            severity="Medium",
-            mitigation="Retry analysis and verify prompt/config constraints.",
-        )
+    response_text = (getattr(response, "text", "") or "").strip()
+    if not response_text:
+        raise ExtractionError("LLM returned no structured extraction payload.")
 
     try:
-        parsed_result = GapAnalysisResult.model_validate_json(raw_text)
-        return parsed_result
+        return DynamicTenderRequirements.model_validate_json(response_text, strict=False)
     except ValidationError as exc:
-        logger.error("GapAnalysisResult.model_validate_json failed: %s", exc)
+        raise ExtractionError(
+            "LLM response failed DynamicTenderRequirements schema validation."
+        ) from exc
+
+
+def _sync_extract_tender_requirements(
+    tender_text: str, available_taxonomy: list[dict], api_key: str
+) -> DynamicTenderRequirements:
+    prompt = _build_extraction_prompt(
+        tender_text=tender_text, available_taxonomy=available_taxonomy
+    )
+    client = genai.Client(api_key=api_key)
+
+    for attempt in range(1, GENAI_MAX_RETRY_ATTEMPTS + 1):
         try:
-            parsed_json = _parse_json_text(raw_text)
-            return GapAnalysisResult.model_validate(parsed_json)
-        except (json.JSONDecodeError, ValidationError) as second_exc:
-            logger.error("Fallback JSON parse/validate failed: %s", second_exc)
-            return _fallback_result(
-                missing="Model response could not be validated against required schema.",
-                risk_type="SchemaValidation",
-                description=f"Structured output validation failed: {type(second_exc).__name__}",
-                severity="Medium",
-                mitigation="Retry and, if persistent, tighten prompt constraints or inspect raw model output.",
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=DynamicTenderRequirements,
+                    temperature=0.0,
+                ),
             )
+            return _validate_structured_response(response)
+        except ValidationError as exc:
+            raise ExtractionError(
+                "LLM response failed DynamicTenderRequirements schema validation."
+            ) from exc
+        except ExtractionError:
+            raise
+        except genai_errors.APIError as exc:
+            error_code = int(getattr(exc, "code", 0) or 0)
+            error_status = str(getattr(exc, "status", "") or "")
+            error_message = str(getattr(exc, "message", "") or "").strip()
+            is_retryable = error_code in GENAI_RETRYABLE_CODES
+            if is_retryable and attempt < GENAI_MAX_RETRY_ATTEMPTS:
+                delay_seconds = min(
+                    GENAI_RETRY_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)),
+                    GENAI_RETRY_BACKOFF_MAX_SECONDS,
+                )
+                logger.warning(
+                    "Tender extraction transient GenAI error (code=%s status=%s). "
+                    "Retrying attempt %s/%s in %.1fs.",
+                    error_code,
+                    error_status,
+                    attempt + 1,
+                    GENAI_MAX_RETRY_ATTEMPTS,
+                    delay_seconds,
+                )
+                time.sleep(delay_seconds)
+                continue
+
+            mapped_status_code = 500
+            if error_code == 429 or error_status == "RESOURCE_EXHAUSTED":
+                mapped_status_code = 429
+            elif error_code in {500, 502, 503, 504} or error_status in {"UNAVAILABLE"}:
+                mapped_status_code = 503
+
+            raise ExtractionError(
+                (
+                    f"Tender requirement extraction failed (Gemini API {error_code} "
+                    f"{error_status}): {error_message or 'no error message'}"
+                ),
+                status_code=mapped_status_code,
+            ) from exc
+        except Exception as exc:
+            logger.exception("Tender requirement extraction failed")
+            raise ExtractionError("Tender requirement extraction failed.") from exc
+
+    raise ExtractionError("Tender requirement extraction failed after retries.", status_code=503)
 
 
-async def analyze_tender_gaps(tender_text: str, company_profile: dict[str, Any]) -> GapAnalysisResult:
+def extract_tender_requirements_sync(
+    tender_text: str, available_taxonomy: list[dict]
+) -> DynamicTenderRequirements:
     api_key = _resolve_gemini_api_key()
     if not api_key:
-        logger.error("GEMINI_API_KEY is not set")
-        return _fallback_result(
-            missing="Gemini API key is not configured.",
-            risk_type="System",
-            description="Gap analysis could not run because GEMINI_API_KEY is missing.",
-            severity="High",
-            mitigation="Set GEMINI_API_KEY and retry analysis.",
-        )
+        raise ExtractionError("GEMINI_API_KEY is not configured.")
 
     cleaned_text = (tender_text or "").strip()
     if not cleaned_text:
-        return _fallback_result(
-            missing="Tender text is empty.",
-            risk_type="InputQuality",
-            description="No tender content was provided to the analyzer.",
-            severity="High",
-            mitigation="Re-run extraction and provide non-empty tender text.",
-        )
+        raise ExtractionError("Tender text is empty.")
 
     if len(cleaned_text) > MAX_TENDER_TEXT_CHARS:
-        logger.warning(
-            "Tender text truncated from %s to %s characters",
-            len(cleaned_text),
-            MAX_TENDER_TEXT_CHARS,
-        )
         cleaned_text = cleaned_text[:MAX_TENDER_TEXT_CHARS]
 
-    prompt = _build_prompt(cleaned_text, company_profile)
+    return _sync_extract_tender_requirements(cleaned_text, available_taxonomy, api_key)
 
-    try:
-        return await asyncio.to_thread(_sync_generate_gap_analysis, prompt, api_key)
-    except (json.JSONDecodeError, ValidationError) as exc:
-        logger.warning("Gemini response schema parsing failed: %s", exc)
-        return _fallback_result(
-            missing="Model response could not be validated against schema.",
-            risk_type="SchemaValidation",
-            description=f"Structured output validation failed: {type(exc).__name__}",
-            severity="Medium",
-            mitigation="Retry and, if persistent, inspect prompt/schema compatibility.",
-        )
-    except Exception as exc:
-        if _is_rate_limited_error(exc):
-            logger.warning("Gemini rate limit reached: %s", exc)
-            return _fallback_result(
-                missing="Gap analysis temporarily unavailable due to API rate limit (429).",
-                risk_type="RateLimit",
-                description="Gemini API throttled the request.",
-                severity="Medium",
-                mitigation="Retry with backoff in 30-60 seconds.",
-            )
 
-        logger.exception("Gemini gap analysis failed")
-        return _fallback_result(
-            missing="Gap analysis could not be completed due to API/system failure.",
-            risk_type="System",
-            description=f"Gemini analysis failed: {type(exc).__name__}",
-            severity="Medium",
-            mitigation=(
-                "Retry after a short delay. If failures persist, verify GEMINI_API_KEY, "
-                "model availability, and network connectivity."
-            ),
-        )
+async def extract_tender_requirements(
+    tender_text: str, available_taxonomy: list[dict]
+) -> DynamicTenderRequirements:
+    api_key = _resolve_gemini_api_key()
+    if not api_key:
+        raise ExtractionError("GEMINI_API_KEY is not configured.")
+
+    cleaned_text = (tender_text or "").strip()
+    if not cleaned_text:
+        raise ExtractionError("Tender text is empty.")
+
+    if len(cleaned_text) > MAX_TENDER_TEXT_CHARS:
+        cleaned_text = cleaned_text[:MAX_TENDER_TEXT_CHARS]
+
+    return await asyncio.to_thread(
+        _sync_extract_tender_requirements,
+        cleaned_text,
+        available_taxonomy,
+        api_key,
+    )
+
+
+async def analyze_tender_gaps(
+    tender_text: str,
+    company_profile: dict[str, Any] | None = None,
+) -> DynamicTenderRequirements:
+    _ = company_profile
+    return await extract_tender_requirements(tender_text, [])
+
+
+def validate_with_dummy_tender_text() -> ExtractedTenderRequirements:
+    dummy_tender_text = """
+Tender requirements:
+- Bidder must hold ISO 9001 and ISO 27001 certificates.
+- Minimum annual turnover: 5,000,000,000 UZS.
+- Required licenses: Construction License Category A, Electrical Installation License.
+- Submission deadline: 2026-03-15 18:00 Tashkent time.
+"""
+    return extract_tender_requirements_sync(dummy_tender_text, [])

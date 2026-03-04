@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api.endpoints import auth, proposals, tenders, users
+from app.api.endpoints import auth, hunter, proposals, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
 from app.db.session import engine
@@ -72,8 +72,10 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(tenders.router, prefix="/api/v1/tenders", tags=["Tenders"])
 app.include_router(proposals.router, prefix="/api/v1/proposals", tags=["Proposals"])
+app.include_router(vault.router, prefix="/api/v1", tags=["Vault"])
 app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
 app.include_router(audit.router, prefix="/audit", tags=["Audit"])
+app.include_router(hunter.router, prefix="/api/v1/hunter", tags=["Hunter"])
 
 
 @app.get("/health")

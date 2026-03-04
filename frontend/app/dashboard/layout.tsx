@@ -3,8 +3,10 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Radar, FileText, Settings, LogOut, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Radar, ScrollText, FileText, Settings, LogOut, Sparkles } from 'lucide-react';
 import { clsx } from 'clsx';
+import { signOut } from 'next-auth/react';
+import { api } from '@/lib/api';
 
 interface NavItem {
     name: string;
@@ -14,7 +16,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
     { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { name: 'Hunter Feed', href: '/dashboard/tenders', icon: <Radar className="w-5 h-5" /> },
+    { name: 'Tenders', href: '/dashboard/tenders', icon: <ScrollText className="w-5 h-5" /> },
+    { name: 'Hunter Feed', href: '/dashboard/hunter', icon: <Radar className="w-5 h-5" /> },
     { name: 'My Bids', href: '/dashboard/bids', icon: <FileText className="w-5 h-5" /> },
     { name: 'Settings', href: '/dashboard/settings', icon: <Settings className="w-5 h-5" /> },
 ];
@@ -23,22 +26,23 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
 
-    const handleLogout = () => {
-        localStorage.removeItem('plasma_token');
+    const handleLogout = async () => {
+        await api.post('/auth/logout').catch(() => undefined);
+        await signOut({ callbackUrl: '/' });
         router.push('/');
     };
 
     return (
-        <div className="min-h-screen bg-black flex">
+        <div className="flex h-screen bg-gray-900 text-white">
             {/* Sidebar */}
-            <aside className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col">
+            <aside className="w-64 bg-gray-950 border-r border-gray-800 flex flex-col">
                 {/* Logo */}
-                <div className="p-6 border-b border-zinc-800">
+                <div className="p-6 border-b border-gray-800">
                     <Link href="/dashboard" className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                             <Sparkles className="w-5 h-5 text-white" />
                         </div>
-                        <span className="text-xl font-bold text-white">Plasma AI</span>
+                        <span className="text-xl font-bold text-white tracking-tight">Plasma AI</span>
                     </Link>
                 </div>
 
@@ -51,10 +55,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                 key={item.href}
                                 href={item.href}
                                 className={clsx(
-                                    'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
+                                    'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200',
                                     isActive
-                                        ? 'bg-zinc-800 text-white'
-                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                                        ? 'bg-indigo-900/20 text-indigo-400 border-l-2 border-indigo-500'
+                                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
                                 )}
                             >
                                 {item.icon}
@@ -65,10 +69,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 </nav>
 
                 {/* Logout */}
-                <div className="p-4 border-t border-zinc-800">
+                <div className="p-4 border-t border-gray-800">
                     <button
                         onClick={handleLogout}
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-red-400 hover:bg-zinc-900 transition-all duration-200 w-full"
+                        className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-red-400 hover:bg-gray-800/50 transition-all duration-200 w-full"
                     >
                         <LogOut className="w-5 h-5" />
                         <span className="font-medium">Logout</span>
@@ -77,11 +81,25 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-auto">
-                <div className="p-8">
-                    {children}
-                </div>
-            </main>
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Top Header */}
+                <header className="h-16 border-b border-gray-800 bg-gray-950/50 backdrop-blur-sm flex items-center justify-between px-8 shrink-0">
+                    <h2 className="text-sm font-medium text-gray-400 tracking-wide uppercase">Command Center</h2>
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1.5">
+                            <div className="w-2 h-2 rounded-full animate-pulse bg-emerald-500" />
+                            <span className="text-emerald-400 text-xs font-semibold tracking-wide">Agent Active</span>
+                        </div>
+                    </div>
+                </header>
+
+                {/* Page Content */}
+                <main className="flex-1 overflow-auto">
+                    <div className="p-8">
+                        {children}
+                    </div>
+                </main>
+            </div>
         </div>
     );
 }

@@ -1,25 +1,32 @@
 import axios from 'axios';
+import { signOut } from 'next-auth/react';
 
 /**
  * Plasma AI API Client
- * 
+ *
  * Axios instance configured with base URL and automatic JWT token injection.
  */
 const api = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL,
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Request interceptor to attach JWT token
+// Request interceptor to attach backend JWT from NextAuth session callback
 api.interceptors.request.use(
-    (config) => {
-        // Only run on client-side
+    async (config) => {
         if (typeof window !== 'undefined') {
-            const token = localStorage.getItem('plasma_token');
-            if (token) {
-                config.headers.Authorization = `Bearer ${token}`;
+            const sessionResponse = await fetch('/api/auth/session', {
+                credentials: 'include',
+                cache: 'no-store',
+            }).catch(() => null);
+            if (sessionResponse?.ok) {
+                const session = (await sessionResponse.json()) as { accessToken?: string };
+                if (session.accessToken) {
+                    config.headers.Authorization = `Bearer ${session.accessToken}`;
+                }
             }
         }
         return config;
@@ -29,17 +36,12 @@ api.interceptors.request.use(
     }
 );
 
-// Response interceptor for error handling
+// Response interceptor — redirect to login on 401 (expired / invalid token)
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
-        // Handle 401 errors (token expired/invalid)
-        if (error.response?.status === 401) {
-            if (typeof window !== 'undefined') {
-                localStorage.removeItem('plasma_token');
-                // Optionally redirect to login
-                // window.location.href = '/';
-            }
+    async (error) => {
+        if (error.response?.status === 401 && typeof window !== 'undefined') {
+            await signOut({ callbackUrl: '/login' });
         }
         return Promise.reject(error);
     }

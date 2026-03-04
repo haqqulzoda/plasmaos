@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Radar, Clock, TrendingUp, FileText, Loader2, MapPin, Banknote } from 'lucide-react';
+import { Radar, Clock, TrendingUp, FileText, Loader2, MapPin, Banknote, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 
@@ -91,8 +91,8 @@ export default function DashboardPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
             >
-                <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-                <p className="text-zinc-400 mt-1">Autonomous Tender Officer at a glance</p>
+                <h1 className="text-3xl font-bold text-white tracking-tight">Dashboard</h1>
+                <p className="text-gray-400 mt-1">Autonomous Tender Officer at a glance</p>
             </motion.div>
 
             {/* Stats Grid */}
@@ -103,43 +103,43 @@ export default function DashboardPage() {
                 className="grid grid-cols-1 md:grid-cols-3 gap-6"
             >
                 {/* Total Budget Card */}
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                <div className="bg-gray-950 border border-gray-800 rounded-xl p-6 hover:border-gray-700 transition-colors shadow-lg shadow-black/20">
                     <div className="flex items-center justify-between mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
-                            <Banknote className="w-6 h-6 text-green-500" />
+                        <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                            <Banknote className="w-6 h-6 text-emerald-500" />
                         </div>
-                        <div className="flex items-center gap-1 text-green-400 text-sm">
+                        <div className="flex items-center gap-1 text-emerald-400 text-sm">
                             <TrendingUp className="w-4 h-4" />
                             <span>Opportunities</span>
                         </div>
                     </div>
-                    <h3 className="text-zinc-400 text-sm mb-1">Total Available Budget</h3>
-                    <p className="text-3xl font-bold text-green-400">{formatBudget(totalBudget)} UZS</p>
-                    <p className="text-zinc-500 text-sm mt-2">{tenders.length} active tenders</p>
+                    <h3 className="text-gray-400 text-sm mb-1">Total Available Budget</h3>
+                    <p className="text-emerald-400 font-semibold text-3xl">{formatBudget(totalBudget)} UZS</p>
+                    <p className="text-gray-500 text-sm mt-2">{tenders.length} active tenders</p>
                 </div>
 
                 {/* Open Tenders Card */}
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                <div className="bg-gray-950 border border-gray-800 rounded-xl p-6 hover:border-gray-700 transition-colors shadow-lg shadow-black/20">
                     <div className="flex items-center justify-between mb-4">
                         <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center">
                             <Radar className="w-6 h-6 text-indigo-500" />
                         </div>
                     </div>
-                    <h3 className="text-zinc-400 text-sm mb-1">Open Tenders</h3>
+                    <h3 className="text-gray-400 text-sm mb-1">Open Tenders</h3>
                     <p className="text-3xl font-bold text-white">{openTenders}</p>
-                    <p className="text-zinc-500 text-sm mt-2">Ready for proposals</p>
+                    <p className="text-gray-500 text-sm mt-2">Ready for proposals</p>
                 </div>
 
                 {/* Urgent Card */}
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                <div className="bg-gray-950 border border-gray-800 rounded-xl p-6 hover:border-gray-700 transition-colors shadow-lg shadow-black/20">
                     <div className="flex items-center justify-between mb-4">
                         <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center">
                             <Clock className="w-6 h-6 text-red-500" />
                         </div>
                     </div>
-                    <h3 className="text-zinc-400 text-sm mb-1">Urgent Deadlines</h3>
+                    <h3 className="text-gray-400 text-sm mb-1">Urgent Deadlines</h3>
                     <p className="text-3xl font-bold text-red-400">{urgentTenders}</p>
-                    <p className="text-zinc-500 text-sm mt-2">Due in &lt; 3 days</p>
+                    <p className="text-gray-500 text-sm mt-2">Due in &lt; 3 days</p>
                 </div>
             </motion.div>
 
@@ -148,11 +148,11 @@ export default function DashboardPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden"
+                className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden shadow-lg shadow-black/20"
             >
-                <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+                <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <Radar className="w-5 h-5 text-zinc-400" />
+                        <Radar className="w-5 h-5 text-gray-400" />
                         <h2 className="text-lg font-semibold text-white">Recent Opportunities</h2>
                     </div>
                     <Link
@@ -165,41 +165,60 @@ export default function DashboardPage() {
 
                 {tenders.length === 0 ? (
                     <div className="p-12 text-center">
-                        <Radar className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-                        <p className="text-zinc-400">No tenders yet. Seed demo data to get started.</p>
+                        <Radar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                        <p className="text-gray-400">No tenders yet. Seed demo data to get started.</p>
                     </div>
                 ) : (
-                    <div className="divide-y divide-zinc-800">
+                    <div className="flex flex-col gap-4 p-4">
                         {tenders.slice(0, 5).map((tender, index) => (
                             <motion.div
                                 key={tender.id}
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: index * 0.1 }}
-                                className="px-6 py-4 flex items-center justify-between hover:bg-zinc-800/30 transition-colors"
+                                className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 hover:bg-gray-800/50 transition-all shadow-md"
                             >
-                                <div className="flex items-center gap-4 flex-1 min-w-0">
-                                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
-                                        <FileText className="w-5 h-5 text-indigo-400" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-white font-medium truncate">{tender.title}</p>
-                                        <div className="flex items-center gap-3 text-zinc-500 text-sm mt-1">
-                                            <span className="font-mono">{tender.external_id}</span>
-                                            {tender.region && (
-                                                <span className="flex items-center gap-1">
-                                                    <MapPin className="w-3 h-3" />
-                                                    {tender.region}
-                                                </span>
-                                            )}
-                                        </div>
+                                {/* Left Panel — Context */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-lg font-medium text-white line-clamp-2 mb-2">{tender.title}</p>
+                                    <div className="text-sm text-gray-400 flex items-center gap-3">
+                                        <span className="font-mono">{tender.external_id}</span>
+                                        <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-medium">{tender.status}</span>
                                     </div>
                                 </div>
-                                <div className="text-right shrink-0 ml-4">
-                                    <p className="text-green-400 font-semibold">{formatBudget(tender.budget)} UZS</p>
-                                    {tender.deadline && (
-                                        <p className="text-zinc-500 text-sm">{formatDate(tender.deadline)}</p>
+
+                                {/* Middle Panel — Meta */}
+                                <div className="flex items-center gap-6 mt-4 lg:mt-0 lg:mx-8 shrink-0">
+                                    <p className="text-xl font-bold text-emerald-400">{formatBudget(tender.budget)} UZS</p>
+                                    {tender.region && (
+                                        <span className="text-gray-400 text-sm flex items-center gap-1">
+                                            <MapPin className="w-3.5 h-3.5" />
+                                            {tender.region}
+                                        </span>
                                     )}
+                                    {tender.deadline && (
+                                        <span className="text-gray-400 text-sm flex items-center gap-1">
+                                            <Clock className="w-3.5 h-3.5" />
+                                            {formatDate(tender.deadline)}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Right Panel — Actions */}
+                                <div className="flex gap-3 mt-4 lg:mt-0 shrink-0">
+                                    <Link
+                                        href={`/dashboard/bids/${tender.id}`}
+                                        className="px-4 py-2 rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors text-sm flex items-center gap-2"
+                                    >
+                                        <ShieldCheck className="w-4 h-4" />
+                                        Compliance
+                                    </Link>
+                                    <Link
+                                        href={`/dashboard/bids/${tender.id}`}
+                                        className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors text-sm"
+                                    >
+                                        Draft Proposal
+                                    </Link>
                                 </div>
                             </motion.div>
                         ))}

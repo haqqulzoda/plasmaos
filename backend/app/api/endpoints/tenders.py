@@ -4,30 +4,46 @@ Plasma AI - Tenders Endpoints
 Public tender feed for the Autonomous Tender Officer.
 """
 
+import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
-from urllib.parse import parse_qs, unquote, urlparse
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import load_only
+from sqlalchemy.orm import load_only, selectinload
 
-from app.core.ai_analyzer import GapAnalysisResult, analyze_tender_gaps
-from app.core.parser import process_tender_document
+from app.api.deps import get_current_user
+from app.core.ai_analyzer import (
+    ExtractedTenderRequirements,
+    ExtractionError,
+    extract_tender_requirements,
+)
+from app.core.celery_app import celery_app
+from app.core.evaluator import DynamicComplianceResult, TaxNodeInfo, evaluate_compliance
 from app.core.scraper import UzExScraper
+from app.core.security import authenticated_dependency
 from app.db.session import get_db
 from app.models.audit import TenderAnalysis
-from app.models.all_models import Tender, TenderDocument, TenderStatus
+from app.models.all_models import Proposal, RiskOverrideLog, TaxonomyNode, Tender, TenderDocument, TenderStatus, User
+from app.models.company import CompanyProfile
+from app.models.taxonomy import CompanyCredential
 from app.schemas.tender import TenderResponse
+from app.schemas.vault import (
+    CertificationItem,
+    CompanyVaultResponse,
+    FinancialHistoryItem,
+    LicenseItem,
+)
+from app.workers.tender_tasks import process_tender_docs
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[authenticated_dependency()])
 
 
 class RefreshResponse(BaseModel):
@@ -38,21 +54,16 @@ class RefreshResponse(BaseModel):
     message: str
 
 
-class TenderDocumentResponse(BaseModel):
-    """Response for tender document."""
-    id: UUID
-    file_url: str
-    file_type: str
-    created_at: datetime
-    
-    model_config = {"from_attributes": True}
+class SyncDocsAcceptedResponse(BaseModel):
+    """Response for sync-docs enqueue endpoint."""
+    message: str
+    job_id: str
 
 
-class SyncDocsResponse(BaseModel):
-    """Response for sync-docs endpoint."""
+class SyncStatusResponse(BaseModel):
+    """Response for sync status polling endpoint."""
+    job_id: str
     status: str
-    documents: list[TenderDocumentResponse]
-    new_count: int
     message: str
 
 
@@ -74,7 +85,23 @@ class AnalyzeTenderResponse(BaseModel):
     """Response payload for analyze-tender endpoint."""
 
     analysis_id: str
-    analysis: GapAnalysisResult
+    requirements: ExtractedTenderRequirements
+    evaluation: DynamicComplianceResult
+
+
+class RiskOverrideRequest(BaseModel):
+    """Request payload for cryptographic liability handshake."""
+
+    node_id: UUID
+    analysis_id: UUID
+    justification: Optional[str] = None
+
+
+class RiskOverrideStatusResponse(BaseModel):
+    """Persisted override status for a tender and current user."""
+
+    tender_id: UUID
+    accepted_node_ids: list[str]
 
 
 def _serialize_tender(tender: Tender) -> TenderResponse:
@@ -84,13 +111,93 @@ def _serialize_tender(tender: Tender) -> TenderResponse:
     return payload
 
 
+def _build_company_vault_response(profile: CompanyProfile) -> CompanyVaultResponse:
+    certifications = [
+        CertificationItem.model_validate(item)
+        for item in sorted(
+            profile.certifications,
+            key=lambda x: (x.issue_date, x.expiry_date, x.cert_type),
+        )
+    ]
+    licenses = [
+        LicenseItem.model_validate(item)
+        for item in sorted(
+            profile.licenses,
+            key=lambda x: x.license_name.lower(),
+        )
+    ]
+    financial_history = [
+        FinancialHistoryItem.model_validate(item)
+        for item in sorted(
+            profile.financial_history,
+            key=lambda x: x.year,
+        )
+    ]
+
+    return CompanyVaultResponse(
+        id=profile.id,
+        user_id=profile.user_id,
+        company_name=profile.company_name,
+        director_name=profile.director_name,
+        address=profile.address,
+        phone_contact=profile.phone_contact,
+        bank_name=profile.bank_name,
+        mfo=profile.mfo,
+        account_number=profile.account_number,
+        inn=profile.inn,
+        certifications=certifications,
+        licenses=licenses,
+        financial_history=financial_history,
+    )
+
+
+def _is_vault_completely_empty(vault: CompanyVaultResponse) -> bool:
+    root_values = [
+        vault.company_name,
+        vault.director_name,
+        vault.address,
+        vault.phone_contact,
+        vault.bank_name,
+        vault.mfo,
+        vault.account_number,
+        vault.inn,
+    ]
+    root_is_empty = all(not (value and value.strip()) for value in root_values)
+    return (
+        root_is_empty
+        and not vault.certifications
+        and not vault.licenses
+        and not vault.financial_history
+    )
+
+
+def _analysis_owner_key(
+    *,
+    current_user: User,
+    profile: CompanyProfile | None,
+) -> str:
+    """
+    Build a tenant-safe ownership key for TenderAnalysis rows.
+
+    TenderAnalysis does not currently store a user_id, so we persist and query
+    by this deterministic key to avoid cross-tenant collisions.
+    """
+    profile_token = str(profile.id) if profile is not None else "no-profile"
+    return f"{current_user.id}:{profile_token}"
+
+
 @router.post("/{tender_id}/analyze", response_model=AnalyzeTenderResponse)
 async def analyze_tender(
     tender_id: UUID,
+    force: bool = False,
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
     Analyze pre-scraped tender text and persist analysis result.
+
+    Returns cached analysis when the underlying text has not changed,
+    unless ``force=True`` is passed to trigger a fresh Gemini call.
     """
     try:
         result = await session.execute(select(Tender).where(Tender.id == tender_id))
@@ -116,25 +223,145 @@ async def analyze_tender(
         )
 
     try:
-        company_profile_dict: dict[str, Any] = {
-            "name": "Extracted Company",
-        }
-        analysis = await analyze_tender_gaps(
-            tender_text=tender_text,
-            company_profile=company_profile_dict,
+        profile_result = await session.execute(
+            select(CompanyProfile)
+            .options(
+                selectinload(CompanyProfile.certifications),
+                selectinload(CompanyProfile.licenses),
+                selectinload(CompanyProfile.financial_history),
+            )
+            .where(CompanyProfile.user_id == current_user.id)
+        )
+        profile = profile_result.scalar_one_or_none()
+
+        if profile is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Company vault is empty. Please fill out your company settings first.",
+            )
+
+        company_vault = _build_company_vault_response(profile)
+        if _is_vault_completely_empty(company_vault):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Company vault is empty. Please fill out your company settings first.",
+            )
+
+        display_company_name = str(
+            company_vault.company_name or current_user.name or "Unknown Company"
+        )
+        analysis_owner_key = _analysis_owner_key(
+            current_user=current_user,
+            profile=profile,
         )
 
-        company_name = str(company_profile_dict.get("name") or "Extracted Company")
+        taxonomy_query = select(TaxonomyNode)
+        taxonomy_is_active = getattr(TaxonomyNode, "is_active", None)
+        if taxonomy_is_active is not None:
+            taxonomy_query = taxonomy_query.where(taxonomy_is_active.is_(True))
+        taxonomy_result = await session.execute(taxonomy_query.order_by(TaxonomyNode.name.asc()))
+        taxonomy_nodes = taxonomy_result.scalars().all()
+        available_taxonomy = [
+            {
+                "id": str(node.id),
+                "name": node.name,
+                "description": node.description or "",
+            }
+            for node in taxonomy_nodes
+        ]
+
+        # ── Build credential UUID set for this user ──
+        cred_result = await session.execute(
+            select(CompanyCredential.taxonomy_node_id).where(
+                CompanyCredential.company_profile_id == profile.id
+            )
+        )
+        credential_uuids: set[str] = {
+            str(row[0]) for row in cred_result.all()
+        }
+
+        # ── Build taxonomy lookup ──
+        taxonomy_lookup: dict[str, TaxNodeInfo] = {
+            str(node.id): TaxNodeInfo(
+                name=node.name,
+                impact_weight=node.impact_weight,
+                is_fatal=node.is_fatal,
+            )
+            for node in taxonomy_nodes
+        }
+
+        # ── Build deterministic content hash over ALL evaluation inputs ──
+        sorted_cred_str = ",".join(sorted(credential_uuids))
+        sorted_tax_str = ",".join(sorted(taxonomy_lookup.keys()))
+        hash_input = f"{tender_text}|{sorted_cred_str}|{sorted_tax_str}"
+        current_content_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
+
+        # ── Cache check: reuse existing analysis only if content hash matches ──
+        if not force:
+            cached_result = await session.execute(
+                select(TenderAnalysis)
+                .where(
+                    TenderAnalysis.tender_id == tender_id,
+                    TenderAnalysis.company_name == analysis_owner_key,
+                )
+                .order_by(TenderAnalysis.created_at.desc())
+                .limit(1)
+            )
+            cached = cached_result.scalar_one_or_none()
+
+            if cached is not None and cached.content_hash == current_content_hash:
+                cached_data = cached.analysis_json or {}
+                try:
+                    cached_reqs = ExtractedTenderRequirements.model_validate(
+                        cached_data.get("requirements", {})
+                    )
+                    cached_eval = DynamicComplianceResult.model_validate(
+                        cached_data.get("evaluation", {})
+                    )
+                    logger.info("Returning cached analysis %s for tender %s (hash match)", cached.id, tender_id)
+                    return {
+                        "analysis_id": str(cached.id),
+                        "requirements": cached_reqs,
+                        "evaluation": cached_eval,
+                    }
+                except (ValidationError, KeyError):
+                    logger.warning(
+                        "Cached analysis %s has legacy schema; forcing fresh extraction",
+                        cached.id,
+                    )
+
+        # ── Fresh Gemini extraction ──
+        requirements = await extract_tender_requirements(tender_text, available_taxonomy)
+        evaluation = evaluate_compliance(
+            mapped_requirement_uuids=requirements.mapped_requirement_uuids,
+            unmapped_custom_requirements=requirements.unmapped_custom_requirements,
+            credential_uuids=credential_uuids,
+            taxonomy_lookup=taxonomy_lookup,
+        )
+
         new_analysis = TenderAnalysis(
             tender_id=tender.id,
             tender_file_name=f"tender_{tender.external_id}",
-            company_name=company_name,
+            company_name=analysis_owner_key,
             raw_extracted_text=tender_text,
-            analysis_json=analysis.model_dump(mode="json"),
+            analysis_json={
+                "requirements": requirements.model_dump(mode="json"),
+                "evaluation": evaluation.model_dump(mode="json"),
+                "tenant_company_name": display_company_name,
+            },
+            content_hash=current_content_hash,
         )
         session.add(new_analysis)
         await session.commit()
         await session.refresh(new_analysis)
+    except ExtractionError as exc:
+        await session.rollback()
+        logger.exception("Tender requirement extraction failed")
+        status_code = getattr(exc, "status_code", status.HTTP_500_INTERNAL_SERVER_ERROR)
+        raise HTTPException(
+            status_code=status_code,
+            detail=f"Tender requirement extraction failed: {exc}",
+        ) from exc
     except SQLAlchemyError as exc:
         await session.rollback()
         logger.exception("Database integrity/persistence failure during tender analysis")
@@ -152,7 +379,8 @@ async def analyze_tender(
 
     return {
         "analysis_id": str(new_analysis.id),
-        "analysis": analysis,
+        "requirements": requirements,
+        "evaluation": evaluation,
     }
 
 
@@ -235,6 +463,7 @@ async def proxy_download(request: ProxyDownloadRequest):
 @router.get("/documents/{doc_id}/download")
 async def download_document(
     doc_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -252,7 +481,11 @@ async def download_document(
     result = await db.execute(
         select(TenderDocument, Tender)
         .join(Tender, TenderDocument.tender_id == Tender.id)
-        .where(TenderDocument.id == doc_id)
+        .join(Proposal, Proposal.tender_id == Tender.id)
+        .where(
+            TenderDocument.id == doc_id,
+            Proposal.user_id == current_user.id,
+        )
     )
     row = result.first()
     
@@ -285,6 +518,8 @@ async def download_document(
             content_type = "application/vnd.ms-excel"
         elif doc.file_type == "zip":
             content_type = "application/zip"
+        elif doc.file_type == "rar":
+            content_type = "application/x-rar-compressed"
         
         # Use inline disposition for PDF (enables iframe preview), attachment for others
         disposition = "inline" if content_type == "application/pdf" else "attachment"
@@ -385,20 +620,14 @@ async def refresh_tenders(
     This endpoint triggers a live scrape of etender.uzex.uz
     and updates the database with new or modified tenders.
     
-    Also sends Telegram alerts for new tenders to all users with telegram_id.
-    
     Returns count of new and updated tenders.
     """
     import traceback
     
     new_count = 0
     updated_count = 0
-    new_tenders_data: list[dict] = []  # Track new tenders for notification
     
     try:
-        from app.core.telegram import broadcast_new_tender
-        from app.models.all_models import User
-        
         logger.info("Starting tender refresh from UzEx portal...")
         scraper = UzExScraper(headless=True, timeout=30000)
         scraped_tenders = await scraper.fetch_latest_tenders(limit=10)
@@ -442,42 +671,9 @@ async def refresh_tenders(
                 )
                 db.add(tender)
                 new_count += 1
-                
-                # Track for telegram notification
-                new_tenders_data.append({
-                    "id": str(tender.id),
-                    "title": scraped.title,
-                    "budget": scraped.budget,
-                    "currency": scraped.currency,
-                    "region": scraped.region,
-                })
                 logger.info(f"Added new tender: {scraped.external_id}")
         
         await db.commit()
-        
-        # Send Telegram alerts for new tenders
-        if new_tenders_data:
-            try:
-                # Get all users with telegram_id
-                users_result = await db.execute(
-                    select(User.telegram_id).where(User.telegram_id.isnot(None))
-                )
-                chat_ids = [row[0] for row in users_result.fetchall() if row[0]]
-                
-                logger.info(f"Broadcasting {len(new_tenders_data)} new tenders to {len(chat_ids)} users")
-                
-                for tender_info in new_tenders_data:
-                    await broadcast_new_tender(
-                        tender_id=tender_info["id"],
-                        title=tender_info["title"],
-                        budget=tender_info["budget"],
-                        currency=tender_info["currency"],
-                        region=tender_info["region"],
-                        user_chat_ids=chat_ids,
-                    )
-            except Exception as e:
-                logger.error(f"Telegram broadcast failed: {e}")
-                # Don't fail the whole request if notifications fail
         
         return RefreshResponse(
             status="success",
@@ -497,221 +693,273 @@ async def refresh_tenders(
         )
 
 
-@router.post("/{tender_id}/sync-docs", response_model=SyncDocsResponse)
+def _normalize_task_status(state: str) -> str:
+    normalized = state.upper()
+    if normalized in {"PENDING", "STARTED", "SUCCESS", "FAILURE"}:
+        return normalized
+    if normalized in {"RECEIVED", "RETRY"}:
+        return "STARTED"
+    if normalized in {"REVOKED"}:
+        return "FAILURE"
+    return "PENDING"
+
+
+@router.post(
+    "/{tender_id}/sync-docs",
+    response_model=SyncDocsAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def sync_tender_documents(
     tender_id: UUID,
+) -> SyncDocsAcceptedResponse:
+    """
+    Enqueue tender document sync to Celery worker.
+    """
+    task = process_tender_docs.delay(str(tender_id))
+    return SyncDocsAcceptedResponse(message="Sync started", job_id=task.id)
+
+
+@router.get("/sync-status/{job_id}", response_model=SyncStatusResponse)
+async def get_sync_status(job_id: str) -> SyncStatusResponse:
+    task = celery_app.AsyncResult(job_id)
+    normalized_status = _normalize_task_status(task.status)
+    return SyncStatusResponse(
+        job_id=job_id,
+        status=normalized_status,
+        message=f"Job status: {normalized_status}",
+    )
+
+
+@router.get("/{tender_id}/documents")
+async def get_tender_documents(
+    tender_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> SyncDocsResponse:
+):
     """
-    Fetch and sync documents from a tender's source page.
-    
-    Scrapes the tender detail page for PDF/DOC/XLS files and stores them.
+    Return all parsed documents for a given tender.
     """
-    import traceback
-    
-    # Get tender from DB
-    result = await db.execute(select(Tender).where(Tender.id == tender_id))
-    tender = result.scalar_one_or_none()
-    
-    if not tender:
+    access_result = await db.execute(
+        select(Proposal.id)
+        .where(
+            Proposal.tender_id == tender_id,
+            Proposal.user_id == current_user.id,
+        )
+        .limit(1)
+    )
+    if access_result.scalar_one_or_none() is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tender not found",
         )
-    
-    def extract_file_path(file_url: str) -> str:
-        """
-        Extract downloadable file path from UzEx URLs.
 
-        Examples:
-        - https://.../DownloadFile?path=/files/2025/..../doc.pdf -> /files/...
-        - /files/2025/.../doc.pdf -> /files/...
-        """
-        parsed = urlparse(file_url)
-        query_path = parse_qs(parsed.query).get("path", [None])[0]
-        if query_path:
-            return unquote(query_path)
-        return file_url
+    result = await db.execute(
+        select(TenderDocument)
+        .join(Proposal, Proposal.tender_id == TenderDocument.tender_id)
+        .where(
+            TenderDocument.tender_id == tender_id,
+            Proposal.user_id == current_user.id,
+        )
+        .distinct()
+    )
+    return result.scalars().all()
 
-    def normalize_file_path(file_url: str) -> str:
-        """
-        Build a normalized path key for dedupe comparisons.
 
-        Handles:
-        - Full URL with ?path=...
-        - Relative /files/... paths
-        - Full URLs without query path
-        """
-        raw_path = extract_file_path(file_url).strip()
-        if not raw_path:
-            return ""
-        parsed = urlparse(raw_path)
-        if parsed.scheme and parsed.netloc:
-            url_path = unquote(parsed.path).strip().lower()
-            # Avoid false dedupe for generic API download endpoints where query
-            # params carry the actual file identity.
-            if url_path in {"/api/common/downloadfile", "/downloadfile"} and parsed.query:
-                return ""
-            return url_path
-        path = parsed.path if parsed.path else raw_path
-        return unquote(path).strip().lower()
+@router.get("/{tender_id}/docs-status")
+async def get_docs_status(
+    tender_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Lightweight check for whether tender documents are already synced.
 
-    def extract_file_name(file_url: str) -> str:
-        """Extract normalized file name for fallback dedupe."""
-        normalized_path = normalize_file_path(file_url)
-        if not normalized_path:
-            return ""
-        file_name = normalized_path.rstrip("/").split("/")[-1]
-        return file_name if "." in file_name else ""
+    Used by the frontend to skip redundant Celery sync-docs calls.
+    """
+    access_result = await db.execute(
+        select(Proposal.id)
+        .where(
+            Proposal.tender_id == tender_id,
+            Proposal.user_id == current_user.id,
+        )
+        .limit(1)
+    )
+    if access_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
 
-    def parsed_text_present(doc: TenderDocument) -> bool:
-        return bool(doc.parsed_text and doc.parsed_text.strip())
+    result = await db.execute(
+        select(TenderDocument)
+        .join(Proposal, Proposal.tender_id == TenderDocument.tender_id)
+        .where(
+            TenderDocument.tender_id == tender_id,
+            Proposal.user_id == current_user.id,
+        )
+        .distinct()
+    )
+    docs = result.scalars().all()
+    has_parsed = any(bool(d.parsed_text and d.parsed_text.strip()) for d in docs)
+    return {
+        "tender_id": str(tender_id),
+        "doc_count": len(docs),
+        "has_parsed_text": has_parsed,
+    }
 
-    def document_identity_key(file_url: str) -> str:
-        path_key = normalize_file_path(file_url)
-        if path_key:
-            return f"path:{path_key}"
-        name_key = extract_file_name(file_url)
-        if name_key:
-            return f"name:{name_key}"
-        return f"url:{file_url.strip().lower()}"
+
+@router.get("/{tender_id}/latest-analysis")
+async def get_latest_analysis(
+    tender_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Return the most recent TenderAnalysis for this tender and the
+    authenticated user's company.  Returns null fields when no
+    cached analysis exists.
+    """
+    profile_result = await db.execute(
+        select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
+    )
+    profile = profile_result.scalar_one_or_none()
+    analysis_owner_key = _analysis_owner_key(
+        current_user=current_user,
+        profile=profile,
+    )
+
+    result = await db.execute(
+        select(TenderAnalysis)
+        .where(
+            TenderAnalysis.tender_id == tender_id,
+            TenderAnalysis.company_name == analysis_owner_key,
+        )
+        .order_by(TenderAnalysis.created_at.desc())
+        .limit(1)
+    )
+    analysis = result.scalar_one_or_none()
+
+    if analysis is None:
+        return {
+            "analysis_id": None,
+            "requirements": None,
+            "evaluation": None,
+        }
+
+    analysis_data = analysis.analysis_json or {}
+    return {
+        "analysis_id": str(analysis.id),
+        "requirements": analysis_data.get("requirements"),
+        "evaluation": analysis_data.get("evaluation"),
+    }
+
+
+@router.post("/{tender_id}/override")
+async def override_risk(
+    tender_id: UUID,
+    request: RiskOverrideRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """
+    Record liability acceptance override with a cryptographic state hash.
+    """
+    tender_result = await db.execute(
+        select(Tender.id).where(Tender.id == tender_id)
+    )
+    if tender_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
+
+    node_result = await db.execute(
+        select(TaxonomyNode.id).where(TaxonomyNode.id == request.node_id)
+    )
+    if node_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Taxonomy node not found",
+        )
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+    raw_string = f"{current_user.id}:{tender_id}:{request.node_id}:{timestamp}"
+    state_hash = hashlib.sha256(raw_string.encode("utf-8")).hexdigest()
+
+    # Verify the analysis exists and belongs to this tender
+    analysis_result = await db.execute(
+        select(TenderAnalysis.id).where(
+            TenderAnalysis.id == request.analysis_id,
+            TenderAnalysis.tender_id == tender_id,
+        )
+    )
+    if analysis_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis not found for this tender",
+        )
+
+    log_entry = RiskOverrideLog(
+        user_id=current_user.id,
+        tender_id=tender_id,
+        analysis_id=request.analysis_id,
+        missing_node_id=request.node_id,
+        justification=request.justification,
+        state_hash=state_hash,
+    )
+    db.add(log_entry)
 
     try:
-        # Scrape documents from source page
-        scraper = UzExScraper(headless=True, timeout=30000)
-        scraped_docs = await scraper.scrape_tender_documents(tender.source_url)
-        
-        # Get existing documents for this tender
-        existing_result = await db.execute(
-            select(TenderDocument).where(TenderDocument.tender_id == tender_id)
-        )
-        existing_docs = existing_result.scalars().all()
-        existing_by_url: dict[str, TenderDocument] = {}
-        existing_by_path: dict[str, TenderDocument] = {}
-        existing_by_name: dict[str, TenderDocument] = {}
-
-        def register_existing_doc(doc: TenderDocument) -> None:
-            url_key = (doc.file_url or "").strip()
-            path_key = normalize_file_path(url_key)
-            name_key = extract_file_name(url_key)
-
-            if url_key and url_key not in existing_by_url:
-                existing_by_url[url_key] = doc
-
-            # Prefer the record that already contains parsed text.
-            if path_key:
-                current = existing_by_path.get(path_key)
-                if current is None or (not parsed_text_present(current) and parsed_text_present(doc)):
-                    existing_by_path[path_key] = doc
-
-            if name_key:
-                current = existing_by_name.get(name_key)
-                if current is None or (not parsed_text_present(current) and parsed_text_present(doc)):
-                    existing_by_name[name_key] = doc
-
-        for existing_doc in existing_docs:
-            register_existing_doc(existing_doc)
-        
-        # Add new documents
-        new_count = 0
-        parsed_count = 0
-        parsed_text_by_identity: dict[str, str] = {}
-        for doc in existing_docs:
-            if parsed_text_present(doc):
-                parsed_text_by_identity.setdefault(
-                    document_identity_key(doc.file_url),
-                    doc.parsed_text.strip(),
-                )
-
-        for doc_data in scraped_docs:
-            scraped_url = (doc_data.get("file_url") or "").strip()
-            if not scraped_url:
-                logger.warning("Skipping scraped doc with empty file_url for tender %s", tender_id)
-                continue
-
-            path_key = normalize_file_path(scraped_url)
-            name_key = extract_file_name(scraped_url)
-
-            doc = (
-                existing_by_url.get(scraped_url)
-                or (existing_by_path.get(path_key) if path_key else None)
-                or (existing_by_name.get(name_key) if name_key else None)
-            )
-
-            if not doc:
-                new_doc = TenderDocument(
-                    id=uuid4(),
-                    tender_id=tender_id,
-                    file_url=scraped_url,
-                    file_type=doc_data["file_type"],
-                )
-                db.add(new_doc)
-                doc = new_doc
-                register_existing_doc(new_doc)
-                new_count += 1
-
-            # If already parsed, skip OCR/parsing but keep deduped text in master compilation.
-            if parsed_text_present(doc):
-                parsed_text_by_identity.setdefault(
-                    document_identity_key(scraped_url),
-                    doc.parsed_text.strip(),
-                )
-                continue
-
-            # Download and parse only new/unparsed docs.
-            file_path = extract_file_path(scraped_url)
-            try:
-                file_bytes, filename = await scraper.download_file(
-                    tender_url=tender.source_url,
-                    file_path=file_path,
-                )
-                extracted_text = await process_tender_document(
-                    source=file_bytes,
-                    filename=filename,
-                )
-                if extracted_text.strip():
-                    doc.parsed_text = extracted_text
-                    parsed_count += 1
-                    parsed_text_by_identity[document_identity_key(scraped_url)] = (
-                        f"[{filename}]\n{extracted_text.strip()}"
-                    )
-            except Exception as parse_exc:
-                logger.warning(
-                    "Failed to parse tender document '%s' for tender %s: %s",
-                    scraped_url,
-                    tender_id,
-                    parse_exc,
-                )
-                continue
-
-        compiled_chunks = [text for text in parsed_text_by_identity.values() if text.strip()]
-        tender.compiled_master_text = "\n\n".join(compiled_chunks).strip() if compiled_chunks else None
-        
         await db.commit()
-        
-        # Fetch all documents to return
-        all_docs_result = await db.execute(
-            select(TenderDocument).where(TenderDocument.tender_id == tender_id)
-        )
-        all_docs = all_docs_result.scalars().all()
-        
-        return SyncDocsResponse(
-            status="success",
-            documents=[TenderDocumentResponse.model_validate(d) for d in all_docs],
-            new_count=new_count,
-            message=(
-                f"Synced {new_count} new documents, parsed {parsed_count} documents, "
-                f"{len(all_docs)} total"
-            ),
-        )
-        
-    except Exception as e:
-        error_tb = traceback.format_exc()
-        logger.error(f"Document sync failed: {e}\n{error_tb}")
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        logger.exception("Failed to persist risk override log")
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to fetch documents: {str(e)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database write failed: {exc}",
+        ) from exc
+
+    return {"state_hash": state_hash}
+
+
+@router.get("/{tender_id}/overrides", response_model=RiskOverrideStatusResponse)
+async def get_risk_overrides(
+    tender_id: UUID,
+    analysis_id: Optional[UUID] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> RiskOverrideStatusResponse:
+    """
+    Return node IDs that the current user has already overridden for this tender.
+
+    When ``analysis_id`` is provided, only overrides recorded against that
+    specific analysis run are returned.  This prevents liability handshakes
+    from leaking between analysis runs.
+    """
+    tender_result = await db.execute(
+        select(Tender.id).where(Tender.id == tender_id)
+    )
+    if tender_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
         )
+
+    filters = [
+        RiskOverrideLog.tender_id == tender_id,
+        RiskOverrideLog.user_id == current_user.id,
+    ]
+    if analysis_id is not None:
+        filters.append(RiskOverrideLog.analysis_id == analysis_id)
+
+    result = await db.execute(
+        select(RiskOverrideLog.missing_node_id).where(*filters)
+    )
+    accepted_node_ids = sorted({str(row[0]) for row in result.all()})
+    return RiskOverrideStatusResponse(
+        tender_id=tender_id,
+        accepted_node_ids=accepted_node_ids,
+    )
 
 
 @router.post("/seed", response_model=dict)

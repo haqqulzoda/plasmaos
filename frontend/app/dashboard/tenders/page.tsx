@@ -275,12 +275,12 @@ export default function TendersPage() {
                 </motion.div>
             )}
 
-            {/* Tenders Grid */}
+            {/* Tenders — Enterprise Action Cards */}
             {filteredTenders.length === 0 ? (
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-zinc-900 border border-zinc-800 rounded-2xl p-12 text-center"
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center"
                 >
                     <Radar className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-white mb-2">
@@ -301,132 +301,89 @@ export default function TendersPage() {
                     </button>
                 </motion.div>
             ) : (
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.1 }}
-                    className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden"
-                >
-                    <div className="w-full overflow-x-auto rounded-lg">
-                        <table className="w-full text-left border-collapse table-fixed">
-                            <thead className="bg-gray-900/50 border-b border-gray-800 text-gray-400 text-sm">
-                                <tr>
-                                    <th className="py-4 px-4 font-medium w-full text-left">Tender</th>
-                                    <th className="py-4 px-4 font-medium w-[110px] text-left">Category</th>
-                                    <th className="py-4 px-4 font-medium w-[140px] text-left">Budget</th>
-                                    <th className="py-4 px-4 font-medium w-[120px] text-left">Region</th>
-                                    <th className="py-4 px-4 font-medium w-[150px] text-left">Deadline</th>
-                                    <th className="py-4 px-4 font-medium w-[290px] text-right">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredTenders.map((tender, index) => {
-                                    const catStyle = getCategoryStyle(tender.category);
-                                    return (
-                                        <motion.tr
-                                            key={tender.id}
-                                            initial={{ opacity: 0, x: -20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: index * 0.05 }}
-                                            className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors group"
+                <div className="flex flex-col gap-4">
+                    {filteredTenders.map((tender, index) => {
+                        const catStyle = getCategoryStyle(tender.category);
+                        return (
+                            <motion.div
+                                key={tender.id}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                                className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:bg-gray-800/60 hover:border-gray-600 transition-all flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6"
+                            >
+                                {/* Left Content — Title & ID */}
+                                <div className="flex-1 max-w-3xl">
+                                    <h3 className="text-lg font-semibold text-gray-100 mb-2 leading-snug">{tender.title}</h3>
+                                    <div className="flex items-center gap-3">
+                                        <a
+                                            href={`https://etender.uzex.uz/lot/${tender.external_id}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-slate-500 hover:text-indigo-400 underline-offset-2 hover:underline"
                                         >
-                                            {/* Title Column */}
-                                            <td className="py-4 px-4 w-full max-w-0">
-                                                <div className="flex flex-col">
-                                                    <div className="truncate block text-sm font-medium text-white">
-                                                        {tender.title}
-                                                    </div>
-                                                    <a
-                                                        href={`https://etender.uzex.uz/lot/${tender.external_id}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="mt-1 inline-block text-xs text-slate-500 hover:text-indigo-400 underline-offset-2 hover:underline"
-                                                    >
-                                                        ID: {tender.external_id}
-                                                    </a>
-                                                </div>
-                                            </td>
+                                            ID: {tender.external_id}
+                                        </a>
+                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
+                                            {tender.category}
+                                        </span>
+                                    </div>
+                                </div>
 
-                                            {/* Category Column */}
-                                            <td className="py-4 px-4 whitespace-nowrap w-[130px]">
-                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
-                                                    {tender.category}
-                                                </span>
-                                            </td>
+                                {/* Middle Content — Key Metrics */}
+                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 shrink-0">
+                                    <div>
+                                        <span className="text-2xl font-bold text-emerald-400 block mb-1">
+                                            {formatBudget(tender.budget, tender.currency)}
+                                        </span>
+                                    </div>
+                                    {tender.region ? (
+                                        <span className="text-sm text-gray-400 inline-flex items-center gap-1">
+                                            <MapPin className="w-3.5 h-3.5" />
+                                            {tender.region}
+                                        </span>
+                                    ) : (
+                                        <span className="text-sm text-zinc-600">No region</span>
+                                    )}
+                                    <span
+                                        className={`text-sm inline-flex items-center gap-1 ${isPassed(tender.deadline)
+                                            ? 'text-zinc-500'
+                                            : isUrgent(tender.deadline)
+                                                ? 'text-red-400 font-semibold'
+                                                : 'text-gray-400'
+                                            }`}
+                                    >
+                                        <Clock className="w-3.5 h-3.5" />
+                                        {formatDeadline(tender.deadline)}
+                                    </span>
+                                </div>
 
-                                            {/* Budget Column */}
-                                            <td className="py-4 px-4 whitespace-nowrap w-[140px]">
-                                                <div className="flex items-center gap-2 whitespace-nowrap">
-                                                    <Banknote className="w-4 h-4 text-green-400 flex-shrink-0" />
-                                                    <span className="text-green-400 font-semibold whitespace-nowrap">
-                                                        {formatBudget(tender.budget, tender.currency)}
-                                                    </span>
-                                                </div>
-                                            </td>
-
-                                            {/* Region Column */}
-                                            <td className="py-4 px-4 whitespace-nowrap w-[120px]">
-                                                {tender.region ? (
-                                                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-zinc-800 rounded-full text-sm text-zinc-300">
-                                                        <MapPin className="w-3 h-3" />
-                                                        {tender.region}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-zinc-500">—</span>
-                                                )}
-                                            </td>
-
-                                            {/* Deadline Column */}
-                                            <td className="py-4 px-4 whitespace-nowrap w-[150px] text-gray-300 text-sm">
-                                                <div
-                                                    className={`flex items-center gap-2 whitespace-nowrap ${isPassed(tender.deadline)
-                                                        ? 'text-zinc-500'
-                                                        : isUrgent(tender.deadline)
-                                                            ? 'text-red-400'
-                                                            : 'text-zinc-300'
-                                                        }`}
-                                                >
-                                                    <Clock className="w-4 h-4" />
-                                                    <span className={isUrgent(tender.deadline) ? 'font-semibold' : ''}>
-                                                        {formatDeadline(tender.deadline)}
-                                                    </span>
-                                                </div>
-                                            </td>
-
-                                            {/* Action Column */}
-                                            <td className="py-4 px-4 whitespace-nowrap text-right w-[290px]">
-                                                <div className="flex items-center justify-end gap-3">
-                                                    {/* Secondary Action: Compliance (Sovereign Shield) */}
-                                                    <button
-                                                        onClick={() => router.push(`/dashboard/tenders/${tender.id}/compliance`)}
-                                                        className="inline-flex min-w-[148px] whitespace-nowrap flex-shrink-0 items-center justify-center gap-2 h-10 px-4 rounded-lg border border-purple-500/20 bg-purple-500/10 text-purple-300 text-sm font-medium transition-all duration-200 hover:bg-purple-500/20 hover:border-purple-500/40 hover:shadow-[0_0_15px_rgba(168,85,247,0.15)]"
-                                                    >
-                                                        <ShieldCheck className="w-4 h-4 flex-shrink-0" />
-                                                        <span>Compliance</span>
-                                                    </button>
-
-                                                    {/* Primary Action: Draft Proposal */}
-                                                    <button
-                                                        onClick={() => handleDraftProposal(tender)}
-                                                        disabled={isPassed(tender.deadline) || draftingId === tender.id}
-                                                        className="inline-flex min-w-[148px] whitespace-nowrap flex-shrink-0 items-center justify-center gap-2 h-10 px-4 rounded-lg bg-purple-600 text-white text-sm font-medium transition-all duration-200 hover:bg-purple-500 hover:shadow-[0_0_15px_rgba(147,51,234,0.3)] focus:ring-2 focus:ring-purple-400/50 disabled:bg-zinc-700 disabled:cursor-not-allowed disabled:hover:shadow-none"
-                                                    >
-                                                        {draftingId === tender.id ? (
-                                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                                        ) : (
-                                                            <FileText className="w-4 h-4 flex-shrink-0" />
-                                                        )}
-                                                        <span>Draft Proposal</span>
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </motion.tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </motion.div>
+                                {/* Right Content — Actions */}
+                                <div className="flex flex-row xl:flex-col gap-3 shrink-0">
+                                    <button
+                                        onClick={() => handleDraftProposal(tender)}
+                                        disabled={isPassed(tender.deadline) || draftingId === tender.id}
+                                        className="bg-indigo-600 hover:bg-indigo-500 text-white w-full px-5 py-2.5 rounded-lg font-medium transition-all text-sm inline-flex items-center justify-center gap-2 disabled:bg-zinc-700 disabled:cursor-not-allowed"
+                                    >
+                                        {draftingId === tender.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <FileText className="w-4 h-4" />
+                                        )}
+                                        Draft Proposal
+                                    </button>
+                                    <button
+                                        onClick={() => router.push(`/dashboard/tenders/${tender.id}/compliance`)}
+                                        className="border border-gray-700 hover:bg-gray-700 text-gray-300 w-full px-5 py-2.5 rounded-lg transition-colors text-sm inline-flex items-center justify-center gap-2"
+                                    >
+                                        <ShieldCheck className="w-4 h-4" />
+                                        Compliance
+                                    </button>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </div>
             )}
         </div>
     );

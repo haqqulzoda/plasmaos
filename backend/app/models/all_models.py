@@ -4,13 +4,11 @@ Plasma AI - Database Models
 Defines all SQLAlchemy ORM models for the Autonomous Tender Officer SaaS platform.
 """
 
-import enum
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -24,149 +22,14 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-
-class Base(DeclarativeBase):
-    """Base class for all database models."""
-    
-    type_annotation_map = {
-        dict[str, Any]: JSON,
-    }
-
-
-# ============================================================================
-# Enums
-# ============================================================================
-
-class SubscriptionTier(str, enum.Enum):
-    """User subscription tiers."""
-    SCOUT = "SCOUT"       # Free tier
-    AGENT = "AGENT"       # Pro tier
-    ENTERPRISE = "ENTERPRISE"  # Team tier
-
-
-class AuthSessionStatus(str, enum.Enum):
-    """Status of Traffic Light authentication sessions."""
-    PENDING = "PENDING"
-    VERIFIED = "VERIFIED"
-
-
-class TenderStatus(str, enum.Enum):
-    """Status of tenders."""
-    OPEN = "OPEN"
-    CLOSED = "CLOSED"
-    CANCELLED = "CANCELLED"
-
-
-class ProposalStatus(str, enum.Enum):
-    """Status of proposals."""
-    DRAFT = "DRAFT"
-    GENERATING = "GENERATING"
-    COMPLETED = "COMPLETED"
-    SUBMITTED = "SUBMITTED"
+from app.models.base import Base, ProposalStatus, SubscriptionTier, TenderStatus
 
 
 # ============================================================================
 # Models
 # ============================================================================
-
-class User(Base):
-    """
-    Users of the Autonomous Tender Officer platform.
-    Authenticated via Telegram with Zero-Trust safety word verification.
-    """
-    
-    __tablename__ = "users"
-    
-    id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4,
-    )
-    telegram_id: Mapped[int] = mapped_column(
-        BigInteger,
-        unique=True,
-        nullable=False,
-    )
-    username: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    phone_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    
-    # Zero-Trust: Safety word for bot handshake verification
-    safety_word: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    
-    # Company Profile Fields (for PDF generation)
-    company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    director_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    address: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    phone_contact: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    bank_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    mfo: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    account_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    inn: Mapped[str | None] = mapped_column(String(15), nullable=True)
-    
-    # SaaS Tier
-    subscription_tier: Mapped[SubscriptionTier] = mapped_column(
-        Enum(SubscriptionTier, name="subscription_tier"),
-        default=SubscriptionTier.SCOUT,
-        nullable=False,
-    )
-    
-    # Admin flag for Concierge upsell
-    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    
-    # Relationships
-    proposals: Mapped[list["Proposal"]] = relationship(
-        "Proposal",
-        back_populates="user",
-        cascade="all, delete-orphan",
-    )
-    
-    # Indexes
-    __table_args__ = (
-        Index("ix_users_telegram_id", "telegram_id"),
-    )
-
-
-class AuthSession(Base):
-    """
-    Traffic Light Authentication sessions.
-    Temporary codes for web-to-Telegram authentication flow.
-    """
-    
-    __tablename__ = "auth_sessions"
-    
-    code: Mapped[str] = mapped_column(
-        String(4),
-        primary_key=True,
-    )
-    ip_address: Mapped[str] = mapped_column(String(45), nullable=False)
-    status: Mapped[AuthSessionStatus] = mapped_column(
-        Enum(AuthSessionStatus, name="auth_session_status"),
-        default=AuthSessionStatus.PENDING,
-        nullable=False,
-    )
-    user_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
 
 
 class Tender(Base):
@@ -357,3 +220,40 @@ class Proposal(Base):
         Index("ix_proposals_tender_id", "tender_id"),
         Index("ix_proposals_status", "status"),
     )
+
+
+# Import modular models so Alembic autogenerate sees the full metadata graph.
+from app.models.audit import AuditLog, TenderAnalysis, TenderRecommendation  # noqa: E402,F401
+from app.models.company import Certification, CompanyProfile, FinancialHistory, License  # noqa: E402,F401
+from app.models.taxonomy import (  # noqa: E402,F401
+    CompanyCredential,
+    RiskOverrideLog,
+    TaxonomyCategory,
+    TaxonomyNode,
+    TenderRequirement,
+)
+from app.models.user import User  # noqa: E402,F401
+
+
+__all__ = [
+    "Base",
+    "SubscriptionTier",
+    "TenderStatus",
+    "ProposalStatus",
+    "User",
+    "Tender",
+    "TenderDocument",
+    "Proposal",
+    "CompanyProfile",
+    "Certification",
+    "License",
+    "FinancialHistory",
+    "TaxonomyCategory",
+    "TaxonomyNode",
+    "CompanyCredential",
+    "TenderRequirement",
+    "RiskOverrideLog",
+    "TenderAnalysis",
+    "TenderRecommendation",
+    "AuditLog",
+]

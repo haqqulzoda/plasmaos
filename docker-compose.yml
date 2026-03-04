@@ -19,7 +19,7 @@ services:
 
   # ---- Redis (Auth Codes) ----
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
     container_name: plasma_redis
     restart: always
     ports:

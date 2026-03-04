@@ -1,7 +1,7 @@
 """
 Plasma AI - Quick PDF Generator
 
-Standalone PDF generator for Telegram bot one-click proposal generation.
+Standalone PDF generator for one-click proposal generation.
 Uses reportlab with DejaVu Sans font for full Cyrillic/Unicode support.
 """
 

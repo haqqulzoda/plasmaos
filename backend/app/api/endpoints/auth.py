@@ -1,190 +1,129 @@
 """
-Plasma AI - Traffic Light Authentication Endpoints
+Plasma AI - Authentication Endpoints
 
-No-password authentication flow:
-1. Frontend calls /init with a 4-digit code
-2. User types code in Telegram Bot
-3. Bot verifies and updates session status
-4. Frontend polls /verify to get JWT token
+Google OAuth bridge endpoints.
 """
 
-import logging
-import traceback
-from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Response
+from pydantic import BaseModel
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, get_current_user
 from app.db.session import get_db
-from app.models.all_models import AuthSession, AuthSessionStatus, User
-
-logger = logging.getLogger(__name__)
+from app.models.all_models import User
 
 router = APIRouter()
 
 
-# =============================================================================
-# Pydantic Schemas
-# =============================================================================
-
-class AuthInitRequest(BaseModel):
-    """Request body for initializing auth session."""
-    code: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
-    ip: str = Field(..., examples=["127.0.0.1"])
+class GoogleAuthRequest(BaseModel):
+    google_id: str
+    email: str
+    name: str
+    avatar_url: str | None = None
 
 
-class AuthInitResponse(BaseModel):
-    """Response for auth initialization."""
-    code: str
-    status: str
-    expires_at: datetime
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
 
-
-class AuthVerifyRequest(BaseModel):
-    """Request body for verifying auth session."""
-    code: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
-
-
-class AuthVerifyResponse(BaseModel):
-    """Response for auth verification."""
-    status: str
-    token: str | None = None
-    user_id: str | None = None
-
-
-# =============================================================================
-# Endpoints
-# =============================================================================
-
-@router.post("/init", response_model=AuthInitResponse)
-async def init_auth_session(
-    request: AuthInitRequest,
+@router.post("/google", response_model=TokenResponse)
+async def google_auth_bridge(
+    payload: GoogleAuthRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
-) -> AuthInitResponse:
-    """
-    Initialize a new Traffic Light auth session.
-    
-    Creates a PENDING session with the provided 4-digit code.
-    If code already exists, updates the existing session.
-    """
-    try:
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
-        
-        # Check if code already exists
-        result = await db.execute(
-            select(AuthSession).where(AuthSession.code == request.code)
-        )
-        existing_session = result.scalar_one_or_none()
-        
-        if existing_session:
-            # Update existing session
-            existing_session.ip_address = request.ip
-            existing_session.status = AuthSessionStatus.PENDING
-            existing_session.expires_at = expires_at
-            existing_session.user_id = None
-        else:
-            # Create new session
-            new_session = AuthSession(
-                code=request.code,
-                ip_address=request.ip,
-                status=AuthSessionStatus.PENDING,
-                expires_at=expires_at,
-            )
-            db.add(new_session)
-        
-        await db.commit()
-        
-        return AuthInitResponse(
-            code=request.code,
-            status="pending",
-            expires_at=expires_at,
-        )
-    except Exception as e:
-        logger.error(f"AUTH INIT ERROR: {e}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Auth init failed: {type(e).__name__}: {str(e)}",
-        )
+) -> TokenResponse:
+    email = payload.email.strip().lower()
+    google_id = payload.google_id.strip()
+    name = payload.name.strip() or email
+    avatar_url = payload.avatar_url
 
-
-@router.post("/verify", response_model=AuthVerifyResponse)
-async def verify_auth_session(
-    request: AuthVerifyRequest,
-    db: AsyncSession = Depends(get_db),
-) -> AuthVerifyResponse:
-    """
-    Check the status of an auth session.
-    
-    If VERIFIED: Returns JWT token for the authenticated user.
-    If PENDING: Returns pending status (frontend should poll again).
-    If expired or not found: Returns error.
-    """
     result = await db.execute(
-        select(AuthSession).where(AuthSession.code == request.code)
+        select(User).where(or_(User.google_id == google_id, User.email == email))
     )
-    session = result.scalar_one_or_none()
-    
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Auth session not found",
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        user = User(
+            google_id=google_id,
+            email=email,
+            name=name,
+            avatar_url=avatar_url,
         )
-    
-    # Check if expired
-    if session.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Auth session expired",
-        )
-    
-    # Check status
-    if session.status == AuthSessionStatus.PENDING:
-        return AuthVerifyResponse(status="pending")
-    
-    if session.status == AuthSessionStatus.VERIFIED:
-        # Session is verified, generate token
-        if not session.user_id:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Session verified but no user linked",
-            )
-        
-        # Fetch user details
-        user_result = await db.execute(
-            select(User).where(User.id == session.user_id)
-        )
-        user = user_result.scalar_one_or_none()
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found",
-            )
-        
-        # Generate JWT token
-        token = create_access_token(
-            data={
-                "sub": str(user.id),
-                "telegram_id": user.telegram_id,
-                "tier": user.subscription_tier.value,
-                "is_admin": user.is_admin,
-            }
-        )
-        
-        # Clean up used session
-        await db.delete(session)
-        await db.commit()
-        
-        return AuthVerifyResponse(
-            status="verified",
-            token=token,
-            user_id=str(user.id),
-        )
-    
-    # Unknown status
-    return AuthVerifyResponse(status="unknown")
+        db.add(user)
+    else:
+        user.google_id = google_id
+        user.email = email
+        user.name = name
+        user.avatar_url = avatar_url
+
+    await db.commit()
+    await db.refresh(user)
+
+    access_token = create_access_token(
+        data={
+            "sub": str(user.id),
+            "google_id": user.google_id,
+            "email": user.email,
+            "name": user.name,
+            "is_admin": user.is_admin,
+            "tier": user.subscription_tier.value,
+        }
+    )
+
+    response.set_cookie(
+        key="plasma_api_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=60 * 60 * 8,
+        path="/",
+    )
+
+    return TokenResponse(access_token=access_token, token_type="bearer")
+
+
+@router.post("/logout")
+async def logout(response: Response) -> dict[str, str]:
+    response.delete_cookie("plasma_api_token", path="/")
+    return {"status": "ok"}
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+) -> TokenResponse:
+    """
+    Issue a fresh backend JWT for the authenticated user.
+
+    Accepts the current token via Bearer header or ``plasma_api_token``
+    cookie — whichever ``get_current_user`` resolves.  Returns a new
+    token with a full 8-hour lifetime and refreshes the cookie.
+    """
+    access_token = create_access_token(
+        data={
+            "sub": str(current_user.id),
+            "google_id": current_user.google_id,
+            "email": current_user.email,
+            "name": current_user.name,
+            "is_admin": current_user.is_admin,
+            "tier": current_user.subscription_tier.value,
+        }
+    )
+
+    response.set_cookie(
+        key="plasma_api_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=60 * 60 * 8,
+        path="/",
+    )
+
+    return TokenResponse(access_token=access_token, token_type="bearer")
+
