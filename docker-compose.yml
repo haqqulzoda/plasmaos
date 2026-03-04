@@ -52,6 +52,13 @@ services:
     restart: always
     depends_on:
       - backend
+    environment:
+      # Internal Docker network URL for server-side API calls (NextAuth)
+      BACKEND_INTERNAL_URL: http://backend:8000/api/v1
+      AUTH_SECRET: ${AUTH_SECRET}
+      NEXTAUTH_URL: https://console.plasmaos.uz
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
     ports:
       - "127.0.0.1:3000:3000"
 
