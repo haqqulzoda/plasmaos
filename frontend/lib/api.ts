@@ -7,7 +7,7 @@ import { signOut } from 'next-auth/react';
  * Axios instance configured with base URL and automatic JWT token injection.
  */
 const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL,
+    baseURL: '/api/v1',
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json',

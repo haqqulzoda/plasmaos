@@ -127,7 +127,13 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     const fetchProposal = async () => {
       try {
-        const response = await api.get<Proposal>(`/proposals/${resolvedParams.id}`);
+        // The URL param is a tender_id. POST creates or returns existing proposal.
+        const createRes = await api.post<{ id: string }>('/proposals', {
+          tender_id: resolvedParams.id,
+        });
+        const proposalId = createRes.data.id;
+        // Fetch full proposal with tender details
+        const response = await api.get<Proposal>(`/proposals/${proposalId}`);
         const data = response.data;
         setProposal(data);
 
