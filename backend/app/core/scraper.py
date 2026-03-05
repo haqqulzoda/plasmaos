@@ -14,7 +14,9 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import partial
+from pathlib import Path
 from typing import Optional
+from urllib.parse import parse_qs, unquote, urlparse
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
@@ -58,6 +60,122 @@ CATEGORY_KEYWORDS = {
         'kantselyariya', 'канцеляр', 'мебел', 'стол', 'stol'
     ],
 }
+
+DOWNLOAD_URL_MARKERS = (
+    "downloadfile",
+    "download",
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".zip",
+    ".rar",
+    ".7z",
+    ".tar",
+    ".gz",
+)
+
+KNOWN_FILE_EXTENSIONS = {
+    "pdf",
+    "doc",
+    "docx",
+    "xls",
+    "xlsx",
+    "zip",
+    "rar",
+    "7z",
+    "tar",
+    "gz",
+}
+
+ARCHIVE_EXTENSIONS = {"zip", "rar", "7z", "tar", "gz"}
+
+
+def _extract_download_path(url_or_path: str) -> str:
+    raw_value = (url_or_path or "").strip()
+    if not raw_value:
+        return ""
+
+    parsed = urlparse(raw_value)
+    query_path = parse_qs(parsed.query).get("path", [None])[0]
+    if query_path:
+        return unquote(query_path).strip()
+
+    if parsed.scheme and parsed.netloc:
+        return unquote(parsed.path).strip()
+
+    return unquote(parsed.path or raw_value).strip()
+
+
+def _download_target_key(url_or_path: str) -> str:
+    return _extract_download_path(url_or_path).lower()
+
+
+def _extract_filename(url_or_path: str) -> str:
+    download_path = _extract_download_path(url_or_path)
+    if not download_path:
+        return ""
+    return Path(download_path).name
+
+
+def _detect_file_extension(url_or_path: str) -> str:
+    filename = _extract_filename(url_or_path)
+    if not filename:
+        return ""
+    return Path(filename).suffix.lower().lstrip(".")
+
+
+def _detect_scraped_file_type(url_or_path: str) -> str:
+    extension = _detect_file_extension(url_or_path)
+    return extension if extension in KNOWN_FILE_EXTENSIONS else "unknown"
+
+
+def _looks_like_html_response(file_bytes: bytes, content_type: str) -> bool:
+    normalized_content_type = (content_type or "").lower()
+    if "html" in normalized_content_type:
+        return True
+
+    prefix = file_bytes[:512].lstrip().lower()
+    return (
+        prefix.startswith(b"<!doctype html")
+        or prefix.startswith(b"<html")
+        or prefix.startswith(b"<body")
+    )
+
+
+def _looks_like_pdf_bytes(file_bytes: bytes) -> bool:
+    return file_bytes.startswith(b"%PDF")
+
+
+def _looks_like_zip_bytes(file_bytes: bytes) -> bool:
+    return file_bytes.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"))
+
+
+def _looks_like_rar_bytes(file_bytes: bytes) -> bool:
+    return file_bytes.startswith((b"Rar!\x1a\x07\x00", b"Rar!\x1a\x07\x01\x00"))
+
+
+def _is_valid_file_payload(file_bytes: bytes, content_type: str, file_path: str) -> bool:
+    if not file_bytes or len(file_bytes) <= 100:
+        return False
+
+    if _looks_like_html_response(file_bytes, content_type):
+        return False
+
+    extension = _detect_file_extension(file_path)
+    normalized_content_type = (content_type or "").lower()
+
+    if extension == "pdf":
+        return _looks_like_pdf_bytes(file_bytes) or "application/pdf" in normalized_content_type
+
+    if extension == "zip":
+        return _looks_like_zip_bytes(file_bytes) or "application/zip" in normalized_content_type
+
+    if extension == "rar":
+        return _looks_like_rar_bytes(file_bytes) or "rar" in normalized_content_type
+
+    return True
 
 
 def detect_category(title: str) -> str:
@@ -349,7 +467,7 @@ class UzExScraper:
             # Set up network interceptor to capture download URLs
             def capture_download_request(request):
                 url = request.url.lower()
-                if any(x in url for x in ['downloadfile', 'download', '.pdf', '.doc', '.xls', '.zip']):
+                if any(marker in url for marker in DOWNLOAD_URL_MARKERS):
                     if 'apietender' in url or 'cdn.uzex' in url or '/api/' in url:
                         captured_urls.append(request.url)
                         logger.info(f"[INTERCEPTOR] Captured: {request.url[:80]}...")
@@ -386,7 +504,11 @@ class UzExScraper:
                         continue
                 
                 # Step 3: Also extract any static links with href
-                static_links = page.query_selector_all("a[href*='download'], a[href$='.pdf'], a[href$='.doc']")
+                static_links = page.query_selector_all(
+                    "a[href*='download'], a[href*='DownloadFile'], a[href$='.pdf'], "
+                    "a[href$='.doc'], a[href$='.docx'], a[href$='.xls'], a[href$='.xlsx'], "
+                    "a[href$='.zip'], a[href$='.rar'], a[href$='.7z'], a[href$='.tar'], a[href$='.gz']"
+                )
                 for link in static_links:
                     try:
                         href = link.get_attribute("href")
@@ -415,20 +537,12 @@ class UzExScraper:
                             url = self.BASE_URL + "/" + url
                         
                         # Skip duplicates
-                        if url in seen_urls:
+                        dedupe_key = _download_target_key(url) or url.lower()
+                        if dedupe_key in seen_urls:
                             continue
-                        seen_urls.add(url)
+                        seen_urls.add(dedupe_key)
                         
-                        # Determine file type - PDF or Bust normalization
-                        ext = url_lower.split('.')[-1].split('?')[0]  # Handle query strings
-                        if ext in ['zip', 'rar', '7z', 'tar']:
-                            file_type = "archive"
-                        elif ext == 'pdf':
-                            file_type = "pdf"
-                        elif ext in ['doc', 'docx']:
-                            file_type = "word"
-                        else:
-                            file_type = "unknown"
+                        file_type = _detect_scraped_file_type(url)
                         
                         documents.append({
                             "file_url": url,
@@ -470,29 +584,39 @@ class UzExScraper:
         3. Response interception fallback (legacy, less reliable for archives)
         """
         import httpx
-        import tempfile, os
+        import os
+        import tempfile
 
-        filename = file_path.split("/")[-1] if file_path else "download"
+        normalized_file_path = _extract_download_path(file_path)
+        target_key = _download_target_key(file_path)
+        requested_extension = _detect_file_extension(file_path)
+        filename = _extract_filename(file_path) or "download"
 
-        # ── Strategy 1: Direct HTTP GET ──────────────────────────────────
-        download_api_url = f"https://apietender.uzex.uz/api/common/DownloadFile?path={file_path}"
-        try:
-            logger.info(f"[DOWNLOAD] Strategy 1: Direct HTTP GET → {download_api_url[:80]}")
-            r = httpx.get(download_api_url, timeout=30, follow_redirects=True)
-            if r.status_code == 200 and len(r.content) > 100:
-                ct = r.headers.get("content-type", "").lower()
-                # Make sure we didn't get an HTML error page
-                if "html" not in ct:
-                    logger.info(f"[DOWNLOAD] Strategy 1 success: {len(r.content)} bytes")
-                    return r.content, filename
-                else:
-                    logger.warning("[DOWNLOAD] Strategy 1 returned HTML, falling through")
-            else:
-                logger.warning(f"[DOWNLOAD] Strategy 1 failed: HTTP {r.status_code}, {len(r.content)} bytes")
-        except Exception as e:
-            logger.warning(f"[DOWNLOAD] Strategy 1 error: {e}")
+        if requested_extension not in ARCHIVE_EXTENSIONS and normalized_file_path:
+            download_api_url = f"https://apietender.uzex.uz/api/common/DownloadFile?path={normalized_file_path}"
+            try:
+                logger.info(f"[DOWNLOAD] Strategy 1: Direct HTTP GET -> {download_api_url[:80]}")
+                response = httpx.get(download_api_url, timeout=30, follow_redirects=True)
+                response_content_type = response.headers.get("content-type", "")
+                if response.status_code == 200 and _is_valid_file_payload(
+                    response.content,
+                    response_content_type,
+                    normalized_file_path,
+                ):
+                    logger.info(f"[DOWNLOAD] Strategy 1 success: {len(response.content)} bytes")
+                    return response.content, filename
 
-        # ── Strategy 2: Playwright download event ────────────────────────
+                logger.warning(
+                    "[DOWNLOAD] Strategy 1 rejected payload: HTTP %s, %s bytes, ct=%s",
+                    response.status_code,
+                    len(response.content),
+                    response_content_type,
+                )
+            except Exception as exc:
+                logger.warning(f"[DOWNLOAD] Strategy 1 error: {exc}")
+        else:
+            logger.info("[DOWNLOAD] Strategy 1 skipped for archive or empty path: %s", file_path)
+
         file_content = b""
 
         with sync_playwright() as p:
@@ -506,85 +630,97 @@ class UzExScraper:
 
             captured_files: list[dict] = []
 
-            # Response interceptor (Strategy 3 fallback data)
             def capture_file_response(response):
                 url_lower = response.url.lower()
-                if 'downloadfile' in url_lower and response.status == 200:
+                if "downloadfile" in url_lower and response.status == 200:
                     try:
                         body = response.body()
-                        if body and len(body) > 100:
-                            captured_files.append({
-                                "url": response.url,
-                                "body": body,
-                            })
-                            logger.info(f"[DOWNLOAD] Intercepted {len(body)} bytes from {response.url[:60]}")
-                    except Exception as e:
-                        logger.debug(f"[DOWNLOAD] Intercept body failed: {e}")
+                        content_type = response.headers.get("content-type", "")
+                        if _is_valid_file_payload(body, content_type, response.url):
+                            captured_files.append(
+                                {
+                                    "url": response.url,
+                                    "body": body,
+                                    "content_type": content_type,
+                                }
+                            )
+                            logger.info(
+                                f"[DOWNLOAD] Intercepted {len(body)} bytes from {response.url[:60]}"
+                            )
+                    except Exception as exc:
+                        logger.debug(f"[DOWNLOAD] Intercept body failed: {exc}")
 
             page.on("response", capture_file_response)
 
             try:
                 logger.info(f"[DOWNLOAD] Loading tender page: {tender_url}")
                 page.goto(tender_url, timeout=self.timeout)
-                page.wait_for_timeout(5000)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:
+                    page.wait_for_timeout(5000)
 
-                download_btns = page.query_selector_all("a.btn-success")
+                download_btns = page.query_selector_all(
+                    "a.btn-success, button.btn-success, a:has-text('Yuklab olish'), "
+                    "button:has-text('Yuklab olish'), a[href*='DownloadFile']"
+                )
                 logger.info(f"[DOWNLOAD] Found {len(download_btns)} download buttons")
 
                 for i, btn in enumerate(download_btns):
                     try:
-                        # Strategy 2: Use expect_download to capture the browser download
                         try:
                             with page.expect_download(timeout=10000) as download_info:
                                 btn.click()
                             download = download_info.value
 
-                            # Save to temp, read bytes, clean up
                             tmp_path = os.path.join(tempfile.gettempdir(), f"plasma_dl_{i}")
                             download.save_as(tmp_path)
-                            with open(tmp_path, "rb") as f:
-                                dl_bytes = f.read()
+                            with open(tmp_path, "rb") as file_handle:
+                                dl_bytes = file_handle.read()
                             os.unlink(tmp_path)
 
                             suggested = download.suggested_filename or filename
 
-                            if dl_bytes and len(dl_bytes) > 100:
-                                # Check if this is the file we're looking for
-                                if file_path in (download.url or ""):
-                                    logger.info(f"[DOWNLOAD] Strategy 2 matched target: {len(dl_bytes)} bytes")
+                            if _is_valid_file_payload(dl_bytes, "", suggested):
+                                if target_key and _download_target_key(download.url or "") == target_key:
+                                    logger.info(
+                                        f"[DOWNLOAD] Strategy 2 matched target: {len(dl_bytes)} bytes"
+                                    )
                                     browser.close()
                                     return dl_bytes, suggested
 
-                                # Not matching target, but store as candidate
                                 if not file_content:
                                     file_content = dl_bytes
                                     filename = suggested
-                                    logger.info(f"[DOWNLOAD] Strategy 2 captured: {len(dl_bytes)} bytes ({suggested})")
+                                    logger.info(
+                                        f"[DOWNLOAD] Strategy 2 captured: {len(dl_bytes)} bytes ({suggested})"
+                                    )
 
                         except PlaywrightTimeout:
-                            # No download triggered — button might use network response instead
                             btn.click()
                             page.wait_for_timeout(2000)
 
-                        # Check intercepted responses for target file
-                        for cf in captured_files:
-                            if file_path in cf["url"]:
-                                ct = cf.get("content_type", "")
-                                if "html" not in ct:
-                                    logger.info(f"[DOWNLOAD] Strategy 3 matched target: {len(cf['body'])} bytes")
-                                    browser.close()
-                                    return cf["body"], filename
+                        for captured in captured_files:
+                            response_key = _download_target_key(captured["url"])
+                            if target_key and response_key == target_key:
+                                logger.info(
+                                    f"[DOWNLOAD] Strategy 3 matched target: {len(captured['body'])} bytes"
+                                )
+                                browser.close()
+                                return captured["body"], _extract_filename(captured["url"]) or filename
 
-                    except Exception as e:
-                        logger.debug(f"[DOWNLOAD] Button {i+1} processing failed: {e}")
+                    except Exception as exc:
+                        logger.debug(f"[DOWNLOAD] Button {i + 1} processing failed: {exc}")
                         continue
 
-                # Return best result: download event > intercepted response > error
-                if file_content and len(file_content) > 100:
+                if file_content and _is_valid_file_payload(file_content, "", filename):
                     logger.info(f"[DOWNLOAD] Using download event capture: {len(file_content)} bytes")
                 elif captured_files:
                     file_content = captured_files[0]["body"]
-                    logger.info(f"[DOWNLOAD] Using first intercepted response: {len(file_content)} bytes")
+                    filename = _extract_filename(captured_files[0]["url"]) or filename
+                    logger.info(
+                        f"[DOWNLOAD] Using first intercepted response: {len(file_content)} bytes"
+                    )
                 else:
                     raise Exception(f"Could not download file: {file_path}")
 
@@ -592,7 +728,7 @@ class UzExScraper:
                 browser.close()
 
         return file_content, filename
-    
+
     async def download_file(self, tender_url: str, file_path: str) -> tuple[bytes, str]:
         """
         Download a file from UzEx tender page.
@@ -752,3 +888,4 @@ def test_scraper():
 
 if __name__ == "__main__":
     test_scraper()
+

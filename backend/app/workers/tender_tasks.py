@@ -143,6 +143,7 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
 
                 for doc_data in scraped_docs:
                     scraped_url = (doc_data.get("file_url") or "").strip()
+                    scraped_file_type = (doc_data.get("file_type") or "").strip().lower()
                     if not scraped_url:
                         logger.warning("Skipping scraped doc with empty file_url for tender %s", tender_uuid)
                         continue
@@ -172,6 +173,12 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                             existing_by_name,
                         )
                         new_count += 1
+
+                    if doc.file_url != scraped_url:
+                        doc.file_url = scraped_url
+
+                    if scraped_file_type and doc.file_type != scraped_file_type:
+                        doc.file_type = scraped_file_type
 
                     if _parsed_text_present(doc):
                         parsed_text_by_identity.setdefault(

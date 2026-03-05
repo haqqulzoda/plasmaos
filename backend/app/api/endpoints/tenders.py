@@ -7,7 +7,9 @@ Public tender feed for the Autonomous Tender Officer.
 import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -184,6 +186,39 @@ def _analysis_owner_key(
     """
     profile_token = str(profile.id) if profile is not None else "no-profile"
     return f"{current_user.id}:{profile_token}"
+
+
+def _extract_remote_file_path(file_url: str) -> str:
+    raw_value = (file_url or "").strip()
+    if not raw_value:
+        return ""
+
+    parsed = urlparse(raw_value)
+    query_path = parse_qs(parsed.query).get("path", [None])[0]
+    if query_path:
+        return unquote(query_path).strip()
+
+    if parsed.scheme and parsed.netloc:
+        return unquote(parsed.path).strip()
+
+    return unquote(parsed.path or raw_value).strip()
+
+
+def _guess_download_content_type(*, filename: str, file_type: str | None = None) -> str:
+    extension = (file_type or Path(filename).suffix.lstrip(".")).lower()
+    content_types = {
+        "pdf": "application/pdf",
+        "doc": "application/msword",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xls": "application/vnd.ms-excel",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "zip": "application/zip",
+        "rar": "application/vnd.rar",
+        "7z": "application/x-7z-compressed",
+        "tar": "application/x-tar",
+        "gz": "application/gzip",
+    }
+    return content_types.get(extension, "application/octet-stream")
 
 
 @router.post("/{tender_id}/analyze", response_model=AnalyzeTenderResponse)
@@ -433,21 +468,7 @@ async def proxy_download(request: ProxyDownloadRequest):
     try:
         scraper = UzExScraper(headless=True)
         file_bytes, filename = await scraper.download_file(request.tender_url, request.file_path)
-        
-        # Determine content type
-        content_type = "application/octet-stream"
-        if filename.endswith(".pdf"):
-            content_type = "application/pdf"
-        elif filename.endswith(".docx"):
-            content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        elif filename.endswith(".doc"):
-            content_type = "application/msword"
-        elif filename.endswith(".xlsx"):
-            content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        elif filename.endswith(".xls"):
-            content_type = "application/vnd.ms-excel"
-        elif filename.endswith(".zip"):
-            content_type = "application/zip"
+        content_type = _guess_download_content_type(filename=filename)
         
         return Response(
             content=file_bytes,
@@ -493,41 +514,27 @@ async def download_document(
         raise HTTPException(status_code=404, detail="Document not found")
     
     doc, tender = row
-    
-    # Extract file path from file_url
-    # e.g., "https://apietender.uzex.uz/api/common/DownloadFile?path=/files/2025/12/23/xxx.pdf"
-    file_path = ""
-    if "path=" in doc.file_url:
-        file_path = doc.file_url.split("path=")[-1]
-    else:
-        file_path = doc.file_url
-    
-    filename = file_path.split("/")[-1] if "/" in file_path else f"document.{doc.file_type}"
+
+    file_path = _extract_remote_file_path(doc.file_url)
+    if not file_path:
+        raise HTTPException(status_code=500, detail="Document file path is invalid")
+
+    filename = Path(file_path).name if file_path else f"document.{doc.file_type}"
     
     try:
         scraper = UzExScraper(headless=True)
         file_bytes, downloaded_name = await scraper.download_file(tender.source_url, file_path)
-        
-        # Determine content type
-        content_type = "application/octet-stream"
-        if doc.file_type == "pdf" or filename.endswith(".pdf"):
-            content_type = "application/pdf"
-        elif doc.file_type in ("doc", "docx"):
-            content_type = "application/msword"
-        elif doc.file_type in ("xls", "xlsx"):
-            content_type = "application/vnd.ms-excel"
-        elif doc.file_type == "zip":
-            content_type = "application/zip"
-        elif doc.file_type == "rar":
-            content_type = "application/x-rar-compressed"
-        
-        # Use inline disposition for PDF (enables iframe preview), attachment for others
+        resolved_name = downloaded_name or filename
+        content_type = _guess_download_content_type(
+            filename=resolved_name,
+            file_type=doc.file_type,
+        )
         disposition = "inline" if content_type == "application/pdf" else "attachment"
         
         return Response(
             content=file_bytes,
             media_type=content_type,
-            headers={"Content-Disposition": f'{disposition}; filename="{downloaded_name or filename}"'}
+            headers={"Content-Disposition": f'{disposition}; filename="{resolved_name}"'}
         )
         
     except Exception as e:

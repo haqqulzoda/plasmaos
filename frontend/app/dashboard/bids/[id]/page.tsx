@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -25,6 +25,23 @@ interface TenderDocument {
   file_url: string;
   file_type: string;
   created_at: string;
+}
+
+interface TenderDocsStatus {
+  tender_id: string;
+  doc_count: number;
+  has_parsed_text: boolean;
+}
+
+interface TenderDocsSyncResponse {
+  message: string;
+  job_id: string;
+}
+
+interface TenderDocsSyncStatus {
+  job_id: string;
+  status: string;
+  message: string;
 }
 
 interface StrategicLineItem {
@@ -72,6 +89,8 @@ const getDeliveryDaysInt = (value: string): number => {
 const formatCurrency = (amount: number, currency: string) =>
   `${new Intl.NumberFormat('en-US').format(amount)} ${currency}`;
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /** Strip non-digits, return raw numeric string */
 const stripNonDigits = (v: string) => v.replace(/\D/g, '');
 
@@ -83,13 +102,36 @@ const formatPriceDisplay = (raw: string) => {
 };
 
 /** File extension helper */
-const getFileExtension = (url: string) => {
-  const parts = url.split('.');
+const getFileExtension = (value: string) => {
+  const sanitized = value.split('?')[0].split('#')[0];
+  const parts = sanitized.split('.');
   return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
 };
 
 const isArchiveFile = (ext: string) => ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext);
 const isPdfFile = (ext: string) => ext === 'pdf';
+
+const getDocumentFilename = (doc: TenderDocument) => {
+  const fallbackExtension = (doc.file_type || '').trim().toLowerCase();
+
+  try {
+    const parsed = new URL(doc.file_url);
+    const queryPath = parsed.searchParams.get('path');
+    const candidate = decodeURIComponent(queryPath || parsed.pathname);
+    const filename = candidate.split('/').filter(Boolean).pop();
+    if (filename) {
+      return filename;
+    }
+  } catch {
+    const sanitized = decodeURIComponent(doc.file_url || '').split('?')[0].split('#')[0];
+    const filename = sanitized.split('/').filter(Boolean).pop();
+    if (filename) {
+      return filename;
+    }
+  }
+
+  return fallbackExtension ? `document.${fallbackExtension}` : 'document';
+};
 
 const formatDeadline = (deadline: string | null) => {
   if (!deadline) return 'No deadline';
@@ -115,8 +157,9 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
   const [isGeneratingDocx, setIsGeneratingDocx] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+  const [isSyncingDocs, setIsSyncingDocs] = useState(false);
+  const [docsSyncError, setDocsSyncError] = useState<string | null>(null);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState(0);
   const [previewingDocId, setPreviewingDocId] = useState<string | null>(null);
 
   const [companyName, setCompanyName] = useState('');
@@ -124,6 +167,30 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
   const [suggestedPrice, setSuggestedPrice] = useState('');
   const [deliveryDays, setDeliveryDays] = useState('');
   const [lineItems, setLineItems] = useState<StrategicLineItem[]>([]);
+
+  const fetchTenderDocuments = useCallback(async (tenderId: string) => {
+    const response = await api.get<TenderDocument[]>(`/tenders/${tenderId}/documents`);
+    setDocuments(response.data);
+  }, []);
+
+  const pollTenderDocumentSync = useCallback(async (jobId: string) => {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const response = await api.get<TenderDocsSyncStatus>(`/tenders/sync-status/${jobId}`);
+      const status = response.data.status.toUpperCase();
+
+      if (status === 'SUCCESS') {
+        return;
+      }
+
+      if (status === 'FAILURE') {
+        throw new Error(response.data.message || 'Tender document sync failed.');
+      }
+
+      await wait(2500);
+    }
+
+    throw new Error('Tender document sync timed out.');
+  }, []);
 
   useEffect(() => {
     const fetchProposal = async () => {
@@ -178,19 +245,81 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
 
   useEffect(() => {
     if (!proposal) return;
-    const fetchDocs = async () => {
+
+    let isActive = true;
+
+    const syncTenderDocuments = async () => {
       setIsLoadingDocs(true);
+      setDocsSyncError(null);
+
       try {
-        const response = await api.get<TenderDocument[]>(`/tenders/${proposal.tender_id}/documents`);
-        setDocuments(response.data);
-      } catch {
-        setDocuments([]);
+        const statusResponse = await api.get<TenderDocsStatus>(
+          `/tenders/${proposal.tender_id}/docs-status`,
+        );
+        const docsStatus = statusResponse.data;
+
+        if (!isActive) {
+          return;
+        }
+
+        if (docsStatus.doc_count > 0) {
+          try {
+            await fetchTenderDocuments(proposal.tender_id);
+          } catch {
+            if (isActive) {
+              setDocuments([]);
+            }
+          }
+        } else {
+          setDocuments([]);
+        }
+
+        if (docsStatus.doc_count === 0 || !docsStatus.has_parsed_text) {
+          if (isActive) {
+            setIsSyncingDocs(true);
+          }
+
+          const syncResponse = await api.post<TenderDocsSyncResponse>(
+            `/tenders/${proposal.tender_id}/sync-docs`,
+          );
+          await pollTenderDocumentSync(syncResponse.data.job_id);
+
+          if (!isActive) {
+            return;
+          }
+
+          await fetchTenderDocuments(proposal.tender_id);
+        }
+      } catch (err) {
+        if (!isActive) {
+          return;
+        }
+
+        try {
+          await fetchTenderDocuments(proposal.tender_id);
+        } catch {
+          setDocuments([]);
+        }
+
+        const axiosError = err as { response?: { data?: { detail?: string } } };
+        setDocsSyncError(
+          axiosError.response?.data?.detail ||
+            'Tender documents are still syncing or could not be fetched right now.',
+        );
       } finally {
-        setIsLoadingDocs(false);
+        if (isActive) {
+          setIsLoadingDocs(false);
+          setIsSyncingDocs(false);
+        }
       }
     };
-    fetchDocs();
-  }, [proposal]);
+
+    syncTenderDocuments();
+
+    return () => {
+      isActive = false;
+    };
+  }, [fetchTenderDocuments, pollTenderDocumentSync, proposal]);
 
   const handleGenerateStrategicProposal = async () => {
     if (!proposal) return;
@@ -245,47 +374,35 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
     }
   };
 
-  const handleArchiveDownload = async (docId: string, label: string) => {
-    setDownloadingDocId(docId);
-    setDownloadProgress(0);
-    try {
-      const response = await api.get(`/tenders/documents/${docId}/download`, {
-        responseType: 'blob',
-        onDownloadProgress: (progressEvent) => {
-          if (progressEvent.total && progressEvent.total > 0) {
-            setDownloadProgress(Math.min(99, Math.round((progressEvent.loaded / progressEvent.total) * 100)));
-          }
-        },
-      });
-
-      setDownloadProgress(100);
-
-      const contentType = response.headers['content-type'] || 'application/octet-stream';
-      const blob = new Blob([response.data], { type: contentType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = label || `document_${docId}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      // fallback: open in new tab via authenticated API path
-      try {
-        const fallback = await api.get(`/tenders/documents/${docId}/download`, { responseType: 'blob' });
-        const blob = new Blob([fallback.data]);
-        window.open(URL.createObjectURL(blob), '_blank');
-      } catch {
-        // last resort
-      }
-    } finally {
-      setTimeout(() => {
-        setDownloadingDocId(null);
-        setDownloadProgress(0);
-      }, 600);
+  const triggerDocumentRequest = useCallback((docId: string, openInNewTab: boolean) => {
+    const link = document.createElement('a');
+    link.href = `/api/documents/${docId}`;
+    if (openInNewTab) {
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
     }
-  };
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }, []);
+
+  const handleDocumentDownload = useCallback((docId: string) => {
+    setDownloadingDocId(docId);
+    triggerDocumentRequest(docId, false);
+
+    window.setTimeout(() => {
+      setDownloadingDocId((current) => (current === docId ? null : current));
+    }, 1200);
+  }, [triggerDocumentRequest]);
+
+  const handleDocumentPreview = useCallback((docId: string) => {
+    setPreviewingDocId(docId);
+    triggerDocumentRequest(docId, true);
+
+    window.setTimeout(() => {
+      setPreviewingDocId((current) => (current === docId ? null : current));
+    }, 1200);
+  }, [triggerDocumentRequest]);
 
   const handleCopySummary = async () => {
     if (!strategicSummary) return;
@@ -631,95 +748,64 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
 
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
             <h2 className="mb-4 text-lg font-semibold text-white">Tender Documents</h2>
-            {isLoadingDocs && <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />}
-            {!isLoadingDocs && documents.length === 0 && (
+            {(isLoadingDocs || isSyncingDocs) && (
+              <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Synchronizing tender documents from UzEx. This can take up to a minute.
+              </div>
+            )}
+            {docsSyncError && (
+              <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                {docsSyncError}
+              </div>
+            )}
+            {!isLoadingDocs && !isSyncingDocs && documents.length === 0 && (
               <p className="text-sm text-zinc-500">No synchronized documents found for this tender.</p>
             )}
             <div className="space-y-2">
               {documents.map((doc) => {
-                const ext = getFileExtension(doc.file_url || doc.file_type);
+                const filename = getDocumentFilename(doc);
+                const ext = getFileExtension(filename || doc.file_type);
                 const isPdf = isPdfFile(ext) || doc.file_type?.toLowerCase() === 'pdf';
-                const isArchive = isArchiveFile(ext) || ['zip', 'rar'].includes(doc.file_type?.toLowerCase());
-                const isThisDownloading = downloadingDocId === doc.id;
-                const filename = doc.file_url?.split('/').pop() || `document.${doc.file_type}`;
-
-                if (isArchive) {
-                  return (
-                    <button
-                      key={doc.id}
-                      onClick={() => handleArchiveDownload(doc.id, filename)}
-                      disabled={isThisDownloading}
-                      className="relative flex w-full items-center justify-between overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-zinc-700 disabled:cursor-wait"
-                    >
-                      {/* Progress bar background */}
-                      {isThisDownloading && (
-                        <motion.div
-                          className="absolute inset-y-0 left-0 bg-amber-500/10"
-                          initial={{ width: '0%' }}
-                          animate={{ width: `${downloadProgress}%` }}
-                          transition={{ ease: 'linear', duration: 0.2 }}
-                        />
-                      )}
-
-                      <span className="relative flex items-center gap-2 truncate">
-                        {isThisDownloading ? (
-                          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-400" />
-                        ) : (
-                          <FileArchive className="h-4 w-4 shrink-0 text-amber-400" />
-                        )}
-                        {doc.file_type.toUpperCase()} | {new Date(doc.created_at).toLocaleDateString()}
-                      </span>
-
-                      <span className="relative inline-flex items-center gap-1 text-zinc-400">
-                        {isThisDownloading ? (
-                          <span className="text-xs font-medium tabular-nums text-amber-300">
-                            {downloadProgress > 0 ? `${downloadProgress}%` : 'Connecting…'}
-                          </span>
-                        ) : (
-                          <>
-                            <Download className="h-4 w-4" />
-                            Download
-                          </>
-                        )}
-                      </span>
-                    </button>
-                  );
-                }
+                const isArchive =
+                  isArchiveFile(ext) || ['zip', 'rar', '7z', 'tar', 'gz'].includes(doc.file_type?.toLowerCase());
+                const isPreviewAction = isPdf;
+                const isBusy = isPreviewAction ? previewingDocId === doc.id : downloadingDocId === doc.id;
+                const typeLabel = (ext || doc.file_type || 'file').toUpperCase();
 
                 return (
                   <button
                     key={doc.id}
-                    disabled={previewingDocId === doc.id}
-                    onClick={async () => {
-                      setPreviewingDocId(doc.id);
-                      try {
-                        const res = await api.get(`/tenders/documents/${doc.id}/download`, { responseType: 'blob' });
-                        const blob = new Blob([res.data], { type: 'application/pdf' });
-                        const url = URL.createObjectURL(blob);
-                        window.open(url, '_blank');
-                      } catch {
-                        // Fallback: nothing to do
-                      } finally {
-                        setPreviewingDocId(null);
-                      }
-                    }}
+                    disabled={isBusy}
+                    onClick={() =>
+                      isPreviewAction ? handleDocumentPreview(doc.id) : handleDocumentDownload(doc.id)
+                    }
                     className="flex w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-zinc-700 disabled:cursor-wait disabled:opacity-70"
                   >
-                    <span className="flex items-center gap-2 truncate">
-                      {previewingDocId === doc.id ? (
+                    <span className="flex min-w-0 items-center gap-2 truncate">
+                      {isBusy ? (
                         <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" />
-                      ) : (
+                      ) : isArchive ? (
+                        <FileArchive className="h-4 w-4 shrink-0 text-amber-400" />
+                      ) : isPdf ? (
                         <FileText className="h-4 w-4 shrink-0 text-sky-400" />
+                      ) : (
+                        <FileType className="h-4 w-4 shrink-0 text-zinc-300" />
                       )}
-                      {doc.file_type.toUpperCase()} | {new Date(doc.created_at).toLocaleDateString()}
+                      <span className="truncate">{typeLabel} | {filename}</span>
                     </span>
                     <span className="inline-flex items-center gap-1 text-zinc-400">
-                      {previewingDocId === doc.id ? (
-                        <span className="text-xs font-medium text-sky-300">Loading…</span>
-                      ) : (
+                      {isBusy ? (
+                        <span className="text-xs font-medium text-sky-300">Opening...</span>
+                      ) : isPreviewAction ? (
                         <>
                           <FileText className="h-4 w-4" />
                           Preview
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-4 w-4" />
+                          Download
                         </>
                       )}
                     </span>
@@ -742,3 +828,4 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
     </div>
   );
 }
+
