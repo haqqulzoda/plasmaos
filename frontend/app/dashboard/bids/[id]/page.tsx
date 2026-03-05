@@ -117,6 +117,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
   const [isCopied, setIsCopied] = useState(false);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [previewingDocId, setPreviewingDocId] = useState<string | null>(null);
 
   const [companyName, setCompanyName] = useState('');
   const [strategicSummary, setStrategicSummary] = useState('');
@@ -259,7 +260,8 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
 
       setDownloadProgress(100);
 
-      const blob = new Blob([response.data]);
+      const contentType = response.headers['content-type'] || 'application/octet-stream';
+      const blob = new Blob([response.data], { type: contentType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -687,7 +689,9 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
                 return (
                   <button
                     key={doc.id}
+                    disabled={previewingDocId === doc.id}
                     onClick={async () => {
+                      setPreviewingDocId(doc.id);
                       try {
                         const res = await api.get(`/tenders/documents/${doc.id}/download`, { responseType: 'blob' });
                         const blob = new Blob([res.data], { type: 'application/pdf' });
@@ -695,17 +699,29 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
                         window.open(url, '_blank');
                       } catch {
                         // Fallback: nothing to do
+                      } finally {
+                        setPreviewingDocId(null);
                       }
                     }}
-                    className="flex w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-zinc-700"
+                    className="flex w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-zinc-700 disabled:cursor-wait disabled:opacity-70"
                   >
                     <span className="flex items-center gap-2 truncate">
-                      <FileText className="h-4 w-4 shrink-0 text-sky-400" />
+                      {previewingDocId === doc.id ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" />
+                      ) : (
+                        <FileText className="h-4 w-4 shrink-0 text-sky-400" />
+                      )}
                       {doc.file_type.toUpperCase()} | {new Date(doc.created_at).toLocaleDateString()}
                     </span>
                     <span className="inline-flex items-center gap-1 text-zinc-400">
-                      <FileText className="h-4 w-4" />
-                      Preview
+                      {previewingDocId === doc.id ? (
+                        <span className="text-xs font-medium text-sky-300">Loading…</span>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4" />
+                          Preview
+                        </>
+                      )}
                     </span>
                   </button>
                 );

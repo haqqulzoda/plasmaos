@@ -462,83 +462,135 @@ class UzExScraper:
     
     def _sync_download_file(self, tender_url: str, file_path: str) -> tuple[bytes, str]:
         """
-        Download a file from UzEx by navigating to tender page and clicking download.
-        
-        Uses response interception to capture file bytes from the network layer.
-        
-        Args:
-            tender_url: URL of the tender detail page (e.g., https://etender.uzex.uz/lot/465790)
-            file_path: The file path from the DownloadFile API (e.g., /files/2025/12/23/xxx.pdf)
-        
-        Returns:
-            Tuple of (file_bytes, filename)
+        Download a file from UzEx.
+
+        Strategy (ordered by reliability for binary files):
+        1. Direct HTTP GET to the DownloadFile API URL (fastest, no browser)
+        2. Playwright download event (captures browser-triggered saves)
+        3. Response interception fallback (legacy, less reliable for archives)
         """
-        file_content = b""
+        import httpx
+        import tempfile, os
+
         filename = file_path.split("/")[-1] if file_path else "download"
-        captured_files: list[dict] = []
-        
+
+        # ── Strategy 1: Direct HTTP GET ──────────────────────────────────
+        download_api_url = f"https://apietender.uzex.uz/api/common/DownloadFile?path={file_path}"
+        try:
+            logger.info(f"[DOWNLOAD] Strategy 1: Direct HTTP GET → {download_api_url[:80]}")
+            r = httpx.get(download_api_url, timeout=30, follow_redirects=True)
+            if r.status_code == 200 and len(r.content) > 100:
+                ct = r.headers.get("content-type", "").lower()
+                # Make sure we didn't get an HTML error page
+                if "html" not in ct:
+                    logger.info(f"[DOWNLOAD] Strategy 1 success: {len(r.content)} bytes")
+                    return r.content, filename
+                else:
+                    logger.warning("[DOWNLOAD] Strategy 1 returned HTML, falling through")
+            else:
+                logger.warning(f"[DOWNLOAD] Strategy 1 failed: HTTP {r.status_code}, {len(r.content)} bytes")
+        except Exception as e:
+            logger.warning(f"[DOWNLOAD] Strategy 1 error: {e}")
+
+        # ── Strategy 2: Playwright download event ────────────────────────
+        file_content = b""
+
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self.headless)
             context = browser.new_context(
                 viewport={"width": 1280, "height": 720},
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                accept_downloads=True,
             )
             page = context.new_page()
-            
-            # Set up response interceptor to capture file bytes
+
+            captured_files: list[dict] = []
+
+            # Response interceptor (Strategy 3 fallback data)
             def capture_file_response(response):
                 url_lower = response.url.lower()
                 if 'downloadfile' in url_lower and response.status == 200:
                     try:
                         body = response.body()
-                        captured_files.append({
-                            "url": response.url,
-                            "body": body,
-                        })
-                        logger.info(f"[DOWNLOAD] Captured {len(body)} bytes from {response.url[:60]}...")
+                        if body and len(body) > 100:
+                            captured_files.append({
+                                "url": response.url,
+                                "body": body,
+                            })
+                            logger.info(f"[DOWNLOAD] Intercepted {len(body)} bytes from {response.url[:60]}")
                     except Exception as e:
-                        logger.debug(f"[DOWNLOAD] Failed to capture response body: {e}")
-            
+                        logger.debug(f"[DOWNLOAD] Intercept body failed: {e}")
+
             page.on("response", capture_file_response)
-            
+
             try:
                 logger.info(f"[DOWNLOAD] Loading tender page: {tender_url}")
                 page.goto(tender_url, timeout=self.timeout)
                 page.wait_for_timeout(5000)
-                
-                # Click download buttons until we find our target file
+
                 download_btns = page.query_selector_all("a.btn-success")
                 logger.info(f"[DOWNLOAD] Found {len(download_btns)} download buttons")
-                
+
                 for i, btn in enumerate(download_btns):
                     try:
-                        btn.click()
-                        page.wait_for_timeout(2000)
-                        
-                        # Check if we captured our target file
+                        # Strategy 2: Use expect_download to capture the browser download
+                        try:
+                            with page.expect_download(timeout=10000) as download_info:
+                                btn.click()
+                            download = download_info.value
+
+                            # Save to temp, read bytes, clean up
+                            tmp_path = os.path.join(tempfile.gettempdir(), f"plasma_dl_{i}")
+                            download.save_as(tmp_path)
+                            with open(tmp_path, "rb") as f:
+                                dl_bytes = f.read()
+                            os.unlink(tmp_path)
+
+                            suggested = download.suggested_filename or filename
+
+                            if dl_bytes and len(dl_bytes) > 100:
+                                # Check if this is the file we're looking for
+                                if file_path in (download.url or ""):
+                                    logger.info(f"[DOWNLOAD] Strategy 2 matched target: {len(dl_bytes)} bytes")
+                                    browser.close()
+                                    return dl_bytes, suggested
+
+                                # Not matching target, but store as candidate
+                                if not file_content:
+                                    file_content = dl_bytes
+                                    filename = suggested
+                                    logger.info(f"[DOWNLOAD] Strategy 2 captured: {len(dl_bytes)} bytes ({suggested})")
+
+                        except PlaywrightTimeout:
+                            # No download triggered — button might use network response instead
+                            btn.click()
+                            page.wait_for_timeout(2000)
+
+                        # Check intercepted responses for target file
                         for cf in captured_files:
                             if file_path in cf["url"]:
-                                file_content = cf["body"]
-                                logger.info(f"[DOWNLOAD] Found target file: {len(file_content)} bytes")
-                                break
-                        
-                        if file_content:
-                            break
+                                ct = cf.get("content_type", "")
+                                if "html" not in ct:
+                                    logger.info(f"[DOWNLOAD] Strategy 3 matched target: {len(cf['body'])} bytes")
+                                    browser.close()
+                                    return cf["body"], filename
+
                     except Exception as e:
-                        logger.debug(f"[DOWNLOAD] Button {i+1} click failed: {e}")
+                        logger.debug(f"[DOWNLOAD] Button {i+1} processing failed: {e}")
                         continue
-                
-                # If we didn't find the specific file, return the first captured file
-                if not file_content and captured_files:
+
+                # Return best result: download event > intercepted response > error
+                if file_content and len(file_content) > 100:
+                    logger.info(f"[DOWNLOAD] Using download event capture: {len(file_content)} bytes")
+                elif captured_files:
                     file_content = captured_files[0]["body"]
-                    logger.info(f"[DOWNLOAD] Using first captured file: {len(file_content)} bytes")
-                
-                if not file_content:
+                    logger.info(f"[DOWNLOAD] Using first intercepted response: {len(file_content)} bytes")
+                else:
                     raise Exception(f"Could not download file: {file_path}")
-                    
+
             finally:
                 browser.close()
-        
+
         return file_content, filename
     
     async def download_file(self, tender_url: str, file_path: str) -> tuple[bytes, str]:
