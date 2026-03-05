@@ -14,18 +14,32 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "gemini-3-flash-preview"
+# ---------------------------------------------------------------------------
+# Model fallback chain for compliance extraction
+# ---------------------------------------------------------------------------
+EXTRACTION_MODEL_CHAIN: list[str] = [
+    os.getenv("GEMINI_EXTRACTION_MODEL", "gemini-3.1-flash-lite-preview"),
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash-lite",
+]
+# Deduplicate while preserving order
+_seen: set[str] = set()
+EXTRACTION_MODEL_CHAIN = [
+    m for m in EXTRACTION_MODEL_CHAIN if m not in _seen and not _seen.add(m)  # type: ignore[func-returns-value]
+]
+
 MAX_TENDER_TEXT_CHARS = 120_000
-GENAI_MAX_RETRY_ATTEMPTS = 4
+GENAI_MAX_RETRY_ATTEMPTS = 3
 GENAI_RETRY_BACKOFF_BASE_SECONDS = 1.5
 GENAI_RETRY_BACKOFF_MAX_SECONDS = 12.0
 GENAI_RETRYABLE_CODES = {429, 500, 502, 503, 504}
 
 
 class ExtractionError(RuntimeError):
-    def __init__(self, message: str, *, status_code: int = 500):
+    def __init__(self, message: str, *, status_code: int = 500, error_type: str = "api_error"):
         super().__init__(message)
         self.status_code = status_code
+        self.error_type = error_type
 
 
 class DynamicTenderRequirements(BaseModel):
@@ -101,72 +115,128 @@ def _validate_structured_response(response: Any) -> DynamicTenderRequirements:
         ) from exc
 
 
+def _is_quota_error(exc: genai_errors.APIError) -> bool:
+    """Return True when the error signals quota / rate-limit exhaustion."""
+    code = int(getattr(exc, "code", 0) or 0)
+    status = str(getattr(exc, "status", "") or "")
+    msg = str(getattr(exc, "message", "") or "").lower()
+    return code == 429 or status == "RESOURCE_EXHAUSTED" or "quota" in msg
+
+
 def _sync_extract_tender_requirements(
     tender_text: str, available_taxonomy: list[dict], api_key: str
 ) -> DynamicTenderRequirements:
+    """Try each model in the extraction chain; advance on quota errors."""
     prompt = _build_extraction_prompt(
         tender_text=tender_text, available_taxonomy=available_taxonomy
     )
     client = genai.Client(api_key=api_key)
 
-    for attempt in range(1, GENAI_MAX_RETRY_ATTEMPTS + 1):
-        try:
-            response = client.models.generate_content(
-                model=MODEL_NAME,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=DynamicTenderRequirements,
-                    temperature=0.0,
-                ),
-            )
-            return _validate_structured_response(response)
-        except ValidationError as exc:
-            raise ExtractionError(
-                "LLM response failed DynamicTenderRequirements schema validation."
-            ) from exc
-        except ExtractionError:
-            raise
-        except genai_errors.APIError as exc:
-            error_code = int(getattr(exc, "code", 0) or 0)
-            error_status = str(getattr(exc, "status", "") or "")
-            error_message = str(getattr(exc, "message", "") or "").strip()
-            is_retryable = error_code in GENAI_RETRYABLE_CODES
-            if is_retryable and attempt < GENAI_MAX_RETRY_ATTEMPTS:
-                delay_seconds = min(
-                    GENAI_RETRY_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)),
-                    GENAI_RETRY_BACKOFF_MAX_SECONDS,
+    last_exc: Exception | None = None
+
+    for model_idx, model_name in enumerate(EXTRACTION_MODEL_CHAIN):
+        logger.info(
+            "Extraction: trying model %s (%d/%d)",
+            model_name, model_idx + 1, len(EXTRACTION_MODEL_CHAIN),
+        )
+
+        for attempt in range(1, GENAI_MAX_RETRY_ATTEMPTS + 1):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=DynamicTenderRequirements,
+                        temperature=0.0,
+                    ),
                 )
-                logger.warning(
-                    "Tender extraction transient GenAI error (code=%s status=%s). "
-                    "Retrying attempt %s/%s in %.1fs.",
-                    error_code,
-                    error_status,
-                    attempt + 1,
-                    GENAI_MAX_RETRY_ATTEMPTS,
-                    delay_seconds,
-                )
-                time.sleep(delay_seconds)
-                continue
+                return _validate_structured_response(response)
+            except ValidationError as exc:
+                raise ExtractionError(
+                    "LLM response failed DynamicTenderRequirements schema validation."
+                ) from exc
+            except ExtractionError:
+                raise
+            except genai_errors.APIError as exc:
+                last_exc = exc
+                error_code = int(getattr(exc, "code", 0) or 0)
+                error_status = str(getattr(exc, "status", "") or "")
+                error_message = str(getattr(exc, "message", "") or "").strip()
 
-            mapped_status_code = 500
-            if error_code == 429 or error_status == "RESOURCE_EXHAUSTED":
-                mapped_status_code = 429
-            elif error_code in {500, 502, 503, 504} or error_status in {"UNAVAILABLE"}:
-                mapped_status_code = 503
+                # ── Quota exhausted → skip to next model immediately ──
+                if _is_quota_error(exc):
+                    if model_idx < len(EXTRACTION_MODEL_CHAIN) - 1:
+                        logger.warning(
+                            "Model %s quota exceeded, falling back to %s",
+                            model_name,
+                            EXTRACTION_MODEL_CHAIN[model_idx + 1],
+                        )
+                        break  # break retry loop → advance model
+                    # Last model — raise
+                    raise ExtractionError(
+                        f"Monthly AI quota reached across all models. "
+                        f"Last error: {error_message or 'RESOURCE_EXHAUSTED'}",
+                        status_code=429,
+                        error_type="quota_exceeded",
+                    ) from exc
 
-            raise ExtractionError(
-                (
-                    f"Tender requirement extraction failed (Gemini API {error_code} "
-                    f"{error_status}): {error_message or 'no error message'}"
-                ),
-                status_code=mapped_status_code,
-            ) from exc
-        except Exception as exc:
-            logger.exception("Tender requirement extraction failed")
-            raise ExtractionError("Tender requirement extraction failed.") from exc
+                # ── Transient server error → retry same model ──
+                is_retryable = error_code in GENAI_RETRYABLE_CODES
+                if is_retryable and attempt < GENAI_MAX_RETRY_ATTEMPTS:
+                    delay_seconds = min(
+                        GENAI_RETRY_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)),
+                        GENAI_RETRY_BACKOFF_MAX_SECONDS,
+                    )
+                    logger.warning(
+                        "Extraction transient error (code=%s status=%s). "
+                        "Retrying attempt %s/%s on %s in %.1fs.",
+                        error_code, error_status,
+                        attempt + 1, GENAI_MAX_RETRY_ATTEMPTS,
+                        model_name, delay_seconds,
+                    )
+                    time.sleep(delay_seconds)
+                    continue
 
-    raise ExtractionError("Tender requirement extraction failed after retries.", status_code=503)
+                # ── Transient but retries exhausted → try next model ──
+                if is_retryable and model_idx < len(EXTRACTION_MODEL_CHAIN) - 1:
+                    logger.warning(
+                        "Model %s retries exhausted (code=%s), falling back to %s",
+                        model_name, error_code, EXTRACTION_MODEL_CHAIN[model_idx + 1],
+                    )
+                    break  # advance model
+
+                # ── Non-retryable or last model ──
+                mapped_status_code = 500
+                error_type = "api_error"
+                if error_code == 429 or error_status == "RESOURCE_EXHAUSTED":
+                    mapped_status_code = 429
+                    error_type = "quota_exceeded"
+                elif error_code in {500, 502, 503, 504} or error_status in {"UNAVAILABLE"}:
+                    mapped_status_code = 503
+                    error_type = "model_overloaded"
+
+                raise ExtractionError(
+                    (
+                        f"Tender requirement extraction failed (Gemini API {error_code} "
+                        f"{error_status}): {error_message or 'no error message'}"
+                    ),
+                    status_code=mapped_status_code,
+                    error_type=error_type,
+                ) from exc
+            except Exception as exc:
+                logger.exception("Tender requirement extraction failed")
+                raise ExtractionError("Tender requirement extraction failed.") from exc
+        else:
+            # Retry loop exhausted without break → move to next model via
+            # the outer for loop's natural iteration (already handled above).
+            continue
+
+    raise ExtractionError(
+        "Tender requirement extraction failed after all models exhausted.",
+        status_code=503,
+        error_type="quota_exceeded",
+    )
 
 
 def extract_tender_requirements_sync(

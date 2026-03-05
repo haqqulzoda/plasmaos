@@ -201,6 +201,18 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
         throw new Error('Non-OK response from AI draft endpoint');
       }
       const draft = response.data;
+
+      // Check if the AI returned an error inside the successful response
+      const errorType = (draft as unknown as Record<string, unknown>).error_type as string | undefined;
+      if (errorType === 'quota_exceeded') {
+        setGenerationError('Monthly AI quota reached. Please try again later or contact support.');
+        return;
+      }
+      if (errorType === 'model_overloaded') {
+        setGenerationError('AI models are temporarily overloaded. Please retry in a few minutes.');
+        return;
+      }
+
       setStrategicSummary(draft.strategic_summary || '');
       setSuggestedPrice(String(draft.suggested_price ?? ''));
       setDeliveryDays(draft.delivery_days || '');
@@ -212,10 +224,21 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
           total: Number(item.total) || 0,
         })),
       );
-    } catch {
-      setGenerationError(
-        'AI Network Congestion: The model provider is currently experiencing high demand. Please try again.',
-      );
+    } catch (err: unknown) {
+      // Parse structured error from backend if available
+      const axiosErr = err as { response?: { data?: { detail?: string }; status?: number } };
+      const status = axiosErr?.response?.status;
+      const detail = axiosErr?.response?.data?.detail || '';
+
+      if (status === 429 || detail.toLowerCase().includes('quota')) {
+        setGenerationError('Monthly AI quota reached across all models. Please try again later or contact support.');
+      } else if (status === 503 || detail.toLowerCase().includes('overload')) {
+        setGenerationError('AI models are temporarily overloaded. Please retry in a few minutes.');
+      } else {
+        setGenerationError(
+          detail || 'AI generation failed. Please check your connection and try again.',
+        );
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -225,34 +248,18 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
     setDownloadingDocId(docId);
     setDownloadProgress(0);
     try {
-      const res = await fetch(`/api/documents/${docId}`);
-      if (!res.ok || !res.body) throw new Error('Download failed');
-
-      const contentLength = Number(res.headers.get('Content-Length') || 0);
-      const reader = res.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let received = 0;
-
-      for (; ;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        if (contentLength > 0) {
-          setDownloadProgress(Math.min(99, Math.round((received / contentLength) * 100)));
-        }
-      }
+      const response = await api.get(`/tenders/documents/${docId}/download`, {
+        responseType: 'blob',
+        onDownloadProgress: (progressEvent) => {
+          if (progressEvent.total && progressEvent.total > 0) {
+            setDownloadProgress(Math.min(99, Math.round((progressEvent.loaded / progressEvent.total) * 100)));
+          }
+        },
+      });
 
       setDownloadProgress(100);
 
-      const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
-      const merged = new Uint8Array(totalLength);
-      let offset = 0;
-      for (const c of chunks) {
-        merged.set(c, offset);
-        offset += c.length;
-      }
-      const blob = new Blob([merged.buffer]);
+      const blob = new Blob([response.data]);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -262,8 +269,14 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
       a.remove();
       URL.revokeObjectURL(url);
     } catch {
-      // fallback: plain navigation
-      window.open(`/api/documents/${docId}`, '_blank');
+      // fallback: open in new tab via authenticated API path
+      try {
+        const fallback = await api.get(`/tenders/documents/${docId}/download`, { responseType: 'blob' });
+        const blob = new Blob([fallback.data]);
+        window.open(URL.createObjectURL(blob), '_blank');
+      } catch {
+        // last resort
+      }
     } finally {
       setTimeout(() => {
         setDownloadingDocId(null);
@@ -672,12 +685,19 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
                 }
 
                 return (
-                  <a
+                  <button
                     key={doc.id}
-                    href={`/api/documents/${doc.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 transition hover:border-zinc-700"
+                    onClick={async () => {
+                      try {
+                        const res = await api.get(`/tenders/documents/${doc.id}/download`, { responseType: 'blob' });
+                        const blob = new Blob([res.data], { type: 'application/pdf' });
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, '_blank');
+                      } catch {
+                        // Fallback: nothing to do
+                      }
+                    }}
+                    className="flex w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-zinc-700"
                   >
                     <span className="flex items-center gap-2 truncate">
                       <FileText className="h-4 w-4 shrink-0 text-sky-400" />
@@ -687,7 +707,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
                       <FileText className="h-4 w-4" />
                       Preview
                     </span>
-                  </a>
+                  </button>
                 );
               })}
             </div>

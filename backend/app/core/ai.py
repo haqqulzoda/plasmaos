@@ -2,22 +2,17 @@
 Plasma AI - AI Analysis Module
 
 Uses Google Gemini to analyze tender documents and extract structured data.
+Model fallback chain: tries multiple models on quota/rate-limit errors.
 """
 
 import json
 import logging
 import os
+import time
 from typing import Any
 
 import google.generativeai as genai
 from google.genai import errors
-from tenacity import (
-    RetryCallState,
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +20,23 @@ logger = logging.getLogger(__name__)
 _gemini_configured = False
 
 
-# Gemini model configuration
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+# ---------------------------------------------------------------------------
+# Model fallback chain
+# ---------------------------------------------------------------------------
+# Order: primary → secondary → tertiary.  On 429 / RESOURCE_EXHAUSTED the
+# caller advances to the next model automatically.
+# ---------------------------------------------------------------------------
+GEMINI_MODEL_CHAIN: list[str] = [
+    os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite-preview"),
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+]
+
+# Deduplicate while preserving order
+_seen: set[str] = set()
+GEMINI_MODEL_CHAIN = [
+    m for m in GEMINI_MODEL_CHAIN if m not in _seen and not _seen.add(m)  # type: ignore[func-returns-value]
+]
 
 
 def _resolve_gemini_api_key() -> str | None:
@@ -40,28 +50,199 @@ def _resolve_gemini_api_key() -> str | None:
         or os.getenv("GOOGLE_API_KEY")
     )
 
+
+def _ensure_configured() -> bool:
+    """Lazily configure the google-generativeai SDK. Returns True on success."""
+    global _gemini_configured
+    if _gemini_configured:
+        return True
+    api_key = _resolve_gemini_api_key()
+    if api_key:
+        genai.configure(api_key=api_key)
+        _gemini_configured = True
+        logger.info("Gemini AI configured successfully (lazy init)")
+        return True
+    logger.error("Cannot operate: GOOGLE_API_KEY / GEMINI_API_KEY not configured")
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Error classification helpers
+# ---------------------------------------------------------------------------
+_QUOTA_INDICATORS = {"RESOURCE_EXHAUSTED", "429", "quota"}
+_TRANSIENT_INDICATORS = {"UNAVAILABLE", "500", "502", "503", "504"}
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    """Return True when the exception signals quota / rate-limit exhaustion."""
+    msg = str(exc).lower()
+    code = str(getattr(exc, "code", ""))
+    status = str(getattr(exc, "status", ""))
+    return (
+        "resource_exhausted" in msg
+        or "429" in code
+        or status == "RESOURCE_EXHAUSTED"
+        or "quota" in msg
+        or "rate limit" in msg
+    )
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    """Return True when the exception signals a transient server error."""
+    msg = str(exc).lower()
+    code = str(getattr(exc, "code", ""))
+    status = str(getattr(exc, "status", ""))
+    return (
+        "unavailable" in msg
+        or any(c in code for c in ("500", "502", "503", "504"))
+        or status in _TRANSIENT_INDICATORS
+        or "overloaded" in msg
+        or "server error" in msg
+    )
+
+
+def _classify_error(exc: Exception) -> str:
+    """Return a machine-readable error type string."""
+    if _is_quota_error(exc):
+        return "quota_exceeded"
+    if _is_transient_error(exc):
+        return "model_overloaded"
+    return "api_error"
+
+
+# ---------------------------------------------------------------------------
+# Core fallback helper
+# ---------------------------------------------------------------------------
+def _call_gemini_with_fallback(
+    prompt: str | list,
+    *,
+    model_chain: list[str] | None = None,
+    generation_config: dict | None = None,
+) -> tuple[str, str]:
+    """
+    Try each model in *model_chain* until one succeeds.
+
+    Returns (response_text, model_name_used).
+    Raises the last exception if ALL models fail.
+    """
+    chain = model_chain or GEMINI_MODEL_CHAIN
+    gen_cfg = genai.types.GenerationConfig(**(generation_config or {}))
+    last_exc: Exception | None = None
+
+    for idx, model_name in enumerate(chain):
+        try:
+            model = genai.GenerativeModel(model_name, generation_config=gen_cfg)
+            logger.info("Trying model %s (%d/%d)", model_name, idx + 1, len(chain))
+            response = model.generate_content(prompt)
+            logger.info("Model %s succeeded", model_name)
+            return response.text.strip(), model_name
+        except Exception as exc:
+            last_exc = exc
+            error_type = _classify_error(exc)
+
+            if error_type == "quota_exceeded" and idx < len(chain) - 1:
+                logger.warning(
+                    "Model %s quota exceeded, falling back to %s",
+                    model_name,
+                    chain[idx + 1],
+                )
+                continue
+
+            if error_type == "model_overloaded" and idx < len(chain) - 1:
+                logger.warning(
+                    "Model %s overloaded, falling back to %s",
+                    model_name,
+                    chain[idx + 1],
+                )
+                time.sleep(1)  # brief pause before fallback
+                continue
+
+            # Non-retryable or last model — raise
+            raise
+
+    # Should not reach here, but safety net
+    raise last_exc  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
 # Company context builder
+# ---------------------------------------------------------------------------
 def _build_company_context(company_context: dict[str, str] | None = None) -> str:
     """Build company persona section for AI prompts."""
     if not company_context:
         return "You are an Expert Consultant analyzing technical task documents."
-    
+
     name = company_context.get("company_name", "")
     services = company_context.get("core_services", "")
     experience = company_context.get("past_experience", "")
-    
+
     if not name:
         return "You are an Expert Consultant analyzing technical task documents."
-    
+
     parts = [f"You are the Lead Proposal Writer for {name}."]
     if services:
         parts.append(f"Your company specializes in: {services}.")
     if experience:
         parts.append(f"Key qualifications and past experience: {experience}.")
     parts.append("Use this context to write relevant, company-specific analysis.")
-    
+
     return " ".join(parts)
 
+
+# ---------------------------------------------------------------------------
+# JSON extraction helper
+# ---------------------------------------------------------------------------
+def _extract_json(response_text: str) -> dict[str, Any]:
+    """Extract a JSON object from a potentially wrapped response."""
+    text = response_text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines)
+
+    start_idx = text.find("{")
+    end_idx = text.rfind("}") + 1
+    if start_idx >= 0 and end_idx > start_idx:
+        text = text[start_idx:end_idx]
+
+    return json.loads(text)
+
+
+# ---------------------------------------------------------------------------
+# Not-configured fallback
+# ---------------------------------------------------------------------------
+def _not_configured_result(**overrides: Any) -> dict[str, Any]:
+    base = {
+        "error": "AI not configured",
+        "error_type": "api_error",
+        "summary": "AI analysis unavailable - API key not configured",
+        "items": [],
+        "delivery_days": 30,
+        "required_licenses": [],
+    }
+    base.update(overrides)
+    return base
+
+
+def _too_short_result(**overrides: Any) -> dict[str, Any]:
+    base = {
+        "error": "Text too short",
+        "error_type": "api_error",
+        "summary": "Document text too short for analysis",
+        "items": [],
+        "delivery_days": 30,
+        "required_licenses": [],
+    }
+    base.update(overrides)
+    return base
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tender Analysis Prompt
+# ═══════════════════════════════════════════════════════════════════════════
 
 TENDER_ANALYSIS_PROMPT = """{company_persona}
 The document may be in Uzbek (Cyrillic or Latin), Russian, or English.
@@ -104,126 +285,89 @@ TEXT TO ANALYZE:
 Return ONLY the JSON object, nothing else."""
 
 
-def analyze_tender_text(text: str, company_context: dict[str, str] | None = None) -> dict[str, Any]:
+def analyze_tender_text(
+    text: str, company_context: dict[str, str] | None = None
+) -> dict[str, Any]:
     """
-    Analyze tender document text using Gemini AI.
-    
-    Args:
-        text: Extracted text from tender document
-        
-    Returns:
-        Structured data dict with summary, items, delivery_days, etc.
+    Analyze tender document text using Gemini AI with model fallback.
+
+    Returns structured data dict with summary, items, delivery_days, etc.
     """
-    global _gemini_configured
-    
-    # Lazy initialization - configure Gemini on first call
-    if not _gemini_configured:
-        api_key = _resolve_gemini_api_key()
-        if api_key:
-            genai.configure(api_key=api_key)
-            _gemini_configured = True
-            logger.info("Gemini AI configured successfully (lazy init)")
-        else:
-            logger.error("Cannot analyze: GOOGLE_API_KEY not configured")
-            return {
-                "error": "AI not configured",
-                "summary": "AI analysis unavailable - API key not configured",
-                "items": [],
-                "delivery_days": 30,
-                "required_licenses": [],
-            }
-    
+    if not _ensure_configured():
+        return _not_configured_result()
+
     if not text or len(text.strip()) < 100:
         logger.warning("Text too short for meaningful analysis")
-        return {
-            "error": "Text too short",
-            "summary": "Document text too short for analysis",
-            "items": [],
-            "delivery_days": 30,
-            "required_licenses": [],
-        }
-    
+        return _too_short_result()
+
     try:
-        model = genai.GenerativeModel(
-            MODEL_NAME,
-            generation_config=genai.types.GenerationConfig(
-                response_mime_type="application/json",
-            )
-        )
-        
-        # Truncate if extremely long (though Flash handles 1M tokens)
-        max_chars = 100_000  # ~25K tokens for faster processing
+        max_chars = 100_000
         if len(text) > max_chars:
-            logger.warning(f"Text truncated from {len(text)} to {max_chars} chars")
+            logger.warning("Text truncated from %d to %d chars", len(text), max_chars)
             text = text[:max_chars]
-        
+
         company_persona = _build_company_context(company_context)
         prompt = TENDER_ANALYSIS_PROMPT.format(text=text, company_persona=company_persona)
-        
-        logger.info(f"Sending {len(text)} chars to Gemini {MODEL_NAME}")
-        response = model.generate_content(prompt)
-        
-        # Extract JSON from response
-        response_text = response.text.strip()
-        logger.debug(f"Raw response (first 500): {response_text[:500]}")
-        
-        # Clean up response (remove markdown code blocks if present)
-        if response_text.startswith("```"):
-            lines = response_text.split("\n")
-            # Remove first and last lines (```json and ```)
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            response_text = "\n".join(lines)
-        
-        # Try to find JSON object in response
-        start_idx = response_text.find("{")
-        end_idx = response_text.rfind("}") + 1
-        if start_idx >= 0 and end_idx > start_idx:
-            response_text = response_text[start_idx:end_idx]
-        
-        result = json.loads(response_text)
-        logger.info(f"AI analysis complete: {len(result.get('items', []))} items extracted")
-        
+
+        response_text, model_used = _call_gemini_with_fallback(
+            prompt,
+            generation_config={"response_mime_type": "application/json"},
+        )
+        logger.info("Tender analysis completed with model %s", model_used)
+        result = _extract_json(response_text)
+        logger.info("AI analysis complete: %d items extracted", len(result.get("items", [])))
         return result
-        
+
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse AI response as JSON: {e}")
-        logger.error(f"Raw response: {response_text[:1000] if 'response_text' in dir() else 'N/A'}")
+        logger.error("Failed to parse AI response as JSON: %s", e)
         return {
             "error": f"JSON parse error: {e}",
+            "error_type": "api_error",
             "summary": "AI response could not be parsed - please try again",
             "items": [],
             "delivery_days": 30,
             "required_licenses": [],
         }
-        
+
     except Exception as e:
-        logger.error(f"Gemini API error: {e}")
+        error_type = _classify_error(e)
+        logger.error("Gemini API error (%s): %s", error_type, e)
         import traceback
         logger.error(traceback.format_exc())
+
+        if error_type == "quota_exceeded":
+            summary = "Monthly AI quota reached across all models. Please try again later or contact support."
+        elif error_type == "model_overloaded":
+            summary = "AI models are temporarily overloaded. Please retry in a few minutes."
+        else:
+            summary = f"AI analysis failed: {e}"
+
         return {
             "error": str(e),
-            "summary": f"AI analysis failed: {e}",
+            "error_type": error_type,
+            "summary": summary,
             "items": [],
             "delivery_days": 30,
             "required_licenses": [],
         }
 
 
-async def analyze_tender_text_async(text: str, company_context: dict[str, str] | None = None) -> dict[str, Any]:
-    """
-    Async wrapper for analyze_tender_text.
-    
-    Uses run_in_executor since google-generativeai is sync.
-    """
+async def analyze_tender_text_async(
+    text: str, company_context: dict[str, str] | None = None
+) -> dict[str, Any]:
+    """Async wrapper for analyze_tender_text."""
     import asyncio
     from functools import partial
-    
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, partial(analyze_tender_text, text, company_context))
 
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None, partial(analyze_tender_text, text, company_context)
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Strategic Draft Prompt
+# ═══════════════════════════════════════════════════════════════════════════
 
 STRATEGIC_DRAFT_PROMPT = """{company_persona}
 Act as a Chief Revenue Officer. Write a persuasive, 3-paragraph `strategic_summary`. Emphasize verified credentials. You MUST provide a commercial justification for these accepted liabilities: [{accepted_liabilities}].
@@ -264,24 +408,6 @@ TENDER TEXT:
 """
 
 
-def _log_strategic_draft_retry_warning(retry_state: RetryCallState) -> None:
-    exc = retry_state.outcome.exception() if retry_state.outcome else None
-    sleep_seconds = retry_state.next_action.sleep if retry_state.next_action else 0.0
-    logger.warning(
-        "Strategic draft Gemini API Error. Retrying attempt %s/4 in %.1fs: %s",
-        retry_state.attempt_number + 1,
-        sleep_seconds,
-        exc,
-    )
-
-
-@retry(
-    stop=stop_after_attempt(4),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type(errors.APIError),
-    before_sleep=_log_strategic_draft_retry_warning,
-    reraise=True
-)
 def draft_strategic_proposal(
     text: str,
     *,
@@ -290,29 +416,22 @@ def draft_strategic_proposal(
     accepted_liabilities: list[str] | None = None,
     tender_budget: float = 0.0,
 ) -> dict[str, Any]:
-    """Generate a strategic proposal draft aligned to compliance ledger context."""
-    global _gemini_configured
-
-    if not _gemini_configured:
-        api_key = _resolve_gemini_api_key()
-        if api_key:
-            genai.configure(api_key=api_key)
-            _gemini_configured = True
-            logger.info("Gemini AI configured successfully (lazy init)")
-        else:
-            logger.error("Cannot draft: GOOGLE_API_KEY not configured")
-            return {
-                "error": "AI not configured",
-                "strategic_summary": "AI drafting unavailable - API key not configured.",
-                "suggested_price": float(tender_budget or 0.0),
-                "delivery_days": "30 calendar days",
-                "line_items": [],
-            }
+    """Generate a strategic proposal draft with model fallback chain."""
+    if not _ensure_configured():
+        return {
+            "error": "AI not configured",
+            "error_type": "api_error",
+            "strategic_summary": "AI drafting unavailable - API key not configured.",
+            "suggested_price": float(tender_budget or 0.0),
+            "delivery_days": "30 calendar days",
+            "line_items": [],
+        }
 
     if not text or len(text.strip()) < 100:
         logger.warning("Text too short for strategic drafting")
         return {
             "error": "Text too short",
+            "error_type": "api_error",
             "strategic_summary": "Tender text is too short for strategic drafting.",
             "suggested_price": float(tender_budget or 0.0),
             "delivery_days": "30 calendar days",
@@ -323,13 +442,6 @@ def draft_strategic_proposal(
     ledger_text = json.dumps(compliance_ledger or {}, ensure_ascii=False, indent=2)
 
     try:
-        model = genai.GenerativeModel(
-            MODEL_NAME,
-            generation_config=genai.types.GenerationConfig(
-                response_mime_type="application/json",
-            ),
-        )
-
         max_chars = 100_000
         if len(text) > max_chars:
             logger.warning("Text truncated from %s to %s chars", len(text), max_chars)
@@ -344,24 +456,14 @@ def draft_strategic_proposal(
             tender_budget=tender_budget,
         )
 
-        response = model.generate_content(prompt)
-        response_text = response.text.strip()
+        response_text, model_used = _call_gemini_with_fallback(
+            prompt,
+            generation_config={"response_mime_type": "application/json"},
+        )
+        logger.info("Strategic draft completed with model %s", model_used)
+        result = _extract_json(response_text)
 
-        if response_text.startswith("```"):
-            lines = response_text.split("\n")
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            response_text = "\n".join(lines)
-
-        start_idx = response_text.find("{")
-        end_idx = response_text.rfind("}") + 1
-        if start_idx >= 0 and end_idx > start_idx:
-            response_text = response_text[start_idx:end_idx]
-
-        result = json.loads(response_text)
-
+        # ── Normalize result fields ──
         summary = str(result.get("strategic_summary", "")).strip()
         if not summary:
             summary = (
@@ -417,18 +519,27 @@ def draft_strategic_proposal(
         logger.error("Failed to parse strategic draft as JSON: %s", exc)
         return {
             "error": f"JSON parse error: {exc}",
+            "error_type": "api_error",
             "strategic_summary": "AI drafting failed due to malformed model response.",
             "suggested_price": float(tender_budget or 0.0),
             "delivery_days": "30 calendar days",
             "line_items": [],
         }
-    except errors.APIError:
-        raise
     except Exception as exc:
-        logger.error("Strategic drafting error: %s", exc)
+        error_type = _classify_error(exc)
+        logger.error("Strategic drafting error (%s): %s", error_type, exc)
+
+        if error_type == "quota_exceeded":
+            msg = "Monthly AI quota reached across all models. Please try again later or contact support."
+        elif error_type == "model_overloaded":
+            msg = "AI models are temporarily overloaded. Please retry in a few minutes."
+        else:
+            msg = f"AI drafting failed: {exc}"
+
         return {
             "error": str(exc),
-            "strategic_summary": f"AI drafting failed: {exc}",
+            "error_type": error_type,
+            "strategic_summary": msg,
             "suggested_price": float(tender_budget or 0.0),
             "delivery_days": "30 calendar days",
             "line_items": [],
@@ -461,7 +572,17 @@ async def draft_strategic_proposal_async(
     )
 
 
-# Prompt for file-based analysis (handles scanned PDFs)
+# ═══════════════════════════════════════════════════════════════════════════
+# File-based analysis (scanned PDFs via vision)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# For file analysis we use a chain biased toward vision-capable models.
+VISION_MODEL_CHAIN: list[str] = [
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash-lite",
+]
+
 FILE_ANALYSIS_PROMPT = """{company_persona}
 You are analyzing a Technical Task document.
 This document may be a SCANNED IMAGE or a text-based PDF. Use your vision capabilities to read it.
@@ -500,122 +621,114 @@ Rules:
 Return ONLY the JSON object, nothing else."""
 
 
-def analyze_tender_file(file_path: str, company_context: dict[str, str] | None = None) -> dict[str, Any]:
+def analyze_tender_file(
+    file_path: str, company_context: dict[str, str] | None = None
+) -> dict[str, Any]:
     """
-    Analyze tender document by uploading directly to Gemini.
-    
-    Uses Gemini's vision capabilities to read scanned/image PDFs.
-    
-    Args:
-        file_path: Path to the PDF file
-        
-    Returns:
-        Structured data dict with summary, items, delivery_days, etc.
+    Analyze tender document by uploading directly to Gemini (vision).
+
+    Uses the vision model chain for best OCR/PDF reading results.
     """
-    global _gemini_configured
-    
-    # Lazy initialization - configure Gemini on first call
-    if not _gemini_configured:
-        api_key = _resolve_gemini_api_key()
-        if api_key:
-            genai.configure(api_key=api_key)
-            _gemini_configured = True
-            logger.info("Gemini AI configured successfully (lazy init)")
-        else:
-            logger.error("Cannot analyze: GOOGLE_API_KEY not configured")
+    if not _ensure_configured():
+        return _not_configured_result()
+
+    chain = VISION_MODEL_CHAIN
+    last_exc: Exception | None = None
+    company_persona = _build_company_context(company_context)
+    file_prompt = FILE_ANALYSIS_PROMPT.format(company_persona=company_persona)
+
+    for idx, model_name in enumerate(chain):
+        try:
+            logger.info("[AI] Uploading file to Gemini: %s (model: %s)", file_path, model_name)
+            uploaded_file = genai.upload_file(file_path)
+            logger.info("[AI] File uploaded: %s", uploaded_file.name)
+
+            model = genai.GenerativeModel(
+                model_name,
+                generation_config=genai.types.GenerationConfig(
+                    response_mime_type="application/json",
+                ),
+            )
+
+            response = model.generate_content([uploaded_file, file_prompt])
+            response_text = response.text.strip()
+
+            # Cleanup uploaded file
+            try:
+                genai.delete_file(uploaded_file.name)
+            except Exception:
+                pass
+
+            result = _extract_json(response_text)
+            logger.info(
+                "AI file analysis complete with %s: %d items extracted",
+                model_name,
+                len(result.get("items", [])),
+            )
+            return result
+
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse AI response as JSON: %s", e)
             return {
-                "error": "AI not configured",
-                "summary": "AI analysis unavailable - API key not configured",
+                "error": f"JSON parse error: {e}",
+                "error_type": "api_error",
+                "summary": "AI response could not be parsed - please try again",
                 "items": [],
                 "delivery_days": 30,
                 "required_licenses": [],
             }
-    
-    try:
-        print(f"[AI] Uploading file to Gemini: {file_path}")
-        
-        # Upload file to Gemini
-        uploaded_file = genai.upload_file(file_path)
-        print(f"[AI] File uploaded: {uploaded_file.name}")
-        
-        # Create model (use gemini-3-flash-preview for vision + speed)
-        model = genai.GenerativeModel(
-            MODEL_NAME,  # Uses gemini-3-flash-preview
-            generation_config=genai.types.GenerationConfig(
-                response_mime_type="application/json",
-            )
-        )
-        
-        print("[AI] Sending to Gemini for analysis...")
-        company_persona = _build_company_context(company_context)
-        file_prompt = FILE_ANALYSIS_PROMPT.format(company_persona=company_persona)
-        response = model.generate_content([uploaded_file, file_prompt])
-        
-        # Extract JSON from response
-        response_text = response.text.strip()
-        print(f"[AI] Raw response (first 300): {response_text[:300]}")
-        
-        # Clean up response (remove markdown code blocks if present)
-        if response_text.startswith("```"):
-            lines = response_text.split("\n")
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            response_text = "\n".join(lines)
-        
-        # Try to find JSON object in response
-        start_idx = response_text.find("{")
-        end_idx = response_text.rfind("}") + 1
-        if start_idx >= 0 and end_idx > start_idx:
-            response_text = response_text[start_idx:end_idx]
-        
-        result = json.loads(response_text)
-        print(f"[AI] Analysis complete: {len(result.get('items', []))} items extracted")
-        logger.info(f"AI file analysis complete: {len(result.get('items', []))} items extracted")
-        
-        # Cleanup uploaded file
-        try:
-            genai.delete_file(uploaded_file.name)
-            print(f"[AI] Cleaned up uploaded file")
-        except Exception:
-            pass  # Ignore cleanup errors
-        
-        return result
-        
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse AI response as JSON: {e}")
-        return {
-            "error": f"JSON parse error: {e}",
-            "summary": "AI response could not be parsed - please try again",
-            "items": [],
-            "delivery_days": 30,
-            "required_licenses": [],
-        }
-        
-    except Exception as e:
-        logger.error(f"Gemini API error: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        print(f"[AI] Error: {e}")
-        return {
-            "error": str(e),
-            "summary": f"AI analysis failed: {e}",
-            "items": [],
-            "delivery_days": 30,
-            "required_licenses": [],
-        }
+
+        except Exception as e:
+            last_exc = e
+            error_type = _classify_error(e)
+            if error_type in ("quota_exceeded", "model_overloaded") and idx < len(chain) - 1:
+                logger.warning(
+                    "Model %s %s during file analysis, falling back to %s",
+                    model_name,
+                    error_type,
+                    chain[idx + 1],
+                )
+                continue
+
+            logger.error("Gemini file analysis error (%s): %s", error_type, e)
+            import traceback
+            logger.error(traceback.format_exc())
+
+            if error_type == "quota_exceeded":
+                summary = "Monthly AI quota reached. Please try again later or contact support."
+            elif error_type == "model_overloaded":
+                summary = "AI models temporarily overloaded. Please retry in a few minutes."
+            else:
+                summary = f"AI analysis failed: {e}"
+
+            return {
+                "error": str(e),
+                "error_type": error_type,
+                "summary": summary,
+                "items": [],
+                "delivery_days": 30,
+                "required_licenses": [],
+            }
+
+    # Safety net — should not reach here
+    return {
+        "error": str(last_exc),
+        "error_type": "quota_exceeded",
+        "summary": "All AI models exhausted. Please try again later.",
+        "items": [],
+        "delivery_days": 30,
+        "required_licenses": [],
+    }
 
 
-async def analyze_tender_file_async(file_path: str, company_context: dict[str, str] | None = None) -> dict[str, Any]:
-    """
-    Async wrapper for analyze_tender_file.
-    
-    Uses run_in_executor since google-generativeai is sync.
-    """
+async def analyze_tender_file_async(
+    file_path: str, company_context: dict[str, str] | None = None
+) -> dict[str, Any]:
+    """Async wrapper for analyze_tender_file."""
     import asyncio
     from functools import partial
-    
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, partial(analyze_tender_file, file_path, company_context))
 
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None, partial(analyze_tender_file, file_path, company_context)
+    )
