@@ -374,35 +374,64 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
     }
   };
 
-  const triggerDocumentRequest = useCallback((docId: string, openInNewTab: boolean) => {
-    const link = document.createElement('a');
-    link.href = `/api/documents/${docId}`;
-    if (openInNewTab) {
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
+  const handleDocumentDownload = useCallback(async (docId: string, filename?: string) => {
+    setDownloadingDocId(docId);
+
+    try {
+      const response = await api.get(`/tenders/documents/${docId}/download`, {
+        responseType: 'blob',
+      });
+
+      const contentType = response.headers['content-type'] || 'application/octet-stream';
+      const blob = new Blob([response.data], { type: contentType });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename || `document_${docId}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } finally {
+      window.setTimeout(() => {
+        setDownloadingDocId((current) => (current === docId ? null : current));
+      }, 1200);
     }
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
   }, []);
 
-  const handleDocumentDownload = useCallback((docId: string) => {
-    setDownloadingDocId(docId);
-    triggerDocumentRequest(docId, false);
-
-    window.setTimeout(() => {
-      setDownloadingDocId((current) => (current === docId ? null : current));
-    }, 1200);
-  }, [triggerDocumentRequest]);
-
-  const handleDocumentPreview = useCallback((docId: string) => {
+  const handleDocumentPreview = useCallback(async (docId: string) => {
     setPreviewingDocId(docId);
-    triggerDocumentRequest(docId, true);
+    const previewTab = window.open('', '_blank');
 
-    window.setTimeout(() => {
-      setPreviewingDocId((current) => (current === docId ? null : current));
-    }, 1200);
-  }, [triggerDocumentRequest]);
+    try {
+      const response = await api.get(`/tenders/documents/${docId}/download`, {
+        responseType: 'blob',
+      });
+
+      const contentType = response.headers['content-type'] || 'application/octet-stream';
+      const blob = new Blob([response.data], { type: contentType });
+      const url = URL.createObjectURL(blob);
+
+      if (previewTab) {
+        previewTab.opener = null;
+        previewTab.location.href = url;
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      if (previewTab) {
+        previewTab.close();
+      }
+    } finally {
+      window.setTimeout(() => {
+        setPreviewingDocId((current) => (current === docId ? null : current));
+      }, 1200);
+    }
+  }, []);
 
   const handleCopySummary = async () => {
     if (!strategicSummary) return;
@@ -778,7 +807,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
                     key={doc.id}
                     disabled={isBusy}
                     onClick={() =>
-                      isPreviewAction ? handleDocumentPreview(doc.id) : handleDocumentDownload(doc.id)
+                      isPreviewAction ? handleDocumentPreview(doc.id) : handleDocumentDownload(doc.id, filename)
                     }
                     className="flex w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-zinc-700 disabled:cursor-wait disabled:opacity-70"
                   >
