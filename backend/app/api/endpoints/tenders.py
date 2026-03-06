@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -219,6 +220,14 @@ def _guess_download_content_type(*, filename: str, file_type: str | None = None)
         "gz": "application/gzip",
     }
     return content_types.get(extension, "application/octet-stream")
+
+
+def _stored_download_name(storage_path: str) -> str:
+    stored_name = Path(storage_path).name
+    prefix, _, remainder = stored_name.partition("_")
+    if len(prefix) == 32 and remainder:
+        return remainder
+    return stored_name or "document.bin"
 
 
 @router.post("/{tender_id}/analyze", response_model=AnalyzeTenderResponse)
@@ -496,8 +505,6 @@ async def download_document(
     
     Can be used as href in <a> tags or src in <iframe> for PDF preview.
     """
-    from fastapi.responses import Response
-    
     # Look up document and its tender
     result = await db.execute(
         select(TenderDocument, Tender)
@@ -514,6 +521,21 @@ async def download_document(
         raise HTTPException(status_code=404, detail="Document not found")
     
     doc, tender = row
+    local_path = Path(doc.storage_path) if doc.storage_path else None
+
+    if local_path and local_path.is_file():
+        resolved_name = _stored_download_name(doc.storage_path)
+        content_type = _guess_download_content_type(
+            filename=resolved_name,
+            file_type=doc.file_type,
+        )
+        disposition = "inline" if content_type == "application/pdf" else "attachment"
+        return FileResponse(
+            path=local_path,
+            media_type=content_type,
+            filename=resolved_name,
+            content_disposition_type=disposition,
+        )
 
     file_path = _extract_remote_file_path(doc.file_url)
     if not file_path:
@@ -522,6 +544,8 @@ async def download_document(
     filename = Path(file_path).name if file_path else f"document.{doc.file_type}"
     
     try:
+        from fastapi.responses import Response
+
         scraper = UzExScraper(headless=True)
         file_bytes, downloaded_name = await scraper.download_file(tender.source_url, file_path)
         resolved_name = downloaded_name or filename

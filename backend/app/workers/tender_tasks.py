@@ -5,8 +5,11 @@ Celery tasks for tender document synchronization and extraction.
 from __future__ import annotations
 
 import asyncio
-
 import logging
+import os
+import random
+import re
+from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID, uuid4
 
@@ -16,8 +19,6 @@ from sqlalchemy.orm import configure_mappers
 # Force-load the entire ORM registry into the worker's memory space
 import app.models  # This triggers __init__.py to load all models
 from app.models.all_models import Tender, TenderDocument
-from app.models.company import CompanyProfile
-from app.models.taxonomy import CompanyCredential, TaxonomyNode
 
 # Lock the relationships (resolves string references like "TenderAnalysis")
 configure_mappers()
@@ -26,7 +27,11 @@ from app.core.celery_app import celery_app
 from app.core.parser import process_tender_document
 from app.core.scraper import UzExScraper
 from app.db.session import AsyncSessionLocal, engine
+
 logger = logging.getLogger(__name__)
+
+DEFAULT_DOCUMENTS_ROOT = Path(__file__).resolve().parents[3] / "data" / "documents"
+DOCUMENTS_ROOT = Path(os.getenv("TENDER_DOCUMENTS_ROOT", str(DEFAULT_DOCUMENTS_ROOT)))
 
 
 def _extract_file_path(file_url: str) -> str:
@@ -63,6 +68,96 @@ def _extract_file_name(file_url: str) -> str:
 
 def _parsed_text_present(doc: TenderDocument) -> bool:
     return bool(doc.parsed_text and doc.parsed_text.strip())
+
+
+def _stored_file_exists(doc: TenderDocument | None) -> bool:
+    if doc is None or not doc.storage_path:
+        return False
+
+    try:
+        return Path(doc.storage_path).is_file()
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def _sanitize_filename(filename: str) -> str:
+    raw_name = Path((filename or "").strip()).name
+    if not raw_name:
+        return "download.bin"
+
+    sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", raw_name)
+    return sanitized.strip("._") or "download.bin"
+
+
+def _resolved_file_type(filename: str, file_type: str | None) -> str:
+    normalized = (file_type or "").strip().lower().lstrip(".")
+    if normalized and normalized != "unknown":
+        return normalized
+
+    suffix = Path(filename).suffix.lower().lstrip(".")
+    return suffix or "unknown"
+
+
+def _persist_document_bytes(
+    *,
+    tender_id: UUID,
+    filename: str,
+    file_bytes: bytes,
+) -> tuple[str, int]:
+    tender_dir = DOCUMENTS_ROOT / str(tender_id)
+    tender_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = _sanitize_filename(filename)
+    stored_name = f"{uuid4().hex}_{safe_filename}"
+    final_path = tender_dir / stored_name
+    temp_path = tender_dir / f".{stored_name}.part"
+
+    try:
+        temp_path.write_bytes(file_bytes)
+        file_size = temp_path.stat().st_size
+        if file_size != len(file_bytes):
+            raise OSError(
+                f"Persisted size mismatch for '{safe_filename}': "
+                f"expected {len(file_bytes)} bytes, wrote {file_size} bytes"
+            )
+        temp_path.replace(final_path)
+        return str(final_path), file_size
+    finally:
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                logger.warning("Failed to remove temporary tender document file: %s", temp_path)
+
+
+def _document_display_name(doc: TenderDocument | None, fallback: str | None = None) -> str:
+    if fallback and fallback.strip():
+        return _sanitize_filename(fallback)
+
+    if doc is not None and doc.storage_path:
+        stored_name = Path(doc.storage_path).name
+        prefix, _, remainder = stored_name.partition("_")
+        if len(prefix) == 32 and remainder:
+            return remainder
+        if stored_name:
+            return stored_name
+
+    if doc is not None:
+        extracted_name = _extract_file_name(doc.file_url)
+        if extracted_name:
+            return extracted_name
+        if doc.file_type:
+            return f"document.{doc.file_type}"
+
+    return "document.bin"
+
+
+def _compiled_text_chunk(doc: TenderDocument, filename: str | None = None) -> str:
+    parsed_text = (doc.parsed_text or "").strip()
+    if not parsed_text:
+        return ""
+
+    return f"[{_document_display_name(doc, filename)}]\n{parsed_text}"
 
 
 def _document_identity_key(file_url: str) -> str:
@@ -133,13 +228,13 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                 new_count = 0
                 parsed_count = 0
                 parsed_text_by_identity: dict[str, str] = {}
-                docs_to_parse: list[tuple[TenderDocument, str, str]] = []
+                docs_to_process: list[tuple[TenderDocument | None, str, str, str]] = []
 
                 for doc in existing_docs:
                     if _parsed_text_present(doc):
                         parsed_text_by_identity.setdefault(
                             _document_identity_key(doc.file_url),
-                            doc.parsed_text.strip(),
+                            _compiled_text_chunk(doc),
                         )
 
                 for doc_data in scraped_docs:
@@ -158,64 +253,112 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                         or (existing_by_name.get(name_key) if name_key else None)
                     )
 
-                    if not doc:
-                        new_doc = TenderDocument(
-                            id=uuid4(),
-                            tender_id=tender_uuid,
-                            file_url=scraped_url,
-                            file_type=doc_data["file_type"],
-                        )
-                        db.add(new_doc)
-                        doc = new_doc
-                        _register_existing_doc(
-                            new_doc,
-                            existing_by_url,
-                            existing_by_path,
-                            existing_by_name,
-                        )
-                        new_count += 1
-
-                    if doc.file_url != scraped_url:
+                    if doc and doc.file_url != scraped_url:
                         doc.file_url = scraped_url
 
-                    if scraped_file_type and doc.file_type != scraped_file_type:
+                    if doc and scraped_file_type and doc.file_type != scraped_file_type:
                         doc.file_type = scraped_file_type
 
-                    if _parsed_text_present(doc):
+                    if doc and _parsed_text_present(doc) and _stored_file_exists(doc):
                         parsed_text_by_identity.setdefault(
                             _document_identity_key(scraped_url),
-                            doc.parsed_text.strip(),
+                            _compiled_text_chunk(doc),
                         )
                         continue
 
                     file_path = _extract_file_path(scraped_url)
-                    docs_to_parse.append((doc, scraped_url, file_path))
+                    if not _stored_file_exists(doc) and not file_path:
+                        logger.warning(
+                            "Skipping scraped doc with invalid remote path for tender %s: %s",
+                            tender_uuid,
+                            scraped_url,
+                        )
+                        continue
 
-                # Persist discovered document rows before slow parse/download work.
-                # This keeps the document list visible in the UI even if parsing
-                # is still running or eventually fails for a specific file.
-                if scraped_docs:
-                    await db.commit()
+                    docs_to_process.append((doc, scraped_url, file_path, scraped_file_type))
 
-                for doc, scraped_url, file_path in docs_to_parse:
+                for index, (doc, scraped_url, file_path, scraped_file_type) in enumerate(docs_to_process):
+                    if index > 0:
+                        delay_seconds = random.uniform(2.0, 5.0)
+                        logger.info(
+                            "Applying %.2fs download jitter for tender %s before '%s'",
+                            delay_seconds,
+                            tender_uuid,
+                            scraped_url,
+                        )
+                        await asyncio.sleep(delay_seconds)
+
                     try:
-                        file_bytes, filename = await scraper.download_file(
+                        if doc is not None and _stored_file_exists(doc):
+                            local_path = Path(doc.storage_path)
+                            display_name = _document_display_name(doc)
+                            if not _parsed_text_present(doc):
+                                extracted_text = await process_tender_document(
+                                    source=local_path,
+                                    filename=display_name,
+                                )
+                                if extracted_text.strip():
+                                    doc.parsed_text = extracted_text.strip()
+                                    parsed_count += 1
+
+                            if _parsed_text_present(doc):
+                                parsed_text_by_identity[_document_identity_key(scraped_url)] = (
+                                    _compiled_text_chunk(doc, display_name)
+                                )
+                            continue
+
+                        file_bytes, downloaded_name = await scraper.download_file(
                             tender_url=tender.source_url,
                             file_path=file_path,
                         )
-                        extracted_text = await process_tender_document(
-                            source=file_bytes,
-                            filename=filename,
+                        resolved_name = downloaded_name or _extract_file_name(scraped_url) or "download"
+                        storage_path, file_size = await asyncio.to_thread(
+                            _persist_document_bytes,
+                            tender_id=tender_uuid,
+                            filename=resolved_name,
+                            file_bytes=file_bytes,
                         )
-                        if extracted_text.strip():
-                            doc.parsed_text = extracted_text
-                            parsed_count += 1
+
+                        if doc is None:
+                            doc = TenderDocument(
+                                id=uuid4(),
+                                tender_id=tender_uuid,
+                                file_url=scraped_url,
+                                file_type=_resolved_file_type(resolved_name, scraped_file_type),
+                                storage_path=storage_path,
+                                file_size=file_size,
+                            )
+                            db.add(doc)
+                            new_count += 1
+                        else:
+                            doc.file_url = scraped_url
+                            doc.file_type = _resolved_file_type(resolved_name, scraped_file_type)
+                            doc.storage_path = storage_path
+                            doc.file_size = file_size
+
+                        _register_existing_doc(
+                            doc,
+                            existing_by_url,
+                            existing_by_path,
+                            existing_by_name,
+                        )
+
+                        if not _parsed_text_present(doc):
+                            extracted_text = await process_tender_document(
+                                source=Path(storage_path),
+                                filename=resolved_name,
+                            )
+                            if extracted_text.strip():
+                                doc.parsed_text = extracted_text.strip()
+                                parsed_count += 1
+
+                        if _parsed_text_present(doc):
                             parsed_text_by_identity[_document_identity_key(scraped_url)] = (
-                                f"[{filename}]\n{extracted_text.strip()}"
+                                _compiled_text_chunk(doc, resolved_name)
                             )
                     except Exception as parse_exc:
                         logger.warning(
-                            "Failed to parse tender document '%s' for tender %s: %s",
+                            "Failed to persist/parse tender document '%s' for tender %s: %s",
                             scraped_url,
                             tender_uuid,
                             parse_exc,

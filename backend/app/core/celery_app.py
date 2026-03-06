@@ -32,6 +32,10 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
+    worker_prefetch_multiplier=1,
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    worker_max_tasks_per_child=int(os.getenv("CELERY_WORKER_MAX_TASKS_PER_CHILD", "10")),
     beat_schedule={
         "run-hunter-sweep-every-30-minutes": {
             "task": "app.workers.hunter_tasks.run_hunter_sweep",

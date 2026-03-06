@@ -123,6 +123,8 @@ class TenderDocument(Base):
     )
     file_url: Mapped[str] = mapped_column(String(500), nullable=False)
     file_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    storage_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parsed_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

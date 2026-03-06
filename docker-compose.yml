@@ -39,8 +39,11 @@ services:
       # Override to point at Docker service names
       POSTGRES_SERVER: db
       POSTGRES_PORT: 5432
+      TENDER_DOCUMENTS_ROOT: /app/data/documents
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      - tender_documents_data:/app/data
 
   # ---- Frontend (Next.js) ----
   frontend:
@@ -77,7 +80,27 @@ services:
       POSTGRES_PORT: 5432
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
-    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "celery,ai_fast_queue,heavy_dl_queue" ]
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "celery,ai_fast_queue" ]
+
+  worker_heavy:
+    build: ./backend
+    container_name: plasma_worker_heavy
+    restart: always
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    environment:
+      POSTGRES_SERVER: db
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_WORKER_MAX_TASKS_PER_CHILD: 10
+      TENDER_DOCUMENTS_ROOT: /app/data/documents
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "heavy_dl_queue", "--concurrency=1", "--max-tasks-per-child=10" ]
+    volumes:
+      - tender_documents_data:/app/data
 
   # ---- Celery Beat (Scheduler) ----
   celery_beat:
@@ -98,3 +121,4 @@ services:
 
 volumes:
   postgres_data:
+  tender_documents_data:

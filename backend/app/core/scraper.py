@@ -21,6 +21,7 @@ from functools import partial
 from pathlib import Path
 from typing import Optional
 from urllib.parse import parse_qs, unquote, urlparse
+from uuid import uuid4
 
 import rarfile
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
@@ -852,11 +853,17 @@ class UzExScraper:
                                 btn.click(force=True)
                             download = download_info.value
 
-                            tmp_path = os.path.join(tempfile.gettempdir(), f"plasma_dl_{i}")
+                            tmp_path = os.path.join(
+                                tempfile.gettempdir(),
+                                f"plasma_dl_{uuid4().hex}_{i}",
+                            )
                             download.save_as(tmp_path)
-                            with open(tmp_path, "rb") as file_handle:
-                                dl_bytes = file_handle.read()
-                            os.unlink(tmp_path)
+                            try:
+                                with open(tmp_path, "rb") as file_handle:
+                                    dl_bytes = file_handle.read()
+                            finally:
+                                if os.path.exists(tmp_path):
+                                    os.unlink(tmp_path)
 
                             suggested = download.suggested_filename or filename
 
