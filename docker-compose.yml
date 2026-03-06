@@ -39,6 +39,8 @@ services:
       # Override to point at Docker service names
       POSTGRES_SERVER: db
       POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       TENDER_DOCUMENTS_ROOT: /app/data/documents
     ports:
       - "127.0.0.1:8000:8000"

@@ -11,9 +11,9 @@ from celery.schedules import crontab
 from kombu import Queue
 
 
-default_redis_url = "redis://localhost:6379/0"
-broker_url = os.getenv("CELERY_BROKER_URL", default_redis_url)
-result_backend = os.getenv("CELERY_RESULT_BACKEND", default_redis_url)
+default_redis_url = "redis://redis:6379/0"
+broker_url = os.getenv("CELERY_BROKER_URL") or default_redis_url
+result_backend = os.getenv("CELERY_RESULT_BACKEND") or default_redis_url
 
 celery_app = Celery(
     "plasmaos",
