@@ -44,6 +44,18 @@ logger = logging.getLogger(__name__)
 SUPPORTED_DOC_SUFFIXES = {".pdf", ".docx"}
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".rtf"}
 ARCHIVE_SUFFIXES = {".zip", ".rar"}
+ARCHIVE_MIME_TYPES = {
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/vnd.rar",
+    "application/x-rar",
+    "application/x-rar-compressed",
+}
+DOCX_MIME_TYPES = {
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+PDF_MIME_TYPES = {"application/pdf"}
+OCR_SAFE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
 OCR_MIN_TEXT_LEN = 50
 OCR_LANGS = "uzb+rus+eng"
 GEMINI_OCR_MODEL = "gemma-3-27b-it"
@@ -114,6 +126,10 @@ def _looks_like_rar(data: bytes) -> bool:
     return data.startswith(b"Rar!\x1a\x07\x00") or data.startswith(b"Rar!\x1a\x07\x01\x00")
 
 
+def _looks_like_pdf(data: bytes) -> bool:
+    return data.lstrip().startswith(b"%PDF")
+
+
 def _looks_like_docx(data: bytes) -> bool:
     if not _looks_like_zip(data):
         return False
@@ -134,6 +150,17 @@ def _safe_decode_text(raw_bytes: bytes) -> str:
         except UnicodeDecodeError:
             continue
     return raw_bytes.decode("utf-8", errors="ignore")
+
+
+def _normalize_content_type(content_type: str | None) -> str:
+    return (content_type or "").split(";", 1)[0].strip().lower()
+
+
+def _ocr_fallback_allowed(*, file_path: str, file_bytes: bytes) -> bool:
+    suffix = Path(file_path or "").suffix.lower()
+    if suffix in OCR_SAFE_SUFFIXES:
+        return True
+    return not suffix and _looks_like_pdf(file_bytes)
 
 
 def _parse_extracted_documents(files: list[ExtractedArchiveFile]) -> str:
@@ -263,22 +290,15 @@ def extract_archive_contents(archive_source: bytes | str | Path | BinaryIO) -> l
             suffix = archive_path.suffix.lower()
             archive_bytes = archive_path.read_bytes()
 
-            try:
-                if suffix == ".zip" or _looks_like_zip(archive_bytes):
-                    return _extract_archive_contents_from_bytes(archive_bytes, ".zip")
-                if suffix == ".rar" or _looks_like_rar(archive_bytes):
-                    return _extract_archive_contents_from_bytes(archive_bytes, ".rar")
+            if suffix == ".zip" or _looks_like_zip(archive_bytes):
+                return _extract_archive_contents_from_bytes(archive_bytes, ".zip")
+            if suffix == ".rar" or _looks_like_rar(archive_bytes):
+                return _extract_archive_contents_from_bytes(archive_bytes, ".rar")
 
-                try:
-                    return _extract_archive_contents_from_bytes(archive_bytes, ".zip")
-                except BadZipFile:
-                    return _extract_archive_contents_from_bytes(archive_bytes, ".rar")
-            finally:
-                if archive_path.exists():
-                    try:
-                        archive_path.unlink()
-                    except OSError:
-                        logger.warning("Failed to remove archive file after extraction: %s", archive_path)
+            try:
+                return _extract_archive_contents_from_bytes(archive_bytes, ".zip")
+            except BadZipFile:
+                return _extract_archive_contents_from_bytes(archive_bytes, ".rar")
 
         archive_bytes: bytes
         if isinstance(archive_source, (bytes, bytearray)):
@@ -507,7 +527,10 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
                     page_texts.append(merged)
     except Exception as e:
         logger.error(f"[SONAR] EXTRACTION FAILED on {file_path}. Reason: {str(e)}", exc_info=True)
-        return _ocr_entire_pdf(pdf_bytes)
+        if _ocr_fallback_allowed(file_path=file_path, file_bytes=pdf_bytes):
+            return _ocr_entire_pdf(pdf_bytes)
+        logger.warning("[SONAR] OCR fallback skipped for unsupported non-PDF source: %s", file_path)
+        return ""
 
     extracted_text = "\n\n".join(page_texts).strip()
     logger.info(f"[SONAR] Extraction complete. Total characters: {len(extracted_text)}")
@@ -525,6 +548,7 @@ async def process_tender_document(
     - returns concatenated legally relevant text
     """
     payload: bytes = b""
+    content_type = ""
     inferred_name = filename or ""
     path_source: Path | None = None
 
@@ -541,6 +565,7 @@ async def process_tender_document(
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.get(source)
                     response.raise_for_status()
+                    content_type = _normalize_content_type(response.headers.get("content-type"))
                     payload = response.content
             else:
                 path_source = Path(source)
@@ -560,25 +585,33 @@ async def process_tender_document(
         return ""
 
     suffix = Path(inferred_name).suffix.lower()
-    is_docx = suffix == ".docx" or _looks_like_docx(payload)
-    is_archive = (suffix in ARCHIVE_SUFFIXES or _looks_like_zip(payload) or _looks_like_rar(payload)) and not is_docx
+    normalized_content_type = _normalize_content_type(content_type)
 
-    if is_archive:
+    if suffix in ARCHIVE_SUFFIXES or normalized_content_type in ARCHIVE_MIME_TYPES:
         archive_input: bytes | str | Path = path_source if path_source else payload
         extracted_files = await asyncio.to_thread(extract_archive_contents, archive_input)
         return await asyncio.to_thread(_parse_extracted_documents, extracted_files)
 
-    if suffix == ".pdf" or payload.startswith(b"%PDF"):
+    if suffix == ".docx" or normalized_content_type in DOCX_MIME_TYPES or _looks_like_docx(payload):
+        return await asyncio.to_thread(parse_docx, payload)
+
+    if suffix == ".txt" or normalized_content_type.startswith("text/"):
+        return _safe_decode_text(payload).strip()
+
+    if suffix == ".pdf" or normalized_content_type in PDF_MIME_TYPES or _looks_like_pdf(payload):
         source_label = str(path_source) if path_source else inferred_name or "<bytes>"
         return await asyncio.to_thread(parse_pdf, payload, source_label)
 
-    if is_docx:
-        return await asyncio.to_thread(parse_docx, payload)
+    if _looks_like_zip(payload) or _looks_like_rar(payload):
+        archive_input = path_source if path_source else payload
+        extracted_files = await asyncio.to_thread(extract_archive_contents, archive_input)
+        return await asyncio.to_thread(_parse_extracted_documents, extracted_files)
 
-    if suffix == ".txt":
-        return _safe_decode_text(payload).strip()
-
-    logger.warning("Unsupported source format for process_tender_document: %s", inferred_name or "<bytes>")
+    logger.warning(
+        "Unsupported source format for process_tender_document: name=%s content_type=%s",
+        inferred_name or "<bytes>",
+        normalized_content_type or "<unknown>",
+    )
     return ""
 
 
