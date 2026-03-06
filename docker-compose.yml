@@ -62,20 +62,6 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
 
-  # ---- Telegram Bot ----
-  bot:
-    build: ./backend
-    container_name: plasma_bot
-    restart: always
-    depends_on:
-      - db
-    env_file:
-      - .env
-    environment:
-      POSTGRES_SERVER: db
-      POSTGRES_PORT: 5432
-    command: [ "python", "-m", "bot.run" ]
-
   # ---- Celery Worker ----
   celery_worker:
     build: ./backend
