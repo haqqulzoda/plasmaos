@@ -8,8 +8,12 @@ Note: Uses sync Playwright in a thread executor to avoid Windows async issues.
 """
 
 import asyncio
+import html
+import io
 import logging
+import os
 import re
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -18,7 +22,9 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
+import rarfile
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from zipfile import BadZipFile, ZipFile
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +96,37 @@ KNOWN_FILE_EXTENSIONS = {
 }
 
 ARCHIVE_EXTENSIONS = {"zip", "rar", "7z", "tar", "gz"}
+DOCUMENT_ATTRIBUTE_NAMES = (
+    "href",
+    "onclick",
+    "data-url",
+    "data-href",
+    "data-link",
+    "data-path",
+    "data-file",
+)
+DOWNLOAD_CANDIDATE_PATTERN = re.compile(
+    r"""(?ix)
+    (?:
+        https?://[^\s"'<>]+?downloadfile\?path=[^\s"'<>]+
+        |https?://[^\s"'<>]+\.(?:pdf|docx?|xlsx?|zip|rar|7z|tar|gz)\b[^\s"'<>]*
+        |/api/common/downloadfile\?path=[^\s"'<>]+
+        |api/common/downloadfile\?path=[^\s"'<>]+
+        |/downloadfile\?path=[^\s"'<>]+
+        |downloadfile\?path=[^\s"'<>]+
+        |/files/[^\s"'<>]+\.(?:pdf|docx?|xlsx?|zip|rar|7z|tar|gz)\b[^\s"'<>]*
+        |files/[^\s"'<>]+\.(?:pdf|docx?|xlsx?|zip|rar|7z|tar|gz)\b[^\s"'<>]*
+    )
+    """
+)
+DOWNLOAD_TRIGGER_SELECTOR = (
+    "a.btn-success, button.btn-success, a[href*='DownloadFile'], "
+    "button[onclick*='DownloadFile'], [onclick*='DownloadFile'], "
+    "[data-url*='DownloadFile'], [data-href*='DownloadFile'], "
+    "a:has-text('Yuklab olish'), button:has-text('Yuklab olish'), "
+    "a:has-text('Download'), button:has-text('Download'), "
+    "a:has-text('Скачать'), button:has-text('Скачать')"
+)
 
 
 def _extract_download_path(url_or_path: str) -> str:
@@ -156,6 +193,107 @@ def _looks_like_rar_bytes(file_bytes: bytes) -> bool:
     return file_bytes.startswith((b"Rar!\x1a\x07\x00", b"Rar!\x1a\x07\x01\x00"))
 
 
+def _normalize_embedded_text(value: str) -> str:
+    normalized = html.unescape(value or "")
+    return (
+        normalized.replace("\\/", "/")
+        .replace("\\u002F", "/")
+        .replace("\\u003A", ":")
+        .replace("\\u0026", "&")
+    )
+
+
+def _extract_download_candidates_from_text(value: str) -> list[str]:
+    cleaned = _normalize_embedded_text(value)
+    if not cleaned:
+        return []
+
+    candidates: list[str] = []
+    for match in DOWNLOAD_CANDIDATE_PATTERN.findall(cleaned):
+        candidate = match.strip().strip("\"'`()[]{}")
+        if candidate:
+            candidates.append(candidate)
+    return candidates
+
+
+def _normalize_download_candidate(value: str, *, portal_base_url: str) -> str:
+    candidate = _normalize_embedded_text(value).strip().strip("\"'`()[]{}")
+    if not candidate:
+        return ""
+
+    candidate_lower = candidate.lower()
+    if candidate.startswith("//"):
+        return f"https:{candidate}"
+    if candidate_lower.startswith(("http://", "https://")):
+        return candidate
+    if "downloadfile?path=" in candidate_lower:
+        if candidate.startswith("/api/"):
+            return f"https://apietender.uzex.uz{candidate}"
+        if candidate.startswith("api/"):
+            return f"https://apietender.uzex.uz/{candidate}"
+        if candidate.startswith("/"):
+            return f"https://apietender.uzex.uz/api/common{candidate}"
+        return f"https://apietender.uzex.uz/api/common/{candidate.lstrip('/')}"
+    if candidate.startswith("/"):
+        return f"{portal_base_url}{candidate}"
+    return f"{portal_base_url.rstrip('/')}/{candidate.lstrip('/')}"
+
+
+def _archive_has_file_members(file_bytes: bytes, extension: str) -> bool:
+    if extension == "zip" or _looks_like_zip_bytes(file_bytes):
+        try:
+            with ZipFile(io.BytesIO(file_bytes), "r") as archive:
+                return any(
+                    not member.is_dir() and Path(member.filename.replace("\\", "/")).name
+                    for member in archive.infolist()
+                )
+        except (BadZipFile, OSError):
+            return False
+
+    if extension == "rar" or _looks_like_rar_bytes(file_bytes):
+        temp_path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".rar", delete=False) as temp_file:
+                temp_file.write(file_bytes)
+                temp_path = temp_file.name
+
+            with rarfile.RarFile(temp_path) as archive:
+                return any(
+                    not member.isdir() and Path(member.filename.replace("\\", "/")).name
+                    for member in archive.infolist()
+                )
+        except (rarfile.Error, FileNotFoundError, OSError):
+            return False
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    logger.warning("Failed to remove temporary rar validation file: %s", temp_path)
+
+    return False
+
+
+def _download_candidate_matches_target(
+    *,
+    target_key: str,
+    requested_name: str,
+    candidate_url: str,
+    candidate_name: str,
+) -> bool:
+    normalized_requested_name = requested_name.strip().lower()
+    normalized_candidate_name = candidate_name.strip().lower()
+
+    if target_key and _download_target_key(candidate_url) == target_key:
+        return True
+
+    if normalized_requested_name and normalized_candidate_name == normalized_requested_name:
+        return True
+
+    candidate_url_name = _extract_filename(candidate_url).strip().lower()
+    return bool(normalized_requested_name and candidate_url_name == normalized_requested_name)
+
+
 def _is_valid_file_payload(file_bytes: bytes, content_type: str, file_path: str) -> bool:
     if not file_bytes or len(file_bytes) <= 100:
         return False
@@ -170,10 +308,20 @@ def _is_valid_file_payload(file_bytes: bytes, content_type: str, file_path: str)
         return _looks_like_pdf_bytes(file_bytes) or "application/pdf" in normalized_content_type
 
     if extension == "zip":
-        return _looks_like_zip_bytes(file_bytes) or "application/zip" in normalized_content_type
+        is_zip_payload = (
+            _looks_like_zip_bytes(file_bytes)
+            or "application/zip" in normalized_content_type
+            or "octet-stream" in normalized_content_type
+        )
+        return is_zip_payload and _archive_has_file_members(file_bytes, "zip")
 
     if extension == "rar":
-        return _looks_like_rar_bytes(file_bytes) or "rar" in normalized_content_type
+        is_rar_payload = (
+            _looks_like_rar_bytes(file_bytes)
+            or "rar" in normalized_content_type
+            or "octet-stream" in normalized_content_type
+        )
+        return is_rar_payload and _archive_has_file_members(file_bytes, "rar")
 
     return True
 
@@ -468,9 +616,8 @@ class UzExScraper:
             def capture_download_request(request):
                 url = request.url.lower()
                 if any(marker in url for marker in DOWNLOAD_URL_MARKERS):
-                    if 'apietender' in url or 'cdn.uzex' in url or '/api/' in url:
-                        captured_urls.append(request.url)
-                        logger.info(f"[INTERCEPTOR] Captured: {request.url[:80]}...")
+                    captured_urls.append(request.url)
+                    logger.info(f"[INTERCEPTOR] Captured: {request.url[:80]}...")
             
             page.on("request", capture_download_request)
             
@@ -487,17 +634,36 @@ class UzExScraper:
                     page.wait_for_timeout(3000)
                 
                 # Step 2: Find and click ALL "Yuklab olish" (Download) buttons
-                download_btns = page.query_selector_all(
-                    "a.btn-success, button.btn-success, a:has-text('Yuklab olish'), button:has-text('Yuklab olish')"
-                )
+                download_btns = page.query_selector_all(DOWNLOAD_TRIGGER_SELECTOR)
                 logger.info(f"[BUTTON CLICKER] Found {len(download_btns)} download buttons")
                 
                 for i, btn in enumerate(download_btns):
                     try:
                         btn_text = (btn.inner_text() or "").strip()[:20]
-                        if "Yuklab" in btn_text or "olish" in btn_text.lower():
+                        btn_marker = " ".join(
+                            filter(
+                                None,
+                                [
+                                    btn_text,
+                                    btn.get_attribute("href") or "",
+                                    btn.get_attribute("onclick") or "",
+                                    btn.get_attribute("data-url") or "",
+                                    btn.get_attribute("data-href") or "",
+                                ],
+                            )
+                        ).lower()
+                        if (
+                            "yuklab" in btn_marker
+                            or "olish" in btn_marker
+                            or "download" in btn_marker
+                            or "downloadfile" in btn_marker
+                        ):
                             logger.debug(f"[BUTTON CLICKER] Clicking button {i+1}: '{btn_text}'")
-                            btn.click()
+                            try:
+                                btn.scroll_into_view_if_needed()
+                            except Exception:
+                                pass
+                            btn.click(force=True)
                             page.wait_for_timeout(1500)  # Wait for network request
                     except Exception as e:
                         logger.debug(f"[BUTTON CLICKER] Button {i+1} click failed: {e}")
@@ -516,6 +682,24 @@ class UzExScraper:
                             captured_urls.append(href)
                     except Exception:
                         continue
+
+                attribute_elements = page.query_selector_all(
+                    "a[href], button[onclick], [onclick], [data-url], [data-href], [data-link], [data-path], [data-file]"
+                )
+                for element in attribute_elements:
+                    for attr_name in DOCUMENT_ATTRIBUTE_NAMES:
+                        try:
+                            attr_value = element.get_attribute(attr_name)
+                        except Exception:
+                            attr_value = None
+                        if not attr_value:
+                            continue
+                        captured_urls.extend(_extract_download_candidates_from_text(attr_value))
+
+                try:
+                    captured_urls.extend(_extract_download_candidates_from_text(page.content()))
+                except Exception as exc:
+                    logger.debug("[SCRAPER] Could not extract candidates from page HTML: %s", exc)
                 
                 # Step 4: Process captured URLs
                 logger.info(f"[SCRAPER] Processing {len(captured_urls)} captured URLs")
@@ -528,13 +712,9 @@ class UzExScraper:
                         if any(noise in url_lower for noise in NOISE_PATTERNS):
                             continue
                         
-                        # Make absolute URL
-                        if url.startswith("//"):
-                            url = "https:" + url
-                        elif url.startswith("/"):
-                            url = self.BASE_URL + url
-                        elif not url.startswith("http"):
-                            url = self.BASE_URL + "/" + url
+                        url = _normalize_download_candidate(url, portal_base_url=self.BASE_URL)
+                        if not url:
+                            continue
                         
                         # Skip duplicates
                         dedupe_key = _download_target_key(url) or url.lower()
@@ -584,8 +764,6 @@ class UzExScraper:
         3. Response interception fallback (legacy, less reliable for archives)
         """
         import httpx
-        import os
-        import tempfile
 
         normalized_file_path = _extract_download_path(file_path)
         target_key = _download_target_key(file_path)
@@ -632,7 +810,7 @@ class UzExScraper:
 
             def capture_file_response(response):
                 url_lower = response.url.lower()
-                if "downloadfile" in url_lower and response.status == 200:
+                if response.status == 200 and any(marker in url_lower for marker in DOWNLOAD_URL_MARKERS):
                     try:
                         body = response.body()
                         content_type = response.headers.get("content-type", "")
@@ -660,17 +838,18 @@ class UzExScraper:
                 except Exception:
                     page.wait_for_timeout(5000)
 
-                download_btns = page.query_selector_all(
-                    "a.btn-success, button.btn-success, a:has-text('Yuklab olish'), "
-                    "button:has-text('Yuklab olish'), a[href*='DownloadFile']"
-                )
+                download_btns = page.query_selector_all(DOWNLOAD_TRIGGER_SELECTOR)
                 logger.info(f"[DOWNLOAD] Found {len(download_btns)} download buttons")
 
                 for i, btn in enumerate(download_btns):
                     try:
                         try:
+                            try:
+                                btn.scroll_into_view_if_needed()
+                            except Exception:
+                                pass
                             with page.expect_download(timeout=10000) as download_info:
-                                btn.click()
+                                btn.click(force=True)
                             download = download_info.value
 
                             tmp_path = os.path.join(tempfile.gettempdir(), f"plasma_dl_{i}")
@@ -682,7 +861,12 @@ class UzExScraper:
                             suggested = download.suggested_filename or filename
 
                             if _is_valid_file_payload(dl_bytes, "", suggested):
-                                if target_key and _download_target_key(download.url or "") == target_key:
+                                if _download_candidate_matches_target(
+                                    target_key=target_key,
+                                    requested_name=filename,
+                                    candidate_url=download.url or "",
+                                    candidate_name=suggested,
+                                ):
                                     logger.info(
                                         f"[DOWNLOAD] Strategy 2 matched target: {len(dl_bytes)} bytes"
                                     )
@@ -697,12 +881,16 @@ class UzExScraper:
                                     )
 
                         except PlaywrightTimeout:
-                            btn.click()
+                            btn.click(force=True)
                             page.wait_for_timeout(2000)
 
                         for captured in captured_files:
-                            response_key = _download_target_key(captured["url"])
-                            if target_key and response_key == target_key:
+                            if _download_candidate_matches_target(
+                                target_key=target_key,
+                                requested_name=filename,
+                                candidate_url=captured["url"],
+                                candidate_name=_extract_filename(captured["url"]),
+                            ):
                                 logger.info(
                                     f"[DOWNLOAD] Strategy 3 matched target: {len(captured['body'])} bytes"
                                 )
@@ -716,6 +904,8 @@ class UzExScraper:
                 if file_content and _is_valid_file_payload(file_content, "", filename):
                     logger.info(f"[DOWNLOAD] Using download event capture: {len(file_content)} bytes")
                 elif captured_files:
+                    if requested_extension in ARCHIVE_EXTENSIONS:
+                        raise Exception(f"Could not confidently match archive download: {file_path}")
                     file_content = captured_files[0]["body"]
                     filename = _extract_filename(captured_files[0]["url"]) or filename
                     logger.info(

@@ -90,6 +90,93 @@ const formatCurrency = (amount: number, currency: string) =>
   `${new Intl.NumberFormat('en-US').format(amount)} ${currency}`;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const PREVIEW_LOADING_HTML = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preparing document preview</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f4f7fb;
+        color: #0f172a;
+        font-family: Georgia, 'Times New Roman', serif;
+      }
+      main {
+        width: min(420px, calc(100vw - 32px));
+        padding: 28px 24px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+      p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.6;
+        color: #475569;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Preparing PDF preview</h1>
+      <p>The document is being fetched from UzEx. This tab will open the PDF automatically when it is ready.</p>
+    </main>
+  </body>
+</html>`;
+const PREVIEW_ERROR_HTML = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preview unavailable</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #fff7ed;
+        color: #7c2d12;
+        font-family: Georgia, 'Times New Roman', serif;
+      }
+      main {
+        width: min(420px, calc(100vw - 32px));
+        padding: 28px 24px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid rgba(194, 65, 12, 0.14);
+        box-shadow: 0 20px 50px rgba(194, 65, 12, 0.08);
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+      p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Preview unavailable</h1>
+      <p>The PDF could not be opened right now. Close this tab and try again from the tender page.</p>
+    </main>
+  </body>
+</html>`;
 
 /** Strip non-digits, return raw numeric string */
 const stripNonDigits = (v: string) => v.replace(/\D/g, '');
@@ -173,8 +260,19 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
     setDocuments(response.data);
   }, []);
 
-  const pollTenderDocumentSync = useCallback(async (jobId: string) => {
+  const pollTenderDocumentSync = useCallback(async (jobId: string, tenderId: string) => {
     for (let attempt = 0; attempt < 24; attempt += 1) {
+      if (attempt > 0) {
+        try {
+          const docsResponse = await api.get<TenderDocument[]>(`/tenders/${tenderId}/documents`);
+          if (docsResponse.data.length > 0) {
+            setDocuments(docsResponse.data);
+          }
+        } catch {
+          // Ignore intermediate fetch failures while the sync job is still running.
+        }
+      }
+
       const response = await api.get<TenderDocsSyncStatus>(`/tenders/sync-status/${jobId}`);
       const status = response.data.status.toUpperCase();
 
@@ -274,7 +372,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
           setDocuments([]);
         }
 
-        if (docsStatus.doc_count === 0 || !docsStatus.has_parsed_text) {
+        if (docsStatus.doc_count === 0) {
           if (isActive) {
             setIsSyncingDocs(true);
           }
@@ -282,7 +380,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
           const syncResponse = await api.post<TenderDocsSyncResponse>(
             `/tenders/${proposal.tender_id}/sync-docs`,
           );
-          await pollTenderDocumentSync(syncResponse.data.job_id);
+          await pollTenderDocumentSync(syncResponse.data.job_id, proposal.tender_id);
 
           if (!isActive) {
             return;
@@ -404,6 +502,11 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
   const handleDocumentPreview = useCallback(async (docId: string) => {
     setPreviewingDocId(docId);
     const previewTab = window.open('', '_blank');
+    if (previewTab) {
+      previewTab.opener = null;
+      previewTab.document.write(PREVIEW_LOADING_HTML);
+      previewTab.document.close();
+    }
 
     try {
       const response = await api.get(`/tenders/documents/${docId}/download`, {
@@ -415,8 +518,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
       const url = URL.createObjectURL(blob);
 
       if (previewTab) {
-        previewTab.opener = null;
-        previewTab.location.href = url;
+        previewTab.location.replace(url);
       } else {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
@@ -424,7 +526,9 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
       window.setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch {
       if (previewTab) {
-        previewTab.close();
+        previewTab.document.open();
+        previewTab.document.write(PREVIEW_ERROR_HTML);
+        previewTab.document.close();
       }
     } finally {
       window.setTimeout(() => {

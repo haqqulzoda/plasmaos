@@ -133,6 +133,7 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                 new_count = 0
                 parsed_count = 0
                 parsed_text_by_identity: dict[str, str] = {}
+                docs_to_parse: list[tuple[TenderDocument, str, str]] = []
 
                 for doc in existing_docs:
                     if _parsed_text_present(doc):
@@ -188,6 +189,15 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                         continue
 
                     file_path = _extract_file_path(scraped_url)
+                    docs_to_parse.append((doc, scraped_url, file_path))
+
+                # Persist discovered document rows before slow parse/download work.
+                # This keeps the document list visible in the UI even if parsing
+                # is still running or eventually fails for a specific file.
+                if scraped_docs:
+                    await db.commit()
+
+                for doc, scraped_url, file_path in docs_to_parse:
                     try:
                         file_bytes, filename = await scraper.download_file(
                             tender_url=tender.source_url,
