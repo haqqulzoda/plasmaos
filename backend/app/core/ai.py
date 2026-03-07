@@ -11,13 +11,14 @@ import os
 import time
 from typing import Any
 
-import google.generativeai as genai
-from google.genai import errors
+from google import genai
+from google.genai import errors as genai_errors
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-# Lazy initialization flag
-_gemini_configured = False
+# Lazily initialised client
+_genai_client: genai.Client | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -52,15 +53,14 @@ def _resolve_gemini_api_key() -> str | None:
 
 
 def _ensure_configured() -> bool:
-    """Lazily configure the google-generativeai SDK. Returns True on success."""
-    global _gemini_configured
-    if _gemini_configured:
+    """Lazily create the google.genai Client. Returns True on success."""
+    global _genai_client
+    if _genai_client is not None:
         return True
     api_key = _resolve_gemini_api_key()
     if api_key:
-        genai.configure(api_key=api_key)
-        _gemini_configured = True
-        logger.info("Gemini AI configured successfully (lazy init)")
+        _genai_client = genai.Client(api_key=api_key)
+        logger.info("Google GenAI client created successfully (lazy init)")
         return True
     logger.error("Cannot operate: GOOGLE_API_KEY / GEMINI_API_KEY not configured")
     return False
@@ -71,16 +71,17 @@ def _ensure_configured() -> bool:
 # ---------------------------------------------------------------------------
 _QUOTA_INDICATORS = {"RESOURCE_EXHAUSTED", "429", "quota"}
 _TRANSIENT_INDICATORS = {"UNAVAILABLE", "500", "502", "503", "504"}
+_RETRYABLE_CODES = {429, 500, 502, 503, 504}
 
 
 def _is_quota_error(exc: Exception) -> bool:
     """Return True when the exception signals quota / rate-limit exhaustion."""
-    msg = str(exc).lower()
-    code = str(getattr(exc, "code", ""))
-    status = str(getattr(exc, "status", ""))
+    code = int(getattr(exc, "code", 0) or 0)
+    status = str(getattr(exc, "status", "") or "")
+    msg = str(getattr(exc, "message", "") or str(exc)).lower()
     return (
-        "resource_exhausted" in msg
-        or "429" in code
+        code == 429
+        or "resource_exhausted" in msg
         or status == "RESOURCE_EXHAUSTED"
         or "quota" in msg
         or "rate limit" in msg
@@ -89,12 +90,12 @@ def _is_quota_error(exc: Exception) -> bool:
 
 def _is_transient_error(exc: Exception) -> bool:
     """Return True when the exception signals a transient server error."""
-    msg = str(exc).lower()
-    code = str(getattr(exc, "code", ""))
-    status = str(getattr(exc, "status", ""))
+    code = int(getattr(exc, "code", 0) or 0)
+    status = str(getattr(exc, "status", "") or "")
+    msg = str(getattr(exc, "message", "") or str(exc)).lower()
     return (
-        "unavailable" in msg
-        or any(c in code for c in ("500", "502", "503", "504"))
+        code in {500, 502, 503, 504}
+        or "unavailable" in msg
         or status in _TRANSIENT_INDICATORS
         or "overloaded" in msg
         or "server error" in msg
@@ -124,44 +125,97 @@ def _call_gemini_with_fallback(
 
     Returns (response_text, model_name_used).
     Raises the last exception if ALL models fail.
+
+    Uses the new google.genai Client SDK.
     """
+    assert _genai_client is not None, "_ensure_configured() must be called first"
     chain = model_chain or GEMINI_MODEL_CHAIN
-    gen_cfg = genai.types.GenerationConfig(**(generation_config or {}))
+    cfg = types.GenerateContentConfig(**(generation_config or {}))
     last_exc: Exception | None = None
+    max_retries = 3
+    backoff_base = 1.5
+    backoff_max = 12.0
 
     for idx, model_name in enumerate(chain):
-        try:
-            model = genai.GenerativeModel(model_name, generation_config=gen_cfg)
-            logger.info("Trying model %s (%d/%d)", model_name, idx + 1, len(chain))
-            response = model.generate_content(prompt)
-            logger.info("Model %s succeeded", model_name)
-            return response.text.strip(), model_name
-        except Exception as exc:
-            last_exc = exc
-            error_type = _classify_error(exc)
-
-            if error_type == "quota_exceeded" and idx < len(chain) - 1:
-                logger.warning(
-                    "Model %s quota exceeded, falling back to %s",
-                    model_name,
-                    chain[idx + 1],
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(
+                    "Trying model %s (%d/%d, attempt %d)",
+                    model_name, idx + 1, len(chain), attempt,
                 )
-                continue
-
-            if error_type == "model_overloaded" and idx < len(chain) - 1:
-                logger.warning(
-                    "Model %s overloaded, falling back to %s",
-                    model_name,
-                    chain[idx + 1],
+                response = _genai_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=cfg,
                 )
-                time.sleep(1)  # brief pause before fallback
-                continue
+                response_text = (getattr(response, "text", None) or "").strip()
+                if not response_text:
+                    raise RuntimeError(
+                        f"Model {model_name} returned empty response"
+                    )
+                logger.info("Model %s succeeded", model_name)
+                return response_text, model_name
 
-            # Non-retryable or last model — raise
-            raise
+            except genai_errors.APIError as exc:
+                last_exc = exc
+                error_code = int(getattr(exc, "code", 0) or 0)
+
+                # Quota → skip to next model immediately
+                if _is_quota_error(exc):
+                    if idx < len(chain) - 1:
+                        logger.warning(
+                            "Model %s quota exceeded, falling back to %s",
+                            model_name, chain[idx + 1],
+                        )
+                        break  # break retry loop → advance model
+                    raise
+
+                # Transient → retry same model with backoff
+                if error_code in _RETRYABLE_CODES and attempt < max_retries:
+                    delay = min(
+                        backoff_base * (2 ** (attempt - 1)), backoff_max
+                    )
+                    logger.warning(
+                        "Model %s transient error (code=%s), retry %d/%d in %.1fs",
+                        model_name, error_code, attempt + 1, max_retries, delay,
+                    )
+                    time.sleep(delay)
+                    continue
+
+                # Transient but retries exhausted → try next model
+                if _is_transient_error(exc) and idx < len(chain) - 1:
+                    logger.warning(
+                        "Model %s retries exhausted, falling back to %s",
+                        model_name, chain[idx + 1],
+                    )
+                    break
+
+                # Non-retryable or last model — raise
+                raise
+
+            except Exception as exc:
+                last_exc = exc
+                error_type = _classify_error(exc)
+
+                if error_type in ("quota_exceeded", "model_overloaded") and idx < len(chain) - 1:
+                    logger.warning(
+                        "Model %s %s, falling back to %s",
+                        model_name, error_type, chain[idx + 1],
+                    )
+                    if error_type == "model_overloaded":
+                        time.sleep(1)
+                    break  # advance to next model
+
+                # Non-retryable or last model
+                raise
+        else:
+            # Retry loop exhausted without break → advance via outer loop
+            continue
 
     # Should not reach here, but safety net
-    raise last_exc  # type: ignore[misc]
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("All models exhausted")
 
 
 # ---------------------------------------------------------------------------
@@ -632,6 +686,7 @@ def analyze_tender_file(
     if not _ensure_configured():
         return _not_configured_result()
 
+    assert _genai_client is not None
     chain = VISION_MODEL_CHAIN
     last_exc: Exception | None = None
     company_persona = _build_company_context(company_context)
@@ -640,22 +695,23 @@ def analyze_tender_file(
     for idx, model_name in enumerate(chain):
         try:
             logger.info("[AI] Uploading file to Gemini: %s (model: %s)", file_path, model_name)
-            uploaded_file = genai.upload_file(file_path)
+            uploaded_file = _genai_client.files.upload(file=file_path)
             logger.info("[AI] File uploaded: %s", uploaded_file.name)
 
-            model = genai.GenerativeModel(
-                model_name,
-                generation_config=genai.types.GenerationConfig(
+            response = _genai_client.models.generate_content(
+                model=model_name,
+                contents=[uploaded_file, file_prompt],
+                config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                 ),
             )
-
-            response = model.generate_content([uploaded_file, file_prompt])
-            response_text = response.text.strip()
+            response_text = (getattr(response, "text", None) or "").strip()
+            if not response_text:
+                raise RuntimeError(f"Model {model_name} returned empty response for file")
 
             # Cleanup uploaded file
             try:
-                genai.delete_file(uploaded_file.name)
+                _genai_client.files.delete(name=uploaded_file.name)
             except Exception:
                 pass
 
