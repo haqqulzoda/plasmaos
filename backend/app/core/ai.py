@@ -485,7 +485,6 @@ async def _analyze_tender_text_impl(
             prompt,
             generation_config={
                 "response_mime_type": "application/json",
-                "response_schema": TenderAnalysisSchema,
                 "temperature": 0.0,
             },
         )
@@ -645,7 +644,6 @@ async def _draft_strategic_proposal_impl(
             prompt,
             generation_config={
                 "response_mime_type": "application/json",
-                "response_schema": StrategicDraftSchema,
                 "temperature": 0.0,
             },
         )
@@ -874,7 +872,6 @@ async def _analyze_tender_file_impl(
                             contents=[uploaded_file, file_prompt],
                             config=types.GenerateContentConfig(
                                 response_mime_type="application/json",
-                                response_schema=TenderAnalysisSchema,
                                 temperature=0.0,
                             ),
                         )
