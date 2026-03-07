@@ -537,6 +537,25 @@ async def download_document(
             content_disposition_type=disposition,
         )
 
+    # ── Hard fail: storage_path is set but the physical file is missing ──
+    # Do NOT fall back to a live UzEx download — UzEx blocks direct HTTP
+    # requests (405 / 0 bytes), which silently serves an empty file to the user.
+    if doc.storage_path:
+        logger.error(
+            "Document %s has storage_path '%s' but physical file is missing from disk",
+            doc_id,
+            doc.storage_path,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Document file missing from physical storage. "
+                "Please re-sync documents for this tender."
+            ),
+        )
+
+    # ── No storage_path at all: document was never downloaded by the worker ──
+    # Attempt a live Playwright download as a last resort.
     file_path = _extract_remote_file_path(doc.file_url)
     if not file_path:
         raise HTTPException(status_code=500, detail="Document file path is invalid")

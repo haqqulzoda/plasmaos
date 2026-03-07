@@ -659,13 +659,30 @@ class UzExScraper:
                             or "download" in btn_marker
                             or "downloadfile" in btn_marker
                         ):
-                            logger.debug(f"[BUTTON CLICKER] Clicking button {i+1}: '{btn_text}'")
+                            pre_click_count = len(captured_urls)
+                            logger.info(
+                                "[BUTTON CLICKER] Clicking button %s/%s: '%s'",
+                                i + 1,
+                                len(download_btns),
+                                btn_text,
+                            )
                             try:
                                 btn.scroll_into_view_if_needed()
                             except Exception:
                                 pass
                             btn.click(force=True)
-                            page.wait_for_timeout(1500)  # Wait for network request
+                            # ── Throttle: give the server time to generate the
+                            # dynamic download URL before clicking the next button.
+                            # Without this, Button N+1's click aborts Button N's
+                            # in-flight URL generation request.
+                            page.wait_for_timeout(3000)
+                            post_click_count = len(captured_urls)
+                            logger.info(
+                                "[BUTTON CLICKER] Button %s captured %s new URL(s) (total: %s)",
+                                i + 1,
+                                post_click_count - pre_click_count,
+                                post_click_count,
+                            )
                     except Exception as e:
                         logger.debug(f"[BUTTON CLICKER] Button {i+1} click failed: {e}")
                         continue
