@@ -58,7 +58,9 @@ PDF_MIME_TYPES = {"application/pdf"}
 OCR_SAFE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
 OCR_MIN_TEXT_LEN = 50
 OCR_LANGS = "uzb+rus+eng"
-GEMINI_OCR_MODEL = "gemma-3-27b-it"
+OCR_PAGE_TIMEOUT_SECONDS = 60
+OCR_MAX_PAGES = 5
+GEMINI_OCR_MODEL = "gemini-2.0-flash"
 GEMINI_OCR_MAX_RETRIES = 3
 GEMINI_OCR_RETRY_BASE_SECONDS = 1.5
 
@@ -426,7 +428,9 @@ def _ocr_pdf_page(image: Image.Image) -> str:
 
 
 def _ocr_pdf_page_from_pdf_bytes(pdf_bytes: bytes, page_number: int) -> str:
-    try:
+    import concurrent.futures
+
+    def _render_and_ocr() -> str:
         with tempfile.TemporaryDirectory(prefix="pdf_ocr_page_") as temp_dir:
             image_paths = convert_from_bytes(
                 pdf_bytes,
@@ -453,6 +457,18 @@ def _ocr_pdf_page_from_pdf_bytes(pdf_bytes: bytes, page_number: int) -> str:
                     continue
 
             return "\n".join(page_chunks).strip()
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_render_and_ocr)
+            return future.result(timeout=OCR_PAGE_TIMEOUT_SECONDS)
+    except concurrent.futures.TimeoutError:
+        logger.warning(
+            "[SONAR] OCR timed out after %ss on page %s — skipping.",
+            OCR_PAGE_TIMEOUT_SECONDS,
+            page_number,
+        )
+        return ""
     except Exception as exc:
         logger.error("OCR conversion failed (page %s): %s", page_number, exc, exc_info=True)
         return ""
@@ -502,6 +518,7 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
 
     page_texts: list[str] = []
     ocr_fallback_logged = False
+    ocr_pages_processed = 0
 
     try:
         with fitz.open(stream=pdf_bytes, filetype="pdf") as pdf_doc:
@@ -524,10 +541,18 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
 
                 ocr_text = ""
                 if native_text or _page_has_visual_content(page):
+                    if ocr_pages_processed >= OCR_MAX_PAGES:
+                        logger.warning(
+                            "[SONAR] OCR page limit (%s) reached at page %s — skipping remaining pages.",
+                            OCR_MAX_PAGES,
+                            page_index,
+                        )
+                        continue
                     if not ocr_fallback_logged:
                         logger.info("[SONAR] Empty text detected. Triggering OCR fallback.")
                         ocr_fallback_logged = True
                     ocr_text = _ocr_pdf_page_from_pdf_bytes(pdf_bytes, page_index)
+                    ocr_pages_processed += 1
 
                 merged = "\n".join(part for part in (native_text, ocr_text) if part).strip()
                 if merged:
