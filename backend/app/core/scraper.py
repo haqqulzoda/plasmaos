@@ -770,9 +770,13 @@ class UzExScraper:
         target_key = _download_target_key(file_path)
         requested_extension = _detect_file_extension(file_path)
         filename = _extract_filename(file_path) or "download"
+        download_api_url = (
+            f"https://apietender.uzex.uz/api/common/DownloadFile?path={normalized_file_path}"
+            if normalized_file_path
+            else ""
+        )
 
         if requested_extension not in ARCHIVE_EXTENSIONS and normalized_file_path:
-            download_api_url = f"https://apietender.uzex.uz/api/common/DownloadFile?path={normalized_file_path}"
             try:
                 logger.info(f"[DOWNLOAD] Strategy 1: Direct HTTP GET -> {download_api_url[:80]}")
                 response = httpx.get(download_api_url, timeout=30, follow_redirects=True)
@@ -795,8 +799,6 @@ class UzExScraper:
                 logger.warning(f"[DOWNLOAD] Strategy 1 error: {exc}")
         else:
             logger.info("[DOWNLOAD] Strategy 1 skipped for archive or empty path: %s", file_path)
-
-        file_content = b""
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self.headless)
@@ -831,6 +833,105 @@ class UzExScraper:
 
             page.on("response", capture_file_response)
 
+            def _consume_download(
+                *,
+                download,
+                attempt_label: str,
+                candidate_url: str,
+            ) -> tuple[bytes, str] | None:
+                tmp_path = os.path.join(
+                    tempfile.gettempdir(),
+                    f"plasma_dl_{uuid4().hex}",
+                )
+                download.save_as(tmp_path)
+                try:
+                    with open(tmp_path, "rb") as file_handle:
+                        dl_bytes = file_handle.read()
+                finally:
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+
+                suggested = download.suggested_filename or filename
+                candidate_name = suggested or _extract_filename(candidate_url) or filename
+                validation_name = suggested or _extract_filename(candidate_url) or filename or file_path
+
+                if not _is_valid_file_payload(dl_bytes, "", validation_name):
+                    logger.warning(
+                        "[DOWNLOAD] %s rejected payload: %s bytes (%s)",
+                        attempt_label,
+                        len(dl_bytes),
+                        validation_name,
+                    )
+                    return None
+
+                if not _download_candidate_matches_target(
+                    target_key=target_key,
+                    requested_name=filename,
+                    candidate_url=candidate_url,
+                    candidate_name=candidate_name,
+                ):
+                    logger.warning(
+                        "[DOWNLOAD] %s produced non-target file: url=%s name=%s",
+                        attempt_label,
+                        candidate_url,
+                        candidate_name,
+                    )
+                    return None
+
+                logger.info(
+                    "[DOWNLOAD] %s matched target: %s bytes",
+                    attempt_label,
+                    len(dl_bytes),
+                )
+                return dl_bytes, suggested
+
+            def _matching_captured_file(
+                *,
+                start_index: int = 0,
+            ) -> tuple[bytes, str] | None:
+                for captured in captured_files[start_index:]:
+                    resolved_name = _extract_filename(captured["url"]) or filename
+                    if _download_candidate_matches_target(
+                        target_key=target_key,
+                        requested_name=filename,
+                        candidate_url=captured["url"],
+                        candidate_name=resolved_name,
+                    ):
+                        logger.info(
+                            "[DOWNLOAD] Strategy 3 matched target: %s bytes",
+                            len(captured["body"]),
+                        )
+                        return captured["body"], resolved_name
+                return None
+
+            def _element_matches_target(element) -> bool:
+                for attr_name in DOCUMENT_ATTRIBUTE_NAMES:
+                    try:
+                        attr_value = element.get_attribute(attr_name)
+                    except Exception:
+                        attr_value = None
+                    if not attr_value:
+                        continue
+
+                    candidates = _extract_download_candidates_from_text(attr_value)
+                    if not candidates:
+                        candidates = [attr_value]
+
+                    for candidate in candidates:
+                        normalized_candidate = _normalize_download_candidate(
+                            candidate,
+                            portal_base_url=self.BASE_URL,
+                        )
+                        if normalized_candidate and _download_candidate_matches_target(
+                            target_key=target_key,
+                            requested_name=filename,
+                            candidate_url=normalized_candidate,
+                            candidate_name=_extract_filename(normalized_candidate),
+                        ):
+                            return True
+
+                return False
+
             try:
                 logger.info(f"[DOWNLOAD] Loading tender page: {tender_url}")
                 page.goto(tender_url, timeout=self.timeout)
@@ -839,11 +940,54 @@ class UzExScraper:
                 except Exception:
                     page.wait_for_timeout(5000)
 
+                if download_api_url:
+                    logger.info("[DOWNLOAD] Strategy 2: direct navigation to exact target URL")
+                    captured_files.clear()
+                    direct_capture_start = 0
+                    try:
+                        with page.expect_download(timeout=10000) as download_info:
+                            page.evaluate(
+                                "(url) => { window.location.href = url; }",
+                                download_api_url,
+                            )
+                        direct_download = download_info.value
+                        matched_download = _consume_download(
+                            download=direct_download,
+                            attempt_label="Strategy 2 direct request",
+                            candidate_url=direct_download.url or download_api_url,
+                        )
+                        if matched_download is not None:
+                            browser.close()
+                            return matched_download
+                    except PlaywrightTimeout:
+                        logger.info("[DOWNLOAD] Strategy 2 direct request timed out, checking interceptor")
+                        page.wait_for_timeout(2000)
+
+                    matched_capture = _matching_captured_file(start_index=direct_capture_start)
+                    if matched_capture is not None:
+                        browser.close()
+                        return matched_capture
+
+                    logger.info("[DOWNLOAD] Strategy 2 direct request did not resolve target, reloading page")
+                    page.goto(tender_url, timeout=self.timeout)
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=15000)
+                    except Exception:
+                        page.wait_for_timeout(5000)
+
                 download_btns = page.query_selector_all(DOWNLOAD_TRIGGER_SELECTOR)
                 logger.info(f"[DOWNLOAD] Found {len(download_btns)} download buttons")
 
-                for i, btn in enumerate(download_btns):
+                matching_btns = [btn for btn in download_btns if _element_matches_target(btn)]
+                logger.info(
+                    "[DOWNLOAD] Found %s target-matching download buttons",
+                    len(matching_btns),
+                )
+
+                for i, btn in enumerate(matching_btns):
                     try:
+                        captured_files.clear()
+                        capture_start = 0
                         try:
                             try:
                                 btn.scroll_into_view_if_needed()
@@ -852,79 +996,34 @@ class UzExScraper:
                             with page.expect_download(timeout=10000) as download_info:
                                 btn.click(force=True)
                             download = download_info.value
-
-                            tmp_path = os.path.join(
-                                tempfile.gettempdir(),
-                                f"plasma_dl_{uuid4().hex}_{i}",
+                            matched_download = _consume_download(
+                                download=download,
+                                attempt_label=f"Strategy 2 button {i + 1}",
+                                candidate_url=download.url or download_api_url or file_path,
                             )
-                            download.save_as(tmp_path)
-                            try:
-                                with open(tmp_path, "rb") as file_handle:
-                                    dl_bytes = file_handle.read()
-                            finally:
-                                if os.path.exists(tmp_path):
-                                    os.unlink(tmp_path)
-
-                            suggested = download.suggested_filename or filename
-
-                            if _is_valid_file_payload(dl_bytes, "", suggested):
-                                if _download_candidate_matches_target(
-                                    target_key=target_key,
-                                    requested_name=filename,
-                                    candidate_url=download.url or "",
-                                    candidate_name=suggested,
-                                ):
-                                    logger.info(
-                                        f"[DOWNLOAD] Strategy 2 matched target: {len(dl_bytes)} bytes"
-                                    )
-                                    browser.close()
-                                    return dl_bytes, suggested
-
-                                if not file_content:
-                                    file_content = dl_bytes
-                                    filename = suggested
-                                    logger.info(
-                                        f"[DOWNLOAD] Strategy 2 captured: {len(dl_bytes)} bytes ({suggested})"
-                                    )
+                            if matched_download is not None:
+                                browser.close()
+                                return matched_download
 
                         except PlaywrightTimeout:
                             btn.click(force=True)
                             page.wait_for_timeout(2000)
 
-                        for captured in captured_files:
-                            if _download_candidate_matches_target(
-                                target_key=target_key,
-                                requested_name=filename,
-                                candidate_url=captured["url"],
-                                candidate_name=_extract_filename(captured["url"]),
-                            ):
-                                logger.info(
-                                    f"[DOWNLOAD] Strategy 3 matched target: {len(captured['body'])} bytes"
-                                )
-                                browser.close()
-                                return captured["body"], _extract_filename(captured["url"]) or filename
+                        matched_capture = _matching_captured_file(start_index=capture_start)
+                        if matched_capture is not None:
+                            browser.close()
+                            return matched_capture
 
                     except Exception as exc:
                         logger.debug(f"[DOWNLOAD] Button {i + 1} processing failed: {exc}")
                         continue
 
-                if file_content and _is_valid_file_payload(file_content, "", filename):
-                    logger.info(f"[DOWNLOAD] Using download event capture: {len(file_content)} bytes")
-                elif captured_files:
-                    if requested_extension in ARCHIVE_EXTENSIONS:
-                        raise Exception(f"Could not confidently match archive download: {file_path}")
-                    file_content = captured_files[0]["body"]
-                    filename = _extract_filename(captured_files[0]["url"]) or filename
-                    logger.info(
-                        f"[DOWNLOAD] Using first intercepted response: {len(file_content)} bytes"
-                    )
-                else:
-                    raise Exception(f"Could not download file: {file_path}")
+                raise Exception(f"Could not download exact file: {file_path}")
 
             finally:
                 browser.close()
 
-        return file_content, filename
+        raise Exception(f"Could not download file: {file_path}")
 
     async def download_file(self, tender_url: str, file_path: str) -> tuple[bytes, str]:
         """
