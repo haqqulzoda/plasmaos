@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import os
-import time
+from functools import partial
 from typing import Any
 
 from google import genai
@@ -33,6 +33,7 @@ GENAI_MAX_RETRY_ATTEMPTS = 3
 GENAI_RETRY_BACKOFF_BASE_SECONDS = 1.5
 GENAI_RETRY_BACKOFF_MAX_SECONDS = 12.0
 GENAI_RETRYABLE_CODES = {429, 500, 502, 503, 504}
+LLM_CALL_TIMEOUT: float = 45.0
 
 
 class ExtractionError(RuntimeError):
@@ -123,10 +124,10 @@ def _is_quota_error(exc: genai_errors.APIError) -> bool:
     return code == 429 or status == "RESOURCE_EXHAUSTED" or "quota" in msg
 
 
-def _sync_extract_tender_requirements(
+async def _extract_tender_requirements_impl(
     tender_text: str, available_taxonomy: list[dict], api_key: str
 ) -> DynamicTenderRequirements:
-    """Try each model in the extraction chain; advance on quota errors."""
+    """Async extraction with asyncio.sleep backoff and per-call timeouts."""
     prompt = _build_extraction_prompt(
         tender_text=tender_text, available_taxonomy=available_taxonomy
     )
@@ -142,16 +143,37 @@ def _sync_extract_tender_requirements(
 
         for attempt in range(1, GENAI_MAX_RETRY_ATTEMPTS + 1):
             try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=DynamicTenderRequirements,
-                        temperature=0.0,
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        partial(
+                            client.models.generate_content,
+                            model=model_name,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                response_schema=DynamicTenderRequirements,
+                                temperature=0.0,
+                            ),
+                        )
                     ),
+                    timeout=LLM_CALL_TIMEOUT,
                 )
                 return _validate_structured_response(response)
+            except asyncio.TimeoutError:
+                last_exc = TimeoutError(f"Model {model_name} timed out after {LLM_CALL_TIMEOUT}s")
+                logger.warning(
+                    "Model %s timed out after %.0fs during extraction, %s",
+                    model_name, LLM_CALL_TIMEOUT,
+                    f"falling back to {EXTRACTION_MODEL_CHAIN[model_idx + 1]}"
+                    if model_idx < len(EXTRACTION_MODEL_CHAIN) - 1 else "no more models",
+                )
+                if model_idx < len(EXTRACTION_MODEL_CHAIN) - 1:
+                    break  # advance to next model
+                raise ExtractionError(
+                    f"All models timed out during extraction.",
+                    status_code=504,
+                    error_type="model_overloaded",
+                ) from last_exc
             except ValidationError as exc:
                 raise ExtractionError(
                     "LLM response failed DynamicTenderRequirements schema validation."
@@ -195,7 +217,7 @@ def _sync_extract_tender_requirements(
                         attempt + 1, GENAI_MAX_RETRY_ATTEMPTS,
                         model_name, delay_seconds,
                     )
-                    time.sleep(delay_seconds)
+                    await asyncio.sleep(delay_seconds)
                     continue
 
                 # ── Transient but retries exhausted → try next model ──
@@ -228,8 +250,7 @@ def _sync_extract_tender_requirements(
                 logger.exception("Tender requirement extraction failed")
                 raise ExtractionError("Tender requirement extraction failed.") from exc
         else:
-            # Retry loop exhausted without break → move to next model via
-            # the outer for loop's natural iteration (already handled above).
+            # Retry loop exhausted without break → advance via outer loop
             continue
 
     raise ExtractionError(
@@ -242,6 +263,7 @@ def _sync_extract_tender_requirements(
 def extract_tender_requirements_sync(
     tender_text: str, available_taxonomy: list[dict]
 ) -> DynamicTenderRequirements:
+    """Sync wrapper — uses asyncio.run() over the async implementation."""
     api_key = _resolve_gemini_api_key()
     if not api_key:
         raise ExtractionError("GEMINI_API_KEY is not configured.")
@@ -253,12 +275,15 @@ def extract_tender_requirements_sync(
     if len(cleaned_text) > MAX_TENDER_TEXT_CHARS:
         cleaned_text = cleaned_text[:MAX_TENDER_TEXT_CHARS]
 
-    return _sync_extract_tender_requirements(cleaned_text, available_taxonomy, api_key)
+    return asyncio.run(
+        _extract_tender_requirements_impl(cleaned_text, available_taxonomy, api_key)
+    )
 
 
 async def extract_tender_requirements(
     tender_text: str, available_taxonomy: list[dict]
 ) -> DynamicTenderRequirements:
+    """Async entry point — calls native async implementation directly."""
     api_key = _resolve_gemini_api_key()
     if not api_key:
         raise ExtractionError("GEMINI_API_KEY is not configured.")
@@ -270,8 +295,7 @@ async def extract_tender_requirements(
     if len(cleaned_text) > MAX_TENDER_TEXT_CHARS:
         cleaned_text = cleaned_text[:MAX_TENDER_TEXT_CHARS]
 
-    return await asyncio.to_thread(
-        _sync_extract_tender_requirements,
+    return await _extract_tender_requirements_impl(
         cleaned_text,
         available_taxonomy,
         api_key,

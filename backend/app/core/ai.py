@@ -3,28 +3,42 @@ Plasma AI - AI Analysis Module
 
 Uses Google Gemini to analyze tender documents and extract structured data.
 Model fallback chain: tries multiple models on quota/rate-limit errors.
+
+Phase 1 Optimizations applied:
+  - Async-first fallback with ``asyncio.sleep`` (no thread-pool starvation)
+  - ``asyncio.wait_for`` timeout on every LLM call
+  - Pydantic ``response_schema`` on all GenerateContentConfig (deterministic JSON)
+  - ``temperature=0.0`` for reproducible output
+  - Single file upload per analysis chain (no redundant re-uploads)
 """
 
+import asyncio
 import json
 import logging
 import os
 import time
+from functools import partial
 from typing import Any
 
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 
 # Lazily initialised client
 _genai_client: genai.Client | None = None
 
+# Timeout constants (seconds)
+LLM_CALL_TIMEOUT: float = 45.0
+LLM_FILE_CALL_TIMEOUT: float = 90.0
+
 
 # ---------------------------------------------------------------------------
 # Model fallback chain
 # ---------------------------------------------------------------------------
-# Order: primary → secondary → tertiary.  On 429 / RESOURCE_EXHAUSTED the
+# Order: primary -> secondary -> tertiary.  On 429 / RESOURCE_EXHAUSTED the
 # caller advances to the next model automatically.
 # ---------------------------------------------------------------------------
 GEMINI_MODEL_CHAIN: list[str] = [
@@ -40,6 +54,58 @@ GEMINI_MODEL_CHAIN = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Pydantic response schemas (enforce deterministic LLM output)
+# ---------------------------------------------------------------------------
+class _TenderItemSchema(BaseModel):
+    model_config = ConfigDict(strict=False)
+    name: str
+    quantity: float = 1
+    unit: str = "pcs"
+
+
+class _CostBreakdownSchema(BaseModel):
+    model_config = ConfigDict(strict=False)
+    materials: float = 0
+    labor: float = 0
+    other: float = 0
+
+
+class TenderAnalysisSchema(BaseModel):
+    """Enforced response schema for tender document analysis."""
+    model_config = ConfigDict(strict=False)
+    summary: str = ""
+    items: list[_TenderItemSchema] = Field(default_factory=list)
+    delivery_days: int = 30
+    required_licenses: list[str] = Field(default_factory=list)
+    estimated_cost_breakdown: _CostBreakdownSchema = Field(
+        default_factory=_CostBreakdownSchema,
+    )
+    key_requirements: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+
+
+class _StrategicLineItemSchema(BaseModel):
+    model_config = ConfigDict(strict=False)
+    name: str = "Line Item"
+    quantity: float = 1
+    unit: str = "lot"
+    unit_price: float = 0
+    total: float = 0
+
+
+class StrategicDraftSchema(BaseModel):
+    """Enforced response schema for strategic proposal drafting."""
+    model_config = ConfigDict(strict=False)
+    strategic_summary: str = ""
+    suggested_price: float = 0
+    delivery_days: str = "30 calendar days"
+    line_items: list[_StrategicLineItemSchema] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# API key resolution & client init
+# ---------------------------------------------------------------------------
 def _resolve_gemini_api_key() -> str | None:
     """Resolve Gemini API key from settings and direct env fallbacks."""
     from app.core.config import settings
@@ -112,13 +178,14 @@ def _classify_error(exc: Exception) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Core fallback helper
+# Core async fallback helper (Phase 1: replaces sync version)
 # ---------------------------------------------------------------------------
-def _call_gemini_with_fallback(
+async def _call_gemini_with_fallback_async(
     prompt: str | list,
     *,
     model_chain: list[str] | None = None,
     generation_config: dict | None = None,
+    timeout: float = LLM_CALL_TIMEOUT,
 ) -> tuple[str, str]:
     """
     Try each model in *model_chain* until one succeeds.
@@ -126,7 +193,8 @@ def _call_gemini_with_fallback(
     Returns (response_text, model_name_used).
     Raises the last exception if ALL models fail.
 
-    Uses the new google.genai Client SDK.
+    Uses ``asyncio.sleep`` for backoff (no thread-pool starvation) and
+    ``asyncio.wait_for`` to enforce per-call timeouts.
     """
     assert _genai_client is not None, "_ensure_configured() must be called first"
     chain = model_chain or GEMINI_MODEL_CHAIN
@@ -143,10 +211,16 @@ def _call_gemini_with_fallback(
                     "Trying model %s (%d/%d, attempt %d)",
                     model_name, idx + 1, len(chain), attempt,
                 )
-                response = _genai_client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                    config=cfg,
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        partial(
+                            _genai_client.models.generate_content,
+                            model=model_name,
+                            contents=prompt,
+                            config=cfg,
+                        )
+                    ),
+                    timeout=timeout,
                 )
                 response_text = (getattr(response, "text", None) or "").strip()
                 if not response_text:
@@ -156,21 +230,34 @@ def _call_gemini_with_fallback(
                 logger.info("Model %s succeeded", model_name)
                 return response_text, model_name
 
+            except asyncio.TimeoutError:
+                last_exc = TimeoutError(
+                    f"Model {model_name} timed out after {timeout}s"
+                )
+                logger.warning(
+                    "Model %s timed out after %.0fs, %s",
+                    model_name, timeout,
+                    f"falling back to {chain[idx + 1]}" if idx < len(chain) - 1 else "no more models",
+                )
+                if idx < len(chain) - 1:
+                    break  # advance to next model
+                raise last_exc
+
             except genai_errors.APIError as exc:
                 last_exc = exc
                 error_code = int(getattr(exc, "code", 0) or 0)
 
-                # Quota → skip to next model immediately
+                # Quota -> skip to next model immediately
                 if _is_quota_error(exc):
                     if idx < len(chain) - 1:
                         logger.warning(
                             "Model %s quota exceeded, falling back to %s",
                             model_name, chain[idx + 1],
                         )
-                        break  # break retry loop → advance model
+                        break  # break retry loop -> advance model
                     raise
 
-                # Transient → retry same model with backoff
+                # Transient -> retry same model with backoff
                 if error_code in _RETRYABLE_CODES and attempt < max_retries:
                     delay = min(
                         backoff_base * (2 ** (attempt - 1)), backoff_max
@@ -179,10 +266,10 @@ def _call_gemini_with_fallback(
                         "Model %s transient error (code=%s), retry %d/%d in %.1fs",
                         model_name, error_code, attempt + 1, max_retries, delay,
                     )
-                    time.sleep(delay)
+                    await asyncio.sleep(delay)
                     continue
 
-                # Transient but retries exhausted → try next model
+                # Transient but retries exhausted -> try next model
                 if _is_transient_error(exc) and idx < len(chain) - 1:
                     logger.warning(
                         "Model %s retries exhausted, falling back to %s",
@@ -190,7 +277,7 @@ def _call_gemini_with_fallback(
                     )
                     break
 
-                # Non-retryable or last model — raise
+                # Non-retryable or last model -- raise
                 raise
 
             except Exception as exc:
@@ -203,19 +290,35 @@ def _call_gemini_with_fallback(
                         model_name, error_type, chain[idx + 1],
                     )
                     if error_type == "model_overloaded":
-                        time.sleep(1)
+                        await asyncio.sleep(1)
                     break  # advance to next model
 
                 # Non-retryable or last model
                 raise
         else:
-            # Retry loop exhausted without break → advance via outer loop
+            # Retry loop exhausted without break -> advance via outer loop
             continue
 
     # Should not reach here, but safety net
     if last_exc:
         raise last_exc
     raise RuntimeError("All models exhausted")
+
+
+def _call_gemini_with_fallback(
+    prompt: str | list,
+    *,
+    model_chain: list[str] | None = None,
+    generation_config: dict | None = None,
+) -> tuple[str, str]:
+    """Sync backward-compat wrapper (for test scripts only)."""
+    return asyncio.run(
+        _call_gemini_with_fallback_async(
+            prompt,
+            model_chain=model_chain,
+            generation_config=generation_config,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +347,7 @@ def _build_company_context(company_context: dict[str, str] | None = None) -> str
 
 
 # ---------------------------------------------------------------------------
-# JSON extraction helper
+# JSON extraction helper (kept as fallback for edge cases)
 # ---------------------------------------------------------------------------
 def _extract_json(response_text: str) -> dict[str, Any]:
     """Extract a JSON object from a potentially wrapped response."""
@@ -263,6 +366,22 @@ def _extract_json(response_text: str) -> dict[str, Any]:
         text = text[start_idx:end_idx]
 
     return json.loads(text)
+
+
+def _validate_with_schema(
+    response_text: str,
+    schema: type[BaseModel],
+) -> dict[str, Any]:
+    """Validate LLM response against a Pydantic schema, with raw fallback."""
+    try:
+        result = schema.model_validate_json(response_text)
+        return result.model_dump()
+    except (ValidationError, json.JSONDecodeError) as exc:
+        logger.warning(
+            "Schema validation failed (%s), falling back to raw JSON extraction: %s",
+            schema.__name__, exc,
+        )
+        return _extract_json(response_text)
 
 
 # ---------------------------------------------------------------------------
@@ -339,14 +458,13 @@ TEXT TO ANALYZE:
 Return ONLY the JSON object, nothing else."""
 
 
-def analyze_tender_text(
+# ---------------------------------------------------------------------------
+# Tender analysis: async implementation (primary) + sync wrapper
+# ---------------------------------------------------------------------------
+async def _analyze_tender_text_impl(
     text: str, company_context: dict[str, str] | None = None
 ) -> dict[str, Any]:
-    """
-    Analyze tender document text using Gemini AI with model fallback.
-
-    Returns structured data dict with summary, items, delivery_days, etc.
-    """
+    """Core async implementation for tender text analysis."""
     if not _ensure_configured():
         return _not_configured_result()
 
@@ -363,12 +481,16 @@ def analyze_tender_text(
         company_persona = _build_company_context(company_context)
         prompt = TENDER_ANALYSIS_PROMPT.format(text=text, company_persona=company_persona)
 
-        response_text, model_used = _call_gemini_with_fallback(
+        response_text, model_used = await _call_gemini_with_fallback_async(
             prompt,
-            generation_config={"response_mime_type": "application/json"},
+            generation_config={
+                "response_mime_type": "application/json",
+                "response_schema": TenderAnalysisSchema,
+                "temperature": 0.0,
+            },
         )
         logger.info("Tender analysis completed with model %s", model_used)
-        result = _extract_json(response_text)
+        result = _validate_with_schema(response_text, TenderAnalysisSchema)
         logger.info("AI analysis complete: %d items extracted", len(result.get("items", [])))
         return result
 
@@ -406,17 +528,23 @@ def analyze_tender_text(
         }
 
 
+def analyze_tender_text(
+    text: str, company_context: dict[str, str] | None = None
+) -> dict[str, Any]:
+    """
+    Analyze tender document text using Gemini AI with model fallback.
+
+    Returns structured data dict with summary, items, delivery_days, etc.
+    Sync wrapper — kept for backward compatibility with test scripts.
+    """
+    return asyncio.run(_analyze_tender_text_impl(text, company_context))
+
+
 async def analyze_tender_text_async(
     text: str, company_context: dict[str, str] | None = None
 ) -> dict[str, Any]:
-    """Async wrapper for analyze_tender_text."""
-    import asyncio
-    from functools import partial
-
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None, partial(analyze_tender_text, text, company_context)
-    )
+    """Async entry point — calls native async implementation directly."""
+    return await _analyze_tender_text_impl(text, company_context)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -462,7 +590,10 @@ TENDER TEXT:
 """
 
 
-def draft_strategic_proposal(
+# ---------------------------------------------------------------------------
+# Strategic draft: async implementation (primary) + sync wrapper
+# ---------------------------------------------------------------------------
+async def _draft_strategic_proposal_impl(
     text: str,
     *,
     company_context: dict[str, str] | None = None,
@@ -470,7 +601,7 @@ def draft_strategic_proposal(
     accepted_liabilities: list[str] | None = None,
     tender_budget: float = 0.0,
 ) -> dict[str, Any]:
-    """Generate a strategic proposal draft with model fallback chain."""
+    """Core async implementation for strategic proposal drafting."""
     if not _ensure_configured():
         return {
             "error": "AI not configured",
@@ -493,7 +624,7 @@ def draft_strategic_proposal(
         }
 
     liabilities_text = ", ".join(accepted_liabilities or []).strip() or "None recorded"
-    ledger_text = json.dumps(compliance_ledger or {}, ensure_ascii=False, indent=2)
+    ledger_text = json.dumps(compliance_ledger or {}, ensure_ascii=False)
 
     try:
         max_chars = 100_000
@@ -510,14 +641,18 @@ def draft_strategic_proposal(
             tender_budget=tender_budget,
         )
 
-        response_text, model_used = _call_gemini_with_fallback(
+        response_text, model_used = await _call_gemini_with_fallback_async(
             prompt,
-            generation_config={"response_mime_type": "application/json"},
+            generation_config={
+                "response_mime_type": "application/json",
+                "response_schema": StrategicDraftSchema,
+                "temperature": 0.0,
+            },
         )
         logger.info("Strategic draft completed with model %s", model_used)
-        result = _extract_json(response_text)
+        result = _validate_with_schema(response_text, StrategicDraftSchema)
 
-        # ── Normalize result fields ──
+        # -- Normalize result fields --
         summary = str(result.get("strategic_summary", "")).strip()
         if not summary:
             summary = (
@@ -600,6 +735,26 @@ def draft_strategic_proposal(
         }
 
 
+def draft_strategic_proposal(
+    text: str,
+    *,
+    company_context: dict[str, str] | None = None,
+    compliance_ledger: dict[str, Any] | None = None,
+    accepted_liabilities: list[str] | None = None,
+    tender_budget: float = 0.0,
+) -> dict[str, Any]:
+    """Generate a strategic proposal draft. Sync wrapper for backward compat."""
+    return asyncio.run(
+        _draft_strategic_proposal_impl(
+            text,
+            company_context=company_context,
+            compliance_ledger=compliance_ledger,
+            accepted_liabilities=accepted_liabilities,
+            tender_budget=tender_budget,
+        )
+    )
+
+
 async def draft_strategic_proposal_async(
     text: str,
     *,
@@ -608,21 +763,13 @@ async def draft_strategic_proposal_async(
     accepted_liabilities: list[str] | None = None,
     tender_budget: float = 0.0,
 ) -> dict[str, Any]:
-    """Async wrapper for draft_strategic_proposal."""
-    import asyncio
-    from functools import partial
-
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None,
-        partial(
-            draft_strategic_proposal,
-            text,
-            company_context=company_context,
-            compliance_ledger=compliance_ledger,
-            accepted_liabilities=accepted_liabilities,
-            tender_budget=tender_budget,
-        ),
+    """Async entry point — calls native async implementation directly."""
+    return await _draft_strategic_proposal_impl(
+        text,
+        company_context=company_context,
+        compliance_ledger=compliance_ledger,
+        accepted_liabilities=accepted_liabilities,
+        tender_budget=tender_budget,
     )
 
 
@@ -675,13 +822,18 @@ Rules:
 Return ONLY the JSON object, nothing else."""
 
 
-def analyze_tender_file(
+# ---------------------------------------------------------------------------
+# File analysis: async implementation (primary) + sync wrapper
+# Upload ONCE, re-use across the entire model fallback chain.
+# ---------------------------------------------------------------------------
+async def _analyze_tender_file_impl(
     file_path: str, company_context: dict[str, str] | None = None
 ) -> dict[str, Any]:
     """
-    Analyze tender document by uploading directly to Gemini (vision).
+    Core async implementation for file-based tender analysis.
 
-    Uses the vision model chain for best OCR/PDF reading results.
+    Uploads the file to Gemini Files API exactly ONCE, then tries each model
+    in the vision chain.  Cleans up the uploaded file in a ``finally`` block.
     """
     if not _ensure_configured():
         return _not_configured_result()
@@ -692,99 +844,140 @@ def analyze_tender_file(
     company_persona = _build_company_context(company_context)
     file_prompt = FILE_ANALYSIS_PROMPT.format(company_persona=company_persona)
 
-    for idx, model_name in enumerate(chain):
-        try:
-            logger.info("[AI] Uploading file to Gemini: %s (model: %s)", file_path, model_name)
-            uploaded_file = _genai_client.files.upload(file=file_path)
-            logger.info("[AI] File uploaded: %s", uploaded_file.name)
+    # Upload file ONCE before the fallback loop
+    try:
+        logger.info("[AI] Uploading file to Gemini: %s", file_path)
+        uploaded_file = await asyncio.to_thread(
+            _genai_client.files.upload, file=file_path
+        )
+        logger.info("[AI] File uploaded: %s", uploaded_file.name)
+    except Exception as upload_exc:
+        logger.error("[AI] File upload failed: %s", upload_exc)
+        return {
+            "error": str(upload_exc),
+            "error_type": "api_error",
+            "summary": f"File upload failed: {upload_exc}",
+            "items": [],
+            "delivery_days": 30,
+            "required_licenses": [],
+        }
 
-            response = _genai_client.models.generate_content(
-                model=model_name,
-                contents=[uploaded_file, file_prompt],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                ),
-            )
-            response_text = (getattr(response, "text", None) or "").strip()
-            if not response_text:
-                raise RuntimeError(f"Model {model_name} returned empty response for file")
-
-            # Cleanup uploaded file
+    try:
+        for idx, model_name in enumerate(chain):
             try:
-                _genai_client.files.delete(name=uploaded_file.name)
-            except Exception:
-                pass
-
-            result = _extract_json(response_text)
-            logger.info(
-                "AI file analysis complete with %s: %d items extracted",
-                model_name,
-                len(result.get("items", [])),
-            )
-            return result
-
-        except json.JSONDecodeError as e:
-            logger.error("Failed to parse AI response as JSON: %s", e)
-            return {
-                "error": f"JSON parse error: {e}",
-                "error_type": "api_error",
-                "summary": "AI response could not be parsed - please try again",
-                "items": [],
-                "delivery_days": 30,
-                "required_licenses": [],
-            }
-
-        except Exception as e:
-            last_exc = e
-            error_type = _classify_error(e)
-            if error_type in ("quota_exceeded", "model_overloaded") and idx < len(chain) - 1:
-                logger.warning(
-                    "Model %s %s during file analysis, falling back to %s",
-                    model_name,
-                    error_type,
-                    chain[idx + 1],
+                logger.info("[AI] Analyzing file with model: %s", model_name)
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        partial(
+                            _genai_client.models.generate_content,
+                            model=model_name,
+                            contents=[uploaded_file, file_prompt],
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                response_schema=TenderAnalysisSchema,
+                                temperature=0.0,
+                            ),
+                        )
+                    ),
+                    timeout=LLM_FILE_CALL_TIMEOUT,
                 )
-                continue
+                response_text = (getattr(response, "text", None) or "").strip()
+                if not response_text:
+                    raise RuntimeError(f"Model {model_name} returned empty response for file")
 
-            logger.error("Gemini file analysis error (%s): %s", error_type, e)
-            import traceback
-            logger.error(traceback.format_exc())
+                result = _validate_with_schema(response_text, TenderAnalysisSchema)
+                logger.info(
+                    "AI file analysis complete with %s: %d items extracted",
+                    model_name,
+                    len(result.get("items", [])),
+                )
+                return result
 
-            if error_type == "quota_exceeded":
-                summary = "Monthly AI quota reached. Please try again later or contact support."
-            elif error_type == "model_overloaded":
-                summary = "AI models temporarily overloaded. Please retry in a few minutes."
-            else:
-                summary = f"AI analysis failed: {e}"
+            except asyncio.TimeoutError:
+                last_exc = TimeoutError(f"Model {model_name} timed out after {LLM_FILE_CALL_TIMEOUT}s")
+                logger.warning(
+                    "Model %s timed out during file analysis, %s",
+                    model_name,
+                    f"falling back to {chain[idx + 1]}" if idx < len(chain) - 1 else "no more models",
+                )
+                if idx < len(chain) - 1:
+                    continue
+                # fall through to safety net
 
-            return {
-                "error": str(e),
-                "error_type": error_type,
-                "summary": summary,
-                "items": [],
-                "delivery_days": 30,
-                "required_licenses": [],
-            }
+            except json.JSONDecodeError as e:
+                logger.error("Failed to parse AI response as JSON: %s", e)
+                return {
+                    "error": f"JSON parse error: {e}",
+                    "error_type": "api_error",
+                    "summary": "AI response could not be parsed - please try again",
+                    "items": [],
+                    "delivery_days": 30,
+                    "required_licenses": [],
+                }
 
-    # Safety net — should not reach here
-    return {
-        "error": str(last_exc),
-        "error_type": "quota_exceeded",
-        "summary": "All AI models exhausted. Please try again later.",
-        "items": [],
-        "delivery_days": 30,
-        "required_licenses": [],
-    }
+            except Exception as e:
+                last_exc = e
+                error_type = _classify_error(e)
+                if error_type in ("quota_exceeded", "model_overloaded") and idx < len(chain) - 1:
+                    logger.warning(
+                        "Model %s %s during file analysis, falling back to %s",
+                        model_name, error_type, chain[idx + 1],
+                    )
+                    continue
+
+                logger.error("Gemini file analysis error (%s): %s", error_type, e)
+                import traceback
+                logger.error(traceback.format_exc())
+
+                if error_type == "quota_exceeded":
+                    summary = "Monthly AI quota reached. Please try again later or contact support."
+                elif error_type == "model_overloaded":
+                    summary = "AI models temporarily overloaded. Please retry in a few minutes."
+                else:
+                    summary = f"AI analysis failed: {e}"
+
+                return {
+                    "error": str(e),
+                    "error_type": error_type,
+                    "summary": summary,
+                    "items": [],
+                    "delivery_days": 30,
+                    "required_licenses": [],
+                }
+
+        # Safety net -- all models exhausted
+        return {
+            "error": str(last_exc),
+            "error_type": "quota_exceeded",
+            "summary": "All AI models exhausted. Please try again later.",
+            "items": [],
+            "delivery_days": 30,
+            "required_licenses": [],
+        }
+    finally:
+        # Cleanup uploaded file exactly ONCE
+        try:
+            await asyncio.to_thread(
+                _genai_client.files.delete, name=uploaded_file.name
+            )
+        except Exception:
+            pass
+
+
+def analyze_tender_file(
+    file_path: str, company_context: dict[str, str] | None = None
+) -> dict[str, Any]:
+    """
+    Analyze tender document by uploading directly to Gemini (vision).
+    Sync wrapper for backward compat.
+    """
+    return asyncio.run(
+        _analyze_tender_file_impl(file_path, company_context)
+    )
 
 
 async def analyze_tender_file_async(
     file_path: str, company_context: dict[str, str] | None = None
 ) -> dict[str, Any]:
-    """Async wrapper for analyze_tender_file."""
-    import asyncio
-    from functools import partial
-
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None, partial(analyze_tender_file, file_path, company_context)
-    )
+    """Async entry point — calls native async implementation directly."""
+    return await _analyze_tender_file_impl(file_path, company_context)
