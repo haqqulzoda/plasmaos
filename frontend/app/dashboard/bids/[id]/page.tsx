@@ -261,7 +261,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
   }, []);
 
   const pollTenderDocumentSync = useCallback(async (jobId: string, tenderId: string) => {
-    for (let attempt = 0; attempt < 24; attempt += 1) {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
       if (attempt > 0) {
         try {
           const docsResponse = await api.get<TenderDocument[]>(`/tenders/${tenderId}/documents`);
@@ -284,10 +284,10 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
         throw new Error(response.data.message || 'Tender document sync failed.');
       }
 
-      await wait(2500);
+      await wait(5000);
     }
 
-    throw new Error('Tender document sync timed out.');
+    throw new Error('Document sync is taking longer than expected. Please reload the page in a minute.');
   }, []);
 
   useEffect(() => {
@@ -402,7 +402,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
         const axiosError = err as { response?: { data?: { detail?: string } } };
         setDocsSyncError(
           axiosError.response?.data?.detail ||
-            'Tender documents are still syncing or could not be fetched right now.',
+          'Tender documents are still syncing or could not be fetched right now.',
         );
       } finally {
         if (isActive) {

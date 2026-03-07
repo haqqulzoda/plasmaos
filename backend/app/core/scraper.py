@@ -624,7 +624,20 @@ class UzExScraper:
             
             try:
                 logger.info(f"[SCRAPER] Fetching: {source_url}")
-                page.goto(source_url, timeout=self.timeout)
+                for nav_attempt in range(2):
+                    try:
+                        nav_timeout = self.timeout if nav_attempt == 0 else 60000
+                        page.goto(source_url, timeout=nav_timeout)
+                        break
+                    except Exception as nav_exc:
+                        if nav_attempt == 0 and "timeout" in str(nav_exc).lower():
+                            logger.warning(
+                                "[SCRAPER] Navigation timed out (%sms), retrying in 5s…",
+                                self.timeout,
+                            )
+                            page.wait_for_timeout(5000)
+                            continue
+                        raise
                 
                 # Step 1: Wait for page load
                 try:
@@ -834,7 +847,20 @@ class UzExScraper:
 
             try:
                 logger.info(f"[DOWNLOAD] Loading tender page: {tender_url}")
-                page.goto(tender_url, timeout=self.timeout)
+                for nav_attempt in range(2):
+                    try:
+                        nav_timeout = self.timeout if nav_attempt == 0 else 60000
+                        page.goto(tender_url, timeout=nav_timeout)
+                        break
+                    except Exception as nav_exc:
+                        if nav_attempt == 0 and "timeout" in str(nav_exc).lower():
+                            logger.warning(
+                                "[DOWNLOAD] Navigation timed out (%sms), retrying in 5s…",
+                                self.timeout,
+                            )
+                            page.wait_for_timeout(5000)
+                            continue
+                        raise
                 try:
                     page.wait_for_load_state("networkidle", timeout=15000)
                 except Exception:
