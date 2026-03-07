@@ -9,11 +9,11 @@ import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -220,6 +220,24 @@ def _guess_download_content_type(*, filename: str, file_type: str | None = None)
         "gz": "application/gzip",
     }
     return content_types.get(extension, "application/octet-stream")
+
+
+def _safe_content_disposition(disposition: str, filename: str) -> str:
+    """Build a Content-Disposition header that is safe for non-ASCII filenames.
+
+    Uses RFC 5987 ``filename*=UTF-8''...`` for the real name and an ASCII-safe
+    ``filename=`` fallback so every browser gets a usable download name.
+    """
+    try:
+        filename.encode("ascii")
+        return f'{disposition}; filename="{filename}"'
+    except UnicodeEncodeError:
+        ascii_fallback = filename.encode("ascii", errors="replace").decode("ascii")
+        utf8_quoted = quote(filename, safe="")
+        return (
+            f'{disposition}; filename="{ascii_fallback}"; '
+            f"filename*=UTF-8''{utf8_quoted}"
+        )
 
 
 def _stored_download_name(storage_path: str) -> str:
@@ -482,7 +500,7 @@ async def proxy_download(request: ProxyDownloadRequest):
         return Response(
             content=file_bytes,
             media_type=content_type,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+            headers={"Content-Disposition": _safe_content_disposition("attachment", filename)}
         )
         
     except Exception as e:
@@ -530,11 +548,10 @@ async def download_document(
             file_type=doc.file_type,
         )
         disposition = "inline" if content_type == "application/pdf" else "attachment"
-        return FileResponse(
-            path=local_path,
+        return Response(
+            content=local_path.read_bytes(),
             media_type=content_type,
-            filename=resolved_name,
-            content_disposition_type=disposition,
+            headers={"Content-Disposition": _safe_content_disposition(disposition, resolved_name)},
         )
 
     # ── Hard fail: storage_path is set but the physical file is missing ──
@@ -577,7 +594,7 @@ async def download_document(
         return Response(
             content=file_bytes,
             media_type=content_type,
-            headers={"Content-Disposition": f'{disposition}; filename="{resolved_name}"'}
+            headers={"Content-Disposition": _safe_content_disposition(disposition, resolved_name)}
         )
         
     except Exception as e:

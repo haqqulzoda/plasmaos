@@ -473,7 +473,7 @@ async def _analyze_tender_text_impl(
         return _too_short_result()
 
     try:
-        max_chars = 100_000
+        max_chars = 2_000_000
         if len(text) > max_chars:
             logger.warning("Text truncated from %d to %d chars", len(text), max_chars)
             text = text[:max_chars]
@@ -627,7 +627,7 @@ async def _draft_strategic_proposal_impl(
     ledger_text = json.dumps(compliance_ledger or {}, ensure_ascii=False)
 
     try:
-        max_chars = 100_000
+        max_chars = 2_000_000
         if len(text) > max_chars:
             logger.warning("Text truncated from %s to %s chars", len(text), max_chars)
             text = text[:max_chars]
