@@ -400,80 +400,105 @@ async def ai_draft_proposal(
             detail="Tender documents have not been synchronized. Please sync documents first.",
         )
 
-    profile_result = await db.execute(
-        select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
-    )
-    profile = profile_result.scalar_one_or_none()
-    analysis_owner_key = _analysis_owner_key(
-        current_user=current_user,
-        profile=profile,
-    )
-    company_name = str(
-        (profile.company_name if profile else None)
-        or current_user.company_name
-        or current_user.name
-        or "Unknown Company"
-    )
-
-    analysis_result = await db.execute(
-        select(TenderAnalysis)
-        .where(
-            TenderAnalysis.tender_id == proposal.tender_id,
-            TenderAnalysis.company_name == analysis_owner_key,
-        )
-        .order_by(TenderAnalysis.created_at.desc())
-        .limit(1)
-    )
-    latest_analysis = analysis_result.scalar_one_or_none()
-    evaluation_payload = (
-        (latest_analysis.analysis_json or {}).get("evaluation", {})
-        if latest_analysis
-        else {}
-    )
     try:
-        compliance_result = DynamicComplianceResult.model_validate(evaluation_payload)
-    except Exception:
-        compliance_result = DynamicComplianceResult(
-            is_compliant=False,
-            met_requirements=[],
-            missing_requirements=[],
-            unmapped_requirements=[],
-            status_message="No cached compliance analysis found.",
+        profile_result = await db.execute(
+            select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
+        )
+        profile = profile_result.scalar_one_or_none()
+        analysis_owner_key = _analysis_owner_key(
+            current_user=current_user,
+            profile=profile,
+        )
+        company_name = str(
+            (profile.company_name if profile else None)
+            or current_user.company_name
+            or current_user.name
+            or "Unknown Company"
         )
 
-    override_result = await db.execute(
-        select(RiskOverrideLog, TaxonomyNode)
-        .join(TaxonomyNode, RiskOverrideLog.missing_node_id == TaxonomyNode.id)
-        .where(
-            RiskOverrideLog.tender_id == proposal.tender_id,
-            RiskOverrideLog.user_id == current_user.id,
+        analysis_result = await db.execute(
+            select(TenderAnalysis)
+            .where(
+                TenderAnalysis.tender_id == proposal.tender_id,
+                TenderAnalysis.company_name == analysis_owner_key,
+            )
+            .order_by(TenderAnalysis.created_at.desc())
+            .limit(1)
         )
-        .order_by(RiskOverrideLog.created_at.asc())
-    )
-    override_rows = override_result.all()
-    accepted_liabilities: list[str] = []
-    for override_log, node in override_rows:
-        item = f"{node.name} (node_id={override_log.missing_node_id})"
-        if override_log.justification:
-            item = f"{item}; justification={override_log.justification}"
-        accepted_liabilities.append(item)
+        latest_analysis = analysis_result.scalar_one_or_none()
+        evaluation_payload = (
+            (latest_analysis.analysis_json or {}).get("evaluation", {})
+            if latest_analysis
+            else {}
+        )
+        try:
+            compliance_result = DynamicComplianceResult.model_validate(evaluation_payload)
+        except Exception:
+            compliance_result = DynamicComplianceResult(
+                is_compliant=False,
+                met_requirements=[],
+                missing_requirements=[],
+                unmapped_requirements=[],
+                status_message="No cached compliance analysis found.",
+            )
 
-    compliance_ledger = {
-        "evaluation": compliance_result.model_dump(mode="json"),
-        "accepted_liabilities": accepted_liabilities,
-    }
-    company_context = {
-        "company_name": company_name,
-        "core_services": getattr(current_user, "core_services", "") or "",
-        "past_experience": getattr(current_user, "past_experience", "") or "",
-    }
-    ai_result = await draft_strategic_proposal_async(
-        tender_text,
-        company_context=company_context,
-        compliance_ledger=compliance_ledger,
-        accepted_liabilities=accepted_liabilities,
-        tender_budget=proposal.tender.budget,
-    )
+        override_result = await db.execute(
+            select(RiskOverrideLog, TaxonomyNode)
+            .join(TaxonomyNode, RiskOverrideLog.missing_node_id == TaxonomyNode.id)
+            .where(
+                RiskOverrideLog.tender_id == proposal.tender_id,
+                RiskOverrideLog.user_id == current_user.id,
+            )
+            .order_by(RiskOverrideLog.created_at.asc())
+        )
+        override_rows = override_result.all()
+        accepted_liabilities: list[str] = []
+        for override_log, node in override_rows:
+            item = f"{node.name} (node_id={override_log.missing_node_id})"
+            if override_log.justification:
+                item = f"{item}; justification={override_log.justification}"
+            accepted_liabilities.append(item)
+
+        compliance_ledger = {
+            "evaluation": compliance_result.model_dump(mode="json"),
+            "accepted_liabilities": accepted_liabilities,
+        }
+        company_context = {
+            "company_name": company_name,
+            "core_services": getattr(current_user, "core_services", "") or "",
+            "past_experience": getattr(current_user, "past_experience", "") or "",
+        }
+        ai_result = await draft_strategic_proposal_async(
+            tender_text,
+            company_context=company_context,
+            compliance_ledger=compliance_ledger,
+            accepted_liabilities=accepted_liabilities,
+            tender_budget=proposal.tender.budget,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(
+            "ai-draft unhandled error for proposal %s: %s", proposal_id, exc,
+        )
+        fallback_price = float(proposal.tender.budget * 0.85) if proposal.tender.budget else 0.0
+        return AIDraftResponse(
+            strategic_summary=(
+                "AI generation encountered an internal error. "
+                "Please try again or contact support."
+            ),
+            suggested_price=fallback_price,
+            delivery_days="30 calendar days",
+            line_items=[
+                AIStrategicLineItem(
+                    name="Delivery Scope",
+                    quantity=1.0,
+                    unit="lot",
+                    unit_price=round(fallback_price, 2),
+                    total=round(fallback_price, 2),
+                )
+            ],
+        )
 
     strategic_summary = str(ai_result.get("strategic_summary", "")).strip()
     if not strategic_summary:
