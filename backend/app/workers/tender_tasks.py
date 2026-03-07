@@ -228,7 +228,7 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                 new_count = 0
                 parsed_count = 0
                 parsed_text_by_identity: dict[str, str] = {}
-                docs_to_process: list[tuple[TenderDocument | None, str, str, str]] = []
+                docs_to_process: list[tuple[TenderDocument | None, str, str, str, int]] = []
 
                 for doc in existing_docs:
                     if _parsed_text_present(doc):
@@ -237,7 +237,7 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                             _compiled_text_chunk(doc),
                         )
 
-                for doc_data in scraped_docs:
+                for scraped_index, doc_data in enumerate(scraped_docs):
                     scraped_url = (doc_data.get("file_url") or "").strip()
                     scraped_file_type = (doc_data.get("file_type") or "").strip().lower()
                     if not scraped_url:
@@ -275,9 +275,9 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                         )
                         continue
 
-                    docs_to_process.append((doc, scraped_url, file_path, scraped_file_type))
+                    docs_to_process.append((doc, scraped_url, file_path, scraped_file_type, scraped_index))
 
-                for index, (doc, scraped_url, file_path, scraped_file_type) in enumerate(docs_to_process):
+                for index, (doc, scraped_url, file_path, scraped_file_type, button_index) in enumerate(docs_to_process):
                     if index > 0:
                         delay_seconds = random.uniform(2.0, 5.0)
                         logger.info(
@@ -310,6 +310,7 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                         file_bytes, downloaded_name = await scraper.download_file(
                             tender_url=tender.source_url,
                             file_path=file_path,
+                            button_index=button_index,
                         )
                         resolved_name = downloaded_name or _extract_file_name(scraped_url) or "download"
                         storage_path, file_size = await asyncio.to_thread(

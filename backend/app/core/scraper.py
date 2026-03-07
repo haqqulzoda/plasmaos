@@ -755,19 +755,23 @@ class UzExScraper:
         logger.info(f"[SCRAPER] Complete: {len(documents)} documents extracted")
         return documents
     
-    def _sync_download_file(self, tender_url: str, file_path: str) -> tuple[bytes, str]:
+    def _sync_download_file(
+        self, tender_url: str, file_path: str, button_index: int = 0
+    ) -> tuple[bytes, str]:
         """
         Download a file from UzEx.
 
         Strategy (ordered by reliability for binary files):
         1. Direct HTTP GET to the DownloadFile API URL (fastest, no browser)
-        2. Playwright download event (captures browser-triggered saves)
-        3. Response interception fallback (legacy, less reliable for archives)
+        2. Spatial index-based Playwright click + expect_download()
+
+        The button_index parameter maps directly to the DOM order of download
+        buttons on the tender page — the same order produced by
+        _sync_scrape_documents.  This eliminates all DOM string matching.
         """
         import httpx
 
         normalized_file_path = _extract_download_path(file_path)
-        target_key = _download_target_key(file_path)
         requested_extension = _detect_file_extension(file_path)
         filename = _extract_filename(file_path) or "download"
         download_api_url = (
@@ -776,6 +780,7 @@ class UzExScraper:
             else ""
         )
 
+        # ── Strategy 1: Direct HTTP GET (non-archive only) ──────────────
         if requested_extension not in ARCHIVE_EXTENSIONS and normalized_file_path:
             try:
                 logger.info(f"[DOWNLOAD] Strategy 1: Direct HTTP GET -> {download_api_url[:80]}")
@@ -800,6 +805,7 @@ class UzExScraper:
         else:
             logger.info("[DOWNLOAD] Strategy 1 skipped for archive or empty path: %s", file_path)
 
+        # ── Strategy 2: Spatial index-based Playwright click ────────────
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self.headless)
             context = browser.new_context(
@@ -809,36 +815,43 @@ class UzExScraper:
             )
             page = context.new_page()
 
-            captured_files: list[dict] = []
+            try:
+                logger.info(f"[DOWNLOAD] Loading tender page: {tender_url}")
+                page.goto(tender_url, timeout=self.timeout)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:
+                    page.wait_for_timeout(5000)
 
-            def capture_file_response(response):
-                url_lower = response.url.lower()
-                if response.status == 200 and any(marker in url_lower for marker in DOWNLOAD_URL_MARKERS):
-                    try:
-                        body = response.body()
-                        content_type = response.headers.get("content-type", "")
-                        if _is_valid_file_payload(body, content_type, response.url):
-                            captured_files.append(
-                                {
-                                    "url": response.url,
-                                    "body": body,
-                                    "content_type": content_type,
-                                }
-                            )
-                            logger.info(
-                                f"[DOWNLOAD] Intercepted {len(body)} bytes from {response.url[:60]}"
-                            )
-                    except Exception as exc:
-                        logger.debug(f"[DOWNLOAD] Intercept body failed: {exc}")
+                download_btns = page.query_selector_all(DOWNLOAD_TRIGGER_SELECTOR)
+                logger.info(
+                    "[DOWNLOAD] Found %s download buttons, targeting index %s",
+                    len(download_btns),
+                    button_index,
+                )
 
-            page.on("response", capture_file_response)
+                if button_index >= len(download_btns):
+                    raise Exception(
+                        f"Button index {button_index} out of bounds for "
+                        f"{len(download_btns)} buttons on {tender_url}"
+                    )
 
-            def _consume_download(
-                *,
-                download,
-                attempt_label: str,
-                candidate_url: str,
-            ) -> tuple[bytes, str] | None:
+                target_btn = download_btns[button_index]
+
+                try:
+                    target_btn.scroll_into_view_if_needed()
+                except Exception:
+                    pass
+
+                # Use Playwright's native download handler — the ONLY
+                # reliable way to capture UzEx's dynamically-authorized
+                # byte stream.
+                with page.expect_download(timeout=30000) as download_info:
+                    target_btn.click(force=True)
+
+                download = download_info.value
+
+                # Save the download to a temp file and read the bytes
                 tmp_path = os.path.join(
                     tempfile.gettempdir(),
                     f"plasma_dl_{uuid4().hex}",
@@ -852,206 +865,35 @@ class UzExScraper:
                         os.unlink(tmp_path)
 
                 suggested = download.suggested_filename or filename
-                candidate_name = suggested or _extract_filename(candidate_url) or filename
-                validation_name = suggested or _extract_filename(candidate_url) or filename or file_path
+                validation_name = suggested or filename or file_path
 
                 if not _is_valid_file_payload(dl_bytes, "", validation_name):
-                    logger.warning(
-                        "[DOWNLOAD] %s rejected payload: %s bytes (%s)",
-                        attempt_label,
-                        len(dl_bytes),
-                        validation_name,
+                    raise Exception(
+                        f"Spatial click at index {button_index} returned invalid payload: "
+                        f"{len(dl_bytes)} bytes ({validation_name})"
                     )
-                    return None
-
-                if not _download_candidate_matches_target(
-                    target_key=target_key,
-                    requested_name=filename,
-                    candidate_url=candidate_url,
-                    candidate_name=candidate_name,
-                ):
-                    logger.warning(
-                        "[DOWNLOAD] %s produced non-target file: url=%s name=%s",
-                        attempt_label,
-                        candidate_url,
-                        candidate_name,
-                    )
-                    return None
 
                 logger.info(
-                    "[DOWNLOAD] %s matched target: %s bytes",
-                    attempt_label,
+                    "[DOWNLOAD] Spatial click success at index %s: %s bytes, name=%s",
+                    button_index,
                     len(dl_bytes),
+                    suggested,
                 )
                 return dl_bytes, suggested
-
-            def _matching_captured_file(
-                *,
-                start_index: int = 0,
-            ) -> tuple[bytes, str] | None:
-                for captured in captured_files[start_index:]:
-                    resolved_name = _extract_filename(captured["url"]) or filename
-                    if _download_candidate_matches_target(
-                        target_key=target_key,
-                        requested_name=filename,
-                        candidate_url=captured["url"],
-                        candidate_name=resolved_name,
-                    ):
-                        logger.info(
-                            "[DOWNLOAD] Strategy 3 matched target: %s bytes",
-                            len(captured["body"]),
-                        )
-                        return captured["body"], resolved_name
-                return None
-
-            def _build_button_entry(element) -> dict:
-                outer_html = ""
-                try:
-                    outer_html = element.evaluate("(el) => el.outerHTML") or ""
-                except Exception:
-                    outer_html = ""
-
-                candidate_urls: list[str] = []
-                seen_candidates: set[str] = set()
-
-                for attr_name in DOCUMENT_ATTRIBUTE_NAMES:
-                    try:
-                        attr_value = element.get_attribute(attr_name)
-                    except Exception:
-                        attr_value = None
-                    if not attr_value:
-                        continue
-
-                    candidates = _extract_download_candidates_from_text(attr_value)
-                    if not candidates:
-                        candidates = [attr_value]
-
-                    for candidate in candidates:
-                        normalized_candidate = _normalize_download_candidate(
-                            candidate,
-                            portal_base_url=self.BASE_URL,
-                        )
-                        if normalized_candidate and normalized_candidate not in seen_candidates:
-                            candidate_urls.append(normalized_candidate)
-                            seen_candidates.add(normalized_candidate)
-
-                for candidate in _extract_download_candidates_from_text(outer_html):
-                    normalized_candidate = _normalize_download_candidate(
-                        candidate,
-                        portal_base_url=self.BASE_URL,
-                    )
-                    if normalized_candidate and normalized_candidate not in seen_candidates:
-                        candidate_urls.append(normalized_candidate)
-                        seen_candidates.add(normalized_candidate)
-
-                return {
-                    "button": element,
-                    "outer_html": _normalize_embedded_text(outer_html).lower(),
-                    "candidate_urls": candidate_urls,
-                    "primary_url": candidate_urls[0] if candidate_urls else "",
-                }
-
-            def _entry_matches_target(entry: dict) -> bool:
-                for candidate_url in entry["candidate_urls"]:
-                    if _download_candidate_matches_target(
-                        target_key=target_key,
-                        requested_name=filename,
-                        candidate_url=candidate_url,
-                        candidate_name=_extract_filename(candidate_url),
-                    ):
-                        return True
-
-                target_basename = filename.strip().lower()
-                if target_basename and target_basename in entry["outer_html"]:
-                    return True
-
-                return False
-
-            try:
-                logger.info(f"[DOWNLOAD] Loading tender page: {tender_url}")
-                page.goto(tender_url, timeout=self.timeout)
-                try:
-                    page.wait_for_load_state("networkidle", timeout=15000)
-                except Exception:
-                    page.wait_for_timeout(5000)
-
-                download_btns = page.query_selector_all(DOWNLOAD_TRIGGER_SELECTOR)
-                logger.info(f"[DOWNLOAD] Found {len(download_btns)} download buttons")
-
-                button_entries = [_build_button_entry(btn) for btn in download_btns]
-                matching_entries = [entry for entry in button_entries if _entry_matches_target(entry)]
-
-                if not matching_entries:
-                    indexed_urls = [entry["primary_url"] for entry in button_entries if entry["primary_url"]]
-                    if len(indexed_urls) == len(button_entries) and button_entries:
-                        for idx, candidate_url in enumerate(indexed_urls):
-                            if _download_candidate_matches_target(
-                                target_key=target_key,
-                                requested_name=filename,
-                                candidate_url=candidate_url,
-                                candidate_name=_extract_filename(candidate_url),
-                            ):
-                                matching_entries = [button_entries[idx]]
-                                logger.info(
-                                    "[DOWNLOAD] Using index fallback to map target to button %s",
-                                    idx + 1,
-                                )
-                                break
-
-                logger.info(
-                    "[DOWNLOAD] Found %s target-matching download buttons",
-                    len(matching_entries),
-                )
-
-                for i, entry in enumerate(matching_entries):
-                    try:
-                        captured_files.clear()
-                        capture_start = 0
-                        btn = entry["button"]
-                        try:
-                            try:
-                                btn.scroll_into_view_if_needed()
-                            except Exception:
-                                pass
-                            with page.expect_download(timeout=10000) as download_info:
-                                btn.click(force=True)
-                            download = download_info.value
-                            matched_download = _consume_download(
-                                download=download,
-                                attempt_label=f"Strategy 2 button {i + 1}",
-                                candidate_url=download.url or entry["primary_url"] or download_api_url or file_path,
-                            )
-                            if matched_download is not None:
-                                browser.close()
-                                return matched_download
-
-                        except PlaywrightTimeout:
-                            btn.click(force=True)
-                            page.wait_for_timeout(2000)
-
-                        matched_capture = _matching_captured_file(start_index=capture_start)
-                        if matched_capture is not None:
-                            browser.close()
-                            return matched_capture
-
-                    except Exception as exc:
-                        logger.debug(f"[DOWNLOAD] Button {i + 1} processing failed: {exc}")
-                        continue
-
-                raise Exception(f"Could not download exact file: {file_path}")
 
             finally:
                 browser.close()
 
-        raise Exception(f"Could not download file: {file_path}")
-
-    async def download_file(self, tender_url: str, file_path: str) -> tuple[bytes, str]:
+    async def download_file(
+        self, tender_url: str, file_path: str, button_index: int = 0
+    ) -> tuple[bytes, str]:
         """
         Download a file from UzEx tender page.
         
         Args:
             tender_url: URL of the tender detail page
             file_path: The file path from the DownloadFile API
+            button_index: Spatial index of the download button in DOM order
         
         Returns:
             Tuple of (file_bytes, filename)
@@ -1059,7 +901,7 @@ class UzExScraper:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             _executor,
-            partial(self._sync_download_file, tender_url, file_path)
+            partial(self._sync_download_file, tender_url, file_path, button_index)
         )
     
     async def scrape_tender_documents(self, source_url: str) -> list[dict]:
