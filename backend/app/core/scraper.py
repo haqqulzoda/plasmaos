@@ -904,7 +904,16 @@ class UzExScraper:
                         return captured["body"], resolved_name
                 return None
 
-            def _element_matches_target(element) -> bool:
+            def _build_button_entry(element) -> dict:
+                outer_html = ""
+                try:
+                    outer_html = element.evaluate("(el) => el.outerHTML") or ""
+                except Exception:
+                    outer_html = ""
+
+                candidate_urls: list[str] = []
+                seen_candidates: set[str] = set()
+
                 for attr_name in DOCUMENT_ATTRIBUTE_NAMES:
                     try:
                         attr_value = element.get_attribute(attr_name)
@@ -922,13 +931,39 @@ class UzExScraper:
                             candidate,
                             portal_base_url=self.BASE_URL,
                         )
-                        if normalized_candidate and _download_candidate_matches_target(
-                            target_key=target_key,
-                            requested_name=filename,
-                            candidate_url=normalized_candidate,
-                            candidate_name=_extract_filename(normalized_candidate),
-                        ):
-                            return True
+                        if normalized_candidate and normalized_candidate not in seen_candidates:
+                            candidate_urls.append(normalized_candidate)
+                            seen_candidates.add(normalized_candidate)
+
+                for candidate in _extract_download_candidates_from_text(outer_html):
+                    normalized_candidate = _normalize_download_candidate(
+                        candidate,
+                        portal_base_url=self.BASE_URL,
+                    )
+                    if normalized_candidate and normalized_candidate not in seen_candidates:
+                        candidate_urls.append(normalized_candidate)
+                        seen_candidates.add(normalized_candidate)
+
+                return {
+                    "button": element,
+                    "outer_html": _normalize_embedded_text(outer_html).lower(),
+                    "candidate_urls": candidate_urls,
+                    "primary_url": candidate_urls[0] if candidate_urls else "",
+                }
+
+            def _entry_matches_target(entry: dict) -> bool:
+                for candidate_url in entry["candidate_urls"]:
+                    if _download_candidate_matches_target(
+                        target_key=target_key,
+                        requested_name=filename,
+                        candidate_url=candidate_url,
+                        candidate_name=_extract_filename(candidate_url),
+                    ):
+                        return True
+
+                target_basename = filename.strip().lower()
+                if target_basename and target_basename in entry["outer_html"]:
+                    return True
 
                 return False
 
@@ -940,54 +975,39 @@ class UzExScraper:
                 except Exception:
                     page.wait_for_timeout(5000)
 
-                if download_api_url:
-                    logger.info("[DOWNLOAD] Strategy 2: direct navigation to exact target URL")
-                    captured_files.clear()
-                    direct_capture_start = 0
-                    try:
-                        with page.expect_download(timeout=10000) as download_info:
-                            page.evaluate(
-                                "(url) => { window.location.href = url; }",
-                                download_api_url,
-                            )
-                        direct_download = download_info.value
-                        matched_download = _consume_download(
-                            download=direct_download,
-                            attempt_label="Strategy 2 direct request",
-                            candidate_url=direct_download.url or download_api_url,
-                        )
-                        if matched_download is not None:
-                            browser.close()
-                            return matched_download
-                    except PlaywrightTimeout:
-                        logger.info("[DOWNLOAD] Strategy 2 direct request timed out, checking interceptor")
-                        page.wait_for_timeout(2000)
-
-                    matched_capture = _matching_captured_file(start_index=direct_capture_start)
-                    if matched_capture is not None:
-                        browser.close()
-                        return matched_capture
-
-                    logger.info("[DOWNLOAD] Strategy 2 direct request did not resolve target, reloading page")
-                    page.goto(tender_url, timeout=self.timeout)
-                    try:
-                        page.wait_for_load_state("networkidle", timeout=15000)
-                    except Exception:
-                        page.wait_for_timeout(5000)
-
                 download_btns = page.query_selector_all(DOWNLOAD_TRIGGER_SELECTOR)
                 logger.info(f"[DOWNLOAD] Found {len(download_btns)} download buttons")
 
-                matching_btns = [btn for btn in download_btns if _element_matches_target(btn)]
+                button_entries = [_build_button_entry(btn) for btn in download_btns]
+                matching_entries = [entry for entry in button_entries if _entry_matches_target(entry)]
+
+                if not matching_entries:
+                    indexed_urls = [entry["primary_url"] for entry in button_entries if entry["primary_url"]]
+                    if len(indexed_urls) == len(button_entries) and button_entries:
+                        for idx, candidate_url in enumerate(indexed_urls):
+                            if _download_candidate_matches_target(
+                                target_key=target_key,
+                                requested_name=filename,
+                                candidate_url=candidate_url,
+                                candidate_name=_extract_filename(candidate_url),
+                            ):
+                                matching_entries = [button_entries[idx]]
+                                logger.info(
+                                    "[DOWNLOAD] Using index fallback to map target to button %s",
+                                    idx + 1,
+                                )
+                                break
+
                 logger.info(
                     "[DOWNLOAD] Found %s target-matching download buttons",
-                    len(matching_btns),
+                    len(matching_entries),
                 )
 
-                for i, btn in enumerate(matching_btns):
+                for i, entry in enumerate(matching_entries):
                     try:
                         captured_files.clear()
                         capture_start = 0
+                        btn = entry["button"]
                         try:
                             try:
                                 btn.scroll_into_view_if_needed()
@@ -999,7 +1019,7 @@ class UzExScraper:
                             matched_download = _consume_download(
                                 download=download,
                                 attempt_label=f"Strategy 2 button {i + 1}",
-                                candidate_url=download.url or download_api_url or file_path,
+                                candidate_url=download.url or entry["primary_url"] or download_api_url or file_path,
                             )
                             if matched_download is not None:
                                 browser.close()
