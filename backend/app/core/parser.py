@@ -119,7 +119,7 @@ def _is_url(value: str) -> bool:
 
 
 def _looks_like_zip(data: bytes) -> bool:
-    return data.startswith(b"PK\x03\x04")
+    return data.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"))
 
 
 def _looks_like_rar(data: bytes) -> bool:
@@ -493,6 +493,13 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
     """
     Parse PDF bytes using native extraction and OCR fallback for scanned pages.
     """
+    if _looks_like_zip(pdf_bytes) or _looks_like_rar(pdf_bytes):
+        logger.warning(
+            "[SONAR] Refusing to send archive bytes to PyMuPDF: %s",
+            file_path,
+        )
+        return ""
+
     page_texts: list[str] = []
     ocr_fallback_logged = False
 
@@ -584,6 +591,18 @@ async def process_tender_document(
     if not payload:
         return ""
 
+    # Route container formats from their binary signatures before any
+    # filename- or MIME-based heuristics. This prevents PyMuPDF from
+    # opening RAR payloads as CBR and triggering OCR on compressed data.
+    is_rar = _looks_like_rar(payload)
+    is_docx = _looks_like_docx(payload)
+    is_zip_archive = _looks_like_zip(payload) and not is_docx
+
+    if is_zip_archive or is_rar:
+        archive_input: bytes | str | Path = path_source if path_source else payload
+        extracted_files = await asyncio.to_thread(extract_archive_contents, archive_input)
+        return await asyncio.to_thread(_parse_extracted_documents, extracted_files)
+
     suffix = Path(inferred_name).suffix.lower()
     normalized_content_type = _normalize_content_type(content_type)
 
@@ -592,7 +611,7 @@ async def process_tender_document(
         extracted_files = await asyncio.to_thread(extract_archive_contents, archive_input)
         return await asyncio.to_thread(_parse_extracted_documents, extracted_files)
 
-    if suffix == ".docx" or normalized_content_type in DOCX_MIME_TYPES or _looks_like_docx(payload):
+    if suffix == ".docx" or normalized_content_type in DOCX_MIME_TYPES or is_docx:
         return await asyncio.to_thread(parse_docx, payload)
 
     if suffix == ".txt" or normalized_content_type.startswith("text/"):
@@ -601,11 +620,6 @@ async def process_tender_document(
     if suffix == ".pdf" or normalized_content_type in PDF_MIME_TYPES or _looks_like_pdf(payload):
         source_label = str(path_source) if path_source else inferred_name or "<bytes>"
         return await asyncio.to_thread(parse_pdf, payload, source_label)
-
-    if _looks_like_zip(payload) or _looks_like_rar(payload):
-        archive_input = path_source if path_source else payload
-        extracted_files = await asyncio.to_thread(extract_archive_contents, archive_input)
-        return await asyncio.to_thread(_parse_extracted_documents, extracted_files)
 
     logger.warning(
         "Unsupported source format for process_tender_document: name=%s content_type=%s",
