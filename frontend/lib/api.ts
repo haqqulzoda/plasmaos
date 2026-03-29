@@ -1,5 +1,61 @@
-import axios from 'axios';
-import { signOut } from 'next-auth/react';
+import axios, { InternalAxiosRequestConfig } from 'axios';
+import { getSession, signOut } from 'next-auth/react';
+
+type SessionWithAccessToken = {
+    accessToken?: string;
+} | null;
+
+const ACCESS_TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let accessTokenCache: string | null = null;
+let accessTokenCachedAt = 0;
+let sessionTokenRequestInFlight: Promise<string | null> | null = null;
+
+const now = () => Date.now();
+
+const hasFreshCachedToken = () =>
+    Boolean(accessTokenCache) &&
+    now() - accessTokenCachedAt < ACCESS_TOKEN_CACHE_TTL_MS;
+
+export const setApiAccessToken = (token: string | null): void => {
+    accessTokenCache = token;
+    accessTokenCachedAt = now();
+};
+
+const readAccessTokenFromSession = async (): Promise<string | null> => {
+    if (hasFreshCachedToken()) {
+        return accessTokenCache;
+    }
+
+    if (!sessionTokenRequestInFlight) {
+        sessionTokenRequestInFlight = (async () => {
+            const session = (await getSession().catch(() => null)) as SessionWithAccessToken;
+            const resolvedToken =
+                typeof session?.accessToken === 'string' ? session.accessToken : null;
+            setApiAccessToken(resolvedToken);
+            return resolvedToken;
+        })().finally(() => {
+            sessionTokenRequestInFlight = null;
+        });
+    }
+
+    return sessionTokenRequestInFlight;
+};
+
+const attachAuthorizationHeader = (
+    config: InternalAxiosRequestConfig,
+    token: string,
+): void => {
+    const authValue = `Bearer ${token}`;
+
+    if (typeof config.headers?.set === 'function') {
+        config.headers.set('Authorization', authValue);
+        return;
+    }
+
+    config.headers = config.headers ?? {};
+    (config.headers as Record<string, string>).Authorization = authValue;
+};
 
 /**
  * Plasma AI API Client
@@ -18,15 +74,9 @@ const api = axios.create({
 api.interceptors.request.use(
     async (config) => {
         if (typeof window !== 'undefined') {
-            const sessionResponse = await fetch('/api/auth/session', {
-                credentials: 'include',
-                cache: 'no-store',
-            }).catch(() => null);
-            if (sessionResponse?.ok) {
-                const session = (await sessionResponse.json()) as { accessToken?: string };
-                if (session.accessToken) {
-                    config.headers.Authorization = `Bearer ${session.accessToken}`;
-                }
+            const token = await readAccessTokenFromSession();
+            if (token) {
+                attachAuthorizationHeader(config, token);
             }
         }
         return config;
@@ -41,6 +91,7 @@ api.interceptors.response.use(
     (response) => response,
     async (error) => {
         if (error.response?.status === 401 && typeof window !== 'undefined') {
+            setApiAccessToken(null);
             await signOut({ callbackUrl: '/login' });
         }
         return Promise.reject(error);

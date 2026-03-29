@@ -15,8 +15,8 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only, selectinload
 
@@ -26,13 +26,22 @@ from app.core.ai_analyzer import (
     ExtractionError,
     extract_tender_requirements,
 )
-from app.core.celery_app import celery_app
 from app.core.evaluator import DynamicComplianceResult, TaxNodeInfo, evaluate_compliance
 from app.core.scraper import UzExScraper
 from app.core.security import authenticated_dependency
 from app.db.session import get_db
 from app.models.audit import TenderAnalysis
-from app.models.all_models import Proposal, RiskOverrideLog, TaxonomyNode, Tender, TenderDocument, TenderStatus, User
+from app.models.all_models import (
+    Proposal,
+    RiskOverrideLog,
+    TaxonomyNode,
+    Tender,
+    TenderDocument,
+    TenderStatus,
+    TenderSyncJob,
+    TenderSyncStatus,
+    User,
+)
 from app.models.company import CompanyProfile
 from app.models.taxonomy import CompanyCredential
 from app.schemas.tender import TenderResponse
@@ -58,16 +67,24 @@ class RefreshResponse(BaseModel):
 
 
 class SyncDocsAcceptedResponse(BaseModel):
-    """Response for sync-docs enqueue endpoint."""
+    """Response for idempotent sync-docs enqueue endpoint."""
+
     message: str
     job_id: str
+    tender_id: UUID
+    user_id: UUID
+    status: str
+    progress: int
+    error_message: str | None = None
 
 
 class SyncStatusResponse(BaseModel):
-    """Response for sync status polling endpoint."""
-    job_id: str
-    status: str
-    message: str
+    """Canonical sync status payload for a tender."""
+
+    state: str
+    progress: int
+    docs_parsed: int
+    error: str | None = None
 
 
 class TestScrapeRequest(BaseModel):
@@ -760,15 +777,95 @@ async def refresh_tenders(
         )
 
 
-def _normalize_task_status(state: str) -> str:
-    normalized = state.upper()
-    if normalized in {"PENDING", "STARTED", "SUCCESS", "FAILURE"}:
-        return normalized
-    if normalized in {"RECEIVED", "RETRY"}:
-        return "STARTED"
-    if normalized in {"REVOKED"}:
-        return "FAILURE"
-    return "PENDING"
+def _serialize_sync_job(
+    job: TenderSyncJob,
+    *,
+    message: str,
+) -> SyncDocsAcceptedResponse:
+    return SyncDocsAcceptedResponse(
+        message=message,
+        job_id=job.job_id,
+        tender_id=job.tender_id,
+        user_id=job.user_id,
+        status=job.status.value,
+        progress=job.progress,
+        error_message=job.error_message,
+    )
+
+
+async def _ensure_tender_access(
+    *,
+    db: AsyncSession,
+    tender_id: UUID,
+    user_id: UUID,
+) -> None:
+    access_result = await db.execute(
+        select(Proposal.id)
+        .where(
+            Proposal.tender_id == tender_id,
+            Proposal.user_id == user_id,
+        )
+        .limit(1)
+    )
+    if access_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
+
+
+async def _get_latest_sync_job_for_user_tender(
+    *,
+    db: AsyncSession,
+    tender_id: UUID,
+    user_id: UUID,
+) -> TenderSyncJob | None:
+    result = await db.execute(
+        select(TenderSyncJob)
+        .where(
+            TenderSyncJob.tender_id == tender_id,
+            TenderSyncJob.user_id == user_id,
+        )
+        .order_by(TenderSyncJob.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _get_active_sync_job_for_user_tender(
+    *,
+    db: AsyncSession,
+    tender_id: UUID,
+    user_id: UUID,
+) -> TenderSyncJob | None:
+    active_statuses = (TenderSyncStatus.PENDING, TenderSyncStatus.IN_PROGRESS)
+    result = await db.execute(
+        select(TenderSyncJob)
+        .where(
+            TenderSyncJob.tender_id == tender_id,
+            TenderSyncJob.user_id == user_id,
+            TenderSyncJob.status.in_(active_statuses),
+        )
+        .order_by(TenderSyncJob.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _count_parsed_documents(
+    *,
+    db: AsyncSession,
+    tender_id: UUID,
+) -> int:
+    result = await db.execute(
+        select(func.count(TenderDocument.id))
+        .where(
+            TenderDocument.tender_id == tender_id,
+            TenderDocument.parsed_text.is_not(None),
+            func.length(func.trim(TenderDocument.parsed_text)) > 0,
+        )
+    )
+    return int(result.scalar_one() or 0)
 
 
 @router.post(
@@ -778,22 +875,131 @@ def _normalize_task_status(state: str) -> str:
 )
 async def sync_tender_documents(
     tender_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> SyncDocsAcceptedResponse:
     """
-    Enqueue tender document sync to Celery worker.
+    Enqueue tender document sync as an idempotent operation.
     """
-    task = process_tender_docs.delay(str(tender_id))
-    return SyncDocsAcceptedResponse(message="Sync started", job_id=task.id)
+    await _ensure_tender_access(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+    )
+
+    existing_job = await _get_active_sync_job_for_user_tender(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+    )
+    if existing_job is not None:
+        return _serialize_sync_job(
+            existing_job,
+            message="Sync already in progress",
+        )
+
+    new_job = TenderSyncJob(
+        id=uuid4(),
+        job_id=str(uuid4()),
+        tender_id=tender_id,
+        user_id=current_user.id,
+        status=TenderSyncStatus.PENDING,
+        progress=0,
+        error_message=None,
+    )
+    db.add(new_job)
+
+    try:
+        await db.commit()
+        await db.refresh(new_job)
+    except IntegrityError:
+        await db.rollback()
+        existing_job = await _get_active_sync_job_for_user_tender(
+            db=db,
+            tender_id=tender_id,
+            user_id=current_user.id,
+        )
+        if existing_job is not None:
+            return _serialize_sync_job(
+                existing_job,
+                message="Sync already in progress",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A sync job already exists for this tender.",
+        )
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        logger.exception("Failed to persist tender sync job before enqueue")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database write failed: {exc}",
+        ) from exc
+
+    try:
+        process_tender_docs.apply_async(
+            args=[str(tender_id), new_job.job_id],
+            task_id=new_job.job_id,
+        )
+    except Exception as exc:
+        logger.exception("Failed to enqueue sync task for tender %s", tender_id)
+        try:
+            new_job.status = TenderSyncStatus.FAILED
+            new_job.progress = 0
+            new_job.error_message = "Failed to enqueue worker task."
+            await db.commit()
+        except SQLAlchemyError:
+            await db.rollback()
+            logger.exception(
+                "Failed to persist enqueue failure for sync job %s",
+                new_job.job_id,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to enqueue tender document sync task.",
+        ) from exc
+
+    return _serialize_sync_job(
+        new_job,
+        message="Sync started",
+    )
 
 
-@router.get("/sync-status/{job_id}", response_model=SyncStatusResponse)
-async def get_sync_status(job_id: str) -> SyncStatusResponse:
-    task = celery_app.AsyncResult(job_id)
-    normalized_status = _normalize_task_status(task.status)
+@router.get("/{tender_id}/sync-status", response_model=SyncStatusResponse)
+async def get_sync_status(
+    tender_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SyncStatusResponse:
+    await _ensure_tender_access(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+    )
+
+    latest_job = await _get_latest_sync_job_for_user_tender(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+    )
+    docs_parsed = await _count_parsed_documents(
+        db=db,
+        tender_id=tender_id,
+    )
+
+    if latest_job is None:
+        return SyncStatusResponse(
+            state="SUCCESS" if docs_parsed > 0 else "IDLE",
+            progress=100 if docs_parsed > 0 else 0,
+            docs_parsed=docs_parsed,
+            error=None,
+        )
+
     return SyncStatusResponse(
-        job_id=job_id,
-        status=normalized_status,
-        message=f"Job status: {normalized_status}",
+        state=latest_job.status.value,
+        progress=latest_job.progress,
+        docs_parsed=docs_parsed,
+        error=latest_job.error_message,
     )
 
 
@@ -806,73 +1012,18 @@ async def get_tender_documents(
     """
     Return all parsed documents for a given tender.
     """
-    access_result = await db.execute(
-        select(Proposal.id)
-        .where(
-            Proposal.tender_id == tender_id,
-            Proposal.user_id == current_user.id,
-        )
-        .limit(1)
+    await _ensure_tender_access(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
     )
-    if access_result.scalar_one_or_none() is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tender not found",
-        )
 
     result = await db.execute(
         select(TenderDocument)
-        .join(Proposal, Proposal.tender_id == TenderDocument.tender_id)
-        .where(
-            TenderDocument.tender_id == tender_id,
-            Proposal.user_id == current_user.id,
-        )
-        .distinct()
+        .where(TenderDocument.tender_id == tender_id)
+        .order_by(TenderDocument.created_at.asc())
     )
     return result.scalars().all()
-
-
-@router.get("/{tender_id}/docs-status")
-async def get_docs_status(
-    tender_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """
-    Lightweight check for whether tender documents are already synced.
-
-    Used by the frontend to skip redundant Celery sync-docs calls.
-    """
-    access_result = await db.execute(
-        select(Proposal.id)
-        .where(
-            Proposal.tender_id == tender_id,
-            Proposal.user_id == current_user.id,
-        )
-        .limit(1)
-    )
-    if access_result.scalar_one_or_none() is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tender not found",
-        )
-
-    result = await db.execute(
-        select(TenderDocument)
-        .join(Proposal, Proposal.tender_id == TenderDocument.tender_id)
-        .where(
-            TenderDocument.tender_id == tender_id,
-            Proposal.user_id == current_user.id,
-        )
-        .distinct()
-    )
-    docs = result.scalars().all()
-    has_parsed = any(bool(d.parsed_text and d.parsed_text.strip()) for d in docs)
-    return {
-        "tender_id": str(tender_id),
-        "doc_count": len(docs),
-        "has_parsed_text": has_parsed,
-    }
 
 
 @router.get("/{tender_id}/latest-analysis")

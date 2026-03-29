@@ -4,12 +4,14 @@ Plasma AI - Database Models
 Defines all SQLAlchemy ORM models for the Autonomous Tender Officer SaaS platform.
 """
 
+import enum
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     Float,
@@ -20,6 +22,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -30,6 +33,15 @@ from app.models.base import Base, ProposalStatus, SubscriptionTier, TenderStatus
 # ============================================================================
 # Models
 # ============================================================================
+
+
+class TenderSyncStatus(str, enum.Enum):
+    """Lifecycle status for tender document sync jobs."""
+
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
 
 
 class Tender(Base):
@@ -100,6 +112,82 @@ class Tender(Base):
         Index("ix_tenders_external_id", "external_id"),
         Index("ix_tenders_status", "status"),
         Index("ix_tenders_deadline", "deadline"),
+    )
+
+
+class TenderSyncJob(Base):
+    """
+    Persistent sync job state for tender document ingestion.
+
+    Used to provide idempotent enqueue semantics and canonical polling state.
+    """
+
+    __tablename__ = "tender_sync_jobs"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    job_id: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        unique=True,
+    )
+    tender_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("tenders.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[TenderSyncStatus] = mapped_column(
+        Enum(TenderSyncStatus, name="tender_sync_status"),
+        default=TenderSyncStatus.PENDING,
+        nullable=False,
+    )
+    progress: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+    error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    tender: Mapped["Tender"] = relationship("Tender")
+    user: Mapped["User"] = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint(
+            "progress >= 0 AND progress <= 100",
+            name="ck_tender_sync_jobs_progress_range",
+        ),
+        Index("ix_tender_sync_jobs_tender_id", "tender_id"),
+        Index("ix_tender_sync_jobs_user_id", "user_id"),
+        Index("ix_tender_sync_jobs_status", "status"),
+        Index(
+            "uq_tender_sync_jobs_active_user_tender",
+            "user_id",
+            "tender_id",
+            unique=True,
+            postgresql_where=text("status IN ('PENDING', 'IN_PROGRESS')"),
+        ),
     )
 
 
@@ -242,8 +330,10 @@ __all__ = [
     "SubscriptionTier",
     "TenderStatus",
     "ProposalStatus",
+    "TenderSyncStatus",
     "User",
     "Tender",
+    "TenderSyncJob",
     "TenderDocument",
     "Proposal",
     "CompanyProfile",

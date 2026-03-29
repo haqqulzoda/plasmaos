@@ -27,21 +27,23 @@ interface TenderDocument {
   created_at: string;
 }
 
-interface TenderDocsStatus {
-  tender_id: string;
-  doc_count: number;
-  has_parsed_text: boolean;
-}
+type TenderSyncState = 'IDLE' | 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
 
 interface TenderDocsSyncResponse {
   message: string;
   job_id: string;
+  tender_id: string;
+  user_id: string;
+  status: TenderSyncState;
+  progress: number;
+  error_message: string | null;
 }
 
-interface TenderDocsSyncStatus {
-  job_id: string;
-  status: string;
-  message: string;
+interface TenderSyncStatusResponse {
+  state: TenderSyncState;
+  progress: number;
+  docs_parsed: number;
+  error: string | null;
 }
 
 interface StrategicLineItem {
@@ -246,6 +248,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
   const [isCopied, setIsCopied] = useState(false);
   const [isSyncingDocs, setIsSyncingDocs] = useState(false);
   const [docsSyncError, setDocsSyncError] = useState<string | null>(null);
+  const [docsSyncProgress, setDocsSyncProgress] = useState(0);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [previewingDocId, setPreviewingDocId] = useState<string | null>(null);
 
@@ -260,9 +263,25 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
     setDocuments(response.data);
   }, []);
 
-  const pollTenderDocumentSync = useCallback(async (jobId: string, tenderId: string) => {
+  const fetchTenderSyncStatus = useCallback(async (tenderId: string) => {
+    const response = await api.get<TenderSyncStatusResponse>(`/tenders/${tenderId}/sync-status`);
+    return response.data;
+  }, []);
+
+  const pollTenderDocumentSync = useCallback(async (tenderId: string) => {
     for (let attempt = 0; attempt < 60; attempt += 1) {
-      if (attempt > 0) {
+      const status = await fetchTenderSyncStatus(tenderId);
+      setDocsSyncProgress(status.progress);
+
+      if (status.state === 'SUCCESS') {
+        return;
+      }
+
+      if (status.state === 'FAILED') {
+        throw new Error(status.error || 'Tender document sync failed.');
+      }
+
+      if (attempt > 0 && status.docs_parsed > 0) {
         try {
           const docsResponse = await api.get<TenderDocument[]>(`/tenders/${tenderId}/documents`);
           if (docsResponse.data.length > 0) {
@@ -273,22 +292,11 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
         }
       }
 
-      const response = await api.get<TenderDocsSyncStatus>(`/tenders/sync-status/${jobId}`);
-      const status = response.data.status.toUpperCase();
-
-      if (status === 'SUCCESS') {
-        return;
-      }
-
-      if (status === 'FAILURE') {
-        throw new Error(response.data.message || 'Tender document sync failed.');
-      }
-
       await wait(5000);
     }
 
     throw new Error('Document sync is taking longer than expected. Please reload the page in a minute.');
-  }, []);
+  }, [fetchTenderSyncStatus]);
 
   useEffect(() => {
     const fetchProposal = async () => {
@@ -349,44 +357,48 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
     const syncTenderDocuments = async () => {
       setIsLoadingDocs(true);
       setDocsSyncError(null);
+      setDocsSyncProgress(0);
 
       try {
-        const statusResponse = await api.get<TenderDocsStatus>(
-          `/tenders/${proposal.tender_id}/docs-status`,
-        );
-        const docsStatus = statusResponse.data;
+        const initialStatus = await fetchTenderSyncStatus(proposal.tender_id);
+        if (!isActive) {
+          return;
+        }
+
+        setDocsSyncProgress(initialStatus.progress);
+
+        const shouldStartSync = initialStatus.state === 'IDLE' && initialStatus.docs_parsed === 0;
+        const shouldPollExisting =
+          initialStatus.state === 'PENDING' || initialStatus.state === 'IN_PROGRESS';
+
+        if (initialStatus.state === 'FAILED') {
+          setDocsSyncError(initialStatus.error || 'Tender document sync failed.');
+        }
+
+        if (shouldStartSync) {
+          setIsSyncingDocs(true);
+          const enqueueResponse = await api.post<TenderDocsSyncResponse>(
+            `/tenders/${proposal.tender_id}/sync-docs`,
+          );
+          if (!isActive) {
+            return;
+          }
+          setDocsSyncProgress(enqueueResponse.data.progress);
+        }
+
+        if (shouldStartSync || shouldPollExisting) {
+          setIsSyncingDocs(true);
+          await pollTenderDocumentSync(proposal.tender_id);
+        }
 
         if (!isActive) {
           return;
         }
 
-        if (docsStatus.doc_count > 0) {
-          try {
-            await fetchTenderDocuments(proposal.tender_id);
-          } catch {
-            if (isActive) {
-              setDocuments([]);
-            }
-          }
-        } else {
-          setDocuments([]);
-        }
-
-        if (docsStatus.doc_count === 0) {
-          if (isActive) {
-            setIsSyncingDocs(true);
-          }
-
-          const syncResponse = await api.post<TenderDocsSyncResponse>(
-            `/tenders/${proposal.tender_id}/sync-docs`,
-          );
-          await pollTenderDocumentSync(syncResponse.data.job_id, proposal.tender_id);
-
-          if (!isActive) {
-            return;
-          }
-
+        try {
           await fetchTenderDocuments(proposal.tender_id);
+        } catch {
+          setDocuments([]);
         }
       } catch (err) {
         if (!isActive) {
@@ -417,7 +429,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
     return () => {
       isActive = false;
     };
-  }, [fetchTenderDocuments, pollTenderDocumentSync, proposal]);
+  }, [fetchTenderDocuments, fetchTenderSyncStatus, pollTenderDocumentSync, proposal]);
 
   const handleGenerateStrategicProposal = async () => {
     if (!proposal) return;
@@ -884,7 +896,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
             {(isLoadingDocs || isSyncingDocs) && (
               <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Synchronizing tender documents from UzEx. This can take up to a minute.
+                Synchronizing tender documents from UzEx ({docsSyncProgress}%).
               </div>
             )}
             {docsSyncError && (
@@ -961,4 +973,3 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
     </div>
   );
 }
-

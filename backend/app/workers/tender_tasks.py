@@ -14,11 +14,12 @@ from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import configure_mappers
 
 # Force-load the entire ORM registry into the worker's memory space
 import app.models  # This triggers __init__.py to load all models
-from app.models.all_models import Tender, TenderDocument
+from app.models.all_models import Tender, TenderDocument, TenderSyncJob, TenderSyncStatus
 
 # Lock the relationships (resolves string references like "TenderAnalysis")
 configure_mappers()
@@ -32,6 +33,89 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DOCUMENTS_ROOT = Path(__file__).resolve().parents[3] / "data" / "documents"
 DOCUMENTS_ROOT = Path(os.getenv("TENDER_DOCUMENTS_ROOT", str(DEFAULT_DOCUMENTS_ROOT)))
+MAX_ERROR_MESSAGE_LENGTH = 2000
+
+
+def _bounded_progress(value: int) -> int:
+    return max(0, min(100, value))
+
+
+def _bounded_error_message(message: str | None) -> str | None:
+    if message is None:
+        return None
+    normalized = message.strip()
+    if not normalized:
+        return None
+    return normalized[:MAX_ERROR_MESSAGE_LENGTH]
+
+
+async def _set_sync_job_state(
+    db: AsyncSession,
+    *,
+    job_id: str | None,
+    status: TenderSyncStatus | None = None,
+    progress: int | None = None,
+    error_message: str | None = None,
+) -> None:
+    if not job_id:
+        return
+
+    result = await db.execute(select(TenderSyncJob).where(TenderSyncJob.job_id == job_id))
+    sync_job = result.scalar_one_or_none()
+    if sync_job is None:
+        return
+
+    if status is not None:
+        sync_job.status = status
+
+    if progress is not None:
+        sync_job.progress = _bounded_progress(progress)
+
+    if error_message is not None:
+        sync_job.error_message = _bounded_error_message(error_message)
+    elif status is not None and status != TenderSyncStatus.FAILED:
+        sync_job.error_message = None
+
+
+async def _mark_sync_job_failed(
+    *,
+    job_id: str | None,
+    error_message: str,
+) -> None:
+    if not job_id:
+        return
+
+    await _persist_sync_job_state(
+        job_id=job_id,
+        status=TenderSyncStatus.FAILED,
+        progress=100,
+        error_message=error_message,
+    )
+
+
+async def _persist_sync_job_state(
+    *,
+    job_id: str | None,
+    status: TenderSyncStatus | None = None,
+    progress: int | None = None,
+    error_message: str | None = None,
+) -> None:
+    if not job_id:
+        return
+
+    async with AsyncSessionLocal() as sync_db:
+        try:
+            await _set_sync_job_state(
+                sync_db,
+                job_id=job_id,
+                status=status,
+                progress=progress,
+                error_message=error_message,
+            )
+            await sync_db.commit()
+        except Exception:
+            await sync_db.rollback()
+            logger.exception("Failed to persist sync state for job %s", job_id)
 
 
 def _extract_file_path(file_url: str) -> str:
@@ -196,7 +280,11 @@ def _register_existing_doc(
             existing_by_name[name_key] = doc
 
 
-async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
+async def _process_tender_docs_async(
+    tender_uuid: UUID,
+    *,
+    job_id: str | None = None,
+) -> dict[str, int | str]:
     try:
         async with AsyncSessionLocal() as db:
             try:
@@ -205,8 +293,19 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                 if tender is None:
                     raise ValueError("Tender not found")
 
+                await _persist_sync_job_state(
+                    job_id=job_id,
+                    status=TenderSyncStatus.IN_PROGRESS,
+                    progress=5,
+                )
+
                 scraper = UzExScraper(headless=True, timeout=30000)
                 scraped_docs = await scraper.scrape_tender_documents(tender.source_url)
+                await _persist_sync_job_state(
+                    job_id=job_id,
+                    status=TenderSyncStatus.IN_PROGRESS,
+                    progress=15,
+                )
 
                 existing_result = await db.execute(
                     select(TenderDocument).where(TenderDocument.tender_id == tender_uuid)
@@ -276,6 +375,13 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                         continue
 
                     docs_to_process.append((doc, scraped_url, file_path, scraped_file_type, scraped_index))
+
+                if not docs_to_process:
+                    await _persist_sync_job_state(
+                        job_id=job_id,
+                        status=TenderSyncStatus.IN_PROGRESS,
+                        progress=85,
+                    )
 
                 for index, (doc, scraped_url, file_path, scraped_file_type, button_index) in enumerate(docs_to_process):
                     if index > 0:
@@ -364,6 +470,14 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                             tender_uuid,
                             parse_exc,
                         )
+                    finally:
+                        if docs_to_process:
+                            progress = 20 + int(((index + 1) / len(docs_to_process)) * 70)
+                            await _persist_sync_job_state(
+                                job_id=job_id,
+                                status=TenderSyncStatus.IN_PROGRESS,
+                                progress=progress,
+                            )
 
                 compiled_chunks = [text for text in parsed_text_by_identity.values() if text.strip()]
                 tender.compiled_master_text = (
@@ -371,6 +485,12 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                 )
 
                 await db.commit()
+                await _persist_sync_job_state(
+                    job_id=job_id,
+                    status=TenderSyncStatus.SUCCESS,
+                    progress=100,
+                    error_message=None,
+                )
 
                 all_docs_result = await db.execute(
                     select(TenderDocument).where(TenderDocument.tender_id == tender_uuid)
@@ -388,19 +508,31 @@ async def _process_tender_docs_async(tender_uuid: UUID) -> dict[str, int | str]:
                         f"{len(all_docs)} total"
                     ),
                 }
-            except Exception:
+            except Exception as exc:
                 await db.rollback()
+                await _mark_sync_job_failed(
+                    job_id=job_id,
+                    error_message=str(exc) or "Tender document sync failed.",
+                )
                 raise
     finally:
         await engine.dispose()
 
 
 @celery_app.task(bind=True)
-def process_tender_docs(self, tender_id: str) -> dict[str, int | str]:
+def process_tender_docs(
+    self,
+    tender_id: str,
+    job_id: str | None = None,
+) -> dict[str, int | str]:
     try:
         tender_uuid = UUID(tender_id)
     except ValueError as exc:
         raise ValueError(f"Invalid tender id: {tender_id}") from exc
 
-    logger.info("Starting tender document sync task for tender %s", tender_id)
-    return asyncio.run(_process_tender_docs_async(tender_uuid))
+    logger.info(
+        "Starting tender document sync task for tender %s (job_id=%s)",
+        tender_id,
+        job_id,
+    )
+    return asyncio.run(_process_tender_docs_async(tender_uuid, job_id=job_id))
