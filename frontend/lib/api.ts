@@ -62,8 +62,10 @@ const attachAuthorizationHeader = (
  *
  * Axios instance configured with base URL and automatic JWT token injection.
  */
+const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL ?? '/api/v1').replace(/\/$/, '');
+
 const api = axios.create({
-    baseURL: '/api/v1',
+    baseURL: apiBaseUrl,
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json',

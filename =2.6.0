@@ -1,0 +1,35 @@
+Collecting psycopg>=3.1 (from psycopg[binary]>=3.1)
+  Downloading psycopg-3.3.4-py3-none-any.whl.metadata (4.3 kB)
+Collecting PyJWT
+  Using cached pyjwt-2.13.0-py3-none-any.whl.metadata (3.4 kB)
+Collecting pydantic-settings
+  Using cached pydantic_settings-2.14.1-py3-none-any.whl.metadata (3.4 kB)
+Collecting typing-extensions>=4.6 (from psycopg>=3.1->psycopg[binary]>=3.1)
+  Using cached typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting pydantic>=2.7.0 (from pydantic-settings)
+  Using cached pydantic-2.13.4-py3-none-any.whl.metadata (109 kB)
+Collecting python-dotenv>=0.21.0 (from pydantic-settings)
+  Using cached python_dotenv-1.2.2-py3-none-any.whl.metadata (27 kB)
+Collecting typing-inspection>=0.4.0 (from pydantic-settings)
+  Using cached typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting psycopg-binary==3.3.4 (from psycopg[binary]>=3.1)
+  Downloading psycopg_binary-3.3.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.7 kB)
+Collecting annotated-types>=0.6.0 (from pydantic>=2.7.0->pydantic-settings)
+  Using cached annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.46.4 (from pydantic>=2.7.0->pydantic-settings)
+  Downloading pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+Downloading psycopg-3.3.4-py3-none-any.whl (213 kB)
+Using cached pyjwt-2.13.0-py3-none-any.whl (31 kB)
+Using cached pydantic_settings-2.14.1-py3-none-any.whl (60 kB)
+Downloading psycopg_binary-3.3.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.2/5.2 MB 1.6 MB/s  0:00:03
+Downloading pydantic-2.13.4-py3-none-any.whl (472 kB)
+Downloading pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 370.1 kB/s  0:00:05
+Using cached annotated_types-0.7.0-py3-none-any.whl (13 kB)
+Using cached python_dotenv-1.2.2-py3-none-any.whl (22 kB)
+Using cached typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+Using cached typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Installing collected packages: typing-extensions, python-dotenv, PyJWT, psycopg-binary, annotated-types, typing-inspection, pydantic-core, psycopg, pydantic, pydantic-settings
+
+Successfully installed PyJWT-2.13.0 annotated-types-0.7.0 psycopg-3.3.4 psycopg-binary-3.3.4 pydantic-2.13.4 pydantic-core-2.46.4 pydantic-settings-2.14.1 python-dotenv-1.2.2 typing-extensions-4.15.0 typing-inspection-0.4.2

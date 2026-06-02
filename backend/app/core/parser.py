@@ -8,6 +8,7 @@ import asyncio
 import io
 import logging
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -60,7 +61,8 @@ OCR_MIN_TEXT_LEN = 50
 OCR_LANGS = "uzb+rus+eng"
 OCR_PAGE_TIMEOUT_SECONDS = 60
 OCR_MAX_PAGES = 5
-GEMINI_OCR_MODEL = "gemini-2.0-flash"
+DEMO_OCR_BYPASS_ENV = "DEMO_OCR_BYPASS"
+GEMINI_OCR_MODEL = "gemini-2.5-flash"
 GEMINI_OCR_MAX_RETRIES = 3
 GEMINI_OCR_RETRY_BASE_SECONDS = 1.5
 
@@ -68,6 +70,8 @@ _TESSERACT_AVAILABLE: bool | None = None
 _TESSERACT_FALLBACK_WARNING_EMITTED = False
 _GEMINI_OCR_CLIENT: genai.Client | None = None
 _GEMINI_OCR_CLIENT_API_KEY: str | None = None
+_TRACE_FILE_MARKER_RE: re.Pattern[str] = re.compile(r"\[\[FILE:\s*[^\]]+?\s*\]\]")
+_TRACE_PAGE_MARKER_RE: re.Pattern[str] = re.compile(r"\[\[PAGE\s+\d+\]\]")
 
 
 def _resolve_gemini_api_key() -> str | None:
@@ -158,6 +162,58 @@ def _normalize_content_type(content_type: str | None) -> str:
     return (content_type or "").split(";", 1)[0].strip().lower()
 
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _source_filename(file_path: str | Path | None) -> str:
+    value = str(file_path or "").strip()
+    if not value or value == "<bytes>":
+        return "uploaded_document"
+    if value.startswith("<") and value.endswith(">"):
+        return value
+    return Path(value).name
+
+
+def _format_file_marker(filename: str) -> str:
+    return f"[[FILE: {filename}]]"
+
+
+def _format_page_marker(page_number: int) -> str:
+    return f"[[PAGE {page_number}]]"
+
+
+def _format_page_text(filename: str, page_number: int, text: str) -> str:
+    normalized = text.strip()
+    if not normalized:
+        return ""
+    return f"{_format_file_marker(filename)}\n{_format_page_marker(page_number)}\n{normalized}"
+
+
+def _format_single_page_document(filename: str, text: str) -> str:
+    return _format_page_text(filename, 1, text)
+
+
+def _has_trace_markers(text: str) -> bool:
+    """Return True when text already has parser-style file and page markers."""
+    return bool(_TRACE_FILE_MARKER_RE.search(text) and _TRACE_PAGE_MARKER_RE.search(text))
+
+
+def ensure_trace_markers(filename: str, text: str) -> str:
+    """
+    Repair legacy markerless parsed text at compile time.
+
+    DOCX files do not have reliable rendered page numbers, so page 1 means
+    document-level provenance for single-page marker repair.
+    """
+    normalized = text.strip()
+    if not normalized:
+        return ""
+    if _has_trace_markers(normalized):
+        return normalized
+    return _format_single_page_document(filename, normalized)
+
+
 def _ocr_fallback_allowed(*, file_path: str, file_bytes: bytes) -> bool:
     suffix = Path(file_path or "").suffix.lower()
     if suffix in OCR_SAFE_SUFFIXES:
@@ -176,7 +232,12 @@ def _parse_extracted_documents(files: list[ExtractedArchiveFile]) -> str:
             if suffix == ".pdf":
                 text = parse_pdf(item["file_bytes"], file_path=filename)
             elif suffix == ".docx":
-                text = parse_docx(item["file_bytes"])
+                text = parse_docx(item["file_bytes"], file_path=filename)
+            elif suffix == ".txt":
+                text = _format_single_page_document(
+                    filename,
+                    _safe_decode_text(item["file_bytes"]),
+                )
             else:
                 continue
         except Exception as exc:
@@ -185,7 +246,7 @@ def _parse_extracted_documents(files: list[ExtractedArchiveFile]) -> str:
 
         normalized = text.strip()
         if normalized:
-            parsed_chunks.append(f"[{filename}]\n{normalized}")
+            parsed_chunks.append(normalized)
 
     return "\n\n".join(parsed_chunks).strip()
 
@@ -328,7 +389,7 @@ def extract_archive_contents(archive_source: bytes | str | Path | BinaryIO) -> l
         return []
 
 
-def parse_docx(docx_bytes: bytes) -> str:
+def parse_docx(docx_bytes: bytes, file_path: str | Path = "<bytes>") -> str:
     """Parse DOCX bytes and return full text."""
     try:
         document = docx.Document(io.BytesIO(docx_bytes))
@@ -354,7 +415,10 @@ def parse_docx(docx_bytes: bytes) -> str:
         logger.error("DOCX parsing failed: %s", exc, exc_info=True)
         return ""
 
-    return "\n".join(chunks).strip()
+    return _format_single_page_document(
+        _source_filename(file_path),
+        "\n".join(chunks).strip(),
+    )
 
 
 def _page_has_visual_content(page: fitz.Page) -> bool:
@@ -474,7 +538,7 @@ def _ocr_pdf_page_from_pdf_bytes(pdf_bytes: bytes, page_number: int) -> str:
         return ""
 
 
-def _ocr_entire_pdf(pdf_bytes: bytes) -> str:
+def _ocr_entire_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
     try:
         with tempfile.TemporaryDirectory(prefix="pdf_ocr_full_") as temp_dir:
             image_paths = convert_from_bytes(
@@ -488,13 +552,15 @@ def _ocr_entire_pdf(pdf_bytes: bytes) -> str:
             if not image_paths:
                 return ""
 
+            filename = _source_filename(file_path)
             page_texts: list[str] = []
             for index, image_path in enumerate(image_paths, start=1):
                 try:
                     with Image.open(image_path) as image:
                         text = _ocr_pdf_page(image)
-                    if text:
-                        page_texts.append(text)
+                    formatted = _format_page_text(filename, index, text)
+                    if formatted:
+                        page_texts.append(formatted)
                 except Exception as exc:
                     logger.error("OCR failed (fallback page %s): %s", index, exc, exc_info=True)
                     continue
@@ -516,9 +582,17 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
         )
         return ""
 
+    filename = _source_filename(file_path)
     page_texts: list[str] = []
     ocr_fallback_logged = False
     ocr_pages_processed = 0
+    demo_ocr_bypass = _env_flag(DEMO_OCR_BYPASS_ENV)
+    if demo_ocr_bypass:
+        logger.warning(
+            "[SONAR] %s=True; OCR page cap bypass is active for %s.",
+            DEMO_OCR_BYPASS_ENV,
+            filename,
+        )
 
     try:
         with fitz.open(stream=pdf_bytes, filetype="pdf") as pdf_doc:
@@ -535,13 +609,13 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
                         exc_info=True,
                     )
 
-                if len(native_text) >= OCR_MIN_TEXT_LEN:
-                    page_texts.append(native_text)
+                if len(native_text) >= OCR_MIN_TEXT_LEN and not demo_ocr_bypass:
+                    page_texts.append(_format_page_text(filename, page_index, native_text))
                     continue
 
                 ocr_text = ""
-                if native_text or _page_has_visual_content(page):
-                    if ocr_pages_processed >= OCR_MAX_PAGES:
+                if demo_ocr_bypass or native_text or _page_has_visual_content(page):
+                    if not demo_ocr_bypass and ocr_pages_processed >= OCR_MAX_PAGES:
                         logger.warning(
                             "[SONAR] OCR page limit (%s) reached at page %s — skipping remaining pages.",
                             OCR_MAX_PAGES,
@@ -555,12 +629,13 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
                     ocr_pages_processed += 1
 
                 merged = "\n".join(part for part in (native_text, ocr_text) if part).strip()
-                if merged:
-                    page_texts.append(merged)
+                formatted = _format_page_text(filename, page_index, merged)
+                if formatted:
+                    page_texts.append(formatted)
     except Exception as e:
         logger.error(f"[SONAR] EXTRACTION FAILED on {file_path}. Reason: {str(e)}", exc_info=True)
         if _ocr_fallback_allowed(file_path=file_path, file_bytes=pdf_bytes):
-            return _ocr_entire_pdf(pdf_bytes)
+            return _ocr_entire_pdf(pdf_bytes, file_path=file_path)
         logger.warning("[SONAR] OCR fallback skipped for unsupported non-PDF source: %s", file_path)
         return ""
 
@@ -637,10 +712,14 @@ async def process_tender_document(
         return await asyncio.to_thread(_parse_extracted_documents, extracted_files)
 
     if suffix == ".docx" or normalized_content_type in DOCX_MIME_TYPES or is_docx:
-        return await asyncio.to_thread(parse_docx, payload)
+        source_label = inferred_name or str(path_source) if path_source else inferred_name or "<bytes>"
+        return await asyncio.to_thread(parse_docx, payload, source_label)
 
     if suffix == ".txt" or normalized_content_type.startswith("text/"):
-        return _safe_decode_text(payload).strip()
+        return _format_single_page_document(
+            _source_filename(inferred_name or path_source or "<bytes>"),
+            _safe_decode_text(payload),
+        )
 
     if suffix == ".pdf" or normalized_content_type in PDF_MIME_TYPES or _looks_like_pdf(payload):
         source_label = str(path_source) if path_source else inferred_name or "<bytes>"
@@ -674,11 +753,11 @@ def extract_text_from_bytes(file_bytes: bytes, file_type: str) -> str:
     normalized = file_type.lower().strip(".")
     try:
         if normalized == "pdf":
-            return parse_pdf(file_bytes)
+            return parse_pdf(file_bytes, file_path="uploaded_document.pdf")
         if normalized in {"doc", "docx"}:
-            return parse_docx(file_bytes)
+            return parse_docx(file_bytes, file_path=f"uploaded_document.{normalized}")
         if normalized == "txt":
-            return _safe_decode_text(file_bytes).strip()
+            return _format_single_page_document("uploaded_document.txt", _safe_decode_text(file_bytes))
         if normalized in {"zip", "rar"}:
             extracted = extract_archive_contents(file_bytes)
             return _parse_extracted_documents(extracted)
@@ -704,5 +783,15 @@ def extract_text_from_file(file_path: str | Path) -> str:
     except Exception as exc:
         logger.error("Unexpected file read error '%s': %s", file_path, exc, exc_info=True)
         return ""
+
+    if suffix == "pdf":
+        return parse_pdf(file_bytes, file_path=str(path))
+    if suffix in {"doc", "docx"}:
+        return parse_docx(file_bytes, file_path=str(path))
+    if suffix == "txt":
+        return _format_single_page_document(path.name, _safe_decode_text(file_bytes))
+    if suffix in {"zip", "rar"}:
+        extracted = extract_archive_contents(file_bytes)
+        return _parse_extracted_documents(extracted)
 
     return extract_text_from_bytes(file_bytes, suffix)

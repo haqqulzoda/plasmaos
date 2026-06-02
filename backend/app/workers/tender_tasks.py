@@ -5,10 +5,13 @@ Celery tasks for tender document synchronization and extraction.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import random
 import re
+import shutil
+import time
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID, uuid4
@@ -34,6 +37,31 @@ logger = logging.getLogger(__name__)
 DEFAULT_DOCUMENTS_ROOT = Path(__file__).resolve().parents[3] / "data" / "documents"
 DOCUMENTS_ROOT = Path(os.getenv("TENDER_DOCUMENTS_ROOT", str(DEFAULT_DOCUMENTS_ROOT)))
 MAX_ERROR_MESSAGE_LENGTH = 2000
+TRACE_FILE_MARKER_RE = re.compile(r"\[\[FILE:\s*(.+?)\]\]")
+TRACE_PAGE_MARKER_RE = re.compile(r"\[\[PAGE\s+(\d+)\]\]")
+
+
+def _log_sync_event(level: int, event: str, **fields) -> None:
+    safe_fields = {}
+    for key, value in fields.items():
+        if value is None:
+            continue
+        safe_fields[key] = str(value)[:500]
+    logger.log(level, "tender_docs.%s %s", event, safe_fields)
+
+
+def _file_sha256_prefix(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file_handle:
+        for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()[:16]
+
+
+def _disk_probe(path: Path) -> dict[str, int]:
+    probe_path = path if path.exists() else path.parent
+    usage = shutil.disk_usage(probe_path)
+    return {"free": usage.free, "total": usage.total}
 
 
 def _bounded_progress(value: int) -> int:
@@ -154,6 +182,27 @@ def _parsed_text_present(doc: TenderDocument) -> bool:
     return bool(doc.parsed_text and doc.parsed_text.strip())
 
 
+def _has_real_trace_markers(text: str | None) -> bool:
+    normalized = (text or "").strip()
+    return bool(
+        TRACE_FILE_MARKER_RE.search(normalized)
+        and TRACE_PAGE_MARKER_RE.search(normalized)
+    )
+
+
+def _parsed_text_markerless(doc: TenderDocument) -> bool:
+    return _parsed_text_present(doc) and not _has_real_trace_markers(doc.parsed_text)
+
+
+def _marker_counts(text: str | None) -> dict[str, int]:
+    normalized = text or ""
+    return {
+        "length": len(normalized),
+        "file_marker_count": normalized.count("[[FILE:"),
+        "page_marker_count": normalized.count("[[PAGE"),
+    }
+
+
 def _stored_file_exists(doc: TenderDocument | None) -> bool:
     if doc is None or not doc.storage_path:
         return False
@@ -214,6 +263,41 @@ def _persist_document_bytes(
                 logger.warning("Failed to remove temporary tender document file: %s", temp_path)
 
 
+def _reserve_document_download_path(*, tender_id: UUID, filename: str) -> tuple[str, str]:
+    tender_dir = DOCUMENTS_ROOT / str(tender_id)
+    tender_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = _sanitize_filename(filename)
+    stored_name = f"{uuid4().hex}_{safe_filename}"
+    final_path = tender_dir / stored_name
+    temp_path = tender_dir / f".{stored_name}.part"
+    return str(temp_path), str(final_path)
+
+
+def _finalize_document_download(*, temp_path: str, final_path: str) -> tuple[str, int, str]:
+    temp = Path(temp_path)
+    final = Path(final_path)
+    if not temp.is_file():
+        raise OSError(f"Temporary tender document file was not created: {temp}")
+
+    file_size = temp.stat().st_size
+    if file_size <= 0:
+        raise OSError(f"Downloaded tender document is empty: {temp}")
+
+    sha256_prefix = _file_sha256_prefix(temp)
+    temp.replace(final)
+    return str(final), file_size, sha256_prefix
+
+
+def _cleanup_temp_download(temp_path: str) -> None:
+    temp = Path(temp_path)
+    if temp.exists():
+        try:
+            temp.unlink()
+        except OSError:
+            logger.warning("Failed to remove temporary tender document file: %s", temp)
+
+
 def _document_display_name(doc: TenderDocument | None, fallback: str | None = None) -> str:
     if fallback and fallback.strip():
         return _sanitize_filename(fallback)
@@ -241,7 +325,63 @@ def _compiled_text_chunk(doc: TenderDocument, filename: str | None = None) -> st
     if not parsed_text:
         return ""
 
-    return f"[{_document_display_name(doc, filename)}]\n{parsed_text}"
+    display_name = _document_display_name(doc, filename)
+    # Do not synthesize parser trace markers here. Source verification must be
+    # based on markers emitted by the parser/reparse path, not legacy headings.
+    return f"[{display_name}]\n{parsed_text}"
+
+
+async def _reparse_markerless_stored_document(
+    doc: TenderDocument,
+    *,
+    tender_uuid: UUID,
+    job_id: str | None,
+) -> bool:
+    if not _parsed_text_markerless(doc) or not _stored_file_exists(doc):
+        return False
+
+    display_name = _document_display_name(doc)
+    storage_path = Path(doc.storage_path)
+    _log_sync_event(
+        logging.INFO,
+        "markerless_reparse_start",
+        tender_id=tender_uuid,
+        job_id=job_id,
+        document_id=doc.id,
+        display_name=display_name,
+        storage_path=storage_path,
+    )
+
+    extracted_text = await process_tender_document(
+        source=storage_path,
+        filename=display_name,
+    )
+    normalized = extracted_text.strip()
+    if not normalized:
+        _log_sync_event(
+            logging.WARNING,
+            "markerless_reparse_empty",
+            tender_id=tender_uuid,
+            job_id=job_id,
+            document_id=doc.id,
+            display_name=display_name,
+        )
+        return False
+
+    doc.parsed_text = normalized
+    counts = _marker_counts(normalized)
+    _log_sync_event(
+        logging.INFO if _has_real_trace_markers(normalized) else logging.WARNING,
+        "markerless_reparse_done",
+        tender_id=tender_uuid,
+        job_id=job_id,
+        document_id=doc.id,
+        display_name=display_name,
+        parsed_chars=counts["length"],
+        parsed_file_markers=counts["file_marker_count"],
+        parsed_page_markers=counts["page_marker_count"],
+    )
+    return True
 
 
 def _document_identity_key(file_url: str) -> str:
@@ -284,7 +424,16 @@ async def _process_tender_docs_async(
     tender_uuid: UUID,
     *,
     job_id: str | None = None,
+    reparse_markerless: bool = False,
 ) -> dict[str, int | str]:
+    task_started_at = time.monotonic()
+    _log_sync_event(
+        logging.INFO,
+        "task_start",
+        tender_id=tender_uuid,
+        job_id=job_id,
+        reparse_markerless=reparse_markerless,
+    )
     try:
         async with AsyncSessionLocal() as db:
             try:
@@ -292,6 +441,7 @@ async def _process_tender_docs_async(
                 tender = tender_result.scalar_one_or_none()
                 if tender is None:
                     raise ValueError("Tender not found")
+                before_compiled_counts = _marker_counts(tender.compiled_master_text)
 
                 await _persist_sync_job_state(
                     job_id=job_id,
@@ -300,7 +450,38 @@ async def _process_tender_docs_async(
                 )
 
                 scraper = UzExScraper(headless=True, timeout=30000)
+                scrape_started_at = time.monotonic()
+                _log_sync_event(
+                    logging.INFO,
+                    "scrape_start",
+                    tender_id=tender_uuid,
+                    job_id=job_id,
+                    source_url=tender.source_url,
+                )
                 scraped_docs = await scraper.scrape_tender_documents(tender.source_url)
+                _log_sync_event(
+                    logging.INFO,
+                    "scrape_done",
+                    tender_id=tender_uuid,
+                    job_id=job_id,
+                    elapsed_ms=int((time.monotonic() - scrape_started_at) * 1000),
+                    scraped_count=len(scraped_docs),
+                    sample_urls=[doc.get("file_url") for doc in scraped_docs[:3]],
+                )
+                if not scraped_docs:
+                    _log_sync_event(
+                        logging.ERROR,
+                        "scrape_zero_documents",
+                        tender_id=tender_uuid,
+                        job_id=job_id,
+                        source_url=tender.source_url,
+                    )
+                    failure_message = f"UzEx scrape returned zero documents for tender {tender_uuid}"
+                    await _mark_sync_job_failed(
+                        job_id=job_id,
+                        error_message=failure_message,
+                    )
+                    raise RuntimeError(failure_message)
                 await _persist_sync_job_state(
                     job_id=job_id,
                     status=TenderSyncStatus.IN_PROGRESS,
@@ -311,6 +492,13 @@ async def _process_tender_docs_async(
                     select(TenderDocument).where(TenderDocument.tender_id == tender_uuid)
                 )
                 existing_docs = existing_result.scalars().all()
+                _log_sync_event(
+                    logging.INFO,
+                    "existing_docs_loaded",
+                    tender_id=tender_uuid,
+                    job_id=job_id,
+                    existing_count=len(existing_docs),
+                )
 
                 existing_by_url: dict[str, TenderDocument] = {}
                 existing_by_path: dict[str, TenderDocument] = {}
@@ -326,8 +514,20 @@ async def _process_tender_docs_async(
 
                 new_count = 0
                 parsed_count = 0
+                reparsed_markerless_count = 0
                 parsed_text_by_identity: dict[str, str] = {}
                 docs_to_process: list[tuple[TenderDocument | None, str, str, str, int]] = []
+
+                if reparse_markerless:
+                    for existing_doc in existing_docs:
+                        if _parsed_text_markerless(existing_doc) and _stored_file_exists(existing_doc):
+                            if await _reparse_markerless_stored_document(
+                                existing_doc,
+                                tender_uuid=tender_uuid,
+                                job_id=job_id,
+                            ):
+                                parsed_count += 1
+                                reparsed_markerless_count += 1
 
                 for doc in existing_docs:
                     if _parsed_text_present(doc):
@@ -340,8 +540,17 @@ async def _process_tender_docs_async(
                     scraped_url = (doc_data.get("file_url") or "").strip()
                     scraped_file_type = (doc_data.get("file_type") or "").strip().lower()
                     if not scraped_url:
-                        logger.warning("Skipping scraped doc with empty file_url for tender %s", tender_uuid)
-                        continue
+                        _log_sync_event(
+                            logging.ERROR,
+                            "scraped_doc_empty_url",
+                            tender_id=tender_uuid,
+                            job_id=job_id,
+                            scraped_index=scraped_index,
+                            doc_data=doc_data,
+                        )
+                        raise RuntimeError(
+                            f"Scraped document at index {scraped_index} has empty file_url"
+                        )
 
                     path_key = _normalize_file_path(scraped_url)
                     name_key = _extract_file_name(scraped_url)
@@ -367,12 +576,16 @@ async def _process_tender_docs_async(
 
                     file_path = _extract_file_path(scraped_url)
                     if not _stored_file_exists(doc) and not file_path:
-                        logger.warning(
-                            "Skipping scraped doc with invalid remote path for tender %s: %s",
-                            tender_uuid,
-                            scraped_url,
+                        _log_sync_event(
+                            logging.ERROR,
+                            "scraped_doc_invalid_remote_path",
+                            tender_id=tender_uuid,
+                            job_id=job_id,
+                            scraped_url=scraped_url,
                         )
-                        continue
+                        raise RuntimeError(
+                            f"Scraped document has invalid remote path: {scraped_url}"
+                        )
 
                     docs_to_process.append((doc, scraped_url, file_path, scraped_file_type, scraped_index))
 
@@ -384,6 +597,20 @@ async def _process_tender_docs_async(
                     )
 
                 for index, (doc, scraped_url, file_path, scraped_file_type, button_index) in enumerate(docs_to_process):
+                    doc_started_at = time.monotonic()
+                    _log_sync_event(
+                        logging.INFO,
+                        "document_start",
+                        tender_id=tender_uuid,
+                        job_id=job_id,
+                        index=index,
+                        button_index=button_index,
+                        scraped_url=scraped_url,
+                        file_path=file_path,
+                        file_type=scraped_file_type,
+                        has_existing_doc=doc is not None,
+                        stored_file_exists=_stored_file_exists(doc),
+                    )
                     if index > 0:
                         delay_seconds = random.uniform(2.0, 5.0)
                         logger.info(
@@ -398,7 +625,21 @@ async def _process_tender_docs_async(
                         if doc is not None and _stored_file_exists(doc):
                             local_path = Path(doc.storage_path)
                             display_name = _document_display_name(doc)
-                            if not _parsed_text_present(doc):
+                            _log_sync_event(
+                                logging.INFO,
+                                "existing_storage_reused",
+                                tender_id=tender_uuid,
+                                job_id=job_id,
+                                document_id=doc.id,
+                                storage_path=local_path,
+                                file_size=local_path.stat().st_size,
+                                sha256_prefix=_file_sha256_prefix(local_path),
+                            )
+                            needs_parse = (
+                                not _parsed_text_present(doc)
+                                or (reparse_markerless and _parsed_text_markerless(doc))
+                            )
+                            if needs_parse:
                                 extracted_text = await process_tender_document(
                                     source=local_path,
                                     filename=display_name,
@@ -406,6 +647,16 @@ async def _process_tender_docs_async(
                                 if extracted_text.strip():
                                     doc.parsed_text = extracted_text.strip()
                                     parsed_count += 1
+                                    if reparse_markerless:
+                                        reparsed_markerless_count += 1
+                                    _log_sync_event(
+                                        logging.INFO,
+                                        "parse_done",
+                                        tender_id=tender_uuid,
+                                        job_id=job_id,
+                                        document_id=doc.id,
+                                        parsed_chars=len(doc.parsed_text),
+                                    )
 
                             if _parsed_text_present(doc):
                                 parsed_text_by_identity[_document_identity_key(scraped_url)] = (
@@ -413,17 +664,54 @@ async def _process_tender_docs_async(
                                 )
                             continue
 
-                        file_bytes, downloaded_name = await scraper.download_file(
-                            tender_url=tender.source_url,
-                            file_path=file_path,
-                            button_index=button_index,
-                        )
-                        resolved_name = downloaded_name or _extract_file_name(scraped_url) or "download"
-                        storage_path, file_size = await asyncio.to_thread(
-                            _persist_document_bytes,
+                        fallback_name = _extract_file_name(scraped_url) or "download"
+                        temp_path, final_path = _reserve_document_download_path(
                             tender_id=tender_uuid,
-                            filename=resolved_name,
-                            file_bytes=file_bytes,
+                            filename=fallback_name,
+                        )
+                        try:
+                            downloaded_name = await scraper.download_file_to_path(
+                                tender_url=tender.source_url,
+                                file_path=file_path,
+                                destination_path=temp_path,
+                                button_index=button_index,
+                            )
+                        except Exception:
+                            _cleanup_temp_download(temp_path)
+                            raise
+
+                        resolved_name = downloaded_name or fallback_name
+                        if _sanitize_filename(resolved_name) != _sanitize_filename(fallback_name):
+                            final_path = str(
+                                Path(temp_path).parent
+                                / f"{uuid4().hex}_{_sanitize_filename(resolved_name)}"
+                            )
+
+                        storage_path, file_size, sha256_prefix = await asyncio.to_thread(
+                            _finalize_document_download,
+                            temp_path=temp_path,
+                            final_path=final_path,
+                        )
+                        _log_sync_event(
+                            logging.INFO,
+                            "download_done",
+                            tender_id=tender_uuid,
+                            job_id=job_id,
+                            bytes=file_size,
+                            sha256_prefix=sha256_prefix,
+                            downloaded_name=downloaded_name,
+                            resolved_name=resolved_name,
+                            elapsed_ms=int((time.monotonic() - doc_started_at) * 1000),
+                        )
+                        _log_sync_event(
+                            logging.INFO,
+                            "storage_done",
+                            tender_id=tender_uuid,
+                            job_id=job_id,
+                            storage_path=storage_path,
+                            file_size=file_size,
+                            exists=Path(storage_path).is_file(),
+                            disk=_disk_probe(Path(storage_path)),
                         )
 
                         if doc is None:
@@ -450,7 +738,11 @@ async def _process_tender_docs_async(
                             existing_by_name,
                         )
 
-                        if not _parsed_text_present(doc):
+                        needs_parse = (
+                            not _parsed_text_present(doc)
+                            or (reparse_markerless and _parsed_text_markerless(doc))
+                        )
+                        if needs_parse:
                             extracted_text = await process_tender_document(
                                 source=Path(storage_path),
                                 filename=resolved_name,
@@ -458,18 +750,43 @@ async def _process_tender_docs_async(
                             if extracted_text.strip():
                                 doc.parsed_text = extracted_text.strip()
                                 parsed_count += 1
+                                if reparse_markerless:
+                                    reparsed_markerless_count += 1
+                                _log_sync_event(
+                                    logging.INFO,
+                                    "parse_done",
+                                    tender_id=tender_uuid,
+                                    job_id=job_id,
+                                    document_id=doc.id,
+                                    parsed_chars=len(doc.parsed_text),
+                                )
 
                         if _parsed_text_present(doc):
                             parsed_text_by_identity[_document_identity_key(scraped_url)] = (
                                 _compiled_text_chunk(doc, resolved_name)
                             )
-                    except Exception as parse_exc:
-                        logger.warning(
-                            "Failed to persist/parse tender document '%s' for tender %s: %s",
-                            scraped_url,
-                            tender_uuid,
-                            parse_exc,
+                    except Exception as doc_exc:
+                        _log_sync_event(
+                            logging.ERROR,
+                            "document_failed",
+                            tender_id=tender_uuid,
+                            job_id=job_id,
+                            index=index,
+                            button_index=button_index,
+                            scraped_url=scraped_url,
+                            error_type=type(doc_exc).__name__,
+                            error=doc_exc,
                         )
+                        logger.exception(
+                            "Tender document sync failed for tender_id=%s job_id=%s url=%s",
+                            tender_uuid,
+                            job_id,
+                            scraped_url,
+                        )
+                        raise RuntimeError(
+                            f"Failed to persist/parse tender document '{scraped_url}' "
+                            f"for tender {tender_uuid}: {doc_exc}"
+                        ) from doc_exc
                     finally:
                         if docs_to_process:
                             progress = 20 + int(((index + 1) / len(docs_to_process)) * 70)
@@ -483,8 +800,54 @@ async def _process_tender_docs_async(
                 tender.compiled_master_text = (
                     "\n\n".join(compiled_chunks).strip() if compiled_chunks else None
                 )
+                after_compiled_counts = _marker_counts(tender.compiled_master_text)
+
+                await db.flush()
+                all_docs_result = await db.execute(
+                    select(TenderDocument).where(TenderDocument.tender_id == tender_uuid)
+                )
+                all_docs = all_docs_result.scalars().all()
+                total_count = len(all_docs)
+                markerless_document_count = sum(
+                    1 for doc in all_docs if _parsed_text_markerless(doc)
+                )
+                markerized_document_count = sum(
+                    1 for doc in all_docs if _has_real_trace_markers(doc.parsed_text)
+                )
+                if total_count == 0:
+                    _log_sync_event(
+                        logging.ERROR,
+                        "zero_persisted_documents",
+                        tender_id=tender_uuid,
+                        job_id=job_id,
+                        scraped_count=len(scraped_docs),
+                        docs_to_process_count=len(docs_to_process),
+                    )
+                    failure_message = (
+                        f"Tender document sync persisted zero documents for tender {tender_uuid}"
+                    )
+                    await _mark_sync_job_failed(
+                        job_id=job_id,
+                        error_message=failure_message,
+                    )
+                    raise RuntimeError(failure_message)
 
                 await db.commit()
+                _log_sync_event(
+                    logging.INFO,
+                    "compiled_text_rebuilt",
+                    tender_id=tender_uuid,
+                    job_id=job_id,
+                    before_compiled_length=before_compiled_counts["length"],
+                    before_compiled_file_markers=before_compiled_counts["file_marker_count"],
+                    before_compiled_page_markers=before_compiled_counts["page_marker_count"],
+                    after_compiled_length=after_compiled_counts["length"],
+                    after_compiled_file_markers=after_compiled_counts["file_marker_count"],
+                    after_compiled_page_markers=after_compiled_counts["page_marker_count"],
+                    documents_reparsed=reparsed_markerless_count,
+                    documents_markerized=markerized_document_count,
+                    documents_still_markerless=markerless_document_count,
+                )
                 await _persist_sync_job_state(
                     job_id=job_id,
                     status=TenderSyncStatus.SUCCESS,
@@ -492,24 +855,48 @@ async def _process_tender_docs_async(
                     error_message=None,
                 )
 
-                all_docs_result = await db.execute(
-                    select(TenderDocument).where(TenderDocument.tender_id == tender_uuid)
+                _log_sync_event(
+                    logging.INFO,
+                    "task_success",
+                    tender_id=tender_uuid,
+                    job_id=job_id,
+                    new_count=new_count,
+                    parsed_count=parsed_count,
+                    total_count=total_count,
+                    reparsed_markerless_count=reparsed_markerless_count,
+                    compiled_file_markers=after_compiled_counts["file_marker_count"],
+                    compiled_page_markers=after_compiled_counts["page_marker_count"],
+                    documents_still_markerless=markerless_document_count,
+                    elapsed_ms=int((time.monotonic() - task_started_at) * 1000),
                 )
-                all_docs = all_docs_result.scalars().all()
 
                 return {
                     "status": "success",
                     "tender_id": str(tender_uuid),
                     "new_count": new_count,
                     "parsed_count": parsed_count,
-                    "total_count": len(all_docs),
+                    "reparsed_markerless_count": reparsed_markerless_count,
+                    "total_count": total_count,
+                    "compiled_file_marker_count": after_compiled_counts["file_marker_count"],
+                    "compiled_page_marker_count": after_compiled_counts["page_marker_count"],
+                    "documents_still_markerless": markerless_document_count,
                     "message": (
                         f"Synced {new_count} new documents, parsed {parsed_count} documents, "
-                        f"{len(all_docs)} total"
+                        f"reparsed {reparsed_markerless_count} markerless documents, "
+                        f"{total_count} total"
                     ),
                 }
             except Exception as exc:
                 await db.rollback()
+                _log_sync_event(
+                    logging.ERROR,
+                    "task_failed",
+                    tender_id=tender_uuid,
+                    job_id=job_id,
+                    error_type=type(exc).__name__,
+                    error=exc,
+                    elapsed_ms=int((time.monotonic() - task_started_at) * 1000),
+                )
                 await _mark_sync_job_failed(
                     job_id=job_id,
                     error_message=str(exc) or "Tender document sync failed.",
@@ -524,6 +911,7 @@ def process_tender_docs(
     self,
     tender_id: str,
     job_id: str | None = None,
+    reparse_markerless: bool = False,
 ) -> dict[str, int | str]:
     try:
         tender_uuid = UUID(tender_id)
@@ -531,8 +919,15 @@ def process_tender_docs(
         raise ValueError(f"Invalid tender id: {tender_id}") from exc
 
     logger.info(
-        "Starting tender document sync task for tender %s (job_id=%s)",
+        "Starting tender document sync task for tender %s (job_id=%s, reparse_markerless=%s)",
         tender_id,
         job_id,
+        reparse_markerless,
     )
-    return asyncio.run(_process_tender_docs_async(tender_uuid, job_id=job_id))
+    return asyncio.run(
+        _process_tender_docs_async(
+            tender_uuid,
+            job_id=job_id,
+            reparse_markerless=reparse_markerless,
+        )
+    )

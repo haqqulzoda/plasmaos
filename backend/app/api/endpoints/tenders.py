@@ -4,31 +4,50 @@ Plasma AI - Tenders Endpoints
 Public tender feed for the Autonomous Tender Officer.
 """
 
+import asyncio
 import hashlib
+import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only, selectinload
 
 from app.api.deps import get_current_user
-from app.core.ai_analyzer import (
-    ExtractedTenderRequirements,
-    ExtractionError,
-    extract_tender_requirements,
+from app.core.agents.requirement_extractor import (
+    EvidenceValidationStatus,
+    EXTRACTOR_SCHEMA_VERSION,
+    ScopeReviewStatus,
+    build_failed_extraction_coverage,
+    build_extraction_warnings,
+    classify_requirements_scope,
+    extract_requirements_with_coverage,
+    validate_requirements_evidence,
 )
-from app.core.evaluator import DynamicComplianceResult, TaxNodeInfo, evaluate_compliance
+from app.core.agents.strategy_extractor import (
+    TenderStrategyIntelligence,
+    extract_strategy_intelligence,
+)
+from app.core.ai_analyzer import ExtractedTenderRequirements
+from app.core.compliance_pdf import (
+    build_compliance_report_pdf,
+    compliance_report_filename,
+)
+from app.core.evaluator import DynamicComplianceResult, TaxNodeInfo
 from app.core.scraper import UzExScraper
 from app.core.security import authenticated_dependency
+from app.crud.crud_profile import get_profile_for_compliance_match
+from app.crud.exceptions import ProfileNotFoundException
 from app.db.session import get_db
 from app.models.audit import TenderAnalysis
 from app.models.all_models import (
@@ -44,18 +63,26 @@ from app.models.all_models import (
 )
 from app.models.company import CompanyProfile
 from app.models.taxonomy import CompanyCredential
-from app.schemas.tender import TenderResponse
+from app.schemas.tender import TenderDocumentResponse, TenderResponse
 from app.schemas.vault import (
     CertificationItem,
     CompanyVaultResponse,
     FinancialHistoryItem,
     LicenseItem,
 )
+from app.services.compliance_engine import (
+    ComplianceResult as HybridComplianceResult,
+    ComplianceVerdictStatus,
+    MatchMethod,
+    MatchVerdict,
+    RequirementMatchDetail,
+    evaluate_tender_compliance,
+)
 from app.workers.tender_tasks import process_tender_docs
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(dependencies=[authenticated_dependency()])
+router = APIRouter()
 
 
 class RefreshResponse(BaseModel):
@@ -76,6 +103,19 @@ class SyncDocsAcceptedResponse(BaseModel):
     status: str
     progress: int
     error_message: str | None = None
+    reparse_markerless: bool = False
+
+
+class SyncMarkerDiagnostics(BaseModel):
+    """Marker provenance diagnostics for compiled tender text."""
+
+    compiled_master_text_length: int = 0
+    compiled_file_marker_count: int = 0
+    compiled_page_marker_count: int = 0
+    documents_total: int = 0
+    documents_parsed: int = 0
+    documents_markerized: int = 0
+    documents_markerless: int = 0
 
 
 class SyncStatusResponse(BaseModel):
@@ -85,6 +125,7 @@ class SyncStatusResponse(BaseModel):
     progress: int
     docs_parsed: int
     error: str | None = None
+    diagnostics: SyncMarkerDiagnostics | None = None
 
 
 class TestScrapeRequest(BaseModel):
@@ -102,19 +143,45 @@ class TestScrapeResponse(BaseModel):
 
 
 class AnalyzeTenderResponse(BaseModel):
-    """Response payload for analyze-tender endpoint."""
+    """Response payload for analyze-tender endpoint.
+
+    Maintains backward compatibility with the frontend contract
+    (requirements + evaluation) while adding the new hybrid
+    compliance result and strategic bidding intelligence.
+    """
 
     analysis_id: str
     requirements: ExtractedTenderRequirements
     evaluation: DynamicComplianceResult
+    hybrid_compliance: HybridComplianceResult | None = None
+    strategy_intelligence: TenderStrategyIntelligence | None = None
+    content_hash: str
+    override_seal: str | None = None
+    evidence_validation: dict[str, Any] | None = None
+    analysis_warnings: list[str] = Field(default_factory=list)
+    coverage_metadata: dict[str, Any] | None = None
+    analysis_status: str = "completed"
+    extraction_error: str | None = None
 
 
 class RiskOverrideRequest(BaseModel):
-    """Request payload for cryptographic liability handshake."""
+    """Request payload for cryptographic liability handshake.
+
+    Justification is mandatory — the user must state why they are
+    overriding the system flag to complete the liability handshake.
+    """
 
     node_id: UUID
     analysis_id: UUID
-    justification: Optional[str] = None
+    justification: str = Field(
+        ...,
+        min_length=10,
+        description=(
+            "Mandatory justification for overriding the system flag. "
+            "Must explain why the user possesses offline context "
+            "(e.g. physical waiver) that the AI cannot see."
+        ),
+    )
 
 
 class RiskOverrideStatusResponse(BaseModel):
@@ -122,6 +189,7 @@ class RiskOverrideStatusResponse(BaseModel):
 
     tender_id: UUID
     accepted_node_ids: list[str]
+    override_seal: str | None = None
 
 
 def _serialize_tender(tender: Tender) -> TenderResponse:
@@ -189,6 +257,50 @@ def _is_vault_completely_empty(vault: CompanyVaultResponse) -> bool:
         and not vault.licenses
         and not vault.financial_history
     )
+
+
+def _vault_cache_payload(profile: CompanyProfile) -> dict[str, Any]:
+    """Return stable Company Vault values that affect compliance matching."""
+    return {
+        "certifications": [
+            {
+                "cert_type": item.cert_type,
+                "issue_date": item.issue_date.isoformat(),
+                "expiry_date": item.expiry_date.isoformat(),
+            }
+            for item in sorted(
+                profile.certifications,
+                key=lambda cert: (
+                    cert.cert_type.casefold(),
+                    cert.issue_date,
+                    cert.expiry_date,
+                ),
+            )
+        ],
+        "licenses": [
+            {
+                "license_name": item.license_name,
+                "is_active": item.is_active,
+            }
+            for item in sorted(
+                profile.licenses,
+                key=lambda license_item: (
+                    license_item.license_name.casefold(),
+                    license_item.is_active,
+                ),
+            )
+        ],
+        "financial_history": [
+            {
+                "year": item.year,
+                "turnover_uzs": item.turnover_uzs,
+            }
+            for item in sorted(
+                profile.financial_history,
+                key=lambda history_item: history_item.year,
+            )
+        ],
+    }
 
 
 def _analysis_owner_key(
@@ -265,6 +377,220 @@ def _stored_download_name(storage_path: str) -> str:
     return stored_name or "document.bin"
 
 
+_TRACE_FILE_MARKER_RE = re.compile(r"\[\[FILE:\s*([^\]\n]+?)\s*\]\]")
+
+
+def _filename_from_document_url(file_url: str) -> str | None:
+    file_path = _extract_remote_file_path(file_url)
+    filename = Path(file_path).name if file_path else ""
+    return filename or None
+
+
+def _has_filename_extension(filename: str | None) -> bool:
+    return bool(filename and Path(filename).suffix)
+
+
+def _is_archive_filename(filename: str | None) -> bool:
+    return (Path(filename or "").suffix.lower().lstrip(".") in {"zip", "rar", "7z", "tar", "gz"})
+
+
+def _is_archive_document(doc: TenderDocument, *, display_name: str | None = None) -> bool:
+    file_type = (doc.file_type or "").lower().strip().lstrip(".")
+    return file_type in {"zip", "rar", "7z", "tar", "gz"} or _is_archive_filename(display_name)
+
+
+def _parsed_source_filenames(parsed_text: str | None) -> list[str]:
+    filenames: list[str] = []
+    seen: set[str] = set()
+
+    for match in _TRACE_FILE_MARKER_RE.finditer(parsed_text or ""):
+        filename = match.group(1).strip()
+        key = filename.casefold()
+        if filename and key not in seen:
+            seen.add(key)
+            filenames.append(filename)
+
+    return filenames
+
+
+def _document_response(doc: TenderDocument) -> TenderDocumentResponse:
+    original_filename = _filename_from_document_url(doc.file_url)
+    storage_filename = _stored_download_name(doc.storage_path) if doc.storage_path else None
+    display_name = (
+        storage_filename if _has_filename_extension(storage_filename) else None
+    ) or original_filename or storage_filename or (
+        f"document.{doc.file_type}" if doc.file_type else "document"
+    )
+    parsed_source_filenames = _parsed_source_filenames(doc.parsed_text)
+    parent_names = {
+        name.casefold()
+        for name in (display_name, original_filename, storage_filename)
+        if name
+    }
+    archive_inner_filenames = [
+        filename
+        for filename in parsed_source_filenames
+        if _is_archive_document(doc, display_name=display_name)
+        and filename.casefold() not in parent_names
+    ]
+
+    return TenderDocumentResponse(
+        id=doc.id,
+        file_url=doc.file_url,
+        file_type=doc.file_type,
+        display_name=display_name,
+        original_filename=original_filename,
+        storage_filename=storage_filename,
+        parsed_source_filenames=parsed_source_filenames,
+        archive_inner_filenames=archive_inner_filenames,
+        file_size=doc.file_size,
+        created_at=doc.created_at,
+    )
+
+
+def _split_validated_requirements(
+    requirements: list[Any],
+) -> tuple[list[Any], list[Any], list[Any]]:
+    accepted = [
+        req
+        for req in requirements
+        if req.validation_status == EvidenceValidationStatus.ACCEPTED
+    ]
+    needs_review = [
+        req
+        for req in requirements
+        if req.validation_status == EvidenceValidationStatus.NEEDS_REVIEW
+    ]
+    rejected = [
+        req
+        for req in requirements
+        if req.validation_status == EvidenceValidationStatus.REJECTED
+    ]
+    return accepted, needs_review, rejected
+
+
+def _evidence_validation_payload(
+    *,
+    all_requirements: list[Any],
+    accepted: list[Any],
+    needs_review: list[Any],
+    rejected: list[Any],
+    warnings: list[str],
+) -> dict[str, Any]:
+    return {
+        "summary": {
+            "total_extracted": len(all_requirements),
+            "accepted": len(accepted),
+            "needs_review": len(needs_review),
+            "rejected": len(rejected),
+            "scope_needs_review": sum(
+                1
+                for req in all_requirements
+                if req.scope_review_status == ScopeReviewStatus.NEEDS_REVIEW
+            ),
+            "bid_affecting": sum(
+                1
+                for req in all_requirements
+                if req.affects_bid_eligibility
+            ),
+        },
+        "warnings": warnings,
+        "accepted_requirements": [
+            req.model_dump(mode="json") for req in accepted
+        ],
+        "needs_review_requirements": [
+            req.model_dump(mode="json") for req in needs_review
+        ],
+        # Debug/admin visibility only. These are intentionally not fed into the
+        # normal compliance result.
+        "rejected_requirements": [
+            req.model_dump(mode="json") for req in rejected
+        ],
+    }
+
+
+def _manual_review_detail_from_validation(req: Any) -> RequirementMatchDetail:
+    category = req.category.value if hasattr(req.category, "value") else str(req.category)
+    return RequirementMatchDetail(
+        category=category,
+        headline=req.headline,
+        source_filename=req.source_filename,
+        source_page=req.source_page,
+        exact_quote=req.exact_quote,
+        raw_text_snippet=req.exact_quote,
+        requirement_type=category,
+        is_dealbreaker=bool(req.is_dealbreaker),
+        confidence_score=1.0,
+        validation_status=req.validation_status.value,
+        validation_reason=req.validation_reason,
+        source_verified=req.source_verified,
+        requirement_scope=req.requirement_scope.value,
+        scope_review_status=req.scope_review_status.value,
+        affects_bid_eligibility=req.affects_bid_eligibility,
+        eligibility_reason=req.eligibility_reason,
+        verdict=MatchVerdict.NEEDS_MANUAL_REVIEW,
+        match_method=MatchMethod.SKIPPED,
+        matched_credential=None,
+        taxonomy_node_id=None,
+        parent_section_header=None,
+        reason=(
+            "Evidence validation requires manual review: "
+            f"{req.validation_reason}"
+        ),
+    )
+
+
+def _serialize_cached_analysis_response(
+    cached: TenderAnalysis,
+    *,
+    content_hash: str,
+    extra_warnings: list[str] | None = None,
+) -> dict[str, Any]:
+    cached_data = cached.analysis_json or {}
+    cached_reqs = ExtractedTenderRequirements.model_validate(
+        cached_data.get("requirements", {})
+    )
+    cached_eval = DynamicComplianceResult.model_validate(
+        cached_data.get("evaluation", {})
+    )
+    cached_hybrid = None
+    if "hybrid_compliance" in cached_data:
+        try:
+            cached_hybrid = HybridComplianceResult.model_validate(
+                cached_data["hybrid_compliance"]
+            )
+        except (ValidationError, KeyError):
+            pass
+
+    cached_strategy = None
+    if "strategy_intelligence" in cached_data:
+        try:
+            cached_strategy = TenderStrategyIntelligence.model_validate(
+                cached_data["strategy_intelligence"]
+            )
+        except (ValidationError, KeyError):
+            pass
+
+    analysis_warnings = list(cached_data.get("analysis_warnings") or [])
+    if extra_warnings:
+        analysis_warnings.extend(extra_warnings)
+
+    return {
+        "analysis_id": str(cached.id),
+        "requirements": cached_reqs,
+        "evaluation": cached_eval,
+        "hybrid_compliance": cached_hybrid,
+        "strategy_intelligence": cached_strategy,
+        "content_hash": content_hash,
+        "override_seal": cached.override_seal,
+        "evidence_validation": cached_data.get("evidence_validation"),
+        "analysis_warnings": analysis_warnings,
+        "coverage_metadata": cached_data.get("coverage_metadata"),
+        "analysis_status": cached_data.get("analysis_status", "completed"),
+        "extraction_error": cached_data.get("extraction_error"),
+    }
+
+
 @router.post("/{tender_id}/analyze", response_model=AnalyzeTenderResponse)
 async def analyze_tender(
     tender_id: UUID,
@@ -273,10 +599,16 @@ async def analyze_tender(
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
-    Analyze pre-scraped tender text and persist analysis result.
+    Analyze pre-scraped tender text using the Hybrid Compliance Engine.
 
-    Returns cached analysis when the underlying text has not changed,
-    unless ``force=True`` is passed to trigger a fresh Gemini call.
+    Pipeline:
+        1. Extract requirements via Gemini (new structured extractor).
+        2. Load taxonomy + credentials for UUID matching.
+        3. Run hybrid evaluation: UUID Strike -> Token Fallback -> Manual Guard.
+        4. Bridge results back to legacy frontend contract.
+        5. Persist analysis and return.
+
+    Returns cached analysis when content hash matches, unless ``force=True``.
     """
     try:
         result = await session.execute(select(Tender).where(Tender.id == tender_id))
@@ -302,18 +634,12 @@ async def analyze_tender(
         )
 
     try:
-        profile_result = await session.execute(
-            select(CompanyProfile)
-            .options(
-                selectinload(CompanyProfile.certifications),
-                selectinload(CompanyProfile.licenses),
-                selectinload(CompanyProfile.financial_history),
+        try:
+            profile = await get_profile_for_compliance_match(
+                db=session,
+                user_id=current_user.id,
             )
-            .where(CompanyProfile.user_id == current_user.id)
-        )
-        profile = profile_result.scalar_one_or_none()
-
-        if profile is None:
+        except ProfileNotFoundException:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Company vault is empty. Please fill out your company settings first.",
@@ -338,18 +664,11 @@ async def analyze_tender(
         taxonomy_is_active = getattr(TaxonomyNode, "is_active", None)
         if taxonomy_is_active is not None:
             taxonomy_query = taxonomy_query.where(taxonomy_is_active.is_(True))
-        taxonomy_result = await session.execute(taxonomy_query.order_by(TaxonomyNode.name.asc()))
+        taxonomy_result = await session.execute(
+            taxonomy_query.order_by(TaxonomyNode.name.asc())
+        )
         taxonomy_nodes = taxonomy_result.scalars().all()
-        available_taxonomy = [
-            {
-                "id": str(node.id),
-                "name": node.name,
-                "description": node.description or "",
-            }
-            for node in taxonomy_nodes
-        ]
 
-        # ── Build credential UUID set for this user ──
         cred_result = await session.execute(
             select(CompanyCredential.taxonomy_node_id).where(
                 CompanyCredential.company_profile_id == profile.id
@@ -359,7 +678,6 @@ async def analyze_tender(
             str(row[0]) for row in cred_result.all()
         }
 
-        # ── Build taxonomy lookup ──
         taxonomy_lookup: dict[str, TaxNodeInfo] = {
             str(node.id): TaxNodeInfo(
                 name=node.name,
@@ -369,13 +687,20 @@ async def analyze_tender(
             for node in taxonomy_nodes
         }
 
-        # ── Build deterministic content hash over ALL evaluation inputs ──
         sorted_cred_str = ",".join(sorted(credential_uuids))
         sorted_tax_str = ",".join(sorted(taxonomy_lookup.keys()))
-        hash_input = f"{tender_text}|{sorted_cred_str}|{sorted_tax_str}"
+        vault_cache_str = json.dumps(
+            _vault_cache_payload(profile),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        hash_input = (
+            f"{EXTRACTOR_SCHEMA_VERSION}|{tender_text}|"
+            f"{sorted_cred_str}|{sorted_tax_str}|{vault_cache_str}"
+        )
         current_content_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
 
-        # ── Cache check: reuse existing analysis only if content hash matches ──
+        latest_cached: TenderAnalysis | None = None
         if not force:
             cached_result = await session.execute(
                 select(TenderAnalysis)
@@ -386,36 +711,265 @@ async def analyze_tender(
                 .order_by(TenderAnalysis.created_at.desc())
                 .limit(1)
             )
-            cached = cached_result.scalar_one_or_none()
+            latest_cached = cached_result.scalar_one_or_none()
 
-            if cached is not None and cached.content_hash == current_content_hash:
-                cached_data = cached.analysis_json or {}
+            if latest_cached is not None and latest_cached.content_hash == current_content_hash:
                 try:
-                    cached_reqs = ExtractedTenderRequirements.model_validate(
-                        cached_data.get("requirements", {})
+                    logger.info(
+                        "Returning cached analysis %s for tender %s (hash match)",
+                        latest_cached.id,
+                        tender_id,
                     )
-                    cached_eval = DynamicComplianceResult.model_validate(
-                        cached_data.get("evaluation", {})
+                    return _serialize_cached_analysis_response(
+                        latest_cached,
+                        content_hash=current_content_hash,
                     )
-                    logger.info("Returning cached analysis %s for tender %s (hash match)", cached.id, tender_id)
-                    return {
-                        "analysis_id": str(cached.id),
-                        "requirements": cached_reqs,
-                        "evaluation": cached_eval,
-                    }
                 except (ValidationError, KeyError):
                     logger.warning(
                         "Cached analysis %s has legacy schema; forcing fresh extraction",
-                        cached.id,
+                        latest_cached.id,
                     )
 
-        # ── Fresh Gemini extraction ──
-        requirements = await extract_tender_requirements(tender_text, available_taxonomy)
-        evaluation = evaluate_compliance(
-            mapped_requirement_uuids=requirements.mapped_requirement_uuids,
-            unmapped_custom_requirements=requirements.unmapped_custom_requirements,
-            credential_uuids=credential_uuids,
-            taxonomy_lookup=taxonomy_lookup,
+        # ── Concurrent Extraction: Compliance + Strategy ──────────
+        # Both agents read the same input text with zero data dependency.
+        # Strategy extraction is wrapped in fault isolation — a failure
+        # must never block the compliance result.
+        async def _safe_strategy_extraction() -> TenderStrategyIntelligence | None:
+            try:
+                return await extract_strategy_intelligence(tender_text)
+            except Exception as strategy_exc:
+                logger.warning(
+                    "Strategy extraction failed (non-fatal, compliance unaffected): %s",
+                    strategy_exc,
+                )
+                return None
+
+        async def _safe_requirement_extraction() -> tuple[
+            list[Any],
+            dict[str, Any],
+            str | None,
+        ]:
+            try:
+                extraction_result = await extract_requirements_with_coverage(
+                    tender_text
+                )
+                coverage_metadata = extraction_result.coverage_metadata.model_dump(
+                    mode="json"
+                )
+                extraction_error = None
+                if coverage_metadata.get("coverage_status") == "failed":
+                    extraction_error = (
+                        "Requirement extraction failed for all document sections."
+                    )
+                return (
+                    extraction_result.requirements,
+                    coverage_metadata,
+                    extraction_error,
+                )
+            except Exception as extraction_exc:
+                logger.exception(
+                    "Requirement extraction failed for tender %s",
+                    tender_id,
+                )
+                failed_coverage = build_failed_extraction_coverage(
+                    tender_text,
+                    error=f"{type(extraction_exc).__name__}: {extraction_exc}",
+                )
+                return (
+                    [],
+                    failed_coverage.model_dump(mode="json"),
+                    str(extraction_exc),
+                )
+
+        (
+            (extracted_reqs, coverage_metadata, extraction_error),
+            strategy_result,
+        ) = await asyncio.gather(
+            _safe_requirement_extraction(),
+            _safe_strategy_extraction(),
+        )
+        analysis_warnings = build_extraction_warnings(
+            tender_text,
+            coverage_metadata=coverage_metadata,
+        )
+
+        if extraction_error and latest_cached is not None:
+            cached_data = latest_cached.analysis_json or {}
+            if cached_data.get("analysis_status") != "failed":
+                try:
+                    return _serialize_cached_analysis_response(
+                        latest_cached,
+                        content_hash=latest_cached.content_hash or current_content_hash,
+                        extra_warnings=[
+                            (
+                                "Fresh compliance extraction failed; returning the "
+                                f"previous analysis. Error: {extraction_error}"
+                            )
+                        ],
+                    )
+                except (ValidationError, KeyError):
+                    logger.warning(
+                        "Previous analysis %s could not be reused after extraction failure",
+                        latest_cached.id,
+                    )
+
+        validated_reqs = classify_requirements_scope(
+            validate_requirements_evidence(
+                extracted_reqs,
+                tender_text,
+            ),
+            tender_text,
+        )
+        accepted_reqs, needs_review_reqs, rejected_reqs = _split_validated_requirements(
+            validated_reqs,
+        )
+        scope_review_reqs = [
+            req
+            for req in accepted_reqs
+            if req.scope_review_status == ScopeReviewStatus.NEEDS_REVIEW
+        ]
+        evidence_validation = _evidence_validation_payload(
+            all_requirements=validated_reqs,
+            accepted=accepted_reqs,
+            needs_review=needs_review_reqs,
+            rejected=rejected_reqs,
+            warnings=analysis_warnings,
+        )
+
+        coverage_status = str(coverage_metadata.get("coverage_status") or "")
+        if extraction_error or coverage_status == "failed":
+            analysis_status = "failed"
+            analysis_warnings.append(
+                "Requirement extraction failed; no new compliance requirements were confirmed."
+            )
+        elif (
+            coverage_status == "partial"
+            or needs_review_reqs
+            or rejected_reqs
+            or scope_review_reqs
+            or analysis_warnings
+        ):
+            analysis_status = "needs_review"
+        else:
+            analysis_status = "completed"
+
+        if extraction_error or coverage_status == "failed":
+            hybrid_result = HybridComplianceResult(
+                is_eligible=True,
+                total_requirements=0,
+                satisfied_count=0,
+                failed_count=0,
+                manual_review_count=0,
+                skipped_optional_count=0,
+                uuid_match_count=0,
+                token_match_count=0,
+                verdict_status=ComplianceVerdictStatus.NEEDS_REVIEW,
+                failed_dealbreakers=[],
+                manual_reviews_required=[],
+                satisfied_requirements=[],
+                status_message=(
+                    "NEEDS REVIEW — Requirement extraction failed; manual "
+                    "review is required before relying on this compliance result."
+                ),
+            )
+        else:
+            hybrid_result = evaluate_tender_compliance(
+                extracted_reqs=accepted_reqs,
+                profile=profile,
+                credential_uuids=credential_uuids if credential_uuids else None,
+                taxonomy_lookup=taxonomy_lookup if taxonomy_lookup else None,
+            )
+
+            validation_manual_reviews = [
+                _manual_review_detail_from_validation(req)
+                for req in needs_review_reqs
+            ]
+            if validation_manual_reviews:
+                manual_reviews_required = [
+                    *hybrid_result.manual_reviews_required,
+                    *validation_manual_reviews,
+                ]
+                has_confirmed_items = bool(
+                    hybrid_result.satisfied_requirements
+                    or hybrid_result.recorded_obligations
+                )
+                if not hybrid_result.failed_dealbreakers and not has_confirmed_items:
+                    verdict_status = ComplianceVerdictStatus.NEEDS_REVIEW
+                    status_message = "No verified requirements yet — manual review required."
+                elif not hybrid_result.failed_dealbreakers:
+                    verdict_status = ComplianceVerdictStatus.ELIGIBLE_WITH_REVIEW
+                    status_message = (
+                        f"ELIGIBLE WITH REVIEW — {len(validation_manual_reviews)} "
+                        f"requirement(s) could not be source-verified | "
+                        f"{hybrid_result.status_message}"
+                    )
+                else:
+                    verdict_status = hybrid_result.verdict_status
+                    status_message = (
+                        f"NEEDS REVIEW — {len(validation_manual_reviews)} "
+                        f"requirement(s) could not be source-verified | "
+                        f"{hybrid_result.status_message}"
+                    )
+                hybrid_result = hybrid_result.model_copy(
+                    update={
+                        "total_requirements": (
+                            hybrid_result.total_requirements
+                            + len(validation_manual_reviews)
+                        ),
+                        "manual_review_count": len(manual_reviews_required),
+                        "manual_reviews_required": manual_reviews_required,
+                        "verdict_status": verdict_status,
+                        "status_message": status_message,
+                    }
+                )
+
+        from app.core.evaluator import MetRequirement, MissingRequirement
+
+        legacy_met: list[MetRequirement] = []
+        legacy_missing: list[MissingRequirement] = []
+        legacy_unmapped: list[str] = []
+
+        for detail in hybrid_result.satisfied_requirements:
+            if detail.taxonomy_node_id:
+                legacy_met.append(
+                    MetRequirement(
+                        uuid=detail.taxonomy_node_id,
+                        name=detail.matched_credential or detail.taxonomy_node_id,
+                    )
+                )
+
+        for detail in hybrid_result.failed_dealbreakers:
+            if detail.taxonomy_node_id:
+                node_info = taxonomy_lookup.get(detail.taxonomy_node_id)
+                legacy_missing.append(
+                    MissingRequirement(
+                        uuid=detail.taxonomy_node_id,
+                        name=node_info.name if node_info else detail.taxonomy_node_id,
+                        impact_weight=node_info.impact_weight if node_info else 0,
+                        is_fatal=node_info.is_fatal if node_info else True,
+                    )
+                )
+            else:
+                legacy_unmapped.append(detail.raw_text_snippet[:200])
+
+        for detail in hybrid_result.manual_reviews_required:
+            legacy_unmapped.append(detail.raw_text_snippet[:200])
+
+        legacy_requirements = ExtractedTenderRequirements(
+            mapped_requirement_uuids=[m.uuid for m in legacy_met] + [
+                detail.taxonomy_node_id
+                for detail in hybrid_result.failed_dealbreakers
+                if detail.taxonomy_node_id
+            ],
+            unmapped_custom_requirements=legacy_unmapped,
+        )
+
+        legacy_evaluation = DynamicComplianceResult(
+            is_compliant=hybrid_result.is_eligible,
+            met_requirements=legacy_met,
+            missing_requirements=legacy_missing,
+            unmapped_requirements=legacy_unmapped,
+            status_message=hybrid_result.status_message,
         )
 
         new_analysis = TenderAnalysis(
@@ -424,8 +978,19 @@ async def analyze_tender(
             company_name=analysis_owner_key,
             raw_extracted_text=tender_text,
             analysis_json={
-                "requirements": requirements.model_dump(mode="json"),
-                "evaluation": evaluation.model_dump(mode="json"),
+                "requirements": legacy_requirements.model_dump(mode="json"),
+                "evaluation": legacy_evaluation.model_dump(mode="json"),
+                "hybrid_compliance": hybrid_result.model_dump(mode="json"),
+                "evidence_validation": evidence_validation,
+                "analysis_warnings": analysis_warnings,
+                "coverage_metadata": coverage_metadata,
+                "analysis_status": analysis_status,
+                "extraction_error": extraction_error,
+                "strategy_intelligence": (
+                    strategy_result.model_dump(mode="json")
+                    if strategy_result is not None
+                    else None
+                ),
                 "tenant_company_name": display_company_name,
             },
             content_hash=current_content_hash,
@@ -433,14 +998,8 @@ async def analyze_tender(
         session.add(new_analysis)
         await session.commit()
         await session.refresh(new_analysis)
-    except ExtractionError as exc:
-        await session.rollback()
-        logger.exception("Tender requirement extraction failed")
-        status_code = getattr(exc, "status_code", status.HTTP_500_INTERNAL_SERVER_ERROR)
-        raise HTTPException(
-            status_code=status_code,
-            detail=f"Tender requirement extraction failed: {exc}",
-        ) from exc
+    except HTTPException:
+        raise
     except SQLAlchemyError as exc:
         await session.rollback()
         logger.exception("Database integrity/persistence failure during tender analysis")
@@ -458,12 +1017,21 @@ async def analyze_tender(
 
     return {
         "analysis_id": str(new_analysis.id),
-        "requirements": requirements,
-        "evaluation": evaluation,
+        "requirements": legacy_requirements,
+        "evaluation": legacy_evaluation,
+        "hybrid_compliance": hybrid_result,
+        "strategy_intelligence": strategy_result,
+        "content_hash": current_content_hash,
+        "override_seal": None,
+        "evidence_validation": evidence_validation,
+        "analysis_warnings": analysis_warnings,
+        "coverage_metadata": coverage_metadata,
+        "analysis_status": analysis_status,
+        "extraction_error": extraction_error,
     }
 
 
-@router.post("/test-scrape", response_model=TestScrapeResponse)
+@router.post("/test-scrape", response_model=TestScrapeResponse, dependencies=[authenticated_dependency()])
 async def test_scrape(request: TestScrapeRequest) -> TestScrapeResponse:
     """
     Manual test endpoint to verify scraper on a specific URL.
@@ -498,7 +1066,7 @@ class ProxyDownloadRequest(BaseModel):
     file_path: str   # e.g., /files/2025/12/23/xxx.pdf
 
 
-@router.post("/proxy-download")
+@router.post("/proxy-download", dependencies=[authenticated_dependency()])
 async def proxy_download(request: ProxyDownloadRequest):
     """
     Proxy download endpoint for UzEx files.
@@ -507,11 +1075,11 @@ async def proxy_download(request: ProxyDownloadRequest):
     
     Returns the file as a downloadable response.
     """
-    from fastapi.responses import Response
-    
     try:
         scraper = UzExScraper(headless=True)
         file_bytes, filename = await scraper.download_file(request.tender_url, request.file_path)
+        if not file_bytes:
+            raise HTTPException(status_code=502, detail="Document download returned an empty file.")
         content_type = _guess_download_content_type(filename=filename)
         
         return Response(
@@ -519,10 +1087,14 @@ async def proxy_download(request: ProxyDownloadRequest):
             media_type=content_type,
             headers={"Content-Disposition": _safe_content_disposition("attachment", filename)}
         )
-        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Proxy download failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+        logger.exception("Proxy download failed")
+        raise HTTPException(
+            status_code=502,
+            detail="Document download failed. Please try again later.",
+        ) from e
 
 
 @router.get("/documents/{doc_id}/download")
@@ -544,11 +1116,7 @@ async def download_document(
     result = await db.execute(
         select(TenderDocument, Tender)
         .join(Tender, TenderDocument.tender_id == Tender.id)
-        .join(Proposal, Proposal.tender_id == Tender.id)
-        .where(
-            TenderDocument.id == doc_id,
-            Proposal.user_id == current_user.id,
-        )
+        .where(TenderDocument.id == doc_id)
     )
     row = result.first()
     
@@ -556,6 +1124,16 @@ async def download_document(
         raise HTTPException(status_code=404, detail="Document not found")
     
     doc, tender = row
+
+    access_result = await db.execute(
+        select(Proposal.id).where(
+            Proposal.tender_id == tender.id,
+            Proposal.user_id == current_user.id,
+        )
+    )
+    if access_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=403, detail="You do not have access to this document")
+
     local_path = Path(doc.storage_path) if doc.storage_path else None
 
     if local_path and local_path.is_file():
@@ -571,19 +1149,19 @@ async def download_document(
             headers={"Content-Disposition": _safe_content_disposition(disposition, resolved_name)},
         )
 
-    # ── Hard fail: storage_path is set but the physical file is missing ──
+    # ── Expected unavailable state: storage_path exists but the file is gone ──
     # Do NOT fall back to a live UzEx download — UzEx blocks direct HTTP
     # requests (405 / 0 bytes), which silently serves an empty file to the user.
     if doc.storage_path:
-        logger.error(
+        logger.warning(
             "Document %s has storage_path '%s' but physical file is missing from disk",
             doc_id,
             doc.storage_path,
         )
         raise HTTPException(
-            status_code=500,
+            status_code=404,
             detail=(
-                "Document file missing from physical storage. "
+                "Document file is no longer available in storage. "
                 "Please re-sync documents for this tender."
             ),
         )
@@ -592,15 +1170,21 @@ async def download_document(
     # Attempt a live Playwright download as a last resort.
     file_path = _extract_remote_file_path(doc.file_url)
     if not file_path:
-        raise HTTPException(status_code=500, detail="Document file path is invalid")
+        raise HTTPException(
+            status_code=404,
+            detail="Document source file path is unavailable. Please re-sync documents for this tender.",
+        )
 
     filename = Path(file_path).name if file_path else f"document.{doc.file_type}"
     
     try:
-        from fastapi.responses import Response
-
         scraper = UzExScraper(headless=True)
         file_bytes, downloaded_name = await scraper.download_file(tender.source_url, file_path)
+        if not file_bytes:
+            raise HTTPException(
+                status_code=502,
+                detail="Document download returned an empty file. Please re-sync documents for this tender.",
+            )
         resolved_name = downloaded_name or filename
         content_type = _guess_download_content_type(
             filename=resolved_name,
@@ -613,10 +1197,14 @@ async def download_document(
             media_type=content_type,
             headers={"Content-Disposition": _safe_content_disposition(disposition, resolved_name)}
         )
-        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Document download failed for {doc_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+        logger.exception("Document download failed for %s", doc_id)
+        raise HTTPException(
+            status_code=502,
+            detail="Document download failed. Please try again or re-sync documents for this tender.",
+        ) from e
 
 @router.get("", response_model=list[TenderResponse])
 async def list_tenders(
@@ -694,7 +1282,7 @@ async def get_tender(
     return _serialize_tender(tender)
 
 
-@router.post("/refresh", response_model=RefreshResponse)
+@router.post("/refresh", response_model=RefreshResponse, dependencies=[authenticated_dependency()])
 async def refresh_tenders(
     db: AsyncSession = Depends(get_db),
 ) -> RefreshResponse:
@@ -781,6 +1369,7 @@ def _serialize_sync_job(
     job: TenderSyncJob,
     *,
     message: str,
+    reparse_markerless: bool = False,
 ) -> SyncDocsAcceptedResponse:
     return SyncDocsAcceptedResponse(
         message=message,
@@ -790,6 +1379,7 @@ def _serialize_sync_job(
         status=job.status.value,
         progress=job.progress,
         error_message=job.error_message,
+        reparse_markerless=reparse_markerless,
     )
 
 
@@ -868,6 +1458,53 @@ async def _count_parsed_documents(
     return int(result.scalar_one() or 0)
 
 
+def _count_marker(text: str | None, marker: str) -> int:
+    return (text or "").count(marker)
+
+
+def _has_real_trace_markers(text: str | None) -> bool:
+    normalized = (text or "").strip()
+    return "[[FILE:" in normalized and "[[PAGE" in normalized
+
+
+async def _get_sync_marker_diagnostics(
+    *,
+    db: AsyncSession,
+    tender_id: UUID,
+) -> SyncMarkerDiagnostics:
+    tender_result = await db.execute(
+        select(Tender)
+        .options(load_only(Tender.compiled_master_text))
+        .where(Tender.id == tender_id)
+    )
+    tender = tender_result.scalar_one_or_none()
+    compiled_text = tender.compiled_master_text if tender is not None else ""
+
+    docs_result = await db.execute(
+        select(TenderDocument).where(TenderDocument.tender_id == tender_id)
+    )
+    documents = docs_result.scalars().all()
+    parsed_documents = [
+        doc
+        for doc in documents
+        if doc.parsed_text and doc.parsed_text.strip()
+    ]
+
+    return SyncMarkerDiagnostics(
+        compiled_master_text_length=len(compiled_text or ""),
+        compiled_file_marker_count=_count_marker(compiled_text, "[[FILE:"),
+        compiled_page_marker_count=_count_marker(compiled_text, "[[PAGE"),
+        documents_total=len(documents),
+        documents_parsed=len(parsed_documents),
+        documents_markerized=sum(
+            1 for doc in parsed_documents if _has_real_trace_markers(doc.parsed_text)
+        ),
+        documents_markerless=sum(
+            1 for doc in parsed_documents if not _has_real_trace_markers(doc.parsed_text)
+        ),
+    )
+
+
 @router.post(
     "/{tender_id}/sync-docs",
     response_model=SyncDocsAcceptedResponse,
@@ -875,6 +1512,13 @@ async def _count_parsed_documents(
 )
 async def sync_tender_documents(
     tender_id: UUID,
+    reparse_markerless: bool = Query(
+        default=False,
+        description=(
+            "Reparse stored documents whose parsed_text lacks real parser "
+            "[[FILE]]/[[PAGE]] markers before rebuilding compiled text."
+        ),
+    ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SyncDocsAcceptedResponse:
@@ -896,6 +1540,7 @@ async def sync_tender_documents(
         return _serialize_sync_job(
             existing_job,
             message="Sync already in progress",
+            reparse_markerless=reparse_markerless,
         )
 
     new_job = TenderSyncJob(
@@ -923,6 +1568,7 @@ async def sync_tender_documents(
             return _serialize_sync_job(
                 existing_job,
                 message="Sync already in progress",
+                reparse_markerless=reparse_markerless,
             )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -939,6 +1585,7 @@ async def sync_tender_documents(
     try:
         process_tender_docs.apply_async(
             args=[str(tender_id), new_job.job_id],
+            kwargs={"reparse_markerless": reparse_markerless},
             task_id=new_job.job_id,
         )
     except Exception as exc:
@@ -961,7 +1608,12 @@ async def sync_tender_documents(
 
     return _serialize_sync_job(
         new_job,
-        message="Sync started",
+        message=(
+            "Sync started with markerless reparse"
+            if reparse_markerless
+            else "Sync started"
+        ),
+        reparse_markerless=reparse_markerless,
     )
 
 
@@ -986,6 +1638,10 @@ async def get_sync_status(
         db=db,
         tender_id=tender_id,
     )
+    diagnostics = await _get_sync_marker_diagnostics(
+        db=db,
+        tender_id=tender_id,
+    )
 
     if latest_job is None:
         return SyncStatusResponse(
@@ -993,6 +1649,7 @@ async def get_sync_status(
             progress=100 if docs_parsed > 0 else 0,
             docs_parsed=docs_parsed,
             error=None,
+            diagnostics=diagnostics,
         )
 
     return SyncStatusResponse(
@@ -1000,15 +1657,16 @@ async def get_sync_status(
         progress=latest_job.progress,
         docs_parsed=docs_parsed,
         error=latest_job.error_message,
+        diagnostics=diagnostics,
     )
 
 
-@router.get("/{tender_id}/documents")
+@router.get("/{tender_id}/documents", response_model=list[TenderDocumentResponse])
 async def get_tender_documents(
     tender_id: UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[TenderDocumentResponse]:
     """
     Return all parsed documents for a given tender.
     """
@@ -1023,7 +1681,7 @@ async def get_tender_documents(
         .where(TenderDocument.tender_id == tender_id)
         .order_by(TenderDocument.created_at.asc())
     )
-    return result.scalars().all()
+    return [_document_response(doc) for doc in result.scalars().all()]
 
 
 @router.get("/{tender_id}/latest-analysis")
@@ -1062,6 +1720,14 @@ async def get_latest_analysis(
             "analysis_id": None,
             "requirements": None,
             "evaluation": None,
+            "hybrid_compliance": None,
+            "content_hash": None,
+            "override_seal": None,
+            "evidence_validation": None,
+            "analysis_warnings": [],
+            "coverage_metadata": None,
+            "analysis_status": "not_found",
+            "extraction_error": None,
         }
 
     analysis_data = analysis.analysis_json or {}
@@ -1069,7 +1735,134 @@ async def get_latest_analysis(
         "analysis_id": str(analysis.id),
         "requirements": analysis_data.get("requirements"),
         "evaluation": analysis_data.get("evaluation"),
+        "hybrid_compliance": analysis_data.get("hybrid_compliance"),
+        "content_hash": analysis.content_hash,
+        "override_seal": analysis.override_seal,
+        "evidence_validation": analysis_data.get("evidence_validation"),
+        "analysis_warnings": analysis_data.get("analysis_warnings") or [],
+        "coverage_metadata": analysis_data.get("coverage_metadata"),
+        "analysis_status": analysis_data.get("analysis_status", "completed"),
+        "extraction_error": analysis_data.get("extraction_error"),
     }
+
+
+@router.get("/{tender_id}/compliance/export/pdf")
+async def export_compliance_pdf(
+    tender_id: UUID,
+    analysis_id: UUID | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """
+    Export a customer-facing Compliance Analysis PDF for this tender.
+
+    The export is read-only and uses the persisted analysis snapshot for the
+    current authenticated user/profile. It does not expose compiled tender text
+    or raw analysis internals.
+    """
+    await _ensure_tender_access(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+    )
+
+    tender_result = await db.execute(
+        select(Tender)
+        .options(
+            load_only(
+                Tender.id,
+                Tender.external_id,
+                Tender.title,
+            )
+        )
+        .where(Tender.id == tender_id)
+    )
+    tender = tender_result.scalar_one_or_none()
+    if tender is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
+
+    profile_result = await db.execute(
+        select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
+    )
+    profile = profile_result.scalar_one_or_none()
+    analysis_owner_key = _analysis_owner_key(
+        current_user=current_user,
+        profile=profile,
+    )
+
+    analysis_query = select(TenderAnalysis).where(
+        TenderAnalysis.tender_id == tender_id,
+        TenderAnalysis.company_name == analysis_owner_key,
+    )
+    if analysis_id is not None:
+        analysis_query = analysis_query.where(TenderAnalysis.id == analysis_id)
+    else:
+        analysis_query = analysis_query.order_by(TenderAnalysis.created_at.desc()).limit(1)
+
+    analysis_result = await db.execute(analysis_query)
+    analysis = analysis_result.scalar_one_or_none()
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance analysis not found for this tender.",
+        )
+
+    analysis_data = analysis.analysis_json or {}
+    hybrid_compliance = analysis_data.get("hybrid_compliance")
+    if not isinstance(hybrid_compliance, dict):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This analysis does not contain exportable compliance results.",
+        )
+
+    generated_at = datetime.now(timezone.utc)
+    company_name = (
+        analysis_data.get("tenant_company_name")
+        or (profile.company_name if profile is not None else None)
+        or current_user.company_name
+        or current_user.name
+    )
+
+    evidence_validation = analysis_data.get("evidence_validation")
+    if not isinstance(evidence_validation, dict):
+        evidence_validation = None
+    raw_warnings = analysis_data.get("analysis_warnings")
+    analysis_warnings = raw_warnings if isinstance(raw_warnings, list) else []
+
+    try:
+        pdf_bytes = build_compliance_report_pdf(
+            tender_title=tender.title,
+            tender_external_id=tender.external_id,
+            company_name=company_name,
+            generated_at=generated_at,
+            analysis_id=str(analysis.id),
+            content_hash=analysis.content_hash,
+            override_seal=analysis.override_seal,
+            hybrid_compliance=hybrid_compliance,
+            evidence_validation=evidence_validation,
+            analysis_warnings=[str(warning) for warning in analysis_warnings],
+        )
+    except Exception as exc:
+        logger.exception("Compliance PDF export failed for tender %s", tender_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Compliance PDF export failed. Please try again later.",
+        ) from exc
+
+    filename = compliance_report_filename(
+        external_id=tender.external_id,
+        generated_at=generated_at,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": _safe_content_disposition("attachment", filename),
+        },
+    )
 
 
 @router.post("/{tender_id}/override")
@@ -1078,9 +1871,13 @@ async def override_risk(
     request: RiskOverrideRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """
     Record liability acceptance override with a cryptographic state hash.
+
+    After persisting the override, recomputes the ``override_seal`` on the
+    parent TenderAnalysis so the cryptographic audit trail permanently
+    reflects that manual intervention occurred.
     """
     tender_result = await db.execute(
         select(Tender.id).where(Tender.id == tender_id)
@@ -1106,12 +1903,13 @@ async def override_risk(
 
     # Verify the analysis exists and belongs to this tender
     analysis_result = await db.execute(
-        select(TenderAnalysis.id).where(
+        select(TenderAnalysis).where(
             TenderAnalysis.id == request.analysis_id,
             TenderAnalysis.tender_id == tender_id,
         )
     )
-    if analysis_result.scalar_one_or_none() is None:
+    analysis = analysis_result.scalar_one_or_none()
+    if analysis is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Analysis not found for this tender",
@@ -1128,6 +1926,43 @@ async def override_risk(
     db.add(log_entry)
 
     try:
+        # Flush so the new log_entry is visible in the next query
+        await db.flush()
+
+        # ── Recompute override_seal ──────────────────────────────────
+        # Query ALL overrides for this analysis to build the seal
+        all_overrides_result = await db.execute(
+            select(
+                RiskOverrideLog.missing_node_id,
+                RiskOverrideLog.created_at,
+            )
+            .where(
+                RiskOverrideLog.analysis_id == request.analysis_id,
+                RiskOverrideLog.user_id == current_user.id,
+            )
+            .order_by(RiskOverrideLog.created_at.asc())
+        )
+        all_overrides = all_overrides_result.all()
+
+        # Build deterministic seal payload:
+        # SHA-256(content_hash | node_id_1:ts_1 | node_id_2:ts_2 | ...)
+        content_hash = analysis.content_hash or "NONE"
+        override_entries = "|".join(
+            f"{row[0]}:{row[1].isoformat()}"
+            for row in all_overrides
+        )
+        seal_input = f"{content_hash}|{override_entries}"
+        override_seal = hashlib.sha256(
+            seal_input.encode("utf-8")
+        ).hexdigest()
+
+        # Persist the seal on the analysis record
+        analysis.override_seal = override_seal
+
+        overridden_node_ids = sorted(
+            {str(row[0]) for row in all_overrides}
+        )
+
         await db.commit()
     except SQLAlchemyError as exc:
         await db.rollback()
@@ -1137,13 +1972,17 @@ async def override_risk(
             detail=f"Database write failed: {exc}",
         ) from exc
 
-    return {"state_hash": state_hash}
+    return {
+        "state_hash": state_hash,
+        "override_seal": override_seal,
+        "overridden_node_ids": overridden_node_ids,
+    }
 
 
 @router.get("/{tender_id}/overrides", response_model=RiskOverrideStatusResponse)
 async def get_risk_overrides(
     tender_id: UUID,
-    analysis_id: Optional[UUID] = None,
+    analysis_id: UUID | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> RiskOverrideStatusResponse:
@@ -1153,6 +1992,8 @@ async def get_risk_overrides(
     When ``analysis_id`` is provided, only overrides recorded against that
     specific analysis run are returned.  This prevents liability handshakes
     from leaking between analysis runs.
+
+    Also returns the current ``override_seal`` from the parent analysis.
     """
     tender_result = await db.execute(
         select(Tender.id).where(Tender.id == tender_id)
@@ -1174,13 +2015,27 @@ async def get_risk_overrides(
         select(RiskOverrideLog.missing_node_id).where(*filters)
     )
     accepted_node_ids = sorted({str(row[0]) for row in result.all()})
+
+    # Fetch the current override_seal from the analysis record
+    override_seal: str | None = None
+    if analysis_id is not None:
+        seal_result = await db.execute(
+            select(TenderAnalysis.override_seal).where(
+                TenderAnalysis.id == analysis_id
+            )
+        )
+        seal_row = seal_result.scalar_one_or_none()
+        if seal_row is not None:
+            override_seal = seal_row
+
     return RiskOverrideStatusResponse(
         tender_id=tender_id,
         accepted_node_ids=accepted_node_ids,
+        override_seal=override_seal,
     )
 
 
-@router.post("/seed", response_model=dict)
+@router.post("/seed", response_model=dict, dependencies=[authenticated_dependency()])
 async def seed_tenders(
     db: AsyncSession = Depends(get_db),
 ) -> dict:

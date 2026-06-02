@@ -17,6 +17,22 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # ---- Database GUI ----
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: plasma_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@plasmaos.com"
+      PGADMIN_DEFAULT_PASSWORD: "Samadov772." 
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "127.0.0.1:5050:80"
+    volumes:
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      - db
+    restart: unless-stopped
+
   # ---- Redis (Auth Codes) ----
   redis:
     image: redis:7-alpine
@@ -121,6 +137,9 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     command: [ "celery", "-A", "app.core.celery_app", "beat", "--loglevel=info" ]
 
+
 volumes:
   postgres_data:
   tender_documents_data:
+
+

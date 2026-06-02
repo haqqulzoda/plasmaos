@@ -57,6 +57,15 @@ class TenderAnalysis(Base):
     raw_extracted_text: Mapped[str] = mapped_column(Text, nullable=False)
     analysis_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    override_seal: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        doc=(
+            "SHA-256 seal incorporating override state. "
+            "Computed as SHA-256(content_hash | sorted_override_node_ids | sorted_override_timestamps). "
+            "Null when no overrides have been applied."
+        ),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

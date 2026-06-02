@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Plasma PostgreSQL",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "plasma_ai",
+      "Username": "plasma",
+      "Password": "plasma_secure_dev_pass_2026",
+      "SSLMode": "prefer"
+    }
+  }
+}

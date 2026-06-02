@@ -367,11 +367,13 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
 
         setDocsSyncProgress(initialStatus.progress);
 
-        const shouldStartSync = initialStatus.state === 'IDLE' && initialStatus.docs_parsed === 0;
+        const shouldStartSync =
+          (initialStatus.state === 'IDLE' || initialStatus.state === 'FAILED') &&
+          initialStatus.docs_parsed === 0;
         const shouldPollExisting =
           initialStatus.state === 'PENDING' || initialStatus.state === 'IN_PROGRESS';
 
-        if (initialStatus.state === 'FAILED') {
+        if (initialStatus.state === 'FAILED' && !shouldStartSync) {
           setDocsSyncError(initialStatus.error || 'Tender document sync failed.');
         }
 
@@ -412,8 +414,10 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
         }
 
         const axiosError = err as { response?: { data?: { detail?: string } } };
+        const thrownError = err instanceof Error ? err.message : null;
         setDocsSyncError(
           axiosError.response?.data?.detail ||
+          thrownError ||
           'Tender documents are still syncing or could not be fetched right now.',
         );
       } finally {
@@ -904,7 +908,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
                 {docsSyncError}
               </div>
             )}
-            {!isLoadingDocs && !isSyncingDocs && documents.length === 0 && (
+            {!isLoadingDocs && !isSyncingDocs && !docsSyncError && documents.length === 0 && (
               <p className="text-sm text-zinc-500">No synchronized documents found for this tender.</p>
             )}
             <div className="space-y-2">
