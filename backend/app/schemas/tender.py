@@ -29,7 +29,6 @@ class TenderResponse(TenderBase):
     id: UUID
     external_id: str
     source_url: str | None = None
-    compiled_master_text: str | None = None
     created_at: datetime
     
     model_config = {"from_attributes": True}
@@ -50,4 +49,3 @@ class TenderDocumentResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
-

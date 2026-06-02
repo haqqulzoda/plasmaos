@@ -430,7 +430,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     const [selectedRequirement, setSelectedRequirement] = useState<RequirementMatchDetail | null>(null);
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
-    // ── Fetch compiled_master_text on mount ──
+    // ── Fetch compiled source text on mount ──
     useEffect(() => {
         const fetchTenderText = async () => {
             setIsLoadingText(true);
@@ -438,8 +438,9 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                 // Primary path: treat route param as a tender ID.
                 try {
                     const { data } = await api.get(`/tenders/${tenderId}`);
+                    const textResponse = await api.get(`/tenders/${tenderId}/compiled-text`);
                     setResolvedTenderId(tenderId);
-                    setRawText(data.compiled_master_text || '');
+                    setRawText(textResponse.data.compiled_master_text || '');
                     setTenderTitle(data.title || `Tender ${tenderId.slice(0, 8)}`);
                     return;
                 } catch (primaryErr: unknown) {
@@ -462,8 +463,9 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                 }
 
                 const { data: tenderData } = await api.get(`/tenders/${mappedTenderId}`);
+                const textResponse = await api.get(`/tenders/${mappedTenderId}/compiled-text`);
                 setResolvedTenderId(mappedTenderId);
-                setRawText(tenderData.compiled_master_text || '');
+                setRawText(textResponse.data.compiled_master_text || '');
                 setTenderTitle(tenderData.title || `Tender ${mappedTenderId.slice(0, 8)}`);
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : 'Failed to load tender text';

@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only, selectinload
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin
 from app.core.agents.requirement_extractor import (
     EvidenceValidationStatus,
     EXTRACTOR_SCHEMA_VERSION,
@@ -45,7 +45,6 @@ from app.core.compliance_pdf import (
 )
 from app.core.evaluator import DynamicComplianceResult, TaxNodeInfo
 from app.core.scraper import UzExScraper
-from app.core.security import authenticated_dependency
 from app.crud.crud_profile import get_profile_for_compliance_match
 from app.crud.exceptions import ProfileNotFoundException
 from app.db.session import get_db
@@ -162,6 +161,11 @@ class AnalyzeTenderResponse(BaseModel):
     coverage_metadata: dict[str, Any] | None = None
     analysis_status: str = "completed"
     extraction_error: str | None = None
+
+
+class TenderCompiledTextResponse(BaseModel):
+    tender_id: UUID
+    compiled_master_text: str | None = None
 
 
 class RiskOverrideRequest(BaseModel):
@@ -509,6 +513,19 @@ def _evidence_validation_payload(
     }
 
 
+def _public_evidence_validation_payload(
+    evidence_validation: dict[str, Any] | None,
+    *,
+    include_debug: bool = False,
+) -> dict[str, Any] | None:
+    if evidence_validation is None:
+        return None
+    payload = dict(evidence_validation)
+    if not include_debug:
+        payload.pop("rejected_requirements", None)
+    return payload
+
+
 def _manual_review_detail_from_validation(req: Any) -> RequirementMatchDetail:
     category = req.category.value if hasattr(req.category, "value") else str(req.category)
     return RequirementMatchDetail(
@@ -545,6 +562,7 @@ def _serialize_cached_analysis_response(
     *,
     content_hash: str,
     extra_warnings: list[str] | None = None,
+    include_debug: bool = False,
 ) -> dict[str, Any]:
     cached_data = cached.analysis_json or {}
     cached_reqs = ExtractedTenderRequirements.model_validate(
@@ -583,7 +601,10 @@ def _serialize_cached_analysis_response(
         "strategy_intelligence": cached_strategy,
         "content_hash": content_hash,
         "override_seal": cached.override_seal,
-        "evidence_validation": cached_data.get("evidence_validation"),
+        "evidence_validation": _public_evidence_validation_payload(
+            cached_data.get("evidence_validation"),
+            include_debug=include_debug,
+        ),
         "analysis_warnings": analysis_warnings,
         "coverage_metadata": cached_data.get("coverage_metadata"),
         "analysis_status": cached_data.get("analysis_status", "completed"),
@@ -610,6 +631,12 @@ async def analyze_tender(
 
     Returns cached analysis when content hash matches, unless ``force=True``.
     """
+    await _ensure_tender_access(
+        db=session,
+        tender_id=tender_id,
+        user_id=current_user.id,
+    )
+
     try:
         result = await session.execute(select(Tender).where(Tender.id == tender_id))
         tender = result.scalar_one_or_none()
@@ -723,6 +750,7 @@ async def analyze_tender(
                     return _serialize_cached_analysis_response(
                         latest_cached,
                         content_hash=current_content_hash,
+                        include_debug=current_user.is_admin,
                     )
                 except (ValidationError, KeyError):
                     logger.warning(
@@ -800,6 +828,7 @@ async def analyze_tender(
                     return _serialize_cached_analysis_response(
                         latest_cached,
                         content_hash=latest_cached.content_hash or current_content_hash,
+                        include_debug=current_user.is_admin,
                         extra_warnings=[
                             (
                                 "Fresh compliance extraction failed; returning the "
@@ -1023,7 +1052,10 @@ async def analyze_tender(
         "strategy_intelligence": strategy_result,
         "content_hash": current_content_hash,
         "override_seal": None,
-        "evidence_validation": evidence_validation,
+        "evidence_validation": _public_evidence_validation_payload(
+            evidence_validation,
+            include_debug=current_user.is_admin,
+        ),
         "analysis_warnings": analysis_warnings,
         "coverage_metadata": coverage_metadata,
         "analysis_status": analysis_status,
@@ -1031,7 +1063,7 @@ async def analyze_tender(
     }
 
 
-@router.post("/test-scrape", response_model=TestScrapeResponse, dependencies=[authenticated_dependency()])
+@router.post("/test-scrape", response_model=TestScrapeResponse, dependencies=[Depends(require_admin)])
 async def test_scrape(request: TestScrapeRequest) -> TestScrapeResponse:
     """
     Manual test endpoint to verify scraper on a specific URL.
@@ -1066,7 +1098,7 @@ class ProxyDownloadRequest(BaseModel):
     file_path: str   # e.g., /files/2025/12/23/xxx.pdf
 
 
-@router.post("/proxy-download", dependencies=[authenticated_dependency()])
+@router.post("/proxy-download", dependencies=[Depends(require_admin)])
 async def proxy_download(request: ProxyDownloadRequest):
     """
     Proxy download endpoint for UzEx files.
@@ -1230,7 +1262,6 @@ async def list_tenders(
                 Tender.region,
                 Tender.status,
                 Tender.category,
-                Tender.compiled_master_text,
                 Tender.created_at,
             )
         )
@@ -1265,7 +1296,6 @@ async def get_tender(
                 Tender.region,
                 Tender.status,
                 Tender.category,
-                Tender.compiled_master_text,
                 Tender.created_at,
             )
         )
@@ -1282,7 +1312,40 @@ async def get_tender(
     return _serialize_tender(tender)
 
 
-@router.post("/refresh", response_model=RefreshResponse, dependencies=[authenticated_dependency()])
+@router.get("/{tender_id}/compiled-text", response_model=TenderCompiledTextResponse)
+async def get_tender_compiled_text(
+    tender_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TenderCompiledTextResponse:
+    """
+    Return compiled source text only to users with access to this tender.
+    """
+    await _ensure_tender_access(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+    )
+
+    result = await db.execute(
+        select(Tender.compiled_master_text).where(Tender.id == tender_id)
+    )
+    compiled_text = result.scalar_one_or_none()
+    if compiled_text is None:
+        tender_exists = await db.execute(select(Tender.id).where(Tender.id == tender_id))
+        if tender_exists.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tender not found",
+            )
+
+    return TenderCompiledTextResponse(
+        tender_id=tender_id,
+        compiled_master_text=compiled_text,
+    )
+
+
+@router.post("/refresh", response_model=RefreshResponse, dependencies=[Depends(require_admin)])
 async def refresh_tenders(
     db: AsyncSession = Depends(get_db),
 ) -> RefreshResponse:
@@ -1402,6 +1465,42 @@ async def _ensure_tender_access(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tender not found",
         )
+
+
+async def _get_analysis_owner_key_for_user(
+    *,
+    db: AsyncSession,
+    current_user: User,
+) -> str:
+    profile_result = await db.execute(
+        select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
+    )
+    profile = profile_result.scalar_one_or_none()
+    return _analysis_owner_key(
+        current_user=current_user,
+        profile=profile,
+    )
+
+
+async def _get_owned_analysis(
+    *,
+    db: AsyncSession,
+    analysis_id: UUID,
+    tender_id: UUID,
+    current_user: User,
+) -> TenderAnalysis | None:
+    owner_key = await _get_analysis_owner_key_for_user(
+        db=db,
+        current_user=current_user,
+    )
+    result = await db.execute(
+        select(TenderAnalysis).where(
+            TenderAnalysis.id == analysis_id,
+            TenderAnalysis.tender_id == tender_id,
+            TenderAnalysis.company_name == owner_key,
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 async def _get_latest_sync_job_for_user_tender(
@@ -1695,6 +1794,12 @@ async def get_latest_analysis(
     authenticated user's company.  Returns null fields when no
     cached analysis exists.
     """
+    await _ensure_tender_access(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+    )
+
     profile_result = await db.execute(
         select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
     )
@@ -1738,7 +1843,10 @@ async def get_latest_analysis(
         "hybrid_compliance": analysis_data.get("hybrid_compliance"),
         "content_hash": analysis.content_hash,
         "override_seal": analysis.override_seal,
-        "evidence_validation": analysis_data.get("evidence_validation"),
+        "evidence_validation": _public_evidence_validation_payload(
+            analysis_data.get("evidence_validation"),
+            include_debug=current_user.is_admin,
+        ),
         "analysis_warnings": analysis_data.get("analysis_warnings") or [],
         "coverage_metadata": analysis_data.get("coverage_metadata"),
         "analysis_status": analysis_data.get("analysis_status", "completed"),
@@ -1879,6 +1987,12 @@ async def override_risk(
     parent TenderAnalysis so the cryptographic audit trail permanently
     reflects that manual intervention occurred.
     """
+    await _ensure_tender_access(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+    )
+
     tender_result = await db.execute(
         select(Tender.id).where(Tender.id == tender_id)
     )
@@ -1902,13 +2016,12 @@ async def override_risk(
     state_hash = hashlib.sha256(raw_string.encode("utf-8")).hexdigest()
 
     # Verify the analysis exists and belongs to this tender
-    analysis_result = await db.execute(
-        select(TenderAnalysis).where(
-            TenderAnalysis.id == request.analysis_id,
-            TenderAnalysis.tender_id == tender_id,
-        )
+    analysis = await _get_owned_analysis(
+        db=db,
+        analysis_id=request.analysis_id,
+        tender_id=tender_id,
+        current_user=current_user,
     )
-    analysis = analysis_result.scalar_one_or_none()
     if analysis is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1995,6 +2108,12 @@ async def get_risk_overrides(
 
     Also returns the current ``override_seal`` from the parent analysis.
     """
+    await _ensure_tender_access(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+    )
+
     tender_result = await db.execute(
         select(Tender.id).where(Tender.id == tender_id)
     )
@@ -2008,25 +2127,26 @@ async def get_risk_overrides(
         RiskOverrideLog.tender_id == tender_id,
         RiskOverrideLog.user_id == current_user.id,
     ]
+    override_seal: str | None = None
     if analysis_id is not None:
+        owned_analysis = await _get_owned_analysis(
+            db=db,
+            analysis_id=analysis_id,
+            tender_id=tender_id,
+            current_user=current_user,
+        )
+        if owned_analysis is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Analysis not found for this tender",
+            )
+        override_seal = owned_analysis.override_seal
         filters.append(RiskOverrideLog.analysis_id == analysis_id)
 
     result = await db.execute(
         select(RiskOverrideLog.missing_node_id).where(*filters)
     )
     accepted_node_ids = sorted({str(row[0]) for row in result.all()})
-
-    # Fetch the current override_seal from the analysis record
-    override_seal: str | None = None
-    if analysis_id is not None:
-        seal_result = await db.execute(
-            select(TenderAnalysis.override_seal).where(
-                TenderAnalysis.id == analysis_id
-            )
-        )
-        seal_row = seal_result.scalar_one_or_none()
-        if seal_row is not None:
-            override_seal = seal_row
 
     return RiskOverrideStatusResponse(
         tender_id=tender_id,
@@ -2035,7 +2155,7 @@ async def get_risk_overrides(
     )
 
 
-@router.post("/seed", response_model=dict, dependencies=[authenticated_dependency()])
+@router.post("/seed", response_model=dict, dependencies=[Depends(require_admin)])
 async def seed_tenders(
     db: AsyncSession = Depends(get_db),
 ) -> dict:

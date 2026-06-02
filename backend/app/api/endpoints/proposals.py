@@ -87,6 +87,38 @@ class PDFGenerateRequest(BaseModel):
     company_name: str = "Your Company LLC"
 
 
+SENSITIVE_STRUCTURED_DATA_KEYS = {
+    "uploaded_tz_path",
+    "uploaded_tz_text",
+}
+
+
+def _public_structured_data(data: dict[str, Any] | None) -> dict[str, Any] | None:
+    if data is None:
+        return None
+    return {
+        key: value
+        for key, value in data.items()
+        if key not in SENSITIVE_STRUCTURED_DATA_KEYS
+    }
+
+
+def _proposal_response(proposal: Proposal) -> ProposalResponse:
+    return ProposalResponse(
+        id=proposal.id,
+        user_id=proposal.user_id,
+        tender_id=proposal.tender_id,
+        status=proposal.status,
+        ai_confidence_score=proposal.ai_confidence_score,
+        structured_data=_public_structured_data(proposal.structured_data),
+        final_pdf_url=proposal.final_pdf_url,
+        margin_percent=proposal.margin_percent,
+        include_vat=proposal.include_vat,
+        currency=proposal.currency,
+        created_at=proposal.created_at,
+    )
+
+
 def _analysis_owner_key(
     *,
     current_user: User,
@@ -140,7 +172,7 @@ async def create_proposal(
     
     if existing:
         # Return existing proposal
-        return ProposalResponse.model_validate(existing)
+        return _proposal_response(existing)
     
     # Create new proposal
     proposal = Proposal(
@@ -154,7 +186,7 @@ async def create_proposal(
     await db.commit()
     await db.refresh(proposal)
     
-    return ProposalResponse.model_validate(proposal)
+    return _proposal_response(proposal)
 
 
 @router.get("", response_model=list[ProposalWithTenderResponse])
@@ -181,7 +213,7 @@ async def list_proposals(
             tender_id=p.tender_id,
             status=p.status,
             ai_confidence_score=p.ai_confidence_score,
-            structured_data=p.structured_data,
+            structured_data=_public_structured_data(p.structured_data),
             final_pdf_url=p.final_pdf_url,
             margin_percent=p.margin_percent,
             include_vat=p.include_vat,
@@ -229,7 +261,7 @@ async def get_proposal(
         tender_id=proposal.tender_id,
         status=proposal.status,
         ai_confidence_score=proposal.ai_confidence_score,
-        structured_data=proposal.structured_data,
+        structured_data=_public_structured_data(proposal.structured_data),
         final_pdf_url=proposal.final_pdf_url,
         margin_percent=proposal.margin_percent,
         include_vat=proposal.include_vat,
@@ -333,7 +365,7 @@ async def update_proposal(
     await db.commit()
     await db.refresh(proposal)
     
-    return ProposalResponse.model_validate(proposal)
+    return _proposal_response(proposal)
 
 
 @router.post("/{proposal_id}/ai-draft", response_model=AIDraftResponse)

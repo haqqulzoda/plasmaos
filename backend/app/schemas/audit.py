@@ -16,5 +16,4 @@ class RiskAuthorizationRequest(BaseModel):
 
     analysis_id: UUID
     risk_type: str
-    user_id: str
-
+    user_id: str | None = None

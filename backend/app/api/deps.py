@@ -28,6 +28,24 @@ async def get_current_user(
     return current_user
 
 
+async def require_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Require an authenticated administrator.
+
+    This intentionally stays small: the pilot P0 need is to block dev/operator
+    routes from normal customer accounts, not to introduce a full RBAC system.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+
+    return current_user
+
+
 def require_tier(required_tier: SubscriptionTier) -> Callable:
     """
     Validate user subscription tier against required endpoint tier.
