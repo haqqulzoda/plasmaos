@@ -8,8 +8,6 @@ Create Date: 2026-03-29 18:20:00.000000
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -20,73 +18,94 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    tender_sync_status = postgresql.ENUM(
-        "PENDING",
-        "IN_PROGRESS",
-        "SUCCESS",
-        "FAILED",
-        name="tender_sync_status",
-    )
-    tender_sync_status.create(op.get_bind(), checkfirst=True)
-
-    op.create_table(
-        "tender_sync_jobs",
-        sa.Column("id", sa.UUID(), nullable=False),
-        sa.Column("job_id", sa.String(length=100), nullable=False),
-        sa.Column("tender_id", sa.UUID(), nullable=False),
-        sa.Column("user_id", sa.UUID(), nullable=False),
-        sa.Column(
-            "status",
-            postgresql.ENUM(
-                "PENDING",
-                "IN_PROGRESS",
-                "SUCCESS",
-                "FAILED",
-                name="tender_sync_status",
-                create_type=False,
-            ),
-            nullable=False,
-        ),
-        sa.Column("progress", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.ForeignKeyConstraint(["tender_id"], ["tenders.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("job_id"),
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_type WHERE typname = 'tender_sync_status'
+            ) THEN
+                CREATE TYPE tender_sync_status AS ENUM (
+                    'PENDING',
+                    'IN_PROGRESS',
+                    'SUCCESS',
+                    'FAILED'
+                );
+            END IF;
+        END $$;
+        """
     )
 
-    op.create_check_constraint(
-        "ck_tender_sync_jobs_progress_range",
-        "tender_sync_jobs",
-        "progress >= 0 AND progress <= 100",
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tender_sync_jobs (
+            id UUID PRIMARY KEY,
+            job_id VARCHAR(100) NOT NULL UNIQUE,
+            tender_id UUID NOT NULL REFERENCES tenders(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status tender_sync_status NOT NULL,
+            progress INTEGER DEFAULT 0 NOT NULL,
+            error_message TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+        )
+        """
     )
-    op.create_index("ix_tender_sync_jobs_tender_id", "tender_sync_jobs", ["tender_id"], unique=False)
-    op.create_index("ix_tender_sync_jobs_user_id", "tender_sync_jobs", ["user_id"], unique=False)
-    op.create_index("ix_tender_sync_jobs_status", "tender_sync_jobs", ["status"], unique=False)
-    op.create_index(
-        "uq_tender_sync_jobs_active_user_tender",
-        "tender_sync_jobs",
-        ["user_id", "tender_id"],
-        unique=True,
-        postgresql_where=sa.text("status IN ('PENDING', 'IN_PROGRESS')"),
+
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'ck_tender_sync_jobs_progress_range'
+            ) THEN
+                ALTER TABLE tender_sync_jobs
+                ADD CONSTRAINT ck_tender_sync_jobs_progress_range
+                CHECK (progress >= 0 AND progress <= 100);
+            END IF;
+        END $$;
+        """
+    )
+
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_tender_sync_jobs_tender_id
+        ON tender_sync_jobs (tender_id)
+        """
+    )
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_tender_sync_jobs_user_id
+        ON tender_sync_jobs (user_id)
+        """
+    )
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_tender_sync_jobs_status
+        ON tender_sync_jobs (status)
+        """
+    )
+    op.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_tender_sync_jobs_active_user_tender
+        ON tender_sync_jobs (user_id, tender_id)
+        WHERE status IN ('PENDING', 'IN_PROGRESS')
+        """
     )
 
 
 def downgrade() -> None:
-    op.drop_index("uq_tender_sync_jobs_active_user_tender", table_name="tender_sync_jobs")
-    op.drop_index("ix_tender_sync_jobs_status", table_name="tender_sync_jobs")
-    op.drop_index("ix_tender_sync_jobs_user_id", table_name="tender_sync_jobs")
-    op.drop_index("ix_tender_sync_jobs_tender_id", table_name="tender_sync_jobs")
-    op.drop_constraint("ck_tender_sync_jobs_progress_range", "tender_sync_jobs", type_="check")
-    op.drop_table("tender_sync_jobs")
-
-    tender_sync_status = postgresql.ENUM(
-        "PENDING",
-        "IN_PROGRESS",
-        "SUCCESS",
-        "FAILED",
-        name="tender_sync_status",
+    op.execute("DROP INDEX IF EXISTS uq_tender_sync_jobs_active_user_tender")
+    op.execute("DROP INDEX IF EXISTS ix_tender_sync_jobs_status")
+    op.execute("DROP INDEX IF EXISTS ix_tender_sync_jobs_user_id")
+    op.execute("DROP INDEX IF EXISTS ix_tender_sync_jobs_tender_id")
+    op.execute(
+        """
+        ALTER TABLE tender_sync_jobs
+        DROP CONSTRAINT IF EXISTS ck_tender_sync_jobs_progress_range
+        """
     )
-    tender_sync_status.drop(op.get_bind(), checkfirst=True)
+    op.execute("DROP TABLE IF EXISTS tender_sync_jobs")
+    op.execute("DROP TYPE IF EXISTS tender_sync_status")

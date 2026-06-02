@@ -43,7 +43,11 @@ services:
 
   # ---- Backend (FastAPI) ----
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        PLASMA_BUILD_SHA: ${PLASMA_BUILD_SHA:-unknown}
+        PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_backend
     restart: always
     depends_on:
@@ -58,6 +62,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       TENDER_DOCUMENTS_ROOT: /app/data/documents
+      AUTO_CREATE_TABLES: "false"
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -69,6 +74,8 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        PLASMA_BUILD_SHA: ${PLASMA_BUILD_SHA:-unknown}
+        PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_frontend
     restart: always
     depends_on:
@@ -85,7 +92,11 @@ services:
 
   # ---- Celery Worker ----
   celery_worker:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        PLASMA_BUILD_SHA: ${PLASMA_BUILD_SHA:-unknown}
+        PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_celery_worker
     restart: always
     depends_on:
@@ -101,7 +112,11 @@ services:
     command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "celery,ai_fast_queue" ]
 
   worker_heavy:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        PLASMA_BUILD_SHA: ${PLASMA_BUILD_SHA:-unknown}
+        PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_worker_heavy
     restart: always
     depends_on:
@@ -122,7 +137,11 @@ services:
 
   # ---- Celery Beat (Scheduler) ----
   celery_beat:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        PLASMA_BUILD_SHA: ${PLASMA_BUILD_SHA:-unknown}
+        PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_celery_beat
     restart: always
     depends_on:

@@ -58,6 +58,10 @@ class Settings(BaseSettings):
         "http://65.109.226.208",
         "https://plasmaos.uz",
     ]
+
+    # Schema management
+    # Keep disabled in production so Alembic remains the single source of truth.
+    AUTO_CREATE_TABLES: bool = False
     
     @computed_field
     @property

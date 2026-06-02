@@ -10,7 +10,12 @@ WORKDIR /app
 
 # Accept API URL as build argument (baked into Next.js at build time)
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+ARG PLASMA_BUILD_SHA=unknown
+ARG PLASMA_BUILD_TIME=unknown
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_BUILD_SHA=$PLASMA_BUILD_SHA
+ENV PLASMA_BUILD_SHA=$PLASMA_BUILD_SHA
+ENV PLASMA_BUILD_TIME=$PLASMA_BUILD_TIME
 
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -24,6 +29,12 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+
+ARG PLASMA_BUILD_SHA=unknown
+ARG PLASMA_BUILD_TIME=unknown
+ENV NEXT_PUBLIC_BUILD_SHA=$PLASMA_BUILD_SHA
+ENV PLASMA_BUILD_SHA=$PLASMA_BUILD_SHA
+ENV PLASMA_BUILD_TIME=$PLASMA_BUILD_TIME
 
 # Copy only what's needed to run
 COPY --from=builder /app/.next ./.next

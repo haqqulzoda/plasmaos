@@ -6,6 +6,11 @@ FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 
 WORKDIR /app
 
+ARG PLASMA_BUILD_SHA=unknown
+ARG PLASMA_BUILD_TIME=unknown
+ENV PLASMA_BUILD_SHA=$PLASMA_BUILD_SHA
+ENV PLASMA_BUILD_TIME=$PLASMA_BUILD_TIME
+
 # 1. Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

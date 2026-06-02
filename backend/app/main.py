@@ -5,6 +5,7 @@ Main application setup with CORS middleware and core endpoints.
 """
 
 from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ from sqlalchemy import text
 
 from app.api.endpoints import auth, hunter, proposals, tenders, users, vault
 from app.api.routers import audit
+from app.core.agents.requirement_extractor import EXTRACTOR_SCHEMA_VERSION
 from app.core.config import settings
 from app.db.session import engine
 from app.models.all_models import Base
@@ -31,13 +33,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"--- DB CONNECTION FAILED: {e} ---")
     
-    # Auto-create tables if they don't exist
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        print("--- TABLES CREATED/VERIFIED ---")
-    except Exception as e:
-        print(f"--- TABLE CREATION FAILED: {e} ---")
+    if settings.AUTO_CREATE_TABLES:
+        # Local/dev escape hatch only. Production schema changes should run via Alembic.
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            print("--- TABLES CREATED/VERIFIED ---")
+        except Exception as e:
+            print(f"--- TABLE CREATION FAILED: {e} ---")
+    else:
+        print("--- AUTO TABLE CREATION DISABLED; USING ALEMBIC SCHEMA ---")
     
     yield  # App runs here
     
@@ -90,5 +95,8 @@ async def health_check() -> dict[str, str]:
         "status": "ok",
         "project": "Plasma AI",
         "version": VERSION,
+        "build_sha": os.getenv("PLASMA_BUILD_SHA", "unknown"),
+        "build_time": os.getenv("PLASMA_BUILD_TIME", "unknown"),
+        "extractor_schema_version": EXTRACTOR_SCHEMA_VERSION,
     }
 

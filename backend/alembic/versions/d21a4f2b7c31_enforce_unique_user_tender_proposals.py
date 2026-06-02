@@ -37,12 +37,19 @@ def upgrade() -> None:
         """
     )
 
-    op.create_unique_constraint(
-        "uq_proposals_user_tender",
-        "proposals",
-        ["user_id", "tender_id"],
+    op.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_proposals_user_tender
+        ON proposals (user_id, tender_id)
+        """
     )
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_proposals_user_tender", "proposals", type_="unique")
+    op.execute(
+        """
+        ALTER TABLE proposals
+        DROP CONSTRAINT IF EXISTS uq_proposals_user_tender
+        """
+    )
+    op.execute("DROP INDEX IF EXISTS uq_proposals_user_tender")
