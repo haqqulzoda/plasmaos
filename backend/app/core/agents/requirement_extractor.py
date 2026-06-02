@@ -9,6 +9,7 @@ back to a concrete file, page, and short source quote.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import os
 import re
@@ -54,6 +55,10 @@ MODEL_NAME: str = os.getenv("GEMINI_REQUIREMENT_MODEL", "gemini-3.1-pro-preview"
 EXTRACTOR_SCHEMA_VERSION: str = "requirement_extractor_scope_v5"
 MAX_PAYLOAD_CHARS: int = _env_int("GEMINI_REQUIREMENT_MAX_PAYLOAD_CHARS", 120_000)
 CHUNK_OVERLAP_CHARS: int = _env_int("GEMINI_REQUIREMENT_CHUNK_OVERLAP_CHARS", 1_000)
+MAX_CHUNK_CONCURRENCY: int = max(
+    1,
+    _env_int("GEMINI_REQUIREMENT_CHUNK_CONCURRENCY", 3),
+)
 MAX_EXACT_QUOTE_WORDS: int = 15
 MAX_HEADLINE_WORDS: int = 5
 SYNTHETIC_SOURCE_FILENAME: str = "compiled_master_text"
@@ -1759,34 +1764,71 @@ def _extract_requirements_full_coverage_sync(
     chunks_failed = 0
     technical_warnings: list[str] = []
     extraction_batch_id = str(uuid4())
+    requirements_by_chunk_index: dict[int, list[TenderRequirement]] = {}
 
-    for chunk in chunks:
-        try:
-            chunk_requirements = _extract_requirements_sync(chunk.text, api_key)
-        except Exception as exc:
-            chunks_failed += 1
-            technical_warnings.append(
-                (
-                    f"Requirement extraction chunk {chunk.index + 1}/{len(chunks)} failed: "
-                    f"{type(exc).__name__}: {exc}"
-                )
-            )
-            logger.exception(
-                "Requirement extraction chunk %d/%d failed.",
-                chunk.index + 1,
-                len(chunks),
-            )
-            continue
-
+    def _record_chunk_success(
+        chunk: _ExtractionChunk,
+        chunk_requirements: list[TenderRequirement],
+    ) -> None:
+        nonlocal chunks_processed
         chunks_processed += 1
-        all_requirements.extend(
+        requirements_by_chunk_index[chunk.index] = [
             _with_chunk_metadata(
                 req,
                 chunk=chunk,
                 extraction_batch_id=extraction_batch_id,
             )
             for req in chunk_requirements
+        ]
+
+    def _record_chunk_failure(
+        chunk: _ExtractionChunk,
+        exc: Exception,
+    ) -> None:
+        nonlocal chunks_failed
+        chunks_failed += 1
+        technical_warnings.append(
+            (
+                f"Requirement extraction chunk {chunk.index + 1}/{len(chunks)} failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
         )
+        logger.exception(
+            "Requirement extraction chunk %d/%d failed.",
+            chunk.index + 1,
+            len(chunks),
+        )
+
+    if len(chunks) == 1 or MAX_CHUNK_CONCURRENCY == 1:
+        for chunk in chunks:
+            try:
+                _record_chunk_success(
+                    chunk,
+                    _extract_requirements_sync(chunk.text, api_key),
+                )
+            except Exception as exc:
+                _record_chunk_failure(chunk, exc)
+    else:
+        max_workers = min(MAX_CHUNK_CONCURRENCY, len(chunks))
+        logger.info(
+            "Requirement extraction processing %d chunks with concurrency=%d.",
+            len(chunks),
+            max_workers,
+        )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_chunk = {
+                executor.submit(_extract_requirements_sync, chunk.text, api_key): chunk
+                for chunk in chunks
+            }
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                chunk = future_to_chunk[future]
+                try:
+                    _record_chunk_success(chunk, future.result())
+                except Exception as exc:
+                    _record_chunk_failure(chunk, exc)
+
+    for chunk in chunks:
+        all_requirements.extend(requirements_by_chunk_index.get(chunk.index, []))
 
     coverage = _coverage_metadata(
         full_text_length=len(traceable_payload),
