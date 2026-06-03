@@ -158,6 +158,10 @@ function filenameFromContentDisposition(value: string | null): string | null {
     return asciiMatch?.[1] ?? null;
 }
 
+function axiosStatus(error: unknown): number | undefined {
+    return (error as { response?: { status?: number } })?.response?.status;
+}
+
 async function complianceExportErrorMessage(error: unknown): Promise<string> {
     const response = (error as { response?: { data?: unknown; status?: number } })?.response;
     const status = response?.status;
@@ -418,6 +422,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     const [rawText, setRawText] = useState<string>('');
     const [tenderTitle, setTenderTitle] = useState<string>('');
     const [isLoadingText, setIsLoadingText] = useState(true);
+    const [textAccessReadyVersion, setTextAccessReadyVersion] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [elapsedTime, setElapsedTime] = useState<number | null>(null);
     const [acceptedNodeIds, setAcceptedNodeIds] = useState<string[]>([]);
@@ -435,38 +440,51 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
         const fetchTenderText = async () => {
             setIsLoadingText(true);
             try {
-                // Primary path: treat route param as a tender ID.
+                let resolvedId = tenderId;
+                let tenderData: { title?: string } | null = null;
+
                 try {
                     const { data } = await api.get(`/tenders/${tenderId}`);
-                    const textResponse = await api.get(`/tenders/${tenderId}/compiled-text`);
-                    setResolvedTenderId(tenderId);
-                    setRawText(textResponse.data.compiled_master_text || '');
-                    setTenderTitle(data.title || `Tender ${tenderId.slice(0, 8)}`);
-                    return;
+                    tenderData = data;
                 } catch (primaryErr: unknown) {
-                    const status = (primaryErr as { response?: { status?: number } })?.response?.status;
+                    const status = axiosStatus(primaryErr);
                     if (status !== 404) {
                         throw new Error(`Failed to fetch tender: ${status ?? 'unknown'}`);
                     }
+
+                    // Fallback: users may paste a proposal ID from /dashboard/bids/{id}.
+                    let mappedTenderId: string | undefined;
+                    try {
+                        const proposalResponse = await api.get(`/proposals/${tenderId}`);
+                        mappedTenderId = proposalResponse.data?.tender_id;
+                    } catch {
+                        throw new Error('Failed to resolve tender from proposal ID');
+                    }
+                    if (!mappedTenderId) {
+                        throw new Error('Could not resolve tender from proposal ID');
+                    }
+
+                    resolvedId = mappedTenderId;
+                    const { data } = await api.get(`/tenders/${resolvedId}`);
+                    tenderData = data;
                 }
 
-                // Fallback: users may paste a proposal ID from /dashboard/bids/{id}.
-                let mappedTenderId: string | undefined;
+                let textResponse;
                 try {
-                    const proposalResponse = await api.get(`/proposals/${tenderId}`);
-                    mappedTenderId = proposalResponse.data?.tender_id;
-                } catch {
-                    throw new Error('Failed to resolve tender from proposal ID');
-                }
-                if (!mappedTenderId) {
-                    throw new Error('Could not resolve tender from proposal ID');
+                    textResponse = await api.get(`/tenders/${resolvedId}/compiled-text`);
+                } catch (textErr: unknown) {
+                    if (axiosStatus(textErr) !== 404) {
+                        throw textErr;
+                    }
+
+                    await api.post('/proposals', { tender_id: resolvedId });
+                    textResponse = await api.get(`/tenders/${resolvedId}/compiled-text`);
                 }
 
-                const { data: tenderData } = await api.get(`/tenders/${mappedTenderId}`);
-                const textResponse = await api.get(`/tenders/${mappedTenderId}/compiled-text`);
-                setResolvedTenderId(mappedTenderId);
+                setResolvedTenderId(resolvedId);
                 setRawText(textResponse.data.compiled_master_text || '');
-                setTenderTitle(tenderData.title || `Tender ${mappedTenderId.slice(0, 8)}`);
+                setTenderTitle(tenderData?.title || `Tender ${resolvedId.slice(0, 8)}`);
+                setTextAccessReadyVersion((version) => version + 1);
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : 'Failed to load tender text';
                 setError(message);
@@ -506,7 +524,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
 
     // ── Load cached analysis on mount ──
     useEffect(() => {
-        if (!resolvedTenderId) return;
+        if (!resolvedTenderId || textAccessReadyVersion === 0) return;
 
         const fetchCachedAnalysis = async () => {
             try {
@@ -525,7 +543,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
         };
 
         fetchCachedAnalysis();
-    }, [resolvedTenderId]);
+    }, [resolvedTenderId, textAccessReadyVersion]);
 
     // ── Load persisted risk overrides scoped to current analysis ──
     useEffect(() => {

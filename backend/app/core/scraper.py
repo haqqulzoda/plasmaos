@@ -993,7 +993,7 @@ class UzExScraper:
             
             try:
                 logger.info(f"[SCRAPER] Fetching: {source_url}")
-                nav_response = Nonem
+                nav_response = None
                 for nav_attempt in range(2):
                     try:
                         nav_timeout = self.timeout if nav_attempt == 0 else 60000

@@ -27,7 +27,10 @@ from app.api.deps import get_current_user, require_admin
 from app.core.agents.requirement_extractor import (
     EvidenceValidationStatus,
     EXTRACTOR_SCHEMA_VERSION,
+    MAX_PAYLOAD_CHARS,
+    MODEL_NAME as REQUIREMENT_MODEL_NAME,
     ScopeReviewStatus,
+    build_failed_extraction_artifacts_metadata,
     build_failed_extraction_coverage,
     build_extraction_warnings,
     classify_requirements_scope,
@@ -44,6 +47,21 @@ from app.core.compliance_pdf import (
     compliance_report_filename,
 )
 from app.core.evaluator import DynamicComplianceResult, TaxNodeInfo
+from app.core.reproducibility import (
+    annotate_evidence_validation,
+    annotate_hybrid_compliance,
+    canonical_source_key,
+    engine_metadata,
+    evidence_validation_route_records,
+    infer_source_system,
+    marker_counts,
+    requirement_fingerprint,
+    requirement_route_records,
+    safe_basename,
+    sanitize_internal_requirement_diagnostics,
+    sha256_text,
+    stable_json_sha256,
+)
 from app.core.scraper import UzExScraper
 from app.crud.crud_profile import get_profile_for_compliance_match
 from app.crud.exceptions import ProfileNotFoundException
@@ -307,6 +325,127 @@ def _vault_cache_payload(profile: CompanyProfile) -> dict[str, Any]:
     }
 
 
+def _taxonomy_fingerprint_payload(taxonomy_nodes: list[TaxonomyNode]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": str(node.id),
+            "category": node.category.value if hasattr(node.category, "value") else str(node.category),
+            "name": node.name,
+            "impact_weight": node.impact_weight,
+            "is_fatal": node.is_fatal,
+        }
+        for node in sorted(taxonomy_nodes, key=lambda item: str(item.id))
+    ]
+
+
+def _document_fingerprint_payload(doc: TenderDocument) -> dict[str, Any]:
+    response = _document_response(doc)
+    parsed_text = doc.parsed_text or ""
+    counts = marker_counts(parsed_text)
+    return {
+        "document_id": str(doc.id),
+        "display_name": safe_basename(response.display_name),
+        "file_type": doc.file_type,
+        "file_size": doc.file_size,
+        "parsed_text_length": len(parsed_text),
+        "parsed_text_sha256": sha256_text(parsed_text),
+        **counts,
+    }
+
+
+def _source_chunk_index_by_fingerprint(requirements: list[Any]) -> dict[str, int | None]:
+    mapping: dict[str, int | None] = {}
+    for req in requirements:
+        payload = req.model_dump(mode="json") if hasattr(req, "model_dump") else dict(req)
+        mapping[requirement_fingerprint(payload)] = payload.get("source_chunk_index")
+    return mapping
+
+
+def _build_reproducibility_snapshot(
+    *,
+    tender: Tender,
+    tender_text: str,
+    documents: list[TenderDocument],
+    profile: CompanyProfile,
+    taxonomy_nodes: list[TaxonomyNode],
+    coverage_metadata: dict[str, Any],
+    hybrid_compliance: dict[str, Any],
+    evidence_validation: dict[str, Any],
+) -> dict[str, Any]:
+    source_system = infer_source_system(tender.source_url)
+    input_counts = marker_counts(tender_text)
+    vault_payload = _vault_cache_payload(profile)
+    taxonomy_payload = _taxonomy_fingerprint_payload(taxonomy_nodes)
+    extractor_mode = (
+        str(coverage_metadata.get("extractor_mode"))
+        if isinstance(coverage_metadata, dict) and coverage_metadata.get("extractor_mode")
+        else None
+    )
+
+    hybrid_route_summary = requirement_route_records(hybrid_compliance)
+    evidence_route_summary = evidence_validation_route_records(evidence_validation)
+
+    return {
+        "tender_identity": {
+            "source_system": source_system,
+            "external_id": tender.external_id,
+            "tender_id": str(tender.id),
+            "canonical_source_key": canonical_source_key(
+                source_system,
+                tender.external_id,
+            ),
+        },
+        "input_fingerprints": {
+            "compiled_text_length": len(tender_text),
+            "compiled_text_sha256": sha256_text(tender_text),
+            **input_counts,
+            "document_count": len(documents),
+            "document_fingerprints": [
+                _document_fingerprint_payload(doc)
+                for doc in sorted(documents, key=lambda item: (item.file_url or "", str(item.id)))
+            ],
+        },
+        "engine_metadata": engine_metadata(
+            extractor_schema_version=EXTRACTOR_SCHEMA_VERSION,
+            requirement_model_name=REQUIREMENT_MODEL_NAME,
+            temperature=0.0,
+            max_payload_chars=MAX_PAYLOAD_CHARS,
+            extractor_mode=extractor_mode,
+        ),
+        "coverage": {
+            "coverage_metadata": coverage_metadata,
+            "chunk_count": coverage_metadata.get("chunk_count"),
+            "chunks_processed": coverage_metadata.get("chunks_processed"),
+            "chunks_failed": coverage_metadata.get("chunks_failed"),
+            "coverage_status": coverage_metadata.get("coverage_status"),
+            "coverage_warnings": coverage_metadata.get("coverage_warnings") or [],
+        },
+        "vault_fingerprint": {
+            "company_profile_id": str(profile.id),
+            "certification_count": len(profile.certifications),
+            "license_count": len(profile.licenses),
+            "financial_history_count": len(profile.financial_history),
+            "vault_sha256": stable_json_sha256(vault_payload),
+        },
+        "taxonomy_fingerprint": {
+            "taxonomy_count": len(taxonomy_payload),
+            "taxonomy_sha256": stable_json_sha256(taxonomy_payload),
+        },
+        "output_summary": {
+            "verdict_status": hybrid_compliance.get("verdict_status"),
+            "failed_count": hybrid_compliance.get("failed_count"),
+            "manual_review_count": hybrid_compliance.get("manual_review_count"),
+            "satisfied_count": hybrid_compliance.get("satisfied_count"),
+            "recorded_obligations_count": hybrid_compliance.get("recorded_obligations_count"),
+            "skipped_optional_count": hybrid_compliance.get("skipped_optional_count"),
+        },
+        "requirement_route_summary": [
+            *hybrid_route_summary,
+            *evidence_route_summary,
+        ],
+    }
+
+
 def _analysis_owner_key(
     *,
     current_user: User,
@@ -320,6 +459,63 @@ def _analysis_owner_key(
     """
     profile_token = str(profile.id) if profile is not None else "no-profile"
     return f"{current_user.id}:{profile_token}"
+
+
+def _legacy_analysis_owner_names(
+    *,
+    current_user: User,
+    profile: CompanyProfile | None,
+) -> list[str]:
+    """
+    Legacy TenderAnalysis rows stored the display company name instead of a
+    tenant-safe owner key. Restrict compatibility to names from the current
+    authenticated user context.
+    """
+    candidates = [
+        profile.company_name if profile is not None else None,
+        current_user.company_name,
+        current_user.name,
+    ]
+    names: list[str] = []
+    for candidate in candidates:
+        name = str(candidate).strip() if candidate else ""
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def _analysis_owner_candidates(
+    *,
+    current_user: User,
+    profile: CompanyProfile | None,
+) -> list[str]:
+    owner_key = _analysis_owner_key(current_user=current_user, profile=profile)
+    return [
+        owner_key,
+        *[
+            name
+            for name in _legacy_analysis_owner_names(
+                current_user=current_user,
+                profile=profile,
+            )
+            if name != owner_key
+        ],
+    ]
+
+
+def _claim_legacy_analysis_owner(
+    *,
+    analysis: TenderAnalysis,
+    owner_key: str,
+    legacy_owner_names: list[str],
+) -> None:
+    if analysis.company_name == owner_key or analysis.company_name not in legacy_owner_names:
+        return
+
+    analysis_data = dict(analysis.analysis_json or {})
+    analysis_data.setdefault("tenant_company_name", analysis.company_name)
+    analysis.company_name = owner_key
+    analysis.analysis_json = analysis_data
 
 
 def _extract_remote_file_path(file_url: str) -> str:
@@ -520,7 +716,7 @@ def _public_evidence_validation_payload(
 ) -> dict[str, Any] | None:
     if evidence_validation is None:
         return None
-    payload = dict(evidence_validation)
+    payload = sanitize_internal_requirement_diagnostics(dict(evidence_validation))
     if not include_debug:
         payload.pop("rejected_requirements", None)
     return payload
@@ -574,8 +770,11 @@ def _serialize_cached_analysis_response(
     cached_hybrid = None
     if "hybrid_compliance" in cached_data:
         try:
-            cached_hybrid = HybridComplianceResult.model_validate(
+            public_hybrid = sanitize_internal_requirement_diagnostics(
                 cached_data["hybrid_compliance"]
+            )
+            cached_hybrid = HybridComplianceResult.model_validate(
+                public_hybrid
             )
         except (ValidationError, KeyError):
             pass
@@ -635,6 +834,7 @@ async def analyze_tender(
         db=session,
         tender_id=tender_id,
         user_id=current_user.id,
+        current_user=current_user,
     )
 
     try:
@@ -686,6 +886,10 @@ async def analyze_tender(
             current_user=current_user,
             profile=profile,
         )
+        analysis_owner_names = _analysis_owner_candidates(
+            current_user=current_user,
+            profile=profile,
+        )
 
         taxonomy_query = select(TaxonomyNode)
         taxonomy_is_active = getattr(TaxonomyNode, "is_active", None)
@@ -714,6 +918,11 @@ async def analyze_tender(
             for node in taxonomy_nodes
         }
 
+        documents_result = await session.execute(
+            select(TenderDocument).where(TenderDocument.tender_id == tender.id)
+        )
+        tender_documents = documents_result.scalars().all()
+
         sorted_cred_str = ",".join(sorted(credential_uuids))
         sorted_tax_str = ",".join(sorted(taxonomy_lookup.keys()))
         vault_cache_str = json.dumps(
@@ -733,7 +942,7 @@ async def analyze_tender(
                 select(TenderAnalysis)
                 .where(
                     TenderAnalysis.tender_id == tender_id,
-                    TenderAnalysis.company_name == analysis_owner_key,
+                    TenderAnalysis.company_name.in_(analysis_owner_names),
                 )
                 .order_by(TenderAnalysis.created_at.desc())
                 .limit(1)
@@ -741,6 +950,14 @@ async def analyze_tender(
             latest_cached = cached_result.scalar_one_or_none()
 
             if latest_cached is not None and latest_cached.content_hash == current_content_hash:
+                _claim_legacy_analysis_owner(
+                    analysis=latest_cached,
+                    owner_key=analysis_owner_key,
+                    legacy_owner_names=_legacy_analysis_owner_names(
+                        current_user=current_user,
+                        profile=profile,
+                    ),
+                )
                 try:
                     logger.info(
                         "Returning cached analysis %s for tender %s (hash match)",
@@ -775,6 +992,7 @@ async def analyze_tender(
         async def _safe_requirement_extraction() -> tuple[
             list[Any],
             dict[str, Any],
+            list[dict[str, Any]],
             str | None,
         ]:
             try:
@@ -784,6 +1002,10 @@ async def analyze_tender(
                 coverage_metadata = extraction_result.coverage_metadata.model_dump(
                     mode="json"
                 )
+                artifacts_metadata = [
+                    item.model_dump(mode="json")
+                    for item in extraction_result.extraction_artifacts_metadata
+                ]
                 extraction_error = None
                 if coverage_metadata.get("coverage_status") == "failed":
                     extraction_error = (
@@ -792,6 +1014,7 @@ async def analyze_tender(
                 return (
                     extraction_result.requirements,
                     coverage_metadata,
+                    artifacts_metadata,
                     extraction_error,
                 )
             except Exception as extraction_exc:
@@ -803,14 +1026,22 @@ async def analyze_tender(
                     tender_text,
                     error=f"{type(extraction_exc).__name__}: {extraction_exc}",
                 )
+                failed_artifacts = build_failed_extraction_artifacts_metadata(
+                    tender_text,
+                    error=f"{type(extraction_exc).__name__}: {extraction_exc}",
+                )
                 return (
                     [],
                     failed_coverage.model_dump(mode="json"),
+                    [
+                        item.model_dump(mode="json")
+                        for item in failed_artifacts
+                    ],
                     str(extraction_exc),
                 )
 
         (
-            (extracted_reqs, coverage_metadata, extraction_error),
+            (extracted_reqs, coverage_metadata, extraction_artifacts_metadata, extraction_error),
             strategy_result,
         ) = await asyncio.gather(
             _safe_requirement_extraction(),
@@ -952,6 +1183,33 @@ async def analyze_tender(
                     }
                 )
 
+        source_chunk_index_by_fingerprint = _source_chunk_index_by_fingerprint(
+            validated_reqs
+        )
+        persisted_hybrid_compliance = annotate_hybrid_compliance(
+            hybrid_result.model_dump(mode="json"),
+            source_chunk_index_by_fingerprint=source_chunk_index_by_fingerprint,
+        )
+        final_bucket_by_fingerprint = {
+            str(record["requirement_fingerprint"]): str(record["final_bucket"])
+            for record in requirement_route_records(persisted_hybrid_compliance)
+            if record.get("requirement_fingerprint") and record.get("final_bucket")
+        }
+        persisted_evidence_validation = annotate_evidence_validation(
+            evidence_validation,
+            final_bucket_by_fingerprint=final_bucket_by_fingerprint,
+        )
+        reproducibility_snapshot = _build_reproducibility_snapshot(
+            tender=tender,
+            tender_text=tender_text,
+            documents=tender_documents,
+            profile=profile,
+            taxonomy_nodes=taxonomy_nodes,
+            coverage_metadata=coverage_metadata,
+            hybrid_compliance=persisted_hybrid_compliance,
+            evidence_validation=persisted_evidence_validation,
+        )
+
         from app.core.evaluator import MetRequirement, MissingRequirement
 
         legacy_met: list[MetRequirement] = []
@@ -1009,8 +1267,10 @@ async def analyze_tender(
             analysis_json={
                 "requirements": legacy_requirements.model_dump(mode="json"),
                 "evaluation": legacy_evaluation.model_dump(mode="json"),
-                "hybrid_compliance": hybrid_result.model_dump(mode="json"),
-                "evidence_validation": evidence_validation,
+                "hybrid_compliance": persisted_hybrid_compliance,
+                "evidence_validation": persisted_evidence_validation,
+                "reproducibility_snapshot": reproducibility_snapshot,
+                "extraction_artifacts_metadata": extraction_artifacts_metadata,
                 "analysis_warnings": analysis_warnings,
                 "coverage_metadata": coverage_metadata,
                 "analysis_status": analysis_status,
@@ -1157,14 +1417,20 @@ async def download_document(
     
     doc, tender = row
 
-    access_result = await db.execute(
-        select(Proposal.id).where(
-            Proposal.tender_id == tender.id,
-            Proposal.user_id == current_user.id,
+    try:
+        await _ensure_tender_access(
+            db=db,
+            tender_id=tender.id,
+            user_id=current_user.id,
+            current_user=current_user,
         )
-    )
-    if access_result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=403, detail="You do not have access to this document")
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have access to this document",
+            ) from exc
+        raise
 
     local_path = Path(doc.storage_path) if doc.storage_path else None
 
@@ -1325,6 +1591,7 @@ async def get_tender_compiled_text(
         db=db,
         tender_id=tender_id,
         user_id=current_user.id,
+        current_user=current_user,
     )
 
     result = await db.execute(
@@ -1451,6 +1718,7 @@ async def _ensure_tender_access(
     db: AsyncSession,
     tender_id: UUID,
     user_id: UUID,
+    current_user: User | None = None,
 ) -> None:
     access_result = await db.execute(
         select(Proposal.id)
@@ -1460,11 +1728,30 @@ async def _ensure_tender_access(
         )
         .limit(1)
     )
-    if access_result.scalar_one_or_none() is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tender not found",
+    if access_result.scalar_one_or_none() is not None:
+        return
+
+    if current_user is not None:
+        profile_result = await db.execute(
+            select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
         )
+        profile = profile_result.scalar_one_or_none()
+        owner_key = _analysis_owner_key(current_user=current_user, profile=profile)
+        analysis_access_result = await db.execute(
+            select(TenderAnalysis.id)
+            .where(
+                TenderAnalysis.tender_id == tender_id,
+                TenderAnalysis.company_name == owner_key,
+            )
+            .limit(1)
+        )
+        if analysis_access_result.scalar_one_or_none() is not None:
+            return
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Tender not found",
+    )
 
 
 async def _get_analysis_owner_key_for_user(
@@ -1493,14 +1780,32 @@ async def _get_owned_analysis(
         db=db,
         current_user=current_user,
     )
+    profile_result = await db.execute(
+        select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
+    )
+    profile = profile_result.scalar_one_or_none()
+    owner_names = _analysis_owner_candidates(
+        current_user=current_user,
+        profile=profile,
+    )
     result = await db.execute(
         select(TenderAnalysis).where(
             TenderAnalysis.id == analysis_id,
             TenderAnalysis.tender_id == tender_id,
-            TenderAnalysis.company_name == owner_key,
+            TenderAnalysis.company_name.in_(owner_names),
         )
     )
-    return result.scalar_one_or_none()
+    analysis = result.scalar_one_or_none()
+    if analysis is not None:
+        _claim_legacy_analysis_owner(
+            analysis=analysis,
+            owner_key=owner_key,
+            legacy_owner_names=_legacy_analysis_owner_names(
+                current_user=current_user,
+                profile=profile,
+            ),
+        )
+    return analysis
 
 
 async def _get_latest_sync_job_for_user_tender(
@@ -1628,6 +1933,7 @@ async def sync_tender_documents(
         db=db,
         tender_id=tender_id,
         user_id=current_user.id,
+        current_user=current_user,
     )
 
     existing_job = await _get_active_sync_job_for_user_tender(
@@ -1726,6 +2032,7 @@ async def get_sync_status(
         db=db,
         tender_id=tender_id,
         user_id=current_user.id,
+        current_user=current_user,
     )
 
     latest_job = await _get_latest_sync_job_for_user_tender(
@@ -1773,6 +2080,7 @@ async def get_tender_documents(
         db=db,
         tender_id=tender_id,
         user_id=current_user.id,
+        current_user=current_user,
     )
 
     result = await db.execute(
@@ -1798,6 +2106,7 @@ async def get_latest_analysis(
         db=db,
         tender_id=tender_id,
         user_id=current_user.id,
+        current_user=current_user,
     )
 
     profile_result = await db.execute(
@@ -1808,12 +2117,16 @@ async def get_latest_analysis(
         current_user=current_user,
         profile=profile,
     )
+    analysis_owner_names = _analysis_owner_candidates(
+        current_user=current_user,
+        profile=profile,
+    )
 
     result = await db.execute(
         select(TenderAnalysis)
         .where(
             TenderAnalysis.tender_id == tender_id,
-            TenderAnalysis.company_name == analysis_owner_key,
+            TenderAnalysis.company_name.in_(analysis_owner_names),
         )
         .order_by(TenderAnalysis.created_at.desc())
         .limit(1)
@@ -1835,12 +2148,23 @@ async def get_latest_analysis(
             "extraction_error": None,
         }
 
+    _claim_legacy_analysis_owner(
+        analysis=analysis,
+        owner_key=analysis_owner_key,
+        legacy_owner_names=_legacy_analysis_owner_names(
+            current_user=current_user,
+            profile=profile,
+        ),
+    )
+
     analysis_data = analysis.analysis_json or {}
     return {
         "analysis_id": str(analysis.id),
         "requirements": analysis_data.get("requirements"),
         "evaluation": analysis_data.get("evaluation"),
-        "hybrid_compliance": analysis_data.get("hybrid_compliance"),
+        "hybrid_compliance": sanitize_internal_requirement_diagnostics(
+            analysis_data.get("hybrid_compliance")
+        ),
         "content_hash": analysis.content_hash,
         "override_seal": analysis.override_seal,
         "evidence_validation": _public_evidence_validation_payload(
@@ -1872,6 +2196,7 @@ async def export_compliance_pdf(
         db=db,
         tender_id=tender_id,
         user_id=current_user.id,
+        current_user=current_user,
     )
 
     tender_result = await db.execute(
@@ -1900,10 +2225,14 @@ async def export_compliance_pdf(
         current_user=current_user,
         profile=profile,
     )
+    analysis_owner_names = _analysis_owner_candidates(
+        current_user=current_user,
+        profile=profile,
+    )
 
     analysis_query = select(TenderAnalysis).where(
         TenderAnalysis.tender_id == tender_id,
-        TenderAnalysis.company_name == analysis_owner_key,
+        TenderAnalysis.company_name.in_(analysis_owner_names),
     )
     if analysis_id is not None:
         analysis_query = analysis_query.where(TenderAnalysis.id == analysis_id)
@@ -1918,8 +2247,19 @@ async def export_compliance_pdf(
             detail="Compliance analysis not found for this tender.",
         )
 
+    _claim_legacy_analysis_owner(
+        analysis=analysis,
+        owner_key=analysis_owner_key,
+        legacy_owner_names=_legacy_analysis_owner_names(
+            current_user=current_user,
+            profile=profile,
+        ),
+    )
+
     analysis_data = analysis.analysis_json or {}
-    hybrid_compliance = analysis_data.get("hybrid_compliance")
+    hybrid_compliance = sanitize_internal_requirement_diagnostics(
+        analysis_data.get("hybrid_compliance")
+    )
     if not isinstance(hybrid_compliance, dict):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1937,6 +2277,11 @@ async def export_compliance_pdf(
     evidence_validation = analysis_data.get("evidence_validation")
     if not isinstance(evidence_validation, dict):
         evidence_validation = None
+    else:
+        evidence_validation = _public_evidence_validation_payload(
+            evidence_validation,
+            include_debug=current_user.is_admin,
+        )
     raw_warnings = analysis_data.get("analysis_warnings")
     analysis_warnings = raw_warnings if isinstance(raw_warnings, list) else []
 
@@ -1991,6 +2336,7 @@ async def override_risk(
         db=db,
         tender_id=tender_id,
         user_id=current_user.id,
+        current_user=current_user,
     )
 
     tender_result = await db.execute(
@@ -2112,6 +2458,7 @@ async def get_risk_overrides(
         db=db,
         tender_id=tender_id,
         user_id=current_user.id,
+        current_user=current_user,
     )
 
     tender_result = await db.execute(

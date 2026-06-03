@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api.endpoints import auth, hunter, proposals, tenders, users, vault
+from app.api.endpoints import admin, auth, hunter, proposals, tenders, users, vault
 from app.api.routers import audit
 from app.core.agents.requirement_extractor import EXTRACTOR_SCHEMA_VERSION
 from app.core.config import settings
@@ -74,6 +74,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(tenders.router, prefix="/api/v1/tenders", tags=["Tenders"])
 app.include_router(proposals.router, prefix="/api/v1/proposals", tags=["Proposals"])
@@ -99,4 +100,3 @@ async def health_check() -> dict[str, str]:
         "build_time": os.getenv("PLASMA_BUILD_TIME", "unknown"),
         "extractor_schema_version": EXTRACTOR_SCHEMA_VERSION,
     }
-

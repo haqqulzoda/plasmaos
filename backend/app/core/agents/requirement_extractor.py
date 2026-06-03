@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import hashlib
 import logging
 import os
 import re
@@ -267,11 +268,26 @@ class RequirementExtractionCoverage(BaseModel):
     technical_warnings: list[str] = Field(default_factory=list)
 
 
+class ExtractionChunkArtifactMetadata(BaseModel):
+    """Lightweight extraction chunk metadata without raw chunk text."""
+
+    chunk_index: int
+    chunk_start_char: int
+    chunk_end_char: int
+    chunk_input_sha256: str
+    extraction_status: str
+    requirements_count: int = 0
+    failure_reason: str | None = None
+
+
 class RequirementExtractionResult(BaseModel):
     """Requirements plus coverage metadata from chunked extraction."""
 
     requirements: list[TenderRequirement] = Field(default_factory=list)
     coverage_metadata: RequirementExtractionCoverage
+    extraction_artifacts_metadata: list[ExtractionChunkArtifactMetadata] = Field(
+        default_factory=list
+    )
 
 
 @dataclass(frozen=True)
@@ -1740,6 +1756,48 @@ def build_failed_extraction_coverage(
     )
 
 
+def _chunk_input_sha256(chunk_text: str) -> str:
+    return hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
+
+
+def build_failed_extraction_artifacts_metadata(
+    text_payload: str,
+    *,
+    error: str,
+) -> list[ExtractionChunkArtifactMetadata]:
+    """Return chunk failure metadata for setup-level extraction failures."""
+    try:
+        chunks = _split_traceable_payload_chunk_metadata(text_payload)
+    except Exception as chunk_exc:
+        return [
+            ExtractionChunkArtifactMetadata(
+                chunk_index=0,
+                chunk_start_char=0,
+                chunk_end_char=len(text_payload or ""),
+                chunk_input_sha256=_chunk_input_sha256(text_payload or ""),
+                extraction_status="failed",
+                requirements_count=0,
+                failure_reason=(
+                    f"{error}; chunk metadata failed: "
+                    f"{type(chunk_exc).__name__}: {chunk_exc}"
+                ),
+            )
+        ]
+
+    return [
+        ExtractionChunkArtifactMetadata(
+            chunk_index=chunk.index,
+            chunk_start_char=chunk.start_char,
+            chunk_end_char=chunk.end_char,
+            chunk_input_sha256=_chunk_input_sha256(chunk.text),
+            extraction_status="failed",
+            requirements_count=0,
+            failure_reason=error,
+        )
+        for chunk in chunks
+    ]
+
+
 def _extract_requirements_full_coverage_sync(
     text_payload: str,
     api_key: str,
@@ -1765,6 +1823,7 @@ def _extract_requirements_full_coverage_sync(
     technical_warnings: list[str] = []
     extraction_batch_id = str(uuid4())
     requirements_by_chunk_index: dict[int, list[TenderRequirement]] = {}
+    artifacts_by_chunk_index: dict[int, ExtractionChunkArtifactMetadata] = {}
 
     def _record_chunk_success(
         chunk: _ExtractionChunk,
@@ -1780,6 +1839,15 @@ def _extract_requirements_full_coverage_sync(
             )
             for req in chunk_requirements
         ]
+        artifacts_by_chunk_index[chunk.index] = ExtractionChunkArtifactMetadata(
+            chunk_index=chunk.index,
+            chunk_start_char=chunk.start_char,
+            chunk_end_char=chunk.end_char,
+            chunk_input_sha256=_chunk_input_sha256(chunk.text),
+            extraction_status="succeeded",
+            requirements_count=len(chunk_requirements),
+            failure_reason=None,
+        )
 
     def _record_chunk_failure(
         chunk: _ExtractionChunk,
@@ -1787,11 +1855,21 @@ def _extract_requirements_full_coverage_sync(
     ) -> None:
         nonlocal chunks_failed
         chunks_failed += 1
+        failure_reason = f"{type(exc).__name__}: {exc}"
         technical_warnings.append(
             (
                 f"Requirement extraction chunk {chunk.index + 1}/{len(chunks)} failed: "
-                f"{type(exc).__name__}: {exc}"
+                f"{failure_reason}"
             )
+        )
+        artifacts_by_chunk_index[chunk.index] = ExtractionChunkArtifactMetadata(
+            chunk_index=chunk.index,
+            chunk_start_char=chunk.start_char,
+            chunk_end_char=chunk.end_char,
+            chunk_input_sha256=_chunk_input_sha256(chunk.text),
+            extraction_status="failed",
+            requirements_count=0,
+            failure_reason=failure_reason,
         )
         logger.exception(
             "Requirement extraction chunk %d/%d failed.",
@@ -1841,6 +1919,11 @@ def _extract_requirements_full_coverage_sync(
     return RequirementExtractionResult(
         requirements=_deduplicate_requirements(all_requirements),
         coverage_metadata=coverage,
+        extraction_artifacts_metadata=[
+            artifacts_by_chunk_index[chunk.index]
+            for chunk in chunks
+            if chunk.index in artifacts_by_chunk_index
+        ],
     )
 
 

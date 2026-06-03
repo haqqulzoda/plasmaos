@@ -51,12 +51,20 @@ class P0SecurityStaticTests(unittest.TestCase):
         for name in ("analyze_tender", "get_latest_analysis", "override_risk", "get_risk_overrides"):
             self.assertIn("_ensure_tender_access", function_block(tenders, name), name)
 
+        ensure_access = function_block(tenders, "_ensure_tender_access")
+        self.assertIn("Proposal.id", ensure_access)
+        self.assertIn("TenderAnalysis.id", ensure_access)
+        self.assertIn("TenderAnalysis.company_name == owner_key", ensure_access)
+        self.assertIn("def _claim_legacy_analysis_owner", tenders)
+
         self.assertIn("async def _get_owned_analysis", tenders)
+        owned_analysis = function_block(tenders, "_get_owned_analysis")
+        self.assertIn("_analysis_owner_candidates", owned_analysis)
         self.assertRegex(
-            tenders,
+            owned_analysis,
             r"TenderAnalysis\.id == analysis_id,[\s\S]+?"
             r"TenderAnalysis\.tender_id == tender_id,[\s\S]+?"
-            r"TenderAnalysis\.company_name == owner_key",
+            r"TenderAnalysis\.company_name\.in_\(owner_names\)",
         )
 
     def test_debug_rejected_requirements_are_scrubbed_from_customer_payloads(self) -> None:
