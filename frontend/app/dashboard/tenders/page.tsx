@@ -90,7 +90,10 @@ export default function TendersPage() {
             await fetchTenders();
         } catch (err) {
             const axiosError = err as { response?: { data?: { detail?: string } } };
-            const errorMsg = axiosError.response?.data?.detail || 'Failed to refresh feed';
+            const detail = axiosError.response?.data?.detail;
+            const errorMsg = detail === 'Admin access required' || detail === 'Operator access required'
+                ? 'Operator access required'
+                : detail || 'Failed to refresh feed';
             setError(errorMsg);
             showNotification(`❌ ${errorMsg}`);
         } finally {

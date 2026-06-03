@@ -23,7 +23,12 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only, selectinload
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import (
+    get_current_user,
+    is_operator_or_admin,
+    require_admin,
+    require_operator_or_admin,
+)
 from app.core.agents.requirement_extractor import (
     EvidenceValidationStatus,
     EXTRACTOR_SCHEMA_VERSION,
@@ -835,6 +840,7 @@ async def analyze_tender(
         tender_id=tender_id,
         user_id=current_user.id,
         current_user=current_user,
+        allow_operator=True,
     )
 
     try:
@@ -1423,6 +1429,7 @@ async def download_document(
             tender_id=tender.id,
             user_id=current_user.id,
             current_user=current_user,
+            allow_operator=True,
         )
     except HTTPException as exc:
         if exc.status_code == status.HTTP_404_NOT_FOUND:
@@ -1592,6 +1599,7 @@ async def get_tender_compiled_text(
         tender_id=tender_id,
         user_id=current_user.id,
         current_user=current_user,
+        allow_operator=True,
     )
 
     result = await db.execute(
@@ -1612,7 +1620,7 @@ async def get_tender_compiled_text(
     )
 
 
-@router.post("/refresh", response_model=RefreshResponse, dependencies=[Depends(require_admin)])
+@router.post("/refresh", response_model=RefreshResponse, dependencies=[Depends(require_operator_or_admin)])
 async def refresh_tenders(
     db: AsyncSession = Depends(get_db),
 ) -> RefreshResponse:
@@ -1719,7 +1727,11 @@ async def _ensure_tender_access(
     tender_id: UUID,
     user_id: UUID,
     current_user: User | None = None,
+    allow_operator: bool = False,
 ) -> None:
+    if allow_operator and current_user is not None and is_operator_or_admin(current_user):
+        return
+
     access_result = await db.execute(
         select(Proposal.id)
         .where(
@@ -1934,6 +1946,7 @@ async def sync_tender_documents(
         tender_id=tender_id,
         user_id=current_user.id,
         current_user=current_user,
+        allow_operator=True,
     )
 
     existing_job = await _get_active_sync_job_for_user_tender(
@@ -2033,6 +2046,7 @@ async def get_sync_status(
         tender_id=tender_id,
         user_id=current_user.id,
         current_user=current_user,
+        allow_operator=True,
     )
 
     latest_job = await _get_latest_sync_job_for_user_tender(
@@ -2081,6 +2095,7 @@ async def get_tender_documents(
         tender_id=tender_id,
         user_id=current_user.id,
         current_user=current_user,
+        allow_operator=True,
     )
 
     result = await db.execute(
@@ -2107,6 +2122,7 @@ async def get_latest_analysis(
         tender_id=tender_id,
         user_id=current_user.id,
         current_user=current_user,
+        allow_operator=True,
     )
 
     profile_result = await db.execute(
@@ -2197,6 +2213,7 @@ async def export_compliance_pdf(
         tender_id=tender_id,
         user_id=current_user.id,
         current_user=current_user,
+        allow_operator=True,
     )
 
     tender_result = await db.execute(

@@ -52,6 +52,7 @@ class P0SecurityStaticTests(unittest.TestCase):
             self.assertIn("_ensure_tender_access", function_block(tenders, name), name)
 
         ensure_access = function_block(tenders, "_ensure_tender_access")
+        self.assertIn("is_operator_or_admin(current_user)", ensure_access)
         self.assertIn("Proposal.id", ensure_access)
         self.assertIn("TenderAnalysis.id", ensure_access)
         self.assertIn("TenderAnalysis.company_name == owner_key", ensure_access)
@@ -67,6 +68,25 @@ class P0SecurityStaticTests(unittest.TestCase):
             r"TenderAnalysis\.company_name\.in_\(owner_names\)",
         )
 
+    def test_operator_support_access_is_route_calibrated(self) -> None:
+        tenders = read("app/api/endpoints/tenders.py")
+
+        operator_allowed_routes = (
+            "analyze_tender",
+            "download_document",
+            "get_tender_compiled_text",
+            "sync_tender_documents",
+            "get_sync_status",
+            "get_tender_documents",
+            "get_latest_analysis",
+            "export_compliance_pdf",
+        )
+        for name in operator_allowed_routes:
+            self.assertIn("allow_operator=True", function_block(tenders, name), name)
+
+        for name in ("override_risk", "get_risk_overrides"):
+            self.assertNotIn("allow_operator=True", function_block(tenders, name), name)
+
     def test_debug_rejected_requirements_are_scrubbed_from_customer_payloads(self) -> None:
         tenders = read("app/api/endpoints/tenders.py")
 
@@ -77,13 +97,23 @@ class P0SecurityStaticTests(unittest.TestCase):
         tenders = read("app/api/endpoints/tenders.py")
         users = read("app/api/endpoints/users.py")
         audit = read("app/api/routers/audit.py")
+        deps = read("app/api/deps.py")
 
-        for route in ("test-scrape", "proxy-download", "refresh", "seed"):
+        for route in ("test-scrape", "proxy-download", "seed"):
             self.assertRegex(
                 tenders,
                 rf'@router\.post\("/{route}"[\s\S]+?Depends\(require_admin\)',
                 route,
             )
+        self.assertRegex(
+            tenders,
+            r'@router\.post\("/refresh"[\s\S]+?Depends\(require_operator_or_admin\)',
+        )
+        self.assertIn("async def require_operator_or_admin", deps)
+        self.assertIn("PLASMA_OPERATOR_EMAILS", deps)
+        self.assertIn('"is_operator"', deps)
+        self.assertIn('"is_founder"', deps)
+        self.assertIn("Operator access required", deps)
 
         self.assertIn("Depends(require_admin)", users)
         self.assertIn("current_user: User = Depends(get_current_user)", audit)

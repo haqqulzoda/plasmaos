@@ -4,6 +4,7 @@ Plasma AI - API Dependencies
 Common dependencies for FastAPI endpoints including authentication and tier gating.
 """
 
+import os
 from typing import Callable
 
 from fastapi import Depends, HTTPException, status
@@ -41,6 +42,52 @@ async def require_admin(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
+        )
+
+    return current_user
+
+
+def _operator_email_allowlist() -> set[str]:
+    """
+    Return the temporary founder/operator allowlist from environment.
+    """
+    raw_emails = os.getenv("PLASMA_OPERATOR_EMAILS", "")
+    return {
+        email.strip().lower()
+        for email in raw_emails.split(",")
+        if email.strip()
+    }
+
+
+def is_operator_or_admin(current_user: User) -> bool:
+    """
+    Allow admins and explicitly allowlisted founder/operator emails.
+
+    This is a narrow pilot-demo bridge, not a replacement for full RBAC.
+    """
+    if current_user.is_admin:
+        return True
+
+    if bool(getattr(current_user, "is_operator", False)):
+        return True
+
+    if bool(getattr(current_user, "is_founder", False)):
+        return True
+
+    user_email = (current_user.email or "").strip().lower()
+    return user_email in _operator_email_allowlist()
+
+
+async def require_operator_or_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Require an authenticated administrator or configured operator.
+    """
+    if not is_operator_or_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operator access required",
         )
 
     return current_user
