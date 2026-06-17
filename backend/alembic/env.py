@@ -6,7 +6,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -28,6 +28,28 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _ensure_alembic_version_column_width(connection: Connection) -> None:
+    """Allow long human-readable Alembic revision IDs.
+
+    Older deployments created ``alembic_version.version_num`` as VARCHAR(32).
+    Newer INT revision names are longer than that, so Alembic can successfully
+    run the migration body but fail while updating its own version row.
+    """
+    connection.execute(
+        text(
+            """
+            DO $$
+            BEGIN
+                IF to_regclass('alembic_version') IS NOT NULL THEN
+                    ALTER TABLE alembic_version
+                    ALTER COLUMN version_num TYPE VARCHAR(128);
+                END IF;
+            END $$;
+            """
+        )
+    )
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
@@ -43,6 +65,7 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    _ensure_alembic_version_column_width(connection)
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
