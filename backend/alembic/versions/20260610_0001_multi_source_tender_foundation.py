@@ -40,7 +40,23 @@ def _print_existing_external_id_constraints() -> None:
     print(f"[INT-1] external_id indexes before migration: {external_indexes}")
 
 
+def _ensure_alembic_version_column_width() -> None:
+    """Let this long migration revision stamp into older Alembic tables."""
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF to_regclass('alembic_version') IS NOT NULL THEN
+                ALTER TABLE alembic_version
+                ALTER COLUMN version_num TYPE VARCHAR(128);
+            END IF;
+        END $$;
+        """
+    )
+
+
 def upgrade() -> None:
+    _ensure_alembic_version_column_width()
     _print_existing_external_id_constraints()
 
     op.execute("ALTER TABLE tenders ADD COLUMN IF NOT EXISTS source_system VARCHAR(50)")

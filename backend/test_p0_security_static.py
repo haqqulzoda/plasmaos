@@ -268,11 +268,16 @@ class P0SecurityStaticTests(unittest.TestCase):
 
     def test_alembic_version_table_supports_long_revision_ids(self) -> None:
         env = read("alembic/env.py")
+        migration = read("alembic/versions/20260610_0001_multi_source_tender_foundation.py")
 
         self.assertIn("def _ensure_alembic_version_column_width", env)
         self.assertIn("ALTER TABLE alembic_version", env)
         self.assertIn("ALTER COLUMN version_num TYPE VARCHAR(128)", env)
         self.assertIn("_ensure_alembic_version_column_width(connection)", env)
+        self.assertIn("connection.in_transaction()", env)
+        self.assertIn("connection.commit()", env)
+        self.assertIn("def _ensure_alembic_version_column_width", migration)
+        self.assertIn("_ensure_alembic_version_column_width()", migration)
 
     def test_proposal_response_scrubs_uploaded_tz_internals(self) -> None:
         proposals = read("app/api/endpoints/proposals.py")
