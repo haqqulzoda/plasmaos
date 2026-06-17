@@ -38,8 +38,14 @@ services:
     image: redis:7-alpine
     container_name: plasma_redis
     restart: always
+    command: [ "redis-server", "--save", "", "--appendonly", "no", "--dir", "/tmp" ]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   # ---- Backend (FastAPI) ----
   backend:
@@ -160,5 +166,3 @@ services:
 volumes:
   postgres_data:
   tender_documents_data:
-
-
