@@ -255,6 +255,10 @@ class P0SecurityStaticTests(unittest.TestCase):
             tenders,
             r'@router\.post\(\s*"/sources/adb/sync"[\s\S]+?Depends\(require_operator_or_admin\)',
         )
+        self.assertRegex(
+            tenders,
+            r'@router\.post\(\s*"/sources/world-bank/sync"[\s\S]+?Depends\(require_operator_or_admin\)',
+        )
         self.assertIn("async def require_operator_or_admin", deps)
         self.assertIn("PLASMA_OPERATOR_EMAILS", deps)
         self.assertIn('"is_operator"', deps)
@@ -278,6 +282,28 @@ class P0SecurityStaticTests(unittest.TestCase):
         self.assertIn("connection.commit()", env)
         self.assertIn("def _ensure_alembic_version_column_width", migration)
         self.assertIn("_ensure_alembic_version_column_width()", migration)
+
+    def test_tender_source_refresh_controls_cover_all_supported_sources(self) -> None:
+        page = read("../frontend/app/dashboard/tenders/page.tsx")
+
+        self.assertIn("SOURCE_REFRESH_ACTIONS", page)
+        self.assertIn("'/tenders/refresh'", page)
+        self.assertIn("'/tenders/sources/world-bank/sync'", page)
+        self.assertIn("'/tenders/sources/adb/sync'", page)
+        self.assertIn("refreshingSource", page)
+
+    def test_tender_document_sync_enqueue_uses_heavy_queue(self) -> None:
+        tenders = read("app/api/endpoints/tenders.py")
+        celery = read("app/core/celery_app.py")
+        sync_block = function_block(tenders, "sync_tender_documents")
+
+        self.assertIn('queue="heavy_dl_queue"', sync_block)
+        self.assertIn('routing_key="heavy_dl_queue"', sync_block)
+        self.assertIn("retry=True", sync_block)
+        self.assertIn("error_type = type(exc).__name__", sync_block)
+        self.assertIn("Check Redis and the heavy document worker", sync_block)
+        self.assertIn("task_publish_retry=True", celery)
+        self.assertIn("broker_connection_retry_on_startup=True", celery)
 
     def test_proposal_response_scrubs_uploaded_tz_internals(self) -> None:
         proposals = read("app/api/endpoints/proposals.py")

@@ -43,6 +43,14 @@ const DEADLINE_FILTERS = [
     { value: 'unknown', label: 'Unknown' },
 ];
 
+const SOURCE_REFRESH_ACTIONS = [
+    { value: 'uzex', label: 'UzEx', endpoint: '/tenders/refresh' },
+    { value: 'world_bank', label: 'World Bank', endpoint: '/tenders/sources/world-bank/sync' },
+    { value: 'adb', label: 'ADB', endpoint: '/tenders/sources/adb/sync' },
+] as const;
+
+type SourceRefreshTarget = (typeof SOURCE_REFRESH_ACTIONS)[number]['value'];
+
 const PAGE_SIZE = 50;
 
 function formatDate(value: string | null) {
@@ -96,7 +104,7 @@ export default function TendersPage() {
     const fetchRequestId = useRef(0);
     const [tenders, setTenders] = useState<Tender[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [refreshingSource, setRefreshingSource] = useState<SourceRefreshTarget | null>(null);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -108,6 +116,8 @@ export default function TendersPage() {
     const [keyword, setKeyword] = useState('');
     const [country, setCountry] = useState('');
     const [category, setCategory] = useState('');
+    const isRefreshing = refreshingSource !== null;
+    const refreshingLabel = SOURCE_REFRESH_ACTIONS.find((item) => item.value === refreshingSource)?.label;
 
     const showNotification = (message: string) => {
         setToastMessage(message);
@@ -158,20 +168,37 @@ export default function TendersPage() {
         fetchTenders();
     }, [fetchTenders]);
 
-    const handleRefresh = async () => {
-        setIsRefreshing(true);
+    const handleRefresh = async (target: SourceRefreshTarget) => {
+        const refreshAction = SOURCE_REFRESH_ACTIONS.find((item) => item.value === target);
+        if (!refreshAction) return;
+
+        setRefreshingSource(target);
         setError(null);
 
         try {
-            const response = await api.post('/tenders/refresh');
-            const { status, new_count, updated_count, message } = response.data;
-            if (status !== 'success') {
+            const response = await api.post(refreshAction.endpoint);
+            const payload = response.data;
+            const status = payload.status ?? 'success';
+            const created = payload.new_count ?? payload.created_count ?? payload.created ?? 0;
+            const updated = payload.updated_count ?? payload.updated ?? 0;
+            const failed = payload.failed_count ?? payload.failed ?? 0;
+            const skipped = payload.skipped_count ?? payload.skipped ?? 0;
+            const message = payload.message;
+
+            if (status === 'failed' || (target === 'uzex' && status !== 'success')) {
                 const errorMsg = message || 'Failed to refresh feed';
                 setError(errorMsg);
                 showNotification(errorMsg);
                 return;
             }
-            showNotification(`UzEx feed refreshed: ${new_count} new, ${updated_count} updated`);
+
+            const resultSummary = `${refreshAction.label} refreshed: ${created} new, ${updated} updated`;
+            const extraSummary = failed > 0
+                ? `, ${failed} failed`
+                : skipped > 0
+                    ? `, ${skipped} skipped`
+                    : '';
+            showNotification(`${resultSummary}${extraSummary}`);
             await fetchTenders();
         } catch (err) {
             const axiosError = err as { response?: { data?: { detail?: string } } };
@@ -179,7 +206,7 @@ export default function TendersPage() {
             setError(errorMsg);
             showNotification(errorMsg);
         } finally {
-            setIsRefreshing(false);
+            setRefreshingSource(null);
         }
     };
 
@@ -211,15 +238,19 @@ export default function TendersPage() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-900/50 border border-zinc-700 text-white text-sm font-medium rounded-lg transition-colors"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                        {isRefreshing ? 'Refreshing...' : 'Refresh UzEx'}
-                    </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    {SOURCE_REFRESH_ACTIONS.map((action) => (
+                        <button
+                            key={action.value}
+                            onClick={() => handleRefresh(action.value)}
+                            disabled={isRefreshing}
+                            title={`Refresh ${action.label}`}
+                            className="inline-flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-900/50 border border-zinc-700 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${refreshingSource === action.value ? 'animate-spin' : ''}`} />
+                            {refreshingSource === action.value ? 'Refreshing...' : action.label}
+                        </button>
+                    ))}
                     <div className="px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 text-sm text-zinc-300">
                         {tenders.length} shown
                     </div>
@@ -293,7 +324,7 @@ export default function TendersPage() {
             {isRefreshing && (
                 <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-3 flex items-center gap-3">
                     <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
-                    <span className="text-indigo-300 text-sm">Refreshing the UzEx source feed.</span>
+                    <span className="text-indigo-300 text-sm">Refreshing {refreshingLabel} source feed.</span>
                 </div>
             )}
 

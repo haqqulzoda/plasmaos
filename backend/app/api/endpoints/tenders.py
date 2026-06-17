@@ -2799,13 +2799,35 @@ async def sync_tender_documents(
         ) from exc
 
     try:
-        process_tender_docs.apply_async(
+        task_result = process_tender_docs.apply_async(
             args=[str(tender_id), new_job.job_id],
             kwargs={"reparse_markerless": reparse_markerless},
             task_id=new_job.job_id,
+            queue="heavy_dl_queue",
+            routing_key="heavy_dl_queue",
+            retry=True,
+            retry_policy={
+                "max_retries": 3,
+                "interval_start": 0,
+                "interval_step": 0.2,
+                "interval_max": 1,
+            },
+        )
+        logger.info(
+            "Enqueued tender document sync task tender_id=%s job_id=%s celery_task_id=%s queue=%s",
+            tender_id,
+            new_job.job_id,
+            task_result.id,
+            "heavy_dl_queue",
         )
     except Exception as exc:
-        logger.exception("Failed to enqueue sync task for tender %s", tender_id)
+        error_type = type(exc).__name__
+        logger.exception(
+            "Failed to enqueue sync task for tender %s job_id=%s error_type=%s",
+            tender_id,
+            new_job.job_id,
+            error_type,
+        )
         try:
             new_job.status = TenderSyncStatus.FAILED
             new_job.progress = 0
@@ -2819,7 +2841,10 @@ async def sync_tender_documents(
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to enqueue tender document sync task.",
+            detail=(
+                "Failed to enqueue tender document sync task "
+                f"({error_type}). Check Redis and the heavy document worker."
+            ),
         ) from exc
 
     return _serialize_sync_job(

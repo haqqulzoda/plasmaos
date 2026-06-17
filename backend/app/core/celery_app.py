@@ -35,6 +35,14 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
+    task_publish_retry=True,
+    task_publish_retry_policy={
+        "max_retries": 3,
+        "interval_start": 0,
+        "interval_step": 0.2,
+        "interval_max": 1,
+    },
+    broker_connection_retry_on_startup=True,
     worker_max_tasks_per_child=int(os.getenv("CELERY_WORKER_MAX_TASKS_PER_CHILD", "10")),
     beat_schedule={
         "run-hunter-sweep-every-30-minutes": {
