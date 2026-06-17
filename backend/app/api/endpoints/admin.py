@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
-from app.core.reproducibility import infer_source_system, requirement_route_records
+from app.core.reproducibility import requirement_route_records
 from app.db.session import get_db
 from app.models.audit import TenderAnalysis
 from app.models.all_models import Tender, User
@@ -90,20 +90,16 @@ async def get_tender_reproducibility(
     del current_user
 
     result = await db.execute(
-        select(Tender).where(Tender.external_id == external_id)
+        select(Tender).where(
+            Tender.source_system == source_system.strip().casefold(),
+            Tender.external_id == external_id,
+        )
     )
     tender = result.scalar_one_or_none()
     if tender is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tender not found",
-        )
-
-    inferred_source_system = infer_source_system(tender.source_url)
-    if source_system.casefold() != inferred_source_system.casefold():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tender not found for source system",
         )
 
     analyses_result = await db.execute(
@@ -116,7 +112,7 @@ async def get_tender_reproducibility(
 
     return {
         "tender_id": str(tender.id),
-        "source_system": inferred_source_system,
+        "source_system": tender.source_system,
         "external_id": tender.external_id,
         "latest_analyses": [
             _analysis_reproducibility_summary(analysis)

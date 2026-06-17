@@ -11,6 +11,8 @@ import type {
     RequirementMatchDetail,
     OverrideResponse,
 } from '@/types/compliance';
+import type { Tender, TenderDocument } from '@/types/tender';
+import { complianceUnavailableMessage } from '@/types/tender';
 import { extractHybridCompliance } from '@/lib/useHybridCompliance';
 import { api } from '@/lib/api';
 import {
@@ -63,19 +65,6 @@ type UiVerdict = {
     status: ComplianceVerdictStatus | 'PENDING';
     label: string;
     tone: VerdictTone;
-};
-
-type TenderDocument = {
-    id: string;
-    file_url: string;
-    file_type: string;
-    display_name: string;
-    original_filename?: string | null;
-    storage_filename?: string | null;
-    parsed_source_filenames?: string[];
-    archive_inner_filenames?: string[];
-    file_size?: number | null;
-    created_at?: string;
 };
 
 function safeDecodeURIComponent(value: string): string {
@@ -217,7 +206,6 @@ function getDocumentDisplayName(doc: TenderDocument): string {
     return (
         basenameFromPathish(doc.display_name)
         || basenameFromPathish(doc.original_filename)
-        || basenameFromPathish(doc.file_url)
         || basenameFromPathish(doc.storage_filename)
         || (doc.file_type ? `document.${doc.file_type}` : 'document')
     );
@@ -228,7 +216,6 @@ function documentCandidateNames(doc: TenderDocument): string[] {
         doc.display_name,
         doc.original_filename,
         getDocumentDisplayName(doc),
-        basenameFromPathish(doc.file_url),
         basenameFromPathish(doc.storage_filename),
         ...(doc.parsed_source_filenames ?? []),
         ...(doc.archive_inner_filenames ?? []),
@@ -240,7 +227,6 @@ function getDocumentExtension(doc: TenderDocument | null): string {
     return (
         getFileExtension(doc.display_name)
         || getFileExtension(doc.original_filename)
-        || getFileExtension(doc.file_url)
         || getFileExtension(doc.storage_filename)
         || doc.file_type.toLowerCase()
     );
@@ -421,6 +407,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     const [resolvedTenderId, setResolvedTenderId] = useState<string>(tenderId);
     const [rawText, setRawText] = useState<string>('');
     const [tenderTitle, setTenderTitle] = useState<string>('');
+    const [complianceGuardMessage, setComplianceGuardMessage] = useState<string | null>(null);
     const [isLoadingText, setIsLoadingText] = useState(true);
     const [textAccessReadyVersion, setTextAccessReadyVersion] = useState(0);
     const [error, setError] = useState<string | null>(null);
@@ -439,12 +426,13 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     useEffect(() => {
         const fetchTenderText = async () => {
             setIsLoadingText(true);
+            setComplianceGuardMessage(null);
             try {
                 let resolvedId = tenderId;
-                let tenderData: { title?: string } | null = null;
+                let tenderData: Tender | null = null;
 
                 try {
-                    const { data } = await api.get(`/tenders/${tenderId}`);
+                    const { data } = await api.get<Tender>(`/tenders/${tenderId}`);
                     tenderData = data;
                 } catch (primaryErr: unknown) {
                     const status = axiosStatus(primaryErr);
@@ -465,8 +453,17 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                     }
 
                     resolvedId = mappedTenderId;
-                    const { data } = await api.get(`/tenders/${resolvedId}`);
+                    const { data } = await api.get<Tender>(`/tenders/${resolvedId}`);
                     tenderData = data;
+                }
+
+                setResolvedTenderId(resolvedId);
+                setTenderTitle(tenderData?.title || `Tender ${resolvedId.slice(0, 8)}`);
+
+                if (tenderData && !tenderData.compliance_analysis_available) {
+                    setRawText('');
+                    setComplianceGuardMessage(complianceUnavailableMessage(tenderData));
+                    return;
                 }
 
                 let textResponse;
@@ -481,9 +478,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                     textResponse = await api.get(`/tenders/${resolvedId}/compiled-text`);
                 }
 
-                setResolvedTenderId(resolvedId);
                 setRawText(textResponse.data.compiled_master_text || '');
-                setTenderTitle(tenderData?.title || `Tender ${resolvedId.slice(0, 8)}`);
                 setTextAccessReadyVersion((version) => version + 1);
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : 'Failed to load tender text';
@@ -564,6 +559,10 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
 
     // ── API Call: Trigger Compliance Scan ──
     const handleAnalyzeTender = async () => {
+        if (complianceGuardMessage) {
+            setError(complianceGuardMessage);
+            return;
+        }
         setIsLoading(true);
         setError(null);
         setRequirements(null);
@@ -638,6 +637,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     // ── Derive UI state ──
     const hasAnalysis = requirements !== null && evaluation !== null;
     const hasText = rawText.length > 0;
+    const canStartAnalysis = hasText && !complianceGuardMessage;
     const uiVerdict = deriveUiVerdict(hybridCompliance, evaluation);
     const complianceLabel = hasAnalysis ? uiVerdict.label : 'Pending';
     const documentIndex = useMemo(() => buildDocumentFilenameIndex(documents), [documents]);
@@ -896,10 +896,10 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                     </div>
                                     <button
                                         onClick={handleAnalyzeTender}
-                                        disabled={isLoading || !hasText}
+                                        disabled={isLoading || !canStartAnalysis}
                                         className={clsx(
                                             'flex items-center justify-center gap-2.5 w-full px-6 py-4 rounded-lg text-[14px] font-medium shadow-md transition-colors',
-                                            hasText
+                                            canStartAnalysis
                                                 ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
                                                 : 'bg-gray-800 text-gray-500 cursor-not-allowed'
                                         )}
@@ -907,7 +907,12 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                         <Sparkles className="w-5 h-5" />
                                         Initialize Plasma AI Compliance Scan
                                     </button>
-                                    {!hasText && !isLoadingText && (
+                                    {complianceGuardMessage && !isLoadingText && (
+                                        <p className="text-[11px] text-amber-400/80">
+                                            {complianceGuardMessage}
+                                        </p>
+                                    )}
+                                    {!complianceGuardMessage && !hasText && !isLoadingText && (
                                         <p className="text-[11px] text-amber-400/80">
                                             No document text found. Scan cannot proceed.
                                         </p>

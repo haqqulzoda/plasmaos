@@ -76,12 +76,14 @@ async def seed_data():
             try:
                 await conn.execute(
                     text(
-                        "INSERT INTO tenders (id, external_id, source_url, title, description, budget, currency, region, deadline, status, created_at) "
-                        "VALUES (:id, :eid, :url, :title, :desc, :budget, :currency, :region, :dl, :status, NOW())"
+                        "INSERT INTO tenders (id, external_id, source_system, canonical_source_key, source_url, title, description, budget, currency, region, deadline, status, created_at) "
+                        "VALUES (:id, :eid, :source_system, :canonical_source_key, :url, :title, :desc, :budget, :currency, :region, :dl, :status, NOW())"
                     ),
                     {
                         "id": t["id"],
                         "eid": t["external_id"],
+                        "source_system": "uzex",
+                        "canonical_source_key": f"uzex:{t['external_id']}",
                         "url": t["source_url"],
                         "title": t["title"],
                         "desc": t["description"],

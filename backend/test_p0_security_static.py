@@ -31,6 +31,149 @@ class P0SecurityStaticTests(unittest.TestCase):
 
         self.assertIn("class TenderResponse", tender_response)
         self.assertNotIn("compiled_master_text", tender_response)
+        self.assertNotIn("source_metadata_json", tender_response)
+        self.assertNotIn("scrape_status", tender_response)
+        self.assertNotIn("last_synced_at", tender_response)
+
+    def test_document_response_excludes_raw_document_sources(self) -> None:
+        schema = read("app/schemas/tender.py")
+        document_response = schema.split("class TenderDocumentResponse", 1)[1]
+
+        self.assertNotIn("file_url:", document_response)
+        self.assertNotIn("source_document_url", document_response)
+        self.assertNotIn("storage_path", document_response)
+        self.assertNotIn("parsed_text", document_response)
+        self.assertIn("download_url", document_response)
+        self.assertIn("download_status", document_response)
+
+    def test_tender_response_has_safe_int4_summary_fields_only(self) -> None:
+        schema = read("app/schemas/tender.py")
+        tender_response = schema.split("class TenderDocumentResponse", 1)[0]
+
+        for field in (
+            "price_amount",
+            "price_currency",
+            "price_display",
+            "has_compiled_text",
+            "document_status",
+            "document_count",
+            "available_document_count",
+            "metadata_only_document_count",
+            "failed_document_count",
+            "compliance_analysis_available",
+            "compliance_unavailable_reason",
+        ):
+            self.assertIn(field, tender_response)
+
+        self.assertNotIn("compiled_master_text:", tender_response)
+        self.assertNotIn("parsed_text:", tender_response)
+        self.assertNotIn("storage_path:", tender_response)
+        self.assertNotIn("source_document_url", tender_response)
+
+    def test_tender_price_fields_are_derived_from_stored_budget_safely(self) -> None:
+        schema = read("app/schemas/tender.py")
+        tenders = read("app/api/endpoints/tenders.py")
+
+        self.assertIn("model_validator", schema)
+        self.assertIn("def populate_price_fields", schema)
+        self.assertIn("amount = float(self.budget or 0)", schema)
+        self.assertIn("if amount <= 0:", schema)
+        self.assertIn("self.price_display = (", schema)
+
+        self.assertIn("def _price_fields", tenders)
+        price_helper = tenders.split("def _price_fields", 1)[1].split(
+            "def _serialize_tender", 1
+        )[0]
+        self.assertIn("amount = float(tender.budget or 0)", price_helper)
+        self.assertIn("if amount <= 0:", price_helper)
+        self.assertIn("return None, None, None", price_helper)
+        self.assertIn('currency = (tender.currency or "").strip().upper() or None', price_helper)
+        self.assertIn('f"{amount:,.2f}".rstrip("0").rstrip(".")', price_helper)
+
+        serializer = tenders.split("def _serialize_tender", 1)[1].split(
+            "def _build_company_vault_response", 1
+        )[0]
+        self.assertIn("payload.price_amount", serializer)
+        self.assertIn("payload.price_currency", serializer)
+        self.assertIn("payload.price_display", serializer)
+        self.assertIn("_price_fields(tender)", serializer)
+
+    def test_tender_list_supports_int4_filters_and_batched_summaries(self) -> None:
+        tenders = read("app/api/endpoints/tenders.py")
+        list_block = function_block(tenders, "list_tenders")
+
+        for param in ("q:", "country:", "deadline_status:", "category:", "source_system:"):
+            self.assertIn(param, list_block)
+
+        self.assertIn('normalized_deadline_status == "active"', list_block)
+        self.assertIn("Tender.deadline >= now", list_block)
+        self.assertIn('normalized_deadline_status == "expired"', list_block)
+        self.assertIn("Tender.deadline < now", list_block)
+        self.assertIn('normalized_deadline_status == "unknown"', list_block)
+        self.assertIn("Tender.deadline.is_(None)", list_block)
+        self.assertIn("_batched_tender_summaries", list_block)
+        self.assertNotIn("TenderDocument", list_block)
+
+    def test_public_source_url_suppresses_document_like_urls(self) -> None:
+        tenders = read("app/api/endpoints/tenders.py")
+
+        self.assertIn("def _safe_source_notice_url", tenders)
+        source_url_helper = tenders.split("def _safe_source_notice_url", 1)[1].split(
+            "def _serialize_tender", 1
+        )[0]
+        for suffix in (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip"):
+            self.assertIn(f'"{suffix}"', source_url_helper)
+        self.assertIn("payload.source_url = _safe_source_notice_url", tenders)
+
+    def test_uzex_start_date_is_mapped_to_publication_date(self) -> None:
+        scraper = read("app/core/scraper.py")
+        uzex_source = read("app/services/tender_sources/uzex.py")
+        tenders = read("app/api/endpoints/tenders.py")
+
+        self.assertIn("publication_date: Optional[datetime] = None", scraper)
+        self.assertIn('start_date_str = lot.get("start_date")', scraper)
+        self.assertIn("publication_date = datetime.fromisoformat(start_date_str)", scraper)
+        self.assertIn("publication_date=publication_date", scraper)
+        self.assertIn("publication_date=raw.publication_date", uzex_source)
+        self.assertIn("def _uzex_trade_list_date_map", tenders)
+        self.assertIn('"https://apietender.uzex.uz/api/common/TradeList"', tenders)
+        self.assertIn('row.get("start_date")', tenders)
+        self.assertIn('row.get("end_date")', tenders)
+        self.assertIn("await _apply_live_uzex_dates(tenders)", tenders)
+        self.assertIn("await _apply_live_uzex_dates([tender])", tenders)
+
+    def test_int42_removes_small_scale_uzex_from_customer_scope(self) -> None:
+        scraper = read("app/core/scraper.py")
+        tenders = read("app/api/endpoints/tenders.py")
+        uzex_source = read("app/services/tender_sources/uzex.py")
+        uzex_scope = read("app/services/tender_sources/uzex_scope.py")
+        purge_script = read("scripts/purge_small_scale_uzex_tenders.py")
+        frontend_tenders = (ROOT.parent / "frontend/app/dashboard/tenders/page.tsx").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('UZEX_SMALL_SCALE_ROUTE = "/lots/1/"', read("app/services/tender_sources/uzex_constants.py"))
+        self.assertIn('UZEX_ENTERPRISE_ROUTE = "/lots/2/"', read("app/services/tender_sources/uzex_constants.py"))
+        self.assertIn("def customer_visible_tender_condition", uzex_scope)
+        self.assertIn("uzex_small_scale_tender_condition", uzex_scope)
+        self.assertIn("uzex_enterprise_tender_condition", uzex_scope)
+        self.assertIn('tender_model.source_system != "uzex"', uzex_scope)
+        self.assertIn("customer_visible_tender_condition(Tender)", function_block(tenders, "list_tenders"))
+        self.assertIn("customer_visible_tender_condition(Tender)", function_block(tenders, "get_tender"))
+
+        self.assertIn("UZEX_ENTERPRISE_TYPE_ID", scraper)
+        self.assertIn('"TypeId": UZEX_ENTERPRISE_TYPE_ID', scraper)
+        self.assertNotIn("for type_id in (1, 2)", scraper)
+        self.assertNotIn('"TypeId": 1', scraper)
+        self.assertIn('"TypeId": UZEX_ENTERPRISE_TYPE_ID', tenders)
+
+        self.assertIn("source_metadata_json=uzex_source_metadata()", uzex_source)
+        self.assertIn("delete(Tender)", purge_script)
+        self.assertIn("UZEX_UNKNOWN", purge_script)
+        self.assertIn("_fetch_live_uzex_ids", purge_script)
+        self.assertIn("Dependent rows covered by tender FK cascades", purge_script)
+        self.assertIn("UzEx enterprise", frontend_tenders)
+        self.assertNotIn("{ value: 'uzex', label: 'UzEx' }", frontend_tenders)
 
     def test_compiled_text_has_dedicated_authenticated_route(self) -> None:
         tenders = read("app/api/endpoints/tenders.py")
@@ -77,7 +220,6 @@ class P0SecurityStaticTests(unittest.TestCase):
             "get_tender_compiled_text",
             "sync_tender_documents",
             "get_sync_status",
-            "get_tender_documents",
             "get_latest_analysis",
             "export_compliance_pdf",
         )
@@ -108,6 +250,10 @@ class P0SecurityStaticTests(unittest.TestCase):
         self.assertRegex(
             tenders,
             r'@router\.post\("/refresh"[\s\S]+?Depends\(require_operator_or_admin\)',
+        )
+        self.assertRegex(
+            tenders,
+            r'@router\.post\(\s*"/sources/adb/sync"[\s\S]+?Depends\(require_operator_or_admin\)',
         )
         self.assertIn("async def require_operator_or_admin", deps)
         self.assertIn("PLASMA_OPERATOR_EMAILS", deps)

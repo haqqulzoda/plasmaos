@@ -15,10 +15,11 @@ from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID, uuid4
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only, selectinload
@@ -55,16 +56,17 @@ from app.core.evaluator import DynamicComplianceResult, TaxNodeInfo
 from app.core.reproducibility import (
     annotate_evidence_validation,
     annotate_hybrid_compliance,
-    canonical_source_key,
+    canonical_marker_text_sha256,
+    canonical_source_filename,
     engine_metadata,
     evidence_validation_route_records,
-    infer_source_system,
     marker_counts,
     requirement_fingerprint,
     requirement_route_records,
     safe_basename,
     sanitize_internal_requirement_diagnostics,
     sha256_text,
+    stable_document_order_key,
     stable_json_sha256,
 )
 from app.core.scraper import UzExScraper
@@ -100,6 +102,12 @@ from app.services.compliance_engine import (
     RequirementMatchDetail,
     evaluate_tender_compliance,
 )
+from app.services.tender_sources.base import NormalizedTender
+from app.services.tender_sources.adb import AdbTenderSource
+from app.services.tender_sources.uzex import UzExTenderSource
+from app.services.tender_sources.uzex_constants import UZEX_ENTERPRISE_TYPE_ID
+from app.services.tender_sources.uzex_scope import customer_visible_tender_condition
+from app.services.tender_sources.world_bank import WorldBankTenderSource
 from app.workers.tender_tasks import process_tender_docs
 
 logger = logging.getLogger(__name__)
@@ -112,6 +120,40 @@ class RefreshResponse(BaseModel):
     status: str
     new_count: int
     updated_count: int
+    message: str
+
+
+class SourceSyncResponse(BaseModel):
+    """Response for source-specific tender sync endpoints."""
+
+    status: str
+    source_system: str
+    fetched_count: int = 0
+    created_count: int = 0
+    updated_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+    attachment_count: int = 0
+    documents_downloaded: int = 0
+    dry_run: bool = False
+    errors: list[str] = Field(default_factory=list)
+    message: str
+
+
+class AdbSyncResponse(BaseModel):
+    """Response for ADB tender sync."""
+
+    status: str
+    source_system: str = "adb"
+    fetched: int = 0
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+    failed: int = 0
+    attachments_discovered: int = 0
+    documents_downloaded: int = 0
+    dry_run: bool = False
+    errors: list[str] = Field(default_factory=list)
     message: str
 
 
@@ -219,10 +261,307 @@ class RiskOverrideStatusResponse(BaseModel):
     override_seal: str | None = None
 
 
-def _serialize_tender(tender: Tender) -> TenderResponse:
+DocumentSummary = dict[str, int | bool | str | None]
+
+AVAILABLE_DOCUMENT_STATUSES = {"available", "downloaded"}
+UNAVAILABLE_LEGACY_DOCUMENT_STATUSES = {
+    "error",
+    "metadata_only",
+    "failed",
+    "processing",
+}
+
+
+def _normalize_tender_source_filter(source_system: str | None) -> str | None:
+    if not source_system:
+        return None
+    normalized_source = source_system.strip().casefold().replace("-", "_")
+    if normalized_source in {"", "all", "all_sources"}:
+        return None
+    if normalized_source == "worldbank":
+        normalized_source = "world_bank"
+    if normalized_source not in {"uzex", "world_bank", "adb"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported source_system",
+        )
+    return normalized_source
+
+
+def _document_status_from_summary(summary: DocumentSummary) -> str:
+    if int(summary.get("available_document_count") or 0) > 0:
+        return "documents_available"
+    if int(summary.get("metadata_only_document_count") or 0) > 0:
+        return "metadata_only"
+    if bool(summary.get("processing")):
+        return "processing"
+    if int(summary.get("failed_document_count") or 0) > 0:
+        return "failed"
+    return "no_documents_found"
+
+
+def _compliance_unavailable_reason(
+    *,
+    source_system: str,
+    has_compiled_text: bool,
+    document_status: str,
+) -> str | None:
+    if has_compiled_text and document_status == "documents_available":
+        return None
+    if source_system == "adb" and document_status == "metadata_only":
+        return "PDF notice discovered — download/parse required before analysis."
+    return "Document ingestion required before analysis."
+
+
+def _empty_tender_summary(*, has_compiled_text: bool = False) -> DocumentSummary:
+    return {
+        "has_compiled_text": has_compiled_text,
+        "document_status": "no_documents_found",
+        "document_count": 0,
+        "available_document_count": 0,
+        "metadata_only_document_count": 0,
+        "failed_document_count": 0,
+        "processing": False,
+    }
+
+
+async def _batched_tender_summaries(
+    *,
+    db: AsyncSession,
+    tender_ids: list[UUID],
+) -> dict[UUID, DocumentSummary]:
+    if not tender_ids:
+        return {}
+
+    summaries = {
+        tender_id: _empty_tender_summary()
+        for tender_id in tender_ids
+    }
+
+    text_rows = await db.execute(
+        select(
+            Tender.id,
+            (
+                Tender.compiled_master_text.is_not(None)
+                & (func.length(func.trim(Tender.compiled_master_text)) > 0)
+            ).label("has_compiled_text"),
+        ).where(Tender.id.in_(tender_ids))
+    )
+    for tender_id, has_compiled_text in text_rows.all():
+        summaries[tender_id]["has_compiled_text"] = bool(has_compiled_text)
+
+    lowered_status = func.lower(
+        func.coalesce(func.nullif(func.trim(TenderDocument.download_status), ""), "")
+    )
+    storage_path_present = (
+        TenderDocument.storage_path.is_not(None)
+        & (func.length(func.trim(TenderDocument.storage_path)) > 0)
+    )
+    file_url_present = (
+        TenderDocument.file_url.is_not(None)
+        & (func.length(func.trim(TenderDocument.file_url)) > 0)
+    )
+    available_status_condition = lowered_status.in_(tuple(AVAILABLE_DOCUMENT_STATUSES))
+    legacy_uzex_available_condition = (
+        (Tender.source_system == "uzex")
+        & file_url_present
+        & (~lowered_status.in_(tuple(UNAVAILABLE_LEGACY_DOCUMENT_STATUSES)))
+    )
+    available_condition = (
+        available_status_condition
+        | storage_path_present
+        | legacy_uzex_available_condition
+    )
+    metadata_only_condition = lowered_status == "metadata_only"
+    failed_condition = lowered_status == "failed"
+    processing_condition = lowered_status == "processing"
+
+    document_rows = await db.execute(
+        select(
+            TenderDocument.tender_id,
+            func.count(TenderDocument.id).label("document_count"),
+            func.sum(case((available_condition, 1), else_=0)).label(
+                "available_document_count"
+            ),
+            func.sum(case((metadata_only_condition, 1), else_=0)).label(
+                "metadata_only_document_count"
+            ),
+            func.sum(case((failed_condition, 1), else_=0)).label(
+                "failed_document_count"
+            ),
+            func.sum(case((processing_condition, 1), else_=0)).label(
+                "processing_document_count"
+            ),
+        )
+        .join(Tender, TenderDocument.tender_id == Tender.id)
+        .where(TenderDocument.tender_id.in_(tender_ids))
+        .group_by(TenderDocument.tender_id)
+    )
+    for row in document_rows.mappings().all():
+        tender_id = row["tender_id"]
+        summaries[tender_id].update(
+            document_count=int(row["document_count"] or 0),
+            available_document_count=int(row["available_document_count"] or 0),
+            metadata_only_document_count=int(row["metadata_only_document_count"] or 0),
+            failed_document_count=int(row["failed_document_count"] or 0),
+            processing=bool(row["processing_document_count"] or 0),
+        )
+
+    for summary in summaries.values():
+        summary["document_status"] = _document_status_from_summary(summary)
+
+    return summaries
+
+
+async def _single_tender_summary(
+    *,
+    db: AsyncSession,
+    tender_id: UUID,
+) -> DocumentSummary:
+    return (
+        await _batched_tender_summaries(db=db, tender_ids=[tender_id])
+    ).get(tender_id, _empty_tender_summary())
+
+
+def _safe_source_notice_url(source_url: str | None) -> str | None:
+    candidate = (source_url or "").strip()
+    if not candidate:
+        return None
+    path = urlparse(candidate).path.lower()
+    if Path(path).suffix in {
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".zip",
+        ".rar",
+        ".7z",
+    }:
+        return None
+    return candidate
+
+
+def _price_fields(tender: Tender) -> tuple[float | None, str | None, str | None]:
+    try:
+        amount = float(tender.budget or 0)
+    except (TypeError, ValueError):
+        amount = 0.0
+    if amount <= 0:
+        return None, None, None
+
+    currency = (tender.currency or "").strip().upper() or None
+    amount_display = f"{amount:,.2f}".rstrip("0").rstrip(".")
+    price_display = (
+        f"{amount_display} {currency}" if currency else amount_display
+    )
+    return amount, currency, price_display
+
+
+def _parse_uzex_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    normalized = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+async def _uzex_trade_list_date_map(
+    external_ids: set[str],
+) -> dict[str, tuple[datetime | None, datetime | None]]:
+    if not external_ids:
+        return {}
+
+    date_map: dict[str, tuple[datetime | None, datetime | None]] = {}
+    payload_base = {
+        "From": 1,
+        "To": 1000,
+        "System_Id": 0,
+    }
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            "https://apietender.uzex.uz/api/common/TradeList",
+            json={**payload_base, "TypeId": UZEX_ENTERPRISE_TYPE_ID},
+            headers={"Content-Type": "application/json"},
+        )
+        response.raise_for_status()
+        rows = response.json()
+        if not isinstance(rows, list):
+            return date_map
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            external_id = str(row.get("id") or "").strip()
+            if external_id not in external_ids:
+                continue
+            date_map[external_id] = (
+                _parse_uzex_datetime(row.get("start_date")),
+                _parse_uzex_datetime(row.get("end_date")),
+            )
+    return date_map
+
+
+async def _apply_live_uzex_dates(tenders: list[Tender]) -> None:
+    external_ids = {
+        tender.external_id
+        for tender in tenders
+        if tender.source_system == "uzex" and tender.external_id
+    }
+    if not external_ids:
+        return
+    try:
+        date_map = await _uzex_trade_list_date_map(external_ids)
+    except Exception:
+        logger.exception("Failed to enrich UzEx publication/deadline dates")
+        return
+
+    for tender in tenders:
+        if tender.source_system != "uzex":
+            continue
+        publication_date, deadline = date_map.get(tender.external_id, (None, None))
+        if publication_date is not None:
+            tender.publication_date = publication_date
+        if deadline is not None:
+            tender.deadline = deadline
+
+
+def _serialize_tender(
+    tender: Tender,
+    *,
+    summary: DocumentSummary | None = None,
+) -> TenderResponse:
     payload = TenderResponse.model_validate(tender)
-    if payload.source_url is not None and not payload.source_url.strip():
-        payload.source_url = None
+    payload.source_url = _safe_source_notice_url(payload.source_url)
+    (
+        payload.price_amount,
+        payload.price_currency,
+        payload.price_display,
+    ) = _price_fields(tender)
+    summary = summary or _empty_tender_summary()
+    payload.has_compiled_text = bool(summary.get("has_compiled_text"))
+    payload.document_status = str(
+        summary.get("document_status") or "no_documents_found"
+    )
+    payload.document_count = int(summary.get("document_count") or 0)
+    payload.available_document_count = int(
+        summary.get("available_document_count") or 0
+    )
+    payload.metadata_only_document_count = int(
+        summary.get("metadata_only_document_count") or 0
+    )
+    payload.failed_document_count = int(summary.get("failed_document_count") or 0)
+    unavailable_reason = _compliance_unavailable_reason(
+        source_system=payload.source_system,
+        has_compiled_text=payload.has_compiled_text,
+        document_status=payload.document_status,
+    )
+    payload.compliance_analysis_available = unavailable_reason is None
+    payload.compliance_unavailable_reason = unavailable_reason
     return payload
 
 
@@ -347,15 +686,76 @@ def _document_fingerprint_payload(doc: TenderDocument) -> dict[str, Any]:
     response = _document_response(doc)
     parsed_text = doc.parsed_text or ""
     counts = marker_counts(parsed_text)
+    parsed_source_filenames_canonical = [
+        canonical
+        for canonical in (
+            canonical_source_filename(filename)
+            for filename in response.parsed_source_filenames
+        )
+        if canonical
+    ]
+    archive_inner_filenames_canonical = [
+        canonical
+        for canonical in (
+            canonical_source_filename(filename)
+            for filename in response.archive_inner_filenames
+        )
+        if canonical
+    ]
     return {
         "document_id": str(doc.id),
         "display_name": safe_basename(response.display_name),
+        "display_name_canonical": canonical_source_filename(response.display_name),
         "file_type": doc.file_type,
         "file_size": doc.file_size,
+        "parsed_source_filenames": response.parsed_source_filenames,
+        "parsed_source_filenames_canonical": parsed_source_filenames_canonical,
+        "archive_inner_filenames": response.archive_inner_filenames,
+        "archive_inner_filenames_canonical": archive_inner_filenames_canonical,
         "parsed_text_length": len(parsed_text),
         "parsed_text_sha256": sha256_text(parsed_text),
+        "parsed_text_canonical_marker_sha256": canonical_marker_text_sha256(
+            parsed_text
+        ),
         **counts,
     }
+
+
+def _document_fingerprint_sort_key(fingerprint: dict[str, Any]) -> tuple[Any, ...]:
+    return stable_document_order_key(
+        source_filename=fingerprint.get("display_name_canonical")
+        or fingerprint.get("display_name"),
+        file_type=fingerprint.get("file_type"),
+        file_size=fingerprint.get("file_size"),
+        parsed_text_canonical_marker_sha256=fingerprint.get(
+            "parsed_text_canonical_marker_sha256"
+        ),
+        document_id=fingerprint.get("document_id"),
+    )
+
+
+def _document_order_fingerprint_payload(
+    document_fingerprints: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "display_name_canonical": item.get("display_name_canonical"),
+            "parsed_source_filenames_canonical": item.get(
+                "parsed_source_filenames_canonical"
+            )
+            or [],
+            "archive_inner_filenames_canonical": item.get(
+                "archive_inner_filenames_canonical"
+            )
+            or [],
+            "file_type": item.get("file_type"),
+            "file_size": item.get("file_size"),
+            "parsed_text_canonical_marker_sha256": item.get(
+                "parsed_text_canonical_marker_sha256"
+            ),
+        }
+        for item in document_fingerprints
+    ]
 
 
 def _source_chunk_index_by_fingerprint(requirements: list[Any]) -> dict[str, int | None]:
@@ -377,7 +777,7 @@ def _build_reproducibility_snapshot(
     hybrid_compliance: dict[str, Any],
     evidence_validation: dict[str, Any],
 ) -> dict[str, Any]:
-    source_system = infer_source_system(tender.source_url)
+    source_system = tender.source_system
     input_counts = marker_counts(tender_text)
     vault_payload = _vault_cache_payload(profile)
     taxonomy_payload = _taxonomy_fingerprint_payload(taxonomy_nodes)
@@ -389,26 +789,30 @@ def _build_reproducibility_snapshot(
 
     hybrid_route_summary = requirement_route_records(hybrid_compliance)
     evidence_route_summary = evidence_validation_route_records(evidence_validation)
+    document_fingerprints = sorted(
+        (_document_fingerprint_payload(doc) for doc in documents),
+        key=_document_fingerprint_sort_key,
+    )
 
     return {
         "tender_identity": {
             "source_system": source_system,
             "external_id": tender.external_id,
             "tender_id": str(tender.id),
-            "canonical_source_key": canonical_source_key(
-                source_system,
-                tender.external_id,
-            ),
+            "canonical_source_key": tender.canonical_source_key,
         },
         "input_fingerprints": {
             "compiled_text_length": len(tender_text),
             "compiled_text_sha256": sha256_text(tender_text),
             **input_counts,
             "document_count": len(documents),
-            "document_fingerprints": [
-                _document_fingerprint_payload(doc)
-                for doc in sorted(documents, key=lambda item: (item.file_url or "", str(item.id)))
+            "document_order_fingerprint": stable_json_sha256(
+                _document_order_fingerprint_payload(document_fingerprints)
+            ),
+            "ordered_canonical_filenames": [
+                item.get("display_name_canonical") for item in document_fingerprints
             ],
+            "document_fingerprints": document_fingerprints,
         },
         "engine_metadata": engine_metadata(
             extractor_schema_version=EXTRACTOR_SCHEMA_VERSION,
@@ -618,8 +1022,58 @@ def _parsed_source_filenames(parsed_text: str | None) -> list[str]:
     return filenames
 
 
-def _document_response(doc: TenderDocument) -> TenderDocumentResponse:
-    original_filename = _filename_from_document_url(doc.file_url)
+def _normalized_document_download_status(doc: TenderDocument) -> str:
+    return (doc.download_status or "").strip().casefold()
+
+
+def _document_has_storage_path(doc: TenderDocument) -> bool:
+    return bool((doc.storage_path or "").strip())
+
+
+def _legacy_uzex_document_can_use_plasma_route(
+    doc: TenderDocument,
+    *,
+    source_system: str | None,
+) -> bool:
+    if (source_system or "").strip().casefold() != "uzex":
+        return False
+    if _normalized_document_download_status(doc) in UNAVAILABLE_LEGACY_DOCUMENT_STATUSES:
+        return False
+    return bool(_extract_remote_file_path(doc.file_url))
+
+
+def _document_download_status(
+    doc: TenderDocument,
+    *,
+    source_system: str | None = None,
+) -> str:
+    raw_status = _normalized_document_download_status(doc)
+    if raw_status in AVAILABLE_DOCUMENT_STATUSES:
+        return "available"
+    if _document_has_storage_path(doc):
+        return "available"
+    if _legacy_uzex_document_can_use_plasma_route(
+        doc,
+        source_system=source_system,
+    ):
+        return "available"
+    if raw_status == "metadata_only":
+        return "metadata_only"
+    if raw_status == "failed":
+        return "failed"
+    if raw_status == "processing":
+        return "processing"
+    return "metadata_only"
+
+
+def _document_response(
+    doc: TenderDocument,
+    *,
+    source_system: str | None = None,
+) -> TenderDocumentResponse:
+    original_filename = _filename_from_document_url(
+        doc.source_document_url or doc.file_url
+    )
     storage_filename = _stored_download_name(doc.storage_path) if doc.storage_path else None
     display_name = (
         storage_filename if _has_filename_extension(storage_filename) else None
@@ -641,9 +1095,10 @@ def _document_response(doc: TenderDocument) -> TenderDocumentResponse:
 
     return TenderDocumentResponse(
         id=doc.id,
-        file_url=doc.file_url,
         file_type=doc.file_type,
         display_name=display_name,
+        download_url=f"/api/v1/tenders/documents/{doc.id}/download",
+        download_status=_document_download_status(doc, source_system=source_system),
         original_filename=original_filename,
         storage_filename=storage_filename,
         parsed_source_filenames=parsed_source_filenames,
@@ -1459,9 +1914,8 @@ async def download_document(
     # requests (405 / 0 bytes), which silently serves an empty file to the user.
     if doc.storage_path:
         logger.warning(
-            "Document %s has storage_path '%s' but physical file is missing from disk",
+            "Document %s has a missing stored file",
             doc_id,
-            doc.storage_path,
         )
         raise HTTPException(
             status_code=404,
@@ -1471,8 +1925,18 @@ async def download_document(
             ),
         )
 
+    raw_download_status = (doc.download_status or "").strip().casefold()
+    if raw_download_status == "metadata_only" or tender.source_system != "uzex":
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Document metadata has been captured, but the file has not "
+                "been downloaded into Plasma storage yet."
+            ),
+        )
+
     # ── No storage_path at all: document was never downloaded by the worker ──
-    # Attempt a live Playwright download as a last resort.
+    # Attempt a live UzEx Playwright download as a last resort.
     file_path = _extract_remote_file_path(doc.file_url)
     if not file_path:
         raise HTTPException(
@@ -1513,37 +1977,119 @@ async def download_document(
 
 @router.get("", response_model=list[TenderResponse])
 async def list_tenders(
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    source_system: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    country: str | None = Query(default=None),
+    deadline_status: str | None = Query(default=None),
+    category: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> list[TenderResponse]:
     """
     List all tenders, sorted by created_at descending.
-    
-    Returns up to 20 tenders.
+
+    Returns a paginated tender list.
     """
-    result = await db.execute(
-        select(Tender)
-        .options(
-            load_only(
-                Tender.id,
-                Tender.external_id,
-                Tender.source_url,
-                Tender.title,
-                Tender.description,
-                Tender.budget,
-                Tender.currency,
-                Tender.deadline,
-                Tender.region,
-                Tender.status,
-                Tender.category,
-                Tender.created_at,
+    query = select(Tender).options(
+        load_only(
+            Tender.id,
+            Tender.external_id,
+            Tender.source_system,
+            Tender.canonical_source_key,
+            Tender.source_url,
+            Tender.title,
+            Tender.description,
+            Tender.budget,
+            Tender.currency,
+            Tender.deadline,
+            Tender.publication_date,
+            Tender.country,
+            Tender.region,
+            Tender.sector,
+            Tender.buyer,
+            Tender.procurement_category,
+            Tender.procurement_method,
+            Tender.notice_type,
+            Tender.project_id,
+            Tender.status,
+            Tender.category,
+            Tender.created_at,
+        )
+    ).where(customer_visible_tender_condition(Tender))
+    normalized_source = _normalize_tender_source_filter(source_system)
+    if normalized_source:
+        query = query.where(Tender.source_system == normalized_source)
+
+    search_term = (q or "").strip()
+    if search_term:
+        pattern = f"%{search_term}%"
+        query = query.where(
+            or_(
+                Tender.title.ilike(pattern),
+                Tender.description.ilike(pattern),
+                Tender.buyer.ilike(pattern),
+                Tender.project_id.ilike(pattern),
+                Tender.external_id.ilike(pattern),
+                Tender.sector.ilike(pattern),
+                Tender.category.ilike(pattern),
+                Tender.procurement_category.ilike(pattern),
+                Tender.procurement_method.ilike(pattern),
+                Tender.notice_type.ilike(pattern),
             )
         )
+
+    country_filter = (country or "").strip()
+    if country_filter:
+        query = query.where(Tender.country.ilike(f"%{country_filter}%"))
+
+    normalized_deadline_status = (deadline_status or "").strip().casefold()
+    if normalized_deadline_status:
+        now = datetime.now(timezone.utc)
+        if normalized_deadline_status == "active":
+            query = query.where(Tender.deadline.is_not(None), Tender.deadline >= now)
+        elif normalized_deadline_status == "expired":
+            query = query.where(Tender.deadline.is_not(None), Tender.deadline < now)
+        elif normalized_deadline_status == "unknown":
+            query = query.where(Tender.deadline.is_(None))
+        elif normalized_deadline_status not in {"all", "any"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported deadline_status",
+            )
+
+    category_filter = (category or "").strip()
+    if category_filter and category_filter.casefold() not in {"all", "any"}:
+        pattern = f"%{category_filter}%"
+        query = query.where(
+            or_(
+                Tender.sector.ilike(pattern),
+                Tender.procurement_category.ilike(pattern),
+                Tender.category.ilike(pattern),
+            )
+        )
+
+    query = (
+        query
         .order_by(Tender.created_at.desc())
-        .limit(20)
+        .offset(offset)
+        .limit(limit)
+    )
+
+    result = await db.execute(
+        query
     )
     tenders = result.scalars().all()
-    
-    return [_serialize_tender(t) for t in tenders]
+    summaries = await _batched_tender_summaries(
+        db=db,
+        tender_ids=[tender.id for tender in tenders],
+    )
+    await _apply_live_uzex_dates(tenders)
+
+    return [
+        _serialize_tender(t, summary=summaries.get(t.id))
+        for t in tenders
+    ]
 
 
 @router.get("/{tender_id}", response_model=TenderResponse)
@@ -1560,19 +2106,32 @@ async def get_tender(
             load_only(
                 Tender.id,
                 Tender.external_id,
+                Tender.source_system,
+                Tender.canonical_source_key,
                 Tender.source_url,
                 Tender.title,
                 Tender.description,
                 Tender.budget,
                 Tender.currency,
                 Tender.deadline,
+                Tender.publication_date,
+                Tender.country,
                 Tender.region,
+                Tender.sector,
+                Tender.buyer,
+                Tender.procurement_category,
+                Tender.procurement_method,
+                Tender.notice_type,
+                Tender.project_id,
                 Tender.status,
                 Tender.category,
                 Tender.created_at,
             )
         )
-        .where(Tender.id == tender_id)
+        .where(
+            Tender.id == tender_id,
+            customer_visible_tender_condition(Tender),
+        )
     )
     tender = result.scalar_one_or_none()
     
@@ -1582,7 +2141,9 @@ async def get_tender(
             detail="Tender not found",
         )
     
-    return _serialize_tender(tender)
+    summary = await _single_tender_summary(db=db, tender_id=tender.id)
+    await _apply_live_uzex_dates([tender])
+    return _serialize_tender(tender, summary=summary)
 
 
 @router.get("/{tender_id}/compiled-text", response_model=TenderCompiledTextResponse)
@@ -1640,48 +2201,20 @@ async def refresh_tenders(
     try:
         logger.info("Starting tender refresh from UzEx portal...")
         scraper = UzExScraper(headless=True, timeout=30000)
-        scraped_tenders = await scraper.fetch_latest_tenders(limit=10)
+        scraped_tenders = await scraper.fetch_latest_tenders(limit=50)
         
         logger.info(f"Scraped {len(scraped_tenders)} tenders from portal")
+        if not scraped_tenders:
+            raise RuntimeError("UzEx TradeList returned no tender rows")
         
+        source = UzExTenderSource()
         for scraped in scraped_tenders:
-            # Check if tender exists by external_id
-            result = await db.execute(
-                select(Tender).where(Tender.external_id == scraped.external_id)
-            )
-            existing = result.scalar_one_or_none()
-            
-            if existing:
-                # Update existing tender
-                existing.title = scraped.title
-                existing.budget = scraped.budget
-                existing.currency = scraped.currency
-                existing.source_url = scraped.source_url
-                if scraped.region:
-                    existing.region = scraped.region
-                if scraped.deadline:
-                    existing.deadline = scraped.deadline
-                existing.category = scraped.category
-                updated_count += 1
-                logger.info(f"Updated tender: {scraped.external_id}")
-            else:
-                # Insert new tender
-                tender = Tender(
-                    id=uuid4(),
-                    external_id=scraped.external_id,
-                    source_url=scraped.source_url,
-                    title=scraped.title,
-                    description=None,
-                    budget=scraped.budget,
-                    currency=scraped.currency,
-                    deadline=scraped.deadline,
-                    region=scraped.region,
-                    category=scraped.category,
-                    status=TenderStatus.OPEN,
-                )
-                db.add(tender)
+            normalized = source.normalize(scraped)
+            _, created = await source.upsert(db, normalized)
+            if created:
                 new_count += 1
-                logger.info(f"Added new tender: {scraped.external_id}")
+            else:
+                updated_count += 1
         
         await db.commit()
         
@@ -1701,6 +2234,271 @@ async def refresh_tenders(
             updated_count=0,
             message=f"Portal temporarily unavailable. Existing tenders are still shown. ({type(e).__name__})",
         )
+
+
+@router.post(
+    "/sources/world-bank/sync",
+    response_model=SourceSyncResponse,
+    dependencies=[Depends(require_operator_or_admin)],
+)
+async def sync_world_bank_tenders(
+    max_pages: int = Query(default=3, ge=1, le=10),
+    rows: int = Query(default=100, ge=1, le=100),
+    active_only: bool = Query(default=True),
+    dry_run: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+) -> SourceSyncResponse:
+    """
+    Import World Bank procurement notices via the official procnotices API.
+    """
+    source = WorldBankTenderSource(
+        rows=rows,
+        max_pages=max_pages,
+        active_only=active_only,
+    )
+    errors: list[str] = []
+    fetched_count = 0
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+    failed_count = 0
+    attachment_count = 0
+
+    try:
+        raw_notices = await source.list_opportunities()
+    except Exception as exc:
+        logger.exception("world_bank_sync_fetch_failed")
+        return SourceSyncResponse(
+            status="failed",
+            source_system=source.source_system,
+            failed_count=1,
+            dry_run=dry_run,
+            errors=[type(exc).__name__],
+            message="World Bank sync failed while fetching notices.",
+        )
+
+    fetched_count = len(raw_notices)
+    for raw_notice in raw_notices:
+        external_id = str(raw_notice.get("id") or "").strip()
+        try:
+            if not source.should_import(raw_notice):
+                skipped_count += 1
+                continue
+
+            normalized = source.normalize(raw_notice)
+            attachments = await source.discover_attachments(normalized)
+            attachment_count += len(attachments)
+
+            if dry_run:
+                continue
+
+            tender, created = await source.upsert(db, normalized)
+            await db.flush()
+            if attachments:
+                await source.upsert_attachments(
+                    db,
+                    tender=tender,
+                    attachments=attachments,
+                )
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+        except Exception as exc:
+            failed_count += 1
+            logger.warning(
+                "world_bank_sync_notice_failed source_system=%s external_id=%s status=failed error_type=%s",
+                source.source_system,
+                external_id,
+                type(exc).__name__,
+            )
+            if len(errors) < 10:
+                errors.append(
+                    f"{external_id or 'unknown'}: {type(exc).__name__}"
+                )
+
+    if dry_run:
+        await db.rollback()
+    else:
+        try:
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            logger.exception("world_bank_sync_commit_failed")
+            return SourceSyncResponse(
+                status="failed",
+                source_system=source.source_system,
+                fetched_count=fetched_count,
+                created_count=created_count,
+                updated_count=updated_count,
+                skipped_count=skipped_count,
+                failed_count=failed_count + 1,
+                attachment_count=attachment_count,
+                dry_run=dry_run,
+                errors=[*errors, f"commit: {type(exc).__name__}"][:10],
+                message="World Bank sync failed while saving notices.",
+            )
+
+    status_value = "success" if failed_count == 0 else "partial"
+    return SourceSyncResponse(
+        status=status_value,
+        source_system=source.source_system,
+        fetched_count=fetched_count,
+        created_count=created_count,
+        updated_count=updated_count,
+        skipped_count=skipped_count,
+        failed_count=failed_count,
+        attachment_count=attachment_count,
+        dry_run=dry_run,
+        errors=errors,
+        message=(
+            "World Bank sync dry run completed."
+            if dry_run
+            else (
+                "World Bank sync completed: "
+                f"{created_count} created, {updated_count} updated, "
+                f"{skipped_count} skipped, {failed_count} failed."
+            )
+        ),
+    )
+
+
+@router.post(
+    "/sources/adb/sync",
+    response_model=AdbSyncResponse,
+    dependencies=[Depends(require_operator_or_admin)],
+)
+async def sync_adb_tenders(
+    max_items: int = Query(default=50, ge=1, le=100),
+    feed_type: str = Query(default="invitation_for_bids"),
+    dry_run: bool = Query(default=False),
+    download_documents: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+) -> AdbSyncResponse:
+    """
+    Import ADB tender notices from official RSS feeds.
+    """
+    if download_documents:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "ADB PDF download and parsing is deferred in INT-3. "
+                "Run with download_documents=false to capture metadata."
+            ),
+        )
+
+    try:
+        source = AdbTenderSource(feed_type=feed_type, max_items=max_items)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    errors: list[str] = []
+    fetched = 0
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+    failed_count = 0
+    attachments_discovered = 0
+
+    try:
+        raw_notices = await source.list_opportunities()
+    except Exception as exc:
+        logger.exception("adb_sync_fetch_failed")
+        return AdbSyncResponse(
+            status="failed",
+            fetched=0,
+            failed=1,
+            dry_run=dry_run,
+            errors=[type(exc).__name__],
+            message="ADB sync failed while fetching RSS feed.",
+        )
+
+    fetched = len(raw_notices)
+    for index, raw_notice in enumerate(raw_notices):
+        if index > 0:
+            await asyncio.sleep(source.config.request_delay_seconds)
+        external_id = str(raw_notice.get("guid") or "").strip()
+        try:
+            if not source.should_import(raw_notice):
+                skipped_count += 1
+                continue
+
+            normalized = source.normalize(raw_notice)
+            attachments = await source.discover_attachments(normalized)
+            attachments_discovered += len(attachments)
+
+            if dry_run:
+                continue
+
+            tender, created = await source.upsert(db, normalized)
+            await db.flush()
+            if attachments:
+                await source.upsert_attachments(
+                    db,
+                    tender=tender,
+                    attachments=attachments,
+                )
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+        except Exception as exc:
+            failed_count += 1
+            logger.warning(
+                "adb_sync_notice_failed source_system=%s external_id=%s status=failed error_type=%s",
+                source.source_system,
+                external_id,
+                type(exc).__name__,
+            )
+            if len(errors) < 10:
+                errors.append(f"{external_id or 'unknown'}: {type(exc).__name__}")
+
+    if dry_run:
+        await db.rollback()
+    else:
+        try:
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            logger.exception("adb_sync_commit_failed")
+            return AdbSyncResponse(
+                status="failed",
+                fetched=fetched,
+                created=created_count,
+                updated=updated_count,
+                skipped=skipped_count,
+                failed=failed_count + 1,
+                attachments_discovered=attachments_discovered,
+                dry_run=dry_run,
+                errors=[*errors, f"commit: {type(exc).__name__}"][:10],
+                message="ADB sync failed while saving notices.",
+            )
+
+    status_value = "success" if failed_count == 0 else "partial"
+    return AdbSyncResponse(
+        status=status_value,
+        fetched=fetched,
+        created=created_count,
+        updated=updated_count,
+        skipped=skipped_count,
+        failed=failed_count,
+        attachments_discovered=attachments_discovered,
+        documents_downloaded=0,
+        dry_run=dry_run,
+        errors=errors,
+        message=(
+            "ADB sync dry run completed. No tenders were written."
+            if dry_run
+            else (
+                "ADB sync completed: "
+                f"{created_count} created, {updated_count} updated, "
+                f"{skipped_count} skipped, {failed_count} failed."
+            )
+        ),
+    )
 
 
 def _serialize_sync_job(
@@ -2088,22 +2886,27 @@ async def get_tender_documents(
     db: AsyncSession = Depends(get_db),
 ) -> list[TenderDocumentResponse]:
     """
-    Return all parsed documents for a given tender.
+    Return safe document metadata for a given tender.
     """
-    await _ensure_tender_access(
-        db=db,
-        tender_id=tender_id,
-        user_id=current_user.id,
-        current_user=current_user,
-        allow_operator=True,
+    tender_result = await db.execute(
+        select(Tender.source_system).where(Tender.id == tender_id)
     )
+    source_system = tender_result.scalar_one_or_none()
+    if source_system is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
 
     result = await db.execute(
         select(TenderDocument)
         .where(TenderDocument.tender_id == tender_id)
         .order_by(TenderDocument.created_at.asc())
     )
-    return [_document_response(doc) for doc in result.scalars().all()]
+    return [
+        _document_response(doc, source_system=source_system)
+        for doc in result.scalars().all()
+    ]
 
 
 @router.get("/{tender_id}/latest-analysis")
@@ -2685,17 +3488,24 @@ async def seed_tenders(
     skip_count = 0
     
     for tender_data in dummy_tenders:
-        # Check if already exists
-        result = await db.execute(
-            select(Tender).where(Tender.external_id == tender_data["external_id"])
+        normalized = NormalizedTender(
+            source_system="uzex",
+            external_id=tender_data["external_id"],
+            source_url=tender_data["source_url"],
+            title=tender_data["title"],
+            description=tender_data["description"],
+            budget=tender_data["budget"],
+            currency=tender_data["currency"],
+            deadline=tender_data["deadline"],
+            region=tender_data["region"],
+            category=tender_data["category"],
+            status=tender_data["status"],
         )
-        if result.scalar_one_or_none():
+        _, created = await UzExTenderSource().upsert(db, normalized)
+        if created:
+            new_count += 1
+        else:
             skip_count += 1
-            continue
-        
-        tender = Tender(id=uuid4(), **tender_data)
-        db.add(tender)
-        new_count += 1
     
     await db.commit()
     

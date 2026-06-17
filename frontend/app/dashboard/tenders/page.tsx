@@ -1,371 +1,450 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Radar, Clock, MapPin, Banknote, FileText, Loader2, AlertCircle, RefreshCw, CheckCircle, Filter, ShieldCheck } from 'lucide-react';
+import {
+    AlertCircle,
+    ArrowRight,
+    CalendarClock,
+    CheckCircle,
+    Clock,
+    FileText,
+    Filter,
+    Loader2,
+    MapPin,
+    Radar,
+    RefreshCw,
+    Search,
+    ShieldCheck,
+} from 'lucide-react';
+
 import { api } from '@/lib/api';
+import type { Tender } from '@/types/tender';
+import {
+    complianceUnavailableMessage,
+    documentStatusClasses,
+    documentStatusLabel,
+    sourceBadgeClasses,
+    sourceLabel,
+} from '@/types/tender';
 
+const SOURCE_FILTERS = [
+    { value: 'All', label: 'All' },
+    { value: 'uzex', label: 'UzEx enterprise' },
+    { value: 'world_bank', label: 'World Bank' },
+    { value: 'adb', label: 'ADB' },
+];
 
-interface Tender {
-    id: string;
-    external_id: string;
-    source_url: string | null;
-    title: string;
-    description: string | null;
-    budget: number;
-    currency: string;
-    deadline: string | null;
-    region: string | null;
-    status: string;
-    category: string;
-    created_at: string;
+const DEADLINE_FILTERS = [
+    { value: 'All', label: 'Any deadline' },
+    { value: 'active', label: 'Active' },
+    { value: 'expired', label: 'Expired' },
+    { value: 'unknown', label: 'Unknown' },
+];
+
+const PAGE_SIZE = 50;
+
+function formatDate(value: string | null) {
+    if (!value) return 'Unknown';
+    return new Date(value).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
 }
 
-// Category badge colors
-const CATEGORY_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-    'Construction': { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/30' },
-    'IT & Tech': { bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/30' },
-    'Medical': { bg: 'bg-pink-500/10', text: 'text-pink-400', border: 'border-pink-500/30' },
-    'Office': { bg: 'bg-violet-500/10', text: 'text-violet-400', border: 'border-violet-500/30' },
-    'Other': { bg: 'bg-zinc-500/10', text: 'text-zinc-400', border: 'border-zinc-500/30' },
-};
+function publishedDateLabel(tender: Tender) {
+    return tender.publication_date ? formatDate(tender.publication_date) : 'Unknown';
+}
 
-const CATEGORIES = ['All', 'Construction', 'IT & Tech', 'Medical', 'Office', 'Other'];
+function timeRemaining(deadline: string | null) {
+    if (!deadline) return 'Unknown deadline';
+    const date = new Date(deadline);
+    const daysLeft = Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysLeft < 0) return 'Expired';
+    if (daysLeft === 0) return 'Due today';
+    if (daysLeft === 1) return '1 day remaining';
+    return `${daysLeft} days remaining`;
+}
+
+function isExpired(deadline: string | null) {
+    return Boolean(deadline && new Date(deadline).getTime() < Date.now());
+}
+
+function tenderCategory(tender: Tender) {
+    return tender.sector || tender.procurement_category || tender.category || 'Uncategorized';
+}
+
+function buyerOrProject(tender: Tender) {
+    return tender.buyer || tender.project_id || 'Not specified';
+}
+
+function priceDisplay(tender: Tender) {
+    if (tender.price_display) return tender.price_display;
+    if (typeof tender.budget === 'number' && tender.budget > 0) {
+        const amount = tender.budget.toLocaleString('en-US', {
+            maximumFractionDigits: 2,
+        });
+        return `${amount}${tender.currency ? ` ${tender.currency}` : ''}`;
+    }
+    return 'Price not specified';
+}
 
 export default function TendersPage() {
     const router = useRouter();
+    const fetchRequestId = useRef(0);
     const [tenders, setTenders] = useState<Tender[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState('All');
 
-    // Show toast notification
+    const [sourceFilter, setSourceFilter] = useState('All');
+    const [deadlineFilter, setDeadlineFilter] = useState('All');
+    const [keyword, setKeyword] = useState('');
+    const [country, setCountry] = useState('');
+    const [category, setCategory] = useState('');
+
     const showNotification = (message: string) => {
         setToastMessage(message);
         setShowToast(true);
         setTimeout(() => setShowToast(false), 4000);
     };
 
-    // Fetch tenders
-    const fetchTenders = async () => {
+    const fetchTenders = useCallback(async (offset = 0, append = false) => {
+        const requestId = fetchRequestId.current + 1;
+        fetchRequestId.current = requestId;
+        if (append) {
+            setIsLoadingMore(true);
+        }
+
         try {
-            const response = await api.get('/tenders');
-            setTenders(response.data);
+            const params: Record<string, string | number> = {
+                limit: PAGE_SIZE,
+                offset,
+            };
+            if (sourceFilter !== 'All') params.source_system = sourceFilter;
+            if (deadlineFilter !== 'All') params.deadline_status = deadlineFilter;
+            if (keyword.trim()) params.q = keyword.trim();
+            if (country.trim()) params.country = country.trim();
+            if (category.trim()) params.category = category.trim();
+
+            const response = await api.get<Tender[]>('/tenders', { params });
+            if (requestId !== fetchRequestId.current) return;
+
+            setTenders((prev) => append ? [...prev, ...response.data] : response.data);
+            setHasMore(response.data.length === PAGE_SIZE);
             setError(null);
         } catch (err) {
+            if (requestId !== fetchRequestId.current) return;
             console.error('Failed to fetch tenders:', err);
             setError('Failed to load tenders');
         } finally {
-            setIsLoading(false);
+            if (requestId === fetchRequestId.current) {
+                setIsLoading(false);
+                setIsLoadingMore(false);
+            }
         }
-    };
+    }, [category, country, deadlineFilter, keyword, sourceFilter]);
 
     useEffect(() => {
+        setIsLoading(true);
+        setTenders([]);
+        setHasMore(false);
         fetchTenders();
-    }, []);
+    }, [fetchTenders]);
 
-    // Filter tenders by category
-    const filteredTenders = useMemo(() => {
-        if (categoryFilter === 'All') return tenders;
-        return tenders.filter(t => t.category === categoryFilter);
-    }, [tenders, categoryFilter]);
-
-    // Refresh tenders from UzEx portal
     const handleRefresh = async () => {
         setIsRefreshing(true);
         setError(null);
 
         try {
             const response = await api.post('/tenders/refresh');
-            const { new_count, updated_count } = response.data;
-
-            showNotification(`✅ Feed refreshed! ${new_count} new, ${updated_count} updated`);
-
-            // Reload the tenders list
+            const { status, new_count, updated_count, message } = response.data;
+            if (status !== 'success') {
+                const errorMsg = message || 'Failed to refresh feed';
+                setError(errorMsg);
+                showNotification(errorMsg);
+                return;
+            }
+            showNotification(`UzEx feed refreshed: ${new_count} new, ${updated_count} updated`);
             await fetchTenders();
         } catch (err) {
             const axiosError = err as { response?: { data?: { detail?: string } } };
-            const detail = axiosError.response?.data?.detail;
-            const errorMsg = detail === 'Admin access required' || detail === 'Operator access required'
-                ? 'Operator access required'
-                : detail || 'Failed to refresh feed';
+            const errorMsg = axiosError.response?.data?.detail || 'Failed to refresh feed';
             setError(errorMsg);
-            showNotification(`❌ ${errorMsg}`);
+            showNotification(errorMsg);
         } finally {
             setIsRefreshing(false);
         }
     };
 
-    // Format budget
-    const formatBudget = (amount: number, currency: string) => {
-        if (amount >= 1_000_000_000) {
-            return `${(amount / 1_000_000_000).toFixed(1)}B ${currency}`;
-        }
-        if (amount >= 1_000_000) {
-            return `${(amount / 1_000_000).toFixed(0)}M ${currency}`;
-        }
-        return new Intl.NumberFormat('en-US').format(amount) + ` ${currency}`;
-    };
-
-    // Check if deadline is urgent (< 3 days)
-    const isUrgent = (deadline: string | null) => {
-        if (!deadline) return false;
-        const daysLeft = Math.ceil(
-            (new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-        );
-        return daysLeft < 3 && daysLeft >= 0;
-    };
-
-    // Check if deadline passed
-    const isPassed = (deadline: string | null) => {
-        if (!deadline) return false;
-        return new Date(deadline).getTime() < Date.now();
-    };
-
-    // Format deadline
-    const formatDeadline = (deadline: string | null) => {
-        if (!deadline) return 'No deadline';
-        const date = new Date(deadline);
-        const daysLeft = Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-
-        if (daysLeft < 0) return 'Expired';
-        if (daysLeft === 0) return 'Today';
-        if (daysLeft === 1) return 'Tomorrow';
-        if (daysLeft < 7) return `${daysLeft} days left`;
-
-        return date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-        });
-    };
-
-    // Get category style
-    const getCategoryStyle = (category: string) => {
-        return CATEGORY_STYLES[category] || CATEGORY_STYLES['Other'];
-    };
-
-    // Handle draft proposal
-    const handleDraftProposal = (tender: Tender) => {
-        router.push(`/dashboard/bids/${tender.id}`);
-    };
-
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-            </div>
-        );
-    }
-
     return (
-        <div className="space-y-6 relative">
-            {/* Toast Notification */}
+        <div className="space-y-5 relative">
             {showToast && (
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    className="fixed top-4 right-4 z-50 bg-zinc-800 border border-zinc-700 rounded-xl px-6 py-4 shadow-xl flex items-center gap-3"
+                    className="fixed top-4 right-4 z-50 bg-zinc-900 border border-zinc-700 rounded-lg px-5 py-3 shadow-xl flex items-center gap-3"
                 >
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white font-medium">{toastMessage}</span>
+                    <CheckCircle className="w-4 h-4 text-emerald-400" />
+                    <span className="text-white text-sm font-medium">{toastMessage}</span>
                 </motion.div>
             )}
 
-            {/* Header */}
             <motion.div
-                initial={{ opacity: 0, y: -20 }}
+                initial={{ opacity: 0, y: -14 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="flex items-center justify-between"
+                className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"
             >
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-                        <Radar className="w-6 h-6 text-indigo-500" />
+                    <div className="w-11 h-11 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                        <Radar className="w-5 h-5 text-indigo-400" />
                     </div>
                     <div>
-                        <h1 className="text-3xl font-bold text-white">Hunter Feed</h1>
-                        <p className="text-zinc-400 mt-1">Active tender opportunities from UzEx & Etender</p>
+                        <h1 className="text-2xl font-bold text-white">Tender Explorer</h1>
+                        <p className="text-zinc-400 text-sm mt-1">UzEx enterprise, World Bank, and ADB opportunities in one worklist</p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {/* Refresh Button */}
                     <button
                         onClick={handleRefresh}
                         disabled={isRefreshing}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800/50 border border-zinc-700 text-white text-sm font-medium rounded-xl transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-900/50 border border-zinc-700 text-white text-sm font-medium rounded-lg transition-colors"
                     >
                         <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                        {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
+                        {isRefreshing ? 'Refreshing...' : 'Refresh UzEx'}
                     </button>
-
-                    {/* Active Count Badge */}
-                    <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-full">
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                        <span className="text-green-400 text-sm font-medium">{filteredTenders.length} Active</span>
+                    <div className="px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 text-sm text-zinc-300">
+                        {tenders.length} shown
                     </div>
                 </div>
             </motion.div>
 
-            {/* Category Filter */}
             <motion.div
-                initial={{ opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-                className="flex items-center gap-3"
+                className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 space-y-4"
             >
-                <Filter className="w-4 h-4 text-zinc-400" />
-                <span className="text-zinc-400 text-sm">Filter:</span>
-                <div className="flex gap-2 flex-wrap">
-                    {CATEGORIES.map(cat => (
-                        <button
-                            key={cat}
-                            onClick={() => setCategoryFilter(cat)}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-all ${categoryFilter === cat
-                                ? 'bg-indigo-600 border-indigo-500 text-white'
-                                : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
-                                }`}
-                        >
-                            {cat}
-                        </button>
-                    ))}
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.4fr_0.8fr_0.8fr]">
+                    <label className="relative">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                        <input
+                            value={keyword}
+                            onChange={(event) => setKeyword(event.target.value)}
+                            placeholder="Search title, buyer, project, sector, method..."
+                            className="w-full rounded-lg border border-zinc-800 bg-gray-950 py-2.5 pl-9 pr-3 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
+                        />
+                    </label>
+                    <input
+                        value={country}
+                        onChange={(event) => setCountry(event.target.value)}
+                        placeholder="Country"
+                        className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
+                    />
+                    <input
+                        value={category}
+                        onChange={(event) => setCategory(event.target.value)}
+                        placeholder="Sector or category"
+                        className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
+                    />
+                </div>
+
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <Filter className="h-4 w-4 text-zinc-500" />
+                        {SOURCE_FILTERS.map((source) => (
+                            <button
+                                key={source.value}
+                                onClick={() => setSourceFilter(source.value)}
+                                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${sourceFilter === source.value
+                                    ? 'border-indigo-500 bg-indigo-600 text-white'
+                                    : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                                    }`}
+                            >
+                                {source.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <CalendarClock className="h-4 w-4 text-zinc-500" />
+                        {DEADLINE_FILTERS.map((filter) => (
+                            <button
+                                key={filter.value}
+                                onClick={() => setDeadlineFilter(filter.value)}
+                                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${deadlineFilter === filter.value
+                                    ? 'border-indigo-500 bg-indigo-600 text-white'
+                                    : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                                    }`}
+                            >
+                                {filter.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </motion.div>
 
-            {/* Refreshing Indicator */}
             {isRefreshing && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex items-center gap-3"
-                >
-                    <RefreshCw className="w-5 h-5 text-indigo-400 animate-spin" />
-                    <span className="text-indigo-400">Scraping UzEx portal... This may take 10-15 seconds.</span>
-                </motion.div>
+                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-3 flex items-center gap-3">
+                    <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
+                    <span className="text-indigo-300 text-sm">Refreshing the UzEx source feed.</span>
+                </div>
             )}
 
-            {/* Error Alert */}
             {error && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3"
-                >
-                    <AlertCircle className="w-5 h-5 text-red-400" />
-                    <span className="text-red-400">{error}</span>
-                </motion.div>
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-center gap-3">
+                    <AlertCircle className="w-4 h-4 text-red-400" />
+                    <span className="text-red-300 text-sm">{error}</span>
+                </div>
             )}
 
-            {/* Tenders — Enterprise Action Cards */}
-            {filteredTenders.length === 0 ? (
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center"
-                >
-                    <Radar className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-white mb-2">
-                        {categoryFilter !== 'All' ? `No ${categoryFilter} tenders` : 'No tenders found'}
-                    </h3>
-                    <p className="text-zinc-400 mb-6">
-                        {categoryFilter !== 'All'
-                            ? 'Try selecting a different category or refresh to get more tenders.'
-                            : 'Click "Refresh Feed" to scrape the latest tenders from UzEx.'}
-                    </p>
-                    <button
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors"
-                    >
-                        <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                        Refresh from UzEx
-                    </button>
-                </motion.div>
+            {isLoading ? (
+                <div className="flex items-center justify-center h-64">
+                    <Loader2 className="w-7 h-7 text-indigo-500 animate-spin" />
+                </div>
+            ) : tenders.length === 0 ? (
+                <div className="bg-gray-900 border border-gray-800 rounded-lg p-10 text-center">
+                    <Radar className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-white mb-2">No tenders found</h3>
+                    <p className="text-zinc-400 text-sm">Adjust filters or refresh the relevant source sync.</p>
+                </div>
             ) : (
-                <div className="flex flex-col gap-4">
-                    {filteredTenders.map((tender, index) => {
-                        const catStyle = getCategoryStyle(tender.category);
-                        return (
-                            <motion.div
-                                key={tender.id}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: index * 0.05 }}
-                                className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:bg-gray-800/60 hover:border-gray-600 transition-all flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6"
-                            >
-                                {/* Left Content — Title & ID */}
-                                <div className="flex-1 max-w-3xl">
-                                    <h3 className="text-lg font-semibold text-gray-100 mb-2 leading-snug">{tender.title}</h3>
-                                    <div className="flex items-center gap-3">
-                                        <a
-                                            href={`https://etender.uzex.uz/lot/${tender.external_id}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-xs text-slate-500 hover:text-indigo-400 underline-offset-2 hover:underline"
+                <div className="overflow-hidden rounded-lg border border-gray-800 bg-gray-950">
+                    <div className="hidden xl:grid grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_1fr_1fr_220px] gap-4 border-b border-gray-800 bg-gray-900/70 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                        <span>Tender</span>
+                        <span>Location</span>
+                        <span>Buyer / Project</span>
+                        <span>Price</span>
+                        <span>Deadline</span>
+                        <span>Category / Method</span>
+                        <span>Actions</span>
+                    </div>
+                    <div className="divide-y divide-gray-900">
+                        {tenders.map((tender, index) => {
+                            const disabledCompliance = !tender.compliance_analysis_available;
+                            return (
+                                <motion.div
+                                    key={tender.id}
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: Math.min(index * 0.02, 0.2) }}
+                                    className="grid grid-cols-1 gap-4 px-4 py-4 transition hover:bg-gray-900/70 xl:grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_1fr_1fr_220px]"
+                                >
+                                    <div className="min-w-0 space-y-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${sourceBadgeClasses(tender.source_system)}`}>
+                                                {sourceLabel(tender.source_system)}
+                                            </span>
+                                            {tender.source_url ? (
+                                                <a
+                                                    href={tender.source_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    title="Open source notice"
+                                                    className="text-[11px] text-zinc-500 underline-offset-2 transition hover:text-indigo-300 hover:underline"
+                                                >
+                                                    ID {tender.external_id}
+                                                </a>
+                                            ) : (
+                                                <span className="text-[11px] text-zinc-500">ID {tender.external_id}</span>
+                                            )}
+                                            <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${documentStatusClasses(tender.document_status)}`}>
+                                                {documentStatusLabel(tender.document_status)}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => router.push(`/dashboard/tenders/${tender.id}`)}
+                                            className="block text-left text-[15px] font-semibold leading-snug text-gray-100 hover:text-indigo-300"
                                         >
-                                            ID: {tender.external_id}
-                                        </a>
-                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
-                                            {tender.category}
-                                        </span>
+                                            {tender.title}
+                                        </button>
+                                        <div className="text-[12px] text-zinc-500">
+                                            Published {publishedDateLabel(tender)}
+                                        </div>
                                     </div>
-                                </div>
 
-                                {/* Middle Content — Key Metrics */}
-                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 shrink-0">
-                                    <div>
-                                        <span className="text-2xl font-bold text-emerald-400 block mb-1">
-                                            {formatBudget(tender.budget, tender.currency)}
-                                        </span>
+                                    <div className="text-sm text-zinc-300">
+                                        <div className="flex items-center gap-1.5">
+                                            <MapPin className="h-3.5 w-3.5 text-zinc-500" />
+                                            <span>{tender.country || 'Unknown Region'}</span>
+                                        </div>
+                                        <p className="mt-1 text-xs text-zinc-500">{tender.region || 'No region'}</p>
                                     </div>
-                                    {tender.region ? (
-                                        <span className="text-sm text-gray-400 inline-flex items-center gap-1">
-                                            <MapPin className="w-3.5 h-3.5" />
-                                            {tender.region}
-                                        </span>
-                                    ) : (
-                                        <span className="text-sm text-zinc-600">No region</span>
-                                    )}
-                                    <span
-                                        className={`text-sm inline-flex items-center gap-1 ${isPassed(tender.deadline)
-                                            ? 'text-zinc-500'
-                                            : isUrgent(tender.deadline)
-                                                ? 'text-red-400 font-semibold'
-                                                : 'text-gray-400'
-                                            }`}
-                                    >
-                                        <Clock className="w-3.5 h-3.5" />
-                                        {formatDeadline(tender.deadline)}
-                                    </span>
-                                </div>
 
-                                {/* Right Content — Actions */}
-                                <div className="flex flex-row xl:flex-col gap-3 shrink-0">
-                                    <button
-                                        onClick={() => handleDraftProposal(tender)}
-                                        disabled={isPassed(tender.deadline)}
-                                        className="bg-indigo-600 hover:bg-indigo-500 text-white w-full px-5 py-2.5 rounded-lg font-medium transition-all text-sm inline-flex items-center justify-center gap-2 disabled:bg-zinc-700 disabled:cursor-not-allowed"
-                                    >
-                                        <FileText className="w-4 h-4" />
-                                        Draft Proposal
-                                    </button>
-                                    <button
-                                        onClick={() => router.push(`/dashboard/tenders/${tender.id}/compliance`)}
-                                        className="border border-gray-700 hover:bg-gray-700 text-gray-300 w-full px-5 py-2.5 rounded-lg transition-colors text-sm inline-flex items-center justify-center gap-2"
-                                    >
-                                        <ShieldCheck className="w-4 h-4" />
-                                        Compliance
-                                    </button>
-                                </div>
-                            </motion.div>
-                        );
-                    })}
+                                    <div className="min-w-0 text-sm text-zinc-300">
+                                        <p className="truncate">{buyerOrProject(tender)}</p>
+                                        {tender.project_id && tender.buyer && (
+                                            <p className="mt-1 text-xs text-zinc-500 truncate">{tender.project_id}</p>
+                                        )}
+                                    </div>
+
+                                    <div className="text-sm text-zinc-300">
+                                        <p className={(tender.price_display || tender.budget > 0) ? 'font-semibold text-emerald-300' : 'text-zinc-500'}>
+                                            {priceDisplay(tender)}
+                                        </p>
+                                    </div>
+
+                                    <div className="text-sm">
+                                        <div className={`flex items-center gap-1.5 ${isExpired(tender.deadline) ? 'text-zinc-500' : 'text-zinc-300'}`}>
+                                            <Clock className="h-3.5 w-3.5" />
+                                            <span>{timeRemaining(tender.deadline)}</span>
+                                        </div>
+                                        <p className="mt-1 text-xs text-zinc-500">{formatDate(tender.deadline)}</p>
+                                    </div>
+
+                                    <div className="min-w-0 text-sm text-zinc-300">
+                                        <p className="truncate">{tenderCategory(tender)}</p>
+                                        <p className="mt-1 text-xs text-zinc-500 truncate">{tender.procurement_method || tender.notice_type || 'Method not specified'}</p>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                                        <button
+                                            onClick={() => router.push(`/dashboard/tenders/${tender.id}`)}
+                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-indigo-500 hover:text-indigo-200"
+                                        >
+                                            <FileText className="h-3.5 w-3.5" />
+                                            Details
+                                        </button>
+                                        <button
+                                            onClick={() => router.push(`/dashboard/tenders/${tender.id}/compliance`)}
+                                            disabled={disabledCompliance}
+                                            title={disabledCompliance ? complianceUnavailableMessage(tender) : 'Open compliance analysis'}
+                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-emerald-500 hover:text-emerald-200 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-600"
+                                        >
+                                            <ShieldCheck className="h-3.5 w-3.5" />
+                                            Compliance
+                                        </button>
+                                        <button
+                                            onClick={() => router.push(`/dashboard/bids/${tender.id}`)}
+                                            disabled={isExpired(tender.deadline)}
+                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+                                        >
+                                            Draft
+                                            <ArrowRight className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                    {hasMore && (
+                        <div className="border-t border-gray-800 p-4 text-center">
+                            <button
+                                onClick={() => fetchTenders(tenders.length, true)}
+                                disabled={isLoadingMore}
+                                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:opacity-60"
+                            >
+                                <Loader2 className={`w-4 h-4 ${isLoadingMore ? 'animate-spin' : 'hidden'}`} />
+                                {isLoadingMore ? 'Loading...' : 'Load more'}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

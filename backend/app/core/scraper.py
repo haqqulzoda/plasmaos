@@ -37,6 +37,11 @@ from tenacity import (
 )
 from zipfile import BadZipFile, ZipFile
 
+from app.services.tender_sources.uzex_constants import (
+    UZEX_ENTERPRISE_LOTS_URL,
+    UZEX_ENTERPRISE_TYPE_ID,
+)
+
 logger = logging.getLogger(__name__)
 
 # Thread pool for running sync Playwright
@@ -53,6 +58,7 @@ class ScrapedTender:
     region: Optional[str]
     source_url: str
     category: str = "Other"
+    publication_date: Optional[datetime] = None
     deadline: Optional[datetime] = None
 
 
@@ -540,7 +546,7 @@ class UzExScraper:
     """
     
     BASE_URL = "https://etender.uzex.uz"
-    LOTS_URL = "https://etender.uzex.uz/lots/2/0"
+    LOTS_URL = UZEX_ENTERPRISE_LOTS_URL
     
     def __init__(self, headless: bool = True, timeout: int = 30000):
         self.headless = headless
@@ -1834,26 +1840,62 @@ class UzExScraper:
         
         tenders: list[ScrapedTender] = []
         
+        def _trade_list_rows(payload):
+            if isinstance(payload, list):
+                return payload
+            if isinstance(payload, dict):
+                for key in ("data", "items", "result", "rows"):
+                    rows = payload.get(key)
+                    if isinstance(rows, list):
+                        return rows
+            return []
+
+        seen_lot_ids: set[str] = set()
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
+                lots = []
                 response = await client.post(
                     API_URL,
-                    json={"TypeId": 2, "From": 1, "To": limit, "System_Id": 0},
+                    json={
+                        "TypeId": UZEX_ENTERPRISE_TYPE_ID,
+                        "From": 1,
+                        "To": limit,
+                        "System_Id": 0,
+                    },
                     headers={"Content-Type": "application/json"},
                 )
                 response.raise_for_status()
-                lots = response.json()
-            
-            logger.info(f"[API] Received {len(lots)} lots from TradeList API")
-            
+                lots = _trade_list_rows(response.json())
+                logger.info(
+                    "[API] Received %s enterprise lots from TradeList API TypeId=%s",
+                    len(lots),
+                    UZEX_ENTERPRISE_TYPE_ID,
+                )
+
             for lot in lots:
                 try:
+                    if not isinstance(lot, dict):
+                        continue
                     lot_id = str(lot.get("id", ""))
+                    if not lot_id or lot_id in seen_lot_ids:
+                        continue
+                    seen_lot_ids.add(lot_id)
                     title = lot.get("name", "").strip()
+                    if not title:
+                        continue
                     cost = float(lot.get("cost", 0) or 0)
                     currency = lot.get("currency_codeabc", "UZS") or "UZS"
                     
-                    # Parse deadline
+                    # Parse publication/start date and deadline.
+                    publication_date = None
+                    start_date_str = lot.get("start_date")
+                    if start_date_str:
+                        try:
+                            publication_date = datetime.fromisoformat(start_date_str).replace(tzinfo=timezone.utc)
+                        except (ValueError, TypeError):
+                            pass
+
                     deadline = None
                     end_date_str = lot.get("end_date")
                     if end_date_str:
@@ -1885,6 +1927,7 @@ class UzExScraper:
                         region=region,
                         source_url=source_url,
                         category=category,
+                        publication_date=publication_date,
                         deadline=deadline,
                     )
                     tenders.append(tender)

@@ -19,13 +19,7 @@ import {
 } from 'lucide-react';
 
 import { api } from '@/lib/api';
-
-interface TenderDocument {
-  id: string;
-  file_url: string;
-  file_type: string;
-  created_at: string;
-}
+import type { TenderDocument } from '@/types/tender';
 
 type TenderSyncState = 'IDLE' | 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
 
@@ -202,21 +196,16 @@ const isPdfFile = (ext: string) => ext === 'pdf';
 
 const getDocumentFilename = (doc: TenderDocument) => {
   const fallbackExtension = (doc.file_type || '').trim().toLowerCase();
+  if (doc.display_name) {
+    return doc.display_name;
+  }
 
-  try {
-    const parsed = new URL(doc.file_url);
-    const queryPath = parsed.searchParams.get('path');
-    const candidate = decodeURIComponent(queryPath || parsed.pathname);
-    const filename = candidate.split('/').filter(Boolean).pop();
-    if (filename) {
-      return filename;
-    }
-  } catch {
-    const sanitized = decodeURIComponent(doc.file_url || '').split('?')[0].split('#')[0];
-    const filename = sanitized.split('/').filter(Boolean).pop();
-    if (filename) {
-      return filename;
-    }
+  if (doc.original_filename) {
+    return doc.original_filename;
+  }
+
+  if (doc.storage_filename) {
+    return doc.storage_filename;
   }
 
   return fallbackExtension ? `document.${fallbackExtension}` : 'document';
@@ -900,7 +889,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
             {(isLoadingDocs || isSyncingDocs) && (
               <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Synchronizing tender documents from UzEx ({docsSyncProgress}%).
+                Synchronizing tender documents ({docsSyncProgress}%).
               </div>
             )}
             {docsSyncError && (
@@ -918,18 +907,24 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
                 const isPdf = isPdfFile(ext) || doc.file_type?.toLowerCase() === 'pdf';
                 const isArchive =
                   isArchiveFile(ext) || ['zip', 'rar', '7z', 'tar', 'gz'].includes(doc.file_type?.toLowerCase());
+                const isAvailable = doc.download_status === 'available';
                 const isPreviewAction = isPdf;
                 const isBusy = isPreviewAction ? previewingDocId === doc.id : downloadingDocId === doc.id;
                 const typeLabel = (ext || doc.file_type || 'file').toUpperCase();
+                const statusLabel = doc.download_status === 'metadata_only'
+                  ? 'PDF notice discovered — not downloaded into Plasma yet.'
+                  : doc.download_status === 'failed'
+                    ? 'Document processing failed.'
+                    : 'Unavailable';
 
                 return (
                   <button
                     key={doc.id}
-                    disabled={isBusy}
+                    disabled={isBusy || !isAvailable}
                     onClick={() =>
                       isPreviewAction ? handleDocumentPreview(doc.id) : handleDocumentDownload(doc.id, filename)
                     }
-                    className="flex w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-zinc-700 disabled:cursor-wait disabled:opacity-70"
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-zinc-700 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <span className="flex min-w-0 items-center gap-2 truncate">
                       {isBusy ? (
@@ -944,7 +939,9 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
                       <span className="truncate">{typeLabel} | {filename}</span>
                     </span>
                     <span className="inline-flex items-center gap-1 text-zinc-400">
-                      {isBusy ? (
+                      {!isAvailable ? (
+                        <span className="max-w-[180px] text-right text-xs font-medium text-amber-300">{statusLabel}</span>
+                      ) : isBusy ? (
                         <span className="text-xs font-medium text-sky-300">Opening...</span>
                       ) : isPreviewAction ? (
                         <>

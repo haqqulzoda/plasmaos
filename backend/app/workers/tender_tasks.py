@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import mimetypes
 import os
 import random
 import re
@@ -29,6 +30,7 @@ configure_mappers()
 
 from app.core.celery_app import celery_app
 from app.core.parser import process_tender_document
+from app.core.reproducibility import stable_document_order_key
 from app.core.scraper import UzExScraper
 from app.db.session import AsyncSessionLocal, engine
 
@@ -50,12 +52,16 @@ def _log_sync_event(level: int, event: str, **fields) -> None:
     logger.log(level, "tender_docs.%s %s", event, safe_fields)
 
 
-def _file_sha256_prefix(path: Path) -> str:
+def _file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as file_handle:
         for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
             digest.update(chunk)
-    return digest.hexdigest()[:16]
+    return digest.hexdigest()
+
+
+def _file_sha256_prefix(path: Path) -> str:
+    return _file_sha256(path)[:16]
 
 
 def _disk_probe(path: Path) -> dict[str, int]:
@@ -284,9 +290,9 @@ def _finalize_document_download(*, temp_path: str, final_path: str) -> tuple[str
     if file_size <= 0:
         raise OSError(f"Downloaded tender document is empty: {temp}")
 
-    sha256_prefix = _file_sha256_prefix(temp)
+    sha256_digest = _file_sha256(temp)
     temp.replace(final)
-    return str(final), file_size, sha256_prefix
+    return str(final), file_size, sha256_digest
 
 
 def _cleanup_temp_download(temp_path: str) -> None:
@@ -331,6 +337,62 @@ def _compiled_text_chunk(doc: TenderDocument, filename: str | None = None) -> st
     return f"[{display_name}]\n{parsed_text}"
 
 
+def _compiled_text_sort_key(
+    doc: TenderDocument,
+    filename: str | None = None,
+) -> tuple[str, str, int, str, str, str]:
+    return stable_document_order_key(
+        source_filename=_document_display_name(doc, filename),
+        file_type=doc.file_type,
+        file_size=doc.file_size,
+        parsed_text=doc.parsed_text,
+        created_at=getattr(doc, "created_at", None),
+        document_id=doc.id,
+    )
+
+
+def _compiled_text_entry(
+    doc: TenderDocument,
+    filename: str | None = None,
+) -> tuple[tuple[str, str, int, str, str, str], str] | None:
+    chunk = _compiled_text_chunk(doc, filename)
+    if not chunk.strip():
+        return None
+    return (_compiled_text_sort_key(doc, filename), chunk)
+
+
+def _store_compiled_text_entry(
+    entries_by_identity: dict[
+        str,
+        tuple[tuple[str, str, int, str, str, str], str],
+    ],
+    identity: str,
+    doc: TenderDocument,
+    filename: str | None = None,
+    *,
+    replace: bool = False,
+) -> None:
+    entry = _compiled_text_entry(doc, filename)
+    if entry is None:
+        return
+    if replace or identity not in entries_by_identity:
+        entries_by_identity[identity] = entry
+
+
+def _join_compiled_text_entries(
+    entries_by_identity: dict[
+        str,
+        tuple[tuple[str, str, int, str, str, str], str],
+    ],
+) -> str | None:
+    compiled_chunks = [
+        text
+        for _, text in sorted(entries_by_identity.values(), key=lambda item: item[0])
+        if text.strip()
+    ]
+    return "\n\n".join(compiled_chunks).strip() if compiled_chunks else None
+
+
 async def _reparse_markerless_stored_document(
     doc: TenderDocument,
     *,
@@ -349,7 +411,6 @@ async def _reparse_markerless_stored_document(
         job_id=job_id,
         document_id=doc.id,
         display_name=display_name,
-        storage_path=storage_path,
     )
 
     extracted_text = await process_tender_document(
@@ -456,7 +517,9 @@ async def _process_tender_docs_async(
                     "scrape_start",
                     tender_id=tender_uuid,
                     job_id=job_id,
-                    source_url=tender.source_url,
+                    source_system=tender.source_system,
+                    external_id=tender.external_id,
+                    canonical_source_key=tender.canonical_source_key,
                 )
                 scraped_docs = await scraper.scrape_tender_documents(tender.source_url)
                 _log_sync_event(
@@ -466,7 +529,6 @@ async def _process_tender_docs_async(
                     job_id=job_id,
                     elapsed_ms=int((time.monotonic() - scrape_started_at) * 1000),
                     scraped_count=len(scraped_docs),
-                    sample_urls=[doc.get("file_url") for doc in scraped_docs[:3]],
                 )
                 if not scraped_docs:
                     _log_sync_event(
@@ -515,7 +577,10 @@ async def _process_tender_docs_async(
                 new_count = 0
                 parsed_count = 0
                 reparsed_markerless_count = 0
-                parsed_text_by_identity: dict[str, str] = {}
+                parsed_text_by_identity: dict[
+                    str,
+                    tuple[tuple[str, str, int, str, str, str], str],
+                ] = {}
                 docs_to_process: list[tuple[TenderDocument | None, str, str, str, int]] = []
 
                 if reparse_markerless:
@@ -531,9 +596,10 @@ async def _process_tender_docs_async(
 
                 for doc in existing_docs:
                     if _parsed_text_present(doc):
-                        parsed_text_by_identity.setdefault(
+                        _store_compiled_text_entry(
+                            parsed_text_by_identity,
                             _document_identity_key(doc.file_url),
-                            _compiled_text_chunk(doc),
+                            doc,
                         )
 
                 for scraped_index, doc_data in enumerate(scraped_docs):
@@ -568,9 +634,10 @@ async def _process_tender_docs_async(
                         doc.file_type = scraped_file_type
 
                     if doc and _parsed_text_present(doc) and _stored_file_exists(doc):
-                        parsed_text_by_identity.setdefault(
+                        _store_compiled_text_entry(
+                            parsed_text_by_identity,
                             _document_identity_key(scraped_url),
-                            _compiled_text_chunk(doc),
+                            doc,
                         )
                         continue
 
@@ -581,10 +648,9 @@ async def _process_tender_docs_async(
                             "scraped_doc_invalid_remote_path",
                             tender_id=tender_uuid,
                             job_id=job_id,
-                            scraped_url=scraped_url,
                         )
                         raise RuntimeError(
-                            f"Scraped document has invalid remote path: {scraped_url}"
+                            f"Scraped document at index {scraped_index} has invalid remote path"
                         )
 
                     docs_to_process.append((doc, scraped_url, file_path, scraped_file_type, scraped_index))
@@ -605,8 +671,6 @@ async def _process_tender_docs_async(
                         job_id=job_id,
                         index=index,
                         button_index=button_index,
-                        scraped_url=scraped_url,
-                        file_path=file_path,
                         file_type=scraped_file_type,
                         has_existing_doc=doc is not None,
                         stored_file_exists=_stored_file_exists(doc),
@@ -631,10 +695,22 @@ async def _process_tender_docs_async(
                                 tender_id=tender_uuid,
                                 job_id=job_id,
                                 document_id=doc.id,
-                                storage_path=local_path,
                                 file_size=local_path.stat().st_size,
                                 sha256_prefix=_file_sha256_prefix(local_path),
                             )
+                            if not doc.source_document_url:
+                                doc.source_document_url = doc.file_url
+                            if not doc.source_document_type:
+                                doc.source_document_type = doc.file_type
+                            if not doc.download_status:
+                                doc.download_status = "downloaded"
+                            if not doc.mime_type:
+                                doc.mime_type = mimetypes.guess_type(display_name)[0]
+                            if not doc.sha256:
+                                doc.sha256 = await asyncio.to_thread(
+                                    _file_sha256,
+                                    local_path,
+                                )
                             needs_parse = (
                                 not _parsed_text_present(doc)
                                 or (reparse_markerless and _parsed_text_markerless(doc))
@@ -659,8 +735,12 @@ async def _process_tender_docs_async(
                                     )
 
                             if _parsed_text_present(doc):
-                                parsed_text_by_identity[_document_identity_key(scraped_url)] = (
-                                    _compiled_text_chunk(doc, display_name)
+                                _store_compiled_text_entry(
+                                    parsed_text_by_identity,
+                                    _document_identity_key(scraped_url),
+                                    doc,
+                                    display_name,
+                                    replace=True,
                                 )
                             continue
 
@@ -687,18 +767,23 @@ async def _process_tender_docs_async(
                                 / f"{uuid4().hex}_{_sanitize_filename(resolved_name)}"
                             )
 
-                        storage_path, file_size, sha256_prefix = await asyncio.to_thread(
+                        storage_path, file_size, sha256_digest = await asyncio.to_thread(
                             _finalize_document_download,
                             temp_path=temp_path,
                             final_path=final_path,
                         )
+                        resolved_file_type = _resolved_file_type(
+                            resolved_name,
+                            scraped_file_type,
+                        )
+                        mime_type = mimetypes.guess_type(resolved_name)[0]
                         _log_sync_event(
                             logging.INFO,
                             "download_done",
                             tender_id=tender_uuid,
                             job_id=job_id,
                             bytes=file_size,
-                            sha256_prefix=sha256_prefix,
+                            sha256_prefix=sha256_digest[:16],
                             downloaded_name=downloaded_name,
                             resolved_name=resolved_name,
                             elapsed_ms=int((time.monotonic() - doc_started_at) * 1000),
@@ -708,7 +793,6 @@ async def _process_tender_docs_async(
                             "storage_done",
                             tender_id=tender_uuid,
                             job_id=job_id,
-                            storage_path=storage_path,
                             file_size=file_size,
                             exists=Path(storage_path).is_file(),
                             disk=_disk_probe(Path(storage_path)),
@@ -719,17 +803,29 @@ async def _process_tender_docs_async(
                                 id=uuid4(),
                                 tender_id=tender_uuid,
                                 file_url=scraped_url,
-                                file_type=_resolved_file_type(resolved_name, scraped_file_type),
+                                file_type=resolved_file_type,
+                                source_document_url=scraped_url,
+                                source_document_type=scraped_file_type,
+                                download_status="downloaded",
+                                download_error=None,
                                 storage_path=storage_path,
                                 file_size=file_size,
+                                mime_type=mime_type,
+                                sha256=sha256_digest,
                             )
                             db.add(doc)
                             new_count += 1
                         else:
                             doc.file_url = scraped_url
-                            doc.file_type = _resolved_file_type(resolved_name, scraped_file_type)
+                            doc.file_type = resolved_file_type
+                            doc.source_document_url = scraped_url
+                            doc.source_document_type = scraped_file_type
+                            doc.download_status = "downloaded"
+                            doc.download_error = None
                             doc.storage_path = storage_path
                             doc.file_size = file_size
+                            doc.mime_type = mime_type
+                            doc.sha256 = sha256_digest
 
                         _register_existing_doc(
                             doc,
@@ -762,8 +858,12 @@ async def _process_tender_docs_async(
                                 )
 
                         if _parsed_text_present(doc):
-                            parsed_text_by_identity[_document_identity_key(scraped_url)] = (
-                                _compiled_text_chunk(doc, resolved_name)
+                            _store_compiled_text_entry(
+                                parsed_text_by_identity,
+                                _document_identity_key(scraped_url),
+                                doc,
+                                resolved_name,
+                                replace=True,
                             )
                     except Exception as doc_exc:
                         _log_sync_event(
@@ -773,18 +873,17 @@ async def _process_tender_docs_async(
                             job_id=job_id,
                             index=index,
                             button_index=button_index,
-                            scraped_url=scraped_url,
                             error_type=type(doc_exc).__name__,
                             error=doc_exc,
                         )
                         logger.exception(
-                            "Tender document sync failed for tender_id=%s job_id=%s url=%s",
+                            "Tender document sync failed for tender_id=%s job_id=%s index=%s",
                             tender_uuid,
                             job_id,
-                            scraped_url,
+                            index,
                         )
                         raise RuntimeError(
-                            f"Failed to persist/parse tender document '{scraped_url}' "
+                            f"Failed to persist/parse tender document at index {index} "
                             f"for tender {tender_uuid}: {doc_exc}"
                         ) from doc_exc
                     finally:
@@ -796,9 +895,8 @@ async def _process_tender_docs_async(
                                 progress=progress,
                             )
 
-                compiled_chunks = [text for text in parsed_text_by_identity.values() if text.strip()]
-                tender.compiled_master_text = (
-                    "\n\n".join(compiled_chunks).strip() if compiled_chunks else None
+                tender.compiled_master_text = _join_compiled_text_entries(
+                    parsed_text_by_identity
                 )
                 after_compiled_counts = _marker_counts(tender.compiled_master_text)
 

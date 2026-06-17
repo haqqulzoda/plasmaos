@@ -59,7 +59,15 @@ class Tender(Base):
     )
     external_id: Mapped[str] = mapped_column(
         String(100),
-        unique=True,
+        nullable=False,
+    )
+    source_system: Mapped[str] = mapped_column(
+        String(50),
+        default="uzex",
+        nullable=False,
+    )
+    canonical_source_key: Mapped[str] = mapped_column(
+        String(200),
         nullable=False,
     )
     source_url: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -73,7 +81,30 @@ class Tender(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    publication_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    country: Mapped[str | None] = mapped_column(String(100), nullable=True)
     region: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sector: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    buyer: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    procurement_category: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    procurement_method: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    notice_type: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    project_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_metadata_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+    scrape_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     status: Mapped[TenderStatus] = mapped_column(
         Enum(TenderStatus, name="tender_status"),
         default=TenderStatus.OPEN,
@@ -109,7 +140,19 @@ class Tender(Base):
     
     # Indexes
     __table_args__ = (
+        CheckConstraint(
+            "source_system IN ('uzex', 'world_bank', 'adb')",
+            name="ck_tenders_source_system_allowed",
+        ),
         Index("ix_tenders_external_id", "external_id"),
+        Index(
+            "ix_tenders_source_system_external_id",
+            "source_system",
+            "external_id",
+            unique=True,
+        ),
+        Index("ix_tenders_canonical_source_key", "canonical_source_key", unique=True),
+        Index("ix_tenders_source_system", "source_system"),
         Index("ix_tenders_status", "status"),
         Index("ix_tenders_deadline", "deadline"),
     )
@@ -211,8 +254,15 @@ class TenderDocument(Base):
     )
     file_url: Mapped[str] = mapped_column(String(500), nullable=False)
     file_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_document_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    source_document_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    download_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    download_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_file_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     storage_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     parsed_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
