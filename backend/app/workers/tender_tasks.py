@@ -43,6 +43,55 @@ TRACE_FILE_MARKER_RE = re.compile(r"\[\[FILE:\s*(.+?)\]\]")
 TRACE_PAGE_MARKER_RE = re.compile(r"\[\[PAGE\s+(\d+)\]\]")
 
 
+def _env_float(
+    name: str,
+    default: float,
+    *,
+    min_value: float | None = None,
+    max_value: float | None = None,
+) -> float:
+    raw_value = os.getenv(name)
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    try:
+        value = float(raw_value)
+    except ValueError:
+        logger.warning("Invalid float for %s=%r; using default %s", name, raw_value, default)
+        return default
+
+    if min_value is not None:
+        value = max(min_value, value)
+    if max_value is not None:
+        value = min(max_value, value)
+    return value
+
+
+DOWNLOAD_JITTER_MIN_SECONDS = _env_float(
+    "TENDER_DOC_DOWNLOAD_JITTER_MIN_SECONDS",
+    0.0,
+    min_value=0.0,
+    max_value=30.0,
+)
+DOWNLOAD_JITTER_MAX_SECONDS = _env_float(
+    "TENDER_DOC_DOWNLOAD_JITTER_MAX_SECONDS",
+    0.0,
+    min_value=0.0,
+    max_value=30.0,
+)
+
+
+def _download_jitter_seconds() -> float:
+    if DOWNLOAD_JITTER_MAX_SECONDS <= 0:
+        return 0.0
+
+    lower_bound = min(DOWNLOAD_JITTER_MIN_SECONDS, DOWNLOAD_JITTER_MAX_SECONDS)
+    upper_bound = max(DOWNLOAD_JITTER_MIN_SECONDS, DOWNLOAD_JITTER_MAX_SECONDS)
+    if upper_bound <= lower_bound:
+        return upper_bound
+    return random.uniform(lower_bound, upper_bound)
+
+
 def _log_sync_event(level: int, event: str, **fields) -> None:
     safe_fields = {}
     for key, value in fields.items():
@@ -676,14 +725,15 @@ async def _process_tender_docs_async(
                         stored_file_exists=_stored_file_exists(doc),
                     )
                     if index > 0:
-                        delay_seconds = random.uniform(2.0, 5.0)
-                        logger.info(
-                            "Applying %.2fs download jitter for tender %s before '%s'",
-                            delay_seconds,
-                            tender_uuid,
-                            scraped_url,
-                        )
-                        await asyncio.sleep(delay_seconds)
+                        delay_seconds = _download_jitter_seconds()
+                        if delay_seconds > 0:
+                            logger.info(
+                                "Applying %.2fs download jitter for tender %s before '%s'",
+                                delay_seconds,
+                                tender_uuid,
+                                scraped_url,
+                            )
+                            await asyncio.sleep(delay_seconds)
 
                     try:
                         if doc is not None and _stored_file_exists(doc):

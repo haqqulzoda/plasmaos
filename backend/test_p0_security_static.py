@@ -305,6 +305,19 @@ class P0SecurityStaticTests(unittest.TestCase):
         self.assertIn("task_publish_retry=True", celery)
         self.assertIn("broker_connection_retry_on_startup=True", celery)
 
+    def test_tender_document_sync_has_fast_production_defaults(self) -> None:
+        worker = read("app/workers/tender_tasks.py")
+        parser = read("app/core/parser.py")
+
+        self.assertIn("TENDER_DOC_DOWNLOAD_JITTER_MIN_SECONDS", worker)
+        self.assertIn("TENDER_DOC_DOWNLOAD_JITTER_MAX_SECONDS", worker)
+        self.assertIn("DOWNLOAD_JITTER_MAX_SECONDS <= 0", worker)
+        self.assertIn('TENDER_OCR_PAGE_TIMEOUT_SECONDS", 12', parser)
+        self.assertIn('TENDER_OCR_MAX_PAGES", 2', parser)
+        self.assertIn('TENDER_OCR_RENDER_DPI", 150', parser)
+        self.assertIn("TENDER_OCR_SKIP_AFTER_TEXT_CHARS", parser)
+        self.assertIn("OCR skipped after", parser)
+
     def test_proposal_response_scrubs_uploaded_tz_internals(self) -> None:
         proposals = read("app/api/endpoints/proposals.py")
 

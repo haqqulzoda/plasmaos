@@ -31,7 +31,7 @@ import {
 
 const SOURCE_FILTERS = [
     { value: 'All', label: 'All' },
-    { value: 'uzex', label: 'UzEx enterprise' },
+    { value: 'uzex', label: 'UzEx' },
     { value: 'world_bank', label: 'World Bank' },
     { value: 'adb', label: 'ADB' },
 ];

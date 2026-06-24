@@ -42,6 +42,34 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(
+    name: str,
+    default: int,
+    *,
+    min_value: int | None = None,
+    max_value: int | None = None,
+) -> int:
+    raw_value = os.environ.get(name)
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    try:
+        value = int(raw_value)
+    except ValueError:
+        logger.warning("Invalid integer for %s=%r; using default %s", name, raw_value, default)
+        return default
+
+    if min_value is not None:
+        value = max(min_value, value)
+    if max_value is not None:
+        value = min(max_value, value)
+    return value
+
 SUPPORTED_DOC_SUFFIXES = {".pdf", ".docx"}
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".rtf"}
 ARCHIVE_SUFFIXES = {".zip", ".rar"}
@@ -59,8 +87,16 @@ PDF_MIME_TYPES = {"application/pdf"}
 OCR_SAFE_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
 OCR_MIN_TEXT_LEN = 50
 OCR_LANGS = "uzb+rus+eng"
-OCR_PAGE_TIMEOUT_SECONDS = 60
-OCR_MAX_PAGES = 5
+OCR_PAGE_TIMEOUT_SECONDS = _env_int("TENDER_OCR_PAGE_TIMEOUT_SECONDS", 12, min_value=1, max_value=60)
+OCR_MAX_PAGES = _env_int("TENDER_OCR_MAX_PAGES", 2, min_value=0, max_value=25)
+OCR_RENDER_DPI = _env_int("TENDER_OCR_RENDER_DPI", 150, min_value=100, max_value=300)
+OCR_SKIP_AFTER_TEXT_CHARS = _env_int(
+    "TENDER_OCR_SKIP_AFTER_TEXT_CHARS",
+    5000,
+    min_value=0,
+    max_value=1_000_000,
+)
+OCR_ENABLED = not _env_flag("TENDER_OCR_DISABLED")
 DEMO_OCR_BYPASS_ENV = "DEMO_OCR_BYPASS"
 GEMINI_OCR_MODEL = "gemini-2.5-flash"
 GEMINI_OCR_MAX_RETRIES = 3
@@ -160,10 +196,6 @@ def _safe_decode_text(raw_bytes: bytes) -> str:
 
 def _normalize_content_type(content_type: str | None) -> str:
     return (content_type or "").split(";", 1)[0].strip().lower()
-
-
-def _env_flag(name: str) -> bool:
-    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _source_filename(file_path: str | Path | None) -> str:
@@ -442,8 +474,12 @@ def _ocr_pdf_page(image: Image.Image) -> str:
 
     if _is_tesseract_available():
         try:
-            return pytesseract.image_to_string(image, lang=OCR_LANGS).strip()
-        except (FileNotFoundError, Exception):
+            return pytesseract.image_to_string(
+                image,
+                lang=OCR_LANGS,
+                timeout=OCR_PAGE_TIMEOUT_SECONDS,
+            ).strip()
+        except Exception:
             _TESSERACT_AVAILABLE = False
 
     if not _TESSERACT_FALLBACK_WARNING_EMITTED:
@@ -498,13 +534,14 @@ def _ocr_pdf_page_from_pdf_bytes(pdf_bytes: bytes, page_number: int) -> str:
         with tempfile.TemporaryDirectory(prefix="pdf_ocr_page_") as temp_dir:
             image_paths = convert_from_bytes(
                 pdf_bytes,
-                dpi=300,
+                dpi=OCR_RENDER_DPI,
                 first_page=page_number,
                 last_page=page_number,
                 fmt="png",
                 output_folder=temp_dir,
                 paths_only=True,
                 thread_count=1,
+                timeout=OCR_PAGE_TIMEOUT_SECONDS,
             )
             if not image_paths:
                 return ""
@@ -523,9 +560,12 @@ def _ocr_pdf_page_from_pdf_bytes(pdf_bytes: bytes, page_number: int) -> str:
             return "\n".join(page_chunks).strip()
 
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_render_and_ocr)
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(_render_and_ocr)
+        try:
             return future.result(timeout=OCR_PAGE_TIMEOUT_SECONDS)
+        finally:
+            executor.shutdown(wait=future.done(), cancel_futures=True)
     except concurrent.futures.TimeoutError:
         logger.warning(
             "[SONAR] OCR timed out after %ss on page %s — skipping.",
@@ -539,15 +579,20 @@ def _ocr_pdf_page_from_pdf_bytes(pdf_bytes: bytes, page_number: int) -> str:
 
 
 def _ocr_entire_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
+    if not OCR_ENABLED:
+        logger.warning("[SONAR] Full-document OCR skipped because TENDER_OCR_DISABLED is active.")
+        return ""
+
     try:
         with tempfile.TemporaryDirectory(prefix="pdf_ocr_full_") as temp_dir:
             image_paths = convert_from_bytes(
                 pdf_bytes,
-                dpi=300,
+                dpi=OCR_RENDER_DPI,
                 fmt="png",
                 output_folder=temp_dir,
                 paths_only=True,
                 thread_count=1,
+                timeout=OCR_PAGE_TIMEOUT_SECONDS,
             )
             if not image_paths:
                 return ""
@@ -585,7 +630,10 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
     filename = _source_filename(file_path)
     page_texts: list[str] = []
     ocr_fallback_logged = False
+    ocr_disabled_logged = False
+    ocr_text_threshold_logged = False
     ocr_pages_processed = 0
+    extracted_chars_so_far = 0
     demo_ocr_bypass = _env_flag(DEMO_OCR_BYPASS_ENV)
     if demo_ocr_bypass:
         logger.warning(
@@ -611,27 +659,49 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
 
                 if len(native_text) >= OCR_MIN_TEXT_LEN and not demo_ocr_bypass:
                     page_texts.append(_format_page_text(filename, page_index, native_text))
+                    extracted_chars_so_far += len(native_text)
                     continue
 
                 ocr_text = ""
                 if demo_ocr_bypass or native_text or _page_has_visual_content(page):
-                    if not demo_ocr_bypass and ocr_pages_processed >= OCR_MAX_PAGES:
+                    run_ocr = True
+                    if not demo_ocr_bypass and not OCR_ENABLED:
+                        if not ocr_disabled_logged:
+                            logger.info("[SONAR] OCR disabled; parsing native PDF text only.")
+                            ocr_disabled_logged = True
+                        run_ocr = False
+                    elif (
+                        not demo_ocr_bypass
+                        and OCR_SKIP_AFTER_TEXT_CHARS
+                        and extracted_chars_so_far >= OCR_SKIP_AFTER_TEXT_CHARS
+                    ):
+                        if not ocr_text_threshold_logged:
+                            logger.info(
+                                "[SONAR] OCR skipped after %s native characters at page %s.",
+                                extracted_chars_so_far,
+                                page_index,
+                            )
+                            ocr_text_threshold_logged = True
+                        run_ocr = False
+                    elif not demo_ocr_bypass and ocr_pages_processed >= OCR_MAX_PAGES:
                         logger.warning(
                             "[SONAR] OCR page limit (%s) reached at page %s — skipping remaining pages.",
                             OCR_MAX_PAGES,
                             page_index,
                         )
                         continue
-                    if not ocr_fallback_logged:
-                        logger.info("[SONAR] Empty text detected. Triggering OCR fallback.")
-                        ocr_fallback_logged = True
-                    ocr_text = _ocr_pdf_page_from_pdf_bytes(pdf_bytes, page_index)
-                    ocr_pages_processed += 1
+                    if run_ocr:
+                        if not ocr_fallback_logged:
+                            logger.info("[SONAR] Empty text detected. Triggering OCR fallback.")
+                            ocr_fallback_logged = True
+                        ocr_text = _ocr_pdf_page_from_pdf_bytes(pdf_bytes, page_index)
+                        ocr_pages_processed += 1
 
                 merged = "\n".join(part for part in (native_text, ocr_text) if part).strip()
                 formatted = _format_page_text(filename, page_index, merged)
                 if formatted:
                     page_texts.append(formatted)
+                    extracted_chars_so_far += len(merged)
     except Exception as e:
         logger.error(f"[SONAR] EXTRACTION FAILED on {file_path}. Reason: {str(e)}", exc_info=True)
         if _ocr_fallback_allowed(file_path=file_path, file_bytes=pdf_bytes):

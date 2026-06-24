@@ -944,7 +944,7 @@ function EvidenceDocumentPane({
     const quote = requirement.exact_quote || requirement.raw_text_snippet;
     const sourceFilename = requirement.source_filename || 'source document';
     const matchedName = matchedDocument ? getDocumentDisplayName(matchedDocument) : sourceFilename;
-    const documentUrl = matchedDocument ? `/api/documents/${matchedDocument.id}` : null;
+    const documentUrl = matchedDocument ? `/document-preview/${matchedDocument.id}` : null;
     const iframeSrc = documentUrl ? `${documentUrl}#page=${sourcePage}` : null;
     const extension = getDocumentExtension(matchedDocument);
     const isPdf = isPdfDocument(matchedDocument);

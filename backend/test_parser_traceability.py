@@ -128,6 +128,26 @@ class ParserTraceabilityTest(unittest.TestCase):
         self.assertIn(f"[[PAGE {parser.OCR_MAX_PAGES + 1}]]", text)
         self.assertIn(f"OCR text page {parser.OCR_MAX_PAGES + 1}", text)
 
+    def test_ocr_is_skipped_after_enough_native_pdf_text(self):
+        pages = [
+            FakePage("Native searchable tender text " * 20),
+            FakePage("", visual=True),
+        ]
+
+        with patch.dict(os.environ, {parser.DEMO_OCR_BYPASS_ENV: ""}), patch(
+            "app.core.parser.OCR_SKIP_AFTER_TEXT_CHARS",
+            100,
+        ), patch(
+            "app.core.parser.fitz.open",
+            return_value=FakePdf(pages),
+        ), patch("app.core.parser._ocr_pdf_page_from_pdf_bytes") as ocr_page:
+            text = parser.parse_pdf(b"%PDF-1.4", file_path="mixed.pdf")
+
+        ocr_page.assert_not_called()
+        self.assertIn("[[PAGE 1]]", text)
+        self.assertIn("Native searchable tender text", text)
+        self.assertNotIn("[[PAGE 2]]", text)
+
 
 if __name__ == "__main__":
     unittest.main()

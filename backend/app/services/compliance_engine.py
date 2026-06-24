@@ -274,7 +274,7 @@ def _build_top_level_verdict(
             parts.append(f"{manual_review_count} require manual review")
         if skipped_optional_count:
             parts.append(f"{skipped_optional_count} optional skipped")
-        parts.append(f"[{uuid_match_count} UUID / {token_match_count} token]")
+        # parts.append(f"[{uuid_match_count} UUID / {token_match_count} token]")
         return status, " | ".join(parts)
 
     if manual_review_count > 0 and satisfied_count == 0 and recorded_obligations_count == 0:
@@ -294,7 +294,7 @@ def _build_top_level_verdict(
             parts.append(f"{recorded_obligations_count} obligations recorded")
         if skipped_optional_count:
             parts.append(f"{skipped_optional_count} optional skipped")
-        parts.append(f"[{uuid_match_count} UUID / {token_match_count} token]")
+        # parts.append(f"[{uuid_match_count} UUID / {token_match_count} token]")
         return status, " | ".join(parts)
 
     if satisfied_count > 0:
@@ -305,7 +305,7 @@ def _build_top_level_verdict(
         ]
         if skipped_optional_count:
             parts.append(f"{skipped_optional_count} optional skipped")
-        parts.append(f"[{uuid_match_count} UUID / {token_match_count} token]")
+        # parts.append(f"[{uuid_match_count} UUID / {token_match_count} token]")
         return status, " | ".join(parts)
 
     if recorded_obligations_count > 0:
