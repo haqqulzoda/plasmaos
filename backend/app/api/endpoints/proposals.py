@@ -34,7 +34,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user, require_tier
+from app.api.deps import get_current_user, require_approved_pilot_access, require_tier
 from app.core.evaluator import DynamicComplianceResult
 from app.core.security import authenticated_dependency
 from app.db.session import get_db
@@ -56,7 +56,12 @@ from app.schemas.proposal import (
     ProposalWithTenderResponse,
 )
 
-router = APIRouter(dependencies=[authenticated_dependency()])
+router = APIRouter(
+    dependencies=[
+        authenticated_dependency(),
+        Depends(require_approved_pilot_access),
+    ]
+)
 
 
 # =============================================================================

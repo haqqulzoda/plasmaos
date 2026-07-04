@@ -32,7 +32,10 @@ from app.core.celery_app import celery_app
 from app.core.parser import process_tender_document
 from app.core.reproducibility import stable_document_order_key
 from app.core.scraper import UzExScraper
+from app.core.storage_paths import normalize_storage_path, storage_file_exists
 from app.db.session import AsyncSessionLocal, engine
+from app.services.tender_sources.base import CanonicalDocument, assert_source_scope
+from app.services.tender_sources.uzex import UzExTenderSource
 
 logger = logging.getLogger(__name__)
 
@@ -259,13 +262,17 @@ def _marker_counts(text: str | None) -> dict[str, int]:
 
 
 def _stored_file_exists(doc: TenderDocument | None) -> bool:
-    if doc is None or not doc.storage_path:
-        return False
+    return bool(doc is not None and storage_file_exists(doc.storage_path))
 
-    try:
-        return Path(doc.storage_path).is_file()
-    except (OSError, TypeError, ValueError):
-        return False
+
+def _canonical_document_from_scraped(
+    doc_data: dict[str, object],
+    *,
+    source_system: str = "uzex",
+) -> CanonicalDocument:
+    if source_system != "uzex":
+        raise ValueError("UzEx worker only accepts UzEx scraped documents")
+    return UzExTenderSource().canonical_document_from_scraped(dict(doc_data))
 
 
 def _sanitize_filename(filename: str) -> str:
@@ -353,12 +360,66 @@ def _cleanup_temp_download(temp_path: str) -> None:
             logger.warning("Failed to remove temporary tender document file: %s", temp)
 
 
+def _document_download_failure_message(
+    *,
+    scraped_index: int,
+    scraped_url: str,
+    error: object,
+) -> str:
+    raw_message = str(error).strip() or type(error).__name__
+    return _bounded_error_message(
+        f"attachment_index={scraped_index}; url={scraped_url}; error={raw_message}"
+    ) or f"attachment_index={scraped_index}; download failed"
+
+
+def _mark_document_download_failed(
+    db: AsyncSession,
+    *,
+    doc: TenderDocument | None,
+    tender_id: UUID,
+    scraped_url: str,
+    scraped_file_type: str | None,
+    scraped_index: int,
+    error: object,
+) -> tuple[TenderDocument, bool]:
+    failure_message = _document_download_failure_message(
+        scraped_index=scraped_index,
+        scraped_url=scraped_url,
+        error=error,
+    )
+    display_name = _extract_file_name(scraped_url) or "download"
+    resolved_file_type = _resolved_file_type(display_name, scraped_file_type)
+    created = doc is None
+
+    if doc is None:
+        doc = TenderDocument(
+            id=uuid4(),
+            tender_id=tender_id,
+            file_url=scraped_url,
+            file_type=resolved_file_type,
+        )
+        db.add(doc)
+
+    doc.file_url = scraped_url
+    doc.file_type = resolved_file_type
+    doc.source_document_url = scraped_url
+    doc.source_document_type = scraped_file_type or None
+    doc.download_status = "failed"
+    doc.download_error = failure_message
+    doc.storage_path = None
+    doc.file_size = None
+    doc.mime_type = None
+    doc.sha256 = None
+    return doc, created
+
+
 def _document_display_name(doc: TenderDocument | None, fallback: str | None = None) -> str:
     if fallback and fallback.strip():
         return _sanitize_filename(fallback)
 
     if doc is not None and doc.storage_path:
-        stored_name = Path(doc.storage_path).name
+        resolved_path = normalize_storage_path(doc.storage_path)
+        stored_name = resolved_path.name if resolved_path is not None else ""
         prefix, _, remainder = stored_name.partition("_")
         if len(prefix) == 32 and remainder:
             return remainder
@@ -452,7 +513,9 @@ async def _reparse_markerless_stored_document(
         return False
 
     display_name = _document_display_name(doc)
-    storage_path = Path(doc.storage_path)
+    storage_path = normalize_storage_path(doc.storage_path)
+    if storage_path is None:
+        return False
     _log_sync_event(
         logging.INFO,
         "markerless_reparse_start",
@@ -551,6 +614,7 @@ async def _process_tender_docs_async(
                 tender = tender_result.scalar_one_or_none()
                 if tender is None:
                     raise ValueError("Tender not found")
+                assert_source_scope("uzex", tender)
                 before_compiled_counts = _marker_counts(tender.compiled_master_text)
 
                 await _persist_sync_job_state(
@@ -570,7 +634,11 @@ async def _process_tender_docs_async(
                     external_id=tender.external_id,
                     canonical_source_key=tender.canonical_source_key,
                 )
-                scraped_docs = await scraper.scrape_tender_documents(tender.source_url)
+                scraped_doc_payloads = await scraper.scrape_tender_documents(tender.source_url)
+                scraped_docs = [
+                    _canonical_document_from_scraped(doc_data, source_system="uzex")
+                    for doc_data in scraped_doc_payloads
+                ]
                 _log_sync_event(
                     logging.INFO,
                     "scrape_done",
@@ -631,6 +699,7 @@ async def _process_tender_docs_async(
                     tuple[tuple[str, str, int, str, str, str], str],
                 ] = {}
                 docs_to_process: list[tuple[TenderDocument | None, str, str, str, int]] = []
+                failed_documents: list[dict[str, int | str]] = []
 
                 if reparse_markerless:
                     for existing_doc in existing_docs:
@@ -651,9 +720,9 @@ async def _process_tender_docs_async(
                             doc,
                         )
 
-                for scraped_index, doc_data in enumerate(scraped_docs):
-                    scraped_url = (doc_data.get("file_url") or "").strip()
-                    scraped_file_type = (doc_data.get("file_type") or "").strip().lower()
+                for scraped_index, canonical_doc in enumerate(scraped_docs):
+                    scraped_url = canonical_doc.source_document_url.strip()
+                    scraped_file_type = canonical_doc.file_type.strip().lower()
                     if not scraped_url:
                         _log_sync_event(
                             logging.ERROR,
@@ -661,7 +730,7 @@ async def _process_tender_docs_async(
                             tender_id=tender_uuid,
                             job_id=job_id,
                             scraped_index=scraped_index,
-                            doc_data=doc_data,
+                            source_system=canonical_doc.normalized_source_system,
                         )
                         raise RuntimeError(
                             f"Scraped document at index {scraped_index} has empty file_url"
@@ -692,15 +761,42 @@ async def _process_tender_docs_async(
 
                     file_path = _extract_file_path(scraped_url)
                     if not _stored_file_exists(doc) and not file_path:
+                        failure = RuntimeError(
+                            f"Scraped document at index {scraped_index} has invalid remote path"
+                        )
+                        failed_doc, created = _mark_document_download_failed(
+                            db,
+                            doc=doc,
+                            tender_id=tender_uuid,
+                            scraped_url=scraped_url,
+                            scraped_file_type=scraped_file_type,
+                            scraped_index=scraped_index,
+                            error=failure,
+                        )
+                        if created:
+                            new_count += 1
+                        _register_existing_doc(
+                            failed_doc,
+                            existing_by_url,
+                            existing_by_path,
+                            existing_by_name,
+                        )
+                        failed_documents.append(
+                            {
+                                "index": scraped_index,
+                                "url": scraped_url,
+                                "error": failed_doc.download_error or str(failure),
+                            }
+                        )
                         _log_sync_event(
                             logging.ERROR,
                             "scraped_doc_invalid_remote_path",
                             tender_id=tender_uuid,
                             job_id=job_id,
+                            scraped_index=scraped_index,
+                            document_id=failed_doc.id,
                         )
-                        raise RuntimeError(
-                            f"Scraped document at index {scraped_index} has invalid remote path"
-                        )
+                        continue
 
                     docs_to_process.append((doc, scraped_url, file_path, scraped_file_type, scraped_index))
 
@@ -737,7 +833,9 @@ async def _process_tender_docs_async(
 
                     try:
                         if doc is not None and _stored_file_exists(doc):
-                            local_path = Path(doc.storage_path)
+                            local_path = normalize_storage_path(doc.storage_path)
+                            if local_path is None:
+                                raise FileNotFoundError("Stored document path is empty")
                             display_name = _document_display_name(doc)
                             _log_sync_event(
                                 logging.INFO,
@@ -916,6 +1014,30 @@ async def _process_tender_docs_async(
                                 replace=True,
                             )
                     except Exception as doc_exc:
+                        failed_doc, created = _mark_document_download_failed(
+                            db,
+                            doc=doc,
+                            tender_id=tender_uuid,
+                            scraped_url=scraped_url,
+                            scraped_file_type=scraped_file_type,
+                            scraped_index=button_index,
+                            error=doc_exc,
+                        )
+                        if created:
+                            new_count += 1
+                        _register_existing_doc(
+                            failed_doc,
+                            existing_by_url,
+                            existing_by_path,
+                            existing_by_name,
+                        )
+                        failed_documents.append(
+                            {
+                                "index": button_index,
+                                "url": scraped_url,
+                                "error": failed_doc.download_error or str(doc_exc),
+                            }
+                        )
                         _log_sync_event(
                             logging.ERROR,
                             "document_failed",
@@ -923,6 +1045,7 @@ async def _process_tender_docs_async(
                             job_id=job_id,
                             index=index,
                             button_index=button_index,
+                            document_id=failed_doc.id,
                             error_type=type(doc_exc).__name__,
                             error=doc_exc,
                         )
@@ -932,10 +1055,7 @@ async def _process_tender_docs_async(
                             job_id,
                             index,
                         )
-                        raise RuntimeError(
-                            f"Failed to persist/parse tender document at index {index} "
-                            f"for tender {tender_uuid}: {doc_exc}"
-                        ) from doc_exc
+                        continue
                     finally:
                         if docs_to_process:
                             progress = 20 + int(((index + 1) / len(docs_to_process)) * 70)
@@ -961,6 +1081,11 @@ async def _process_tender_docs_async(
                 )
                 markerized_document_count = sum(
                     1 for doc in all_docs if _has_real_trace_markers(doc.parsed_text)
+                )
+                failed_document_count = sum(
+                    1
+                    for doc in all_docs
+                    if (doc.download_status or "").strip().casefold() == "failed"
                 )
                 if total_count == 0:
                     _log_sync_event(
@@ -995,7 +1120,54 @@ async def _process_tender_docs_async(
                     documents_reparsed=reparsed_markerless_count,
                     documents_markerized=markerized_document_count,
                     documents_still_markerless=markerless_document_count,
+                    failed_documents_current_run=len(failed_documents),
+                    failed_documents_total=failed_document_count,
                 )
+
+                if failed_documents:
+                    failure_message = (
+                        "Document sync incomplete: "
+                        f"{len(failed_documents)} of {len(scraped_docs)} discovered attachment(s) "
+                        "failed to download or parse."
+                    )
+                    _log_sync_event(
+                        logging.ERROR,
+                        "task_partial_failed",
+                        tender_id=tender_uuid,
+                        job_id=job_id,
+                        new_count=new_count,
+                        parsed_count=parsed_count,
+                        total_count=total_count,
+                        failed_count=len(failed_documents),
+                        failed_documents=failed_documents,
+                        compiled_file_markers=after_compiled_counts["file_marker_count"],
+                        compiled_page_markers=after_compiled_counts["page_marker_count"],
+                        elapsed_ms=int((time.monotonic() - task_started_at) * 1000),
+                    )
+                    await _persist_sync_job_state(
+                        job_id=job_id,
+                        status=TenderSyncStatus.FAILED,
+                        progress=100,
+                        error_message=failure_message,
+                    )
+                    return {
+                        "status": (
+                            "failed"
+                            if len(failed_documents) >= len(scraped_docs) and parsed_count == 0
+                            else "partial_failed"
+                        ),
+                        "tender_id": str(tender_uuid),
+                        "new_count": new_count,
+                        "parsed_count": parsed_count,
+                        "failed_count": len(failed_documents),
+                        "reparsed_markerless_count": reparsed_markerless_count,
+                        "total_count": total_count,
+                        "compiled_file_marker_count": after_compiled_counts["file_marker_count"],
+                        "compiled_page_marker_count": after_compiled_counts["page_marker_count"],
+                        "documents_still_markerless": markerless_document_count,
+                        "message": failure_message,
+                    }
+
                 await _persist_sync_job_state(
                     job_id=job_id,
                     status=TenderSyncStatus.SUCCESS,
@@ -1015,6 +1187,7 @@ async def _process_tender_docs_async(
                     compiled_file_markers=after_compiled_counts["file_marker_count"],
                     compiled_page_markers=after_compiled_counts["page_marker_count"],
                     documents_still_markerless=markerless_document_count,
+                    failed_documents_total=failed_document_count,
                     elapsed_ms=int((time.monotonic() - task_started_at) * 1000),
                 )
 
@@ -1025,6 +1198,7 @@ async def _process_tender_docs_async(
                     "parsed_count": parsed_count,
                     "reparsed_markerless_count": reparsed_markerless_count,
                     "total_count": total_count,
+                    "failed_count": 0,
                     "compiled_file_marker_count": after_compiled_counts["file_marker_count"],
                     "compiled_page_marker_count": after_compiled_counts["page_marker_count"],
                     "documents_still_markerless": markerless_document_count,

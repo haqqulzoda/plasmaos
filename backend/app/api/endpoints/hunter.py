@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.api.deps import get_current_user
+from app.api.deps import require_approved_pilot_access
 from app.core.security import authenticated_dependency
 from app.db.session import get_db
 from app.models.all_models import User
@@ -62,7 +62,7 @@ class DismissResponse(BaseModel):
 @router.get("", response_model=list[HunterRecommendationPayload])
 @router.get("/", response_model=list[HunterRecommendationPayload], include_in_schema=False)
 async def list_recommendations(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -124,7 +124,7 @@ async def list_recommendations(
 )
 async def dismiss_recommendation(
     recommendation_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ):
     """

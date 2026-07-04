@@ -98,6 +98,59 @@ def _safe_join(items: list[str]) -> str | None:
     return "; ".join(values) if values else None
 
 
+def _first_text(raw: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        cleaned = _clean_whitespace(raw.get(key))
+        if cleaned:
+            return cleaned
+    return None
+
+
+def extract_world_bank_contact_info(raw: dict[str, Any] | None) -> dict[str, str | None]:
+    """Extract the public CONTACT INFORMATION block from a procnotice row."""
+    if not isinstance(raw, dict):
+        return {}
+
+    contact_name = _first_text(
+        raw,
+        (
+            "contact_name",
+            "contact_person",
+            "contact_person_name",
+            "procurement_contact_name",
+        ),
+    )
+    contact_title = _first_text(raw, ("contact_job_title", "contact_title"))
+    contact_person = (
+        f"{contact_name} ({contact_title})"
+        if contact_name and contact_title
+        else contact_name
+    )
+    address = _safe_join(
+        [
+            _first_text(raw, ("contact_address", "agency_address")),
+            _first_text(raw, ("contact_city", "contact_municipality")),
+            _first_text(raw, ("contact_state", "contact_province", "contact_region")),
+            _first_text(raw, ("contact_postal_code", "contact_zip")),
+            _first_text(raw, ("contact_ctry_name", "contact_country")),
+        ]
+    )
+
+    return {
+        "buyer_agency": _first_text(
+            raw,
+            ("contact_organization", "agency_name", "buyer", "buyer_name"),
+        ),
+        "contact_person": contact_person,
+        "email": _first_text(raw, ("contact_email", "email")),
+        "phone": _first_text(
+            raw,
+            ("contact_phone_no", "contact_phone", "phone", "telephone"),
+        ),
+        "address": address,
+    }
+
+
 def _sector_text(raw: dict[str, Any]) -> str | None:
     sectors = raw.get("sector")
     if not isinstance(sectors, list):
@@ -432,6 +485,16 @@ class WorldBankTenderSource:
             for item in attachment_payloads
         ]
 
+    async def discover_documents(self, normalized_tender: Any) -> list[Any]:
+        from app.services.tender_sources.base import canonical_documents_from_attachments
+
+        attachments = await self.discover_attachments(normalized_tender)
+        return canonical_documents_from_attachments(
+            source_system=self.source_system,
+            attachments=attachments,
+            download_status="metadata_only",
+        )
+
     def normalize(self, raw: dict[str, Any]) -> Any:
         from app.models.all_models import TenderStatus
         from app.services.tender_sources.base import NormalizedTender
@@ -473,14 +536,35 @@ class WorldBankTenderSource:
         tender: Any,
         attachments: list[Any],
     ) -> tuple[int, int]:
+        from app.services.tender_sources.base import canonical_documents_from_attachments
+
+        return await self.upsert_documents(
+            db,
+            tender=tender,
+            documents=canonical_documents_from_attachments(
+                source_system=self.source_system,
+                attachments=attachments,
+                download_status="metadata_only",
+            ),
+        )
+
+    async def upsert_documents(
+        self,
+        db: Any,
+        *,
+        tender: Any,
+        documents: list[Any],
+    ) -> tuple[int, int]:
         from sqlalchemy import select
 
         from app.models.all_models import TenderDocument
+        from app.services.tender_sources.base import assert_source_scope
 
+        assert_source_scope(self.source_system, tender)
         created = 0
         updated = 0
-        for attachment in attachments:
-            source_url = str(attachment.source_document_url).strip()
+        for document in documents:
+            source_url = str(document.source_document_url).strip()
             if not source_url:
                 continue
             result = await db.execute(
@@ -490,7 +574,11 @@ class WorldBankTenderSource:
                 )
             )
             existing = result.scalar_one_or_none()
-            file_type = attachment.source_document_type or "document"
+            file_type = (
+                document.source_document_type
+                or document.file_type
+                or "document"
+            )
             if existing is None:
                 db.add(
                     TenderDocument(
@@ -499,11 +587,11 @@ class WorldBankTenderSource:
                         file_type=file_type,
                         source_document_url=source_url,
                         source_document_type=file_type,
-                        download_status="metadata_only",
-                        external_file_id=attachment.external_file_id,
-                        file_size=attachment.file_size,
-                        mime_type=attachment.mime_type,
-                        sha256=attachment.sha256,
+                        download_status=document.download_status or "metadata_only",
+                        external_file_id=document.external_file_id,
+                        file_size=document.file_size,
+                        mime_type=document.mime_type,
+                        sha256=document.sha256,
                     )
                 )
                 created += 1
@@ -511,10 +599,10 @@ class WorldBankTenderSource:
                 existing.source_document_type = file_type
                 existing.download_status = existing.download_status or "metadata_only"
                 existing.external_file_id = (
-                    attachment.external_file_id or existing.external_file_id
+                    document.external_file_id or existing.external_file_id
                 )
-                existing.file_size = attachment.file_size or existing.file_size
-                existing.mime_type = attachment.mime_type or existing.mime_type
-                existing.sha256 = attachment.sha256 or existing.sha256
+                existing.file_size = document.file_size or existing.file_size
+                existing.mime_type = document.mime_type or existing.mime_type
+                existing.sha256 = document.sha256 or existing.sha256
                 updated += 1
         return created, updated

@@ -1,13 +1,20 @@
-export type SourceSystem = 'uzex' | 'world_bank' | 'adb';
+export type SourceSystem = 'uzex' | 'world_bank' | 'adb' | 'giz' | 'ebrd';
 
 export type TenderDocumentStatus =
     | 'documents_available'
+    | 'files_missing'
     | 'metadata_only'
+    | 'access_required'
     | 'no_documents_found'
     | 'processing'
     | 'failed';
 
-export type DocumentDownloadStatus = 'available' | 'metadata_only' | 'failed' | string;
+export type DocumentDownloadStatus = 'available' | 'metadata_only' | 'failed' | 'missing_file' | string;
+export type CompetitorParticipationType = 'winner' | 'participant' | 'similar_market_actor';
+export type CompetitorConfidence = 'high' | 'medium' | 'low';
+export type TenderDeadlineUrgency = 'expired' | 'urgent' | 'soon' | 'normal' | 'unknown';
+export type TenderContactAvailability = 'available' | 'partial' | 'missing';
+export type TenderAvailabilityStatus = 'available' | 'unavailable';
 
 export interface Tender {
     id: string;
@@ -38,11 +45,30 @@ export interface Tender {
     document_status: TenderDocumentStatus;
     document_count: number;
     available_document_count: number;
+    downloadable_document_count: number;
+    missing_file_document_count: number;
+    parsed_document_count: number;
     metadata_only_document_count: number;
     failed_document_count: number;
     compliance_analysis_available: boolean;
     compliance_unavailable_reason: string | null;
+    contact_submission: TenderContactSubmission | null;
     created_at: string;
+}
+
+export interface TenderContactSubmission {
+    buyer_agency: string | null;
+    contact_person: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    submission_method: string | null;
+    submission_deadline: string | null;
+    question_deadline: string | null;
+    procedure_type: string | null;
+    participation_instructions: string | null;
+    source_url: string | null;
+    document_access_notes: string | null;
 }
 
 export interface TenderDocument {
@@ -59,9 +85,61 @@ export interface TenderDocument {
     created_at: string;
 }
 
+export interface TenderCompetitor {
+    company_name: string;
+    industry: string;
+    service_category: string;
+    source: string;
+    related_tender_id: string | null;
+    buyer: string | null;
+    country: string | null;
+    sector: string | null;
+    category: string | null;
+    participation_type: CompetitorParticipationType;
+    confidence: CompetitorConfidence;
+    reason: string;
+    evidence_source: string | null;
+}
+
+export interface TenderCompetitorGroup {
+    industry: string;
+    service_category: string;
+    competitors: TenderCompetitor[];
+}
+
+export interface TenderCompetitorIntelligence {
+    tender_id: string;
+    message: string;
+    groups: TenderCompetitorGroup[];
+}
+
+export interface TenderDecisionSnapshot {
+    tender_id: string;
+    source: SourceSystem;
+    country: string | null;
+    region: string | null;
+    service_category: string | null;
+    deadline: string | null;
+    deadline_urgency: TenderDeadlineUrgency;
+    price_amount: number | null;
+    price_currency: string | null;
+    price_display: string | null;
+    document_status: TenderDocumentStatus;
+    document_count: number;
+    downloadable_document_count: number;
+    missing_file_document_count: number;
+    parsed_document_count: number;
+    contact_availability: TenderContactAvailability;
+    competitor_intelligence_status: TenderAvailabilityStatus;
+    compliance_availability: TenderAvailabilityStatus;
+    source_notice_available: boolean;
+}
+
 export const sourceLabel = (source?: string | null) => {
     if (source === 'world_bank') return 'World Bank';
     if (source === 'adb') return 'ADB';
+    if (source === 'giz') return 'GIZ';
+    if (source === 'ebrd') return 'EBRD';
     return 'UzEx';
 };
 
@@ -72,23 +150,37 @@ export const sourceBadgeClasses = (source?: string | null) => {
     if (source === 'adb') {
         return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
     }
+    if (source === 'giz') {
+        return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300';
+    }
+    if (source === 'ebrd') {
+        return 'border-violet-500/30 bg-violet-500/10 text-violet-300';
+    }
     return 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300';
 };
 
 export const documentStatusLabel = (status?: string | null) => {
     if (status === 'documents_available') return 'Documents available';
+    if (status === 'files_missing') return 'Files need re-sync';
     if (status === 'metadata_only') return 'PDF notice discovered';
+    if (status === 'access_required') return 'Participation required';
     if (status === 'processing') return 'Processing documents';
     if (status === 'failed') return 'Document processing failed';
-    return 'No documents found';
+    return 'Documents unavailable';
 };
 
 export const documentStatusClasses = (status?: string | null) => {
     if (status === 'documents_available') {
         return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
     }
+    if (status === 'files_missing') {
+        return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+    }
     if (status === 'metadata_only') {
         return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+    }
+    if (status === 'access_required') {
+        return 'border-sky-500/30 bg-sky-500/10 text-sky-300';
     }
     if (status === 'processing') {
         return 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300';
@@ -99,10 +191,107 @@ export const documentStatusClasses = (status?: string | null) => {
     return 'border-zinc-700 bg-zinc-800/60 text-zinc-400';
 };
 
+export type TenderDocumentAggregate = {
+    document_status?: string | null;
+    has_compiled_text?: boolean | null;
+    compliance_analysis_available?: boolean | null;
+    compliance_availability?: TenderAvailabilityStatus | null;
+    downloadable_document_count?: number | null;
+    missing_file_document_count?: number | null;
+    parsed_document_count?: number | null;
+};
+
+export const documentAggregateLabel = (aggregate: TenderDocumentAggregate) => {
+    const downloadableCount = aggregate.downloadable_document_count ?? 0;
+    const missingCount = aggregate.missing_file_document_count ?? 0;
+    const parsedCount = aggregate.parsed_document_count ?? 0;
+    const analysisAvailable = Boolean(
+        aggregate.has_compiled_text ||
+        aggregate.compliance_analysis_available ||
+        aggregate.compliance_availability === 'available' ||
+        parsedCount > 0,
+    );
+
+    if (downloadableCount > 0) return 'Documents available';
+    if (missingCount > 0 && analysisAvailable) {
+        return 'Analysis available · files need re-sync';
+    }
+    if (missingCount > 0) return 'Files need re-sync';
+    if (analysisAvailable) return 'Analysis available';
+    return documentStatusLabel(aggregate.document_status);
+};
+
+export const deadlineUrgencyLabel = (urgency?: string | null) => {
+    if (urgency === 'expired') return 'Expired';
+    if (urgency === 'urgent') return 'Urgent';
+    if (urgency === 'soon') return 'Soon';
+    if (urgency === 'normal') return 'Normal';
+    return 'Unknown deadline';
+};
+
+export const deadlineUrgencyClasses = (urgency?: string | null) => {
+    if (urgency === 'expired') return 'border-red-500/30 bg-red-500/10 text-red-300';
+    if (urgency === 'urgent') return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+    if (urgency === 'soon') return 'border-sky-500/30 bg-sky-500/10 text-sky-300';
+    if (urgency === 'normal') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+    return 'border-zinc-700 bg-zinc-800/60 text-zinc-400';
+};
+
+export const contactAvailabilityLabel = (status?: string | null) => {
+    if (status === 'available') return 'Contact available';
+    if (status === 'partial') return 'Source notice available';
+    return 'Contact missing';
+};
+
+export const contactAvailabilityClasses = (status?: string | null) => {
+    if (status === 'available') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+    if (status === 'partial') return 'border-sky-500/30 bg-sky-500/10 text-sky-300';
+    return 'border-zinc-700 bg-zinc-800/60 text-zinc-400';
+};
+
+export const competitorStatusLabel = (status?: string | null) =>
+    status === 'available' ? 'Competitor data available' : 'No competitor data yet';
+
+export const complianceAvailabilityLabel = (status?: string | null) =>
+    status === 'available' ? 'Ready for analysis' : 'Metadata only';
+
+export const availabilityClasses = (status?: string | null) =>
+    status === 'available'
+        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+        : 'border-zinc-700 bg-zinc-800/60 text-zinc-400';
+
+export const competitorConfidenceLabel = (confidence?: string | null) => {
+    if (confidence === 'high') return 'High confidence';
+    if (confidence === 'medium') return 'Medium confidence';
+    return 'Low confidence';
+};
+
+export const competitorConfidenceClasses = (confidence?: string | null) => {
+    if (confidence === 'high') {
+        return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+    }
+    if (confidence === 'medium') {
+        return 'border-sky-500/30 bg-sky-500/10 text-sky-300';
+    }
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+};
+
+export const competitorParticipationLabel = (participation?: string | null) => {
+    if (participation === 'winner') return 'Historical winner';
+    if (participation === 'participant') return 'Known market participant';
+    return 'Similar market actor';
+};
+
 export const complianceUnavailableMessage = (tender: Tender) => {
     if (tender.compliance_unavailable_reason) return tender.compliance_unavailable_reason;
     if (tender.source_system === 'adb' && tender.document_status === 'metadata_only') {
         return 'PDF notice discovered — download/parse required before analysis.';
+    }
+    if (tender.source_system === 'ebrd') {
+        return 'EBRD notices are metadata-only; participation documents require ECEPP registration.';
+    }
+    if (tender.document_status === 'files_missing') {
+        return 'Document files need re-sync before analysis.';
     }
     return 'Document ingestion required before analysis.';
 };

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.scraper import ScrapedTender
 from app.models.all_models import Tender
 from app.services.tender_sources.base import (
+    CanonicalDocument,
     NormalizedAttachment,
     NormalizedTender,
     upsert_tender,
@@ -31,7 +32,21 @@ class UzExTenderSource:
     ) -> list[NormalizedAttachment]:
         raise NotImplementedError("UzEx attachment sync is handled by existing worker.")
 
+    def canonical_document_from_scraped(self, doc_data: dict[str, Any]) -> CanonicalDocument:
+        source_url = str(doc_data.get("file_url") or "").strip()
+        file_type = str(doc_data.get("file_type") or "unknown").strip().lower() or "unknown"
+        return CanonicalDocument(
+            source_system=self.source_system,
+            source_document_url=source_url,
+            file_type=file_type,
+            source_document_type=None if file_type == "unknown" else file_type,
+        )
+
     def normalize(self, raw: ScrapedTender) -> NormalizedTender:
+        source_metadata = uzex_source_metadata()
+        if raw.source_metadata_json:
+            source_metadata.update(raw.source_metadata_json)
+
         return NormalizedTender(
             source_system=self.source_system,
             external_id=raw.external_id,
@@ -42,8 +57,9 @@ class UzExTenderSource:
             publication_date=raw.publication_date,
             deadline=raw.deadline,
             region=raw.region,
+            buyer=raw.buyer,
             category=raw.category,
-            source_metadata_json=uzex_source_metadata(),
+            source_metadata_json=source_metadata,
             scrape_status="success",
         )
 

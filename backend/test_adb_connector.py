@@ -10,6 +10,7 @@ from app.services.tender_sources.adb import (
     ADB_FEEDS,
     AdbTenderSource,
     attachment_metadata_from_response,
+    extract_adb_contact_info,
     is_active_adb_notice,
     normalize_adb_notice_payload,
     parse_adb_rss,
@@ -147,6 +148,44 @@ class AdbConnectorTests(unittest.TestCase):
             "RuntimeError",
         )
 
+    def test_attachment_discovery_stores_pdf_contact_metadata(self) -> None:
+        class ContactAdbSource(AdbTenderSource):
+            async def resolve_node_redirect(self, node_url: str):  # type: ignore[override]
+                return attachment_metadata_from_response(
+                    node_url=node_url,
+                    final_url="https://www.adb.org/sites/default/files/tenders/sample.pdf",
+                    headers={"content-type": "application/pdf"},
+                    status_code=200,
+                )
+
+            async def fetch_contact_metadata(self, **kwargs):  # type: ignore[override]
+                return {
+                    "contact_person": "PAG Manager, Mr. Bobokhon Abdulmajid",
+                    "email": "istem.taj@gmail.com",
+                    "phone": "(+992) 44 600 4809",
+                    "submission_method": "Physical submission to the address specified in the ADB notice",
+                }
+
+        source = ContactAdbSource()
+        normalized = SimpleNamespace(
+            external_id="1140436",
+            source_url="https://www.adb.org/node/1140436",
+            source_metadata_json={"node_url": "https://www.adb.org/node/1140436"},
+        )
+
+        attachments = asyncio.run(source.discover_attachments(normalized))
+
+        self.assertEqual(len(attachments), 1)
+        self.assertEqual(
+            normalized.source_metadata_json["contact_person"],
+            "PAG Manager, Mr. Bobokhon Abdulmajid",
+        )
+        self.assertEqual(normalized.source_metadata_json["email"], "istem.taj@gmail.com")
+        self.assertEqual(
+            normalized.source_metadata_json["attachment_discovery_status"],
+            "success",
+        )
+
     def test_deadline_extraction_from_sample_text(self) -> None:
         deadline = parse_deadline_from_text(
             "Bids must be delivered before the submission deadline: 30 June 2026."
@@ -156,6 +195,72 @@ class AdbConnectorTests(unittest.TestCase):
         assert deadline is not None
         self.assertEqual(deadline.isoformat(), "2026-06-30T00:00:00+00:00")
         self.assertIsNone(parse_deadline_from_text("This document has many dates."))
+
+    def test_contact_extraction_from_structured_adb_notice_text(self) -> None:
+        text = """
+        To obtain further information and inspect the Bidding Documents, Bidders should contact
+        (during working days from Monday to Friday from 8:00 AM to 5:00 PM):
+
+        Project Administration Group (PAG)
+        Attention: PAG Manager, Mr. Bobokhon Abdulmajid
+        Street Address: 101 Karamov str.
+        Floor/Room Number: 2nd Floor, Room No.1
+        City: Dushanbe
+        Country: Tajikistan
+        Telephone No.: (+992) 44 600 4809
+        E-mail Address: istem.taj@gmail.com
+
+        7. To purchase the Bidding Documents in English, eligible Bidders should
+        write to the address above.
+        8. Deliver your bid
+        to the address above on or before the deadline: 30 June 2026 at 10:00 hours.
+        """
+
+        contact = extract_adb_contact_info(text)
+
+        self.assertEqual(contact["buyer_agency"], "Project Administration Group (PAG)")
+        self.assertEqual(
+            contact["contact_person"],
+            "PAG Manager, Mr. Bobokhon Abdulmajid",
+        )
+        self.assertEqual(contact["email"], "istem.taj@gmail.com")
+        self.assertEqual(contact["phone"], "(+992) 44 600 4809")
+        self.assertEqual(
+            contact["address"],
+            "101 Karamov str.; 2nd Floor, Room No.1; Dushanbe; Tajikistan",
+        )
+        self.assertEqual(
+            contact["submission_deadline"],
+            "2026-06-30T00:00:00+00:00",
+        )
+
+    def test_contact_extraction_from_tenderlink_adb_notice_text(self) -> None:
+        text = """
+        To obtain further information and inspect the bidding documents, Bidders should contact:
+        Any request for clarification shall be submitted through the TenderLink portal
+        https://portal.tenderlink.com/cpuc no later than 14 days before the bid submission deadline.
+
+        6. To purchase the bidding documents in English, eligible Bidders should:
+        Electronic Bid Documents can also be obtained from Mr. Kembo Mida, CPUC CEO,
+        email: kembo.mida@cpuc.fm.
+
+        7. Deliver your bid
+        Bidders shall submit their Bids electronically through the TenderLink portal
+        https://portal.tenderlink.com/cpuc.
+        Should assistance be required please contact the email address supplied above 6,
+        or clayton.eliam@cpuc.fm.
+        on or before the deadline: 19 June 2026 at 10:00 hours Chuuk time.
+        """
+
+        contact = extract_adb_contact_info(text)
+
+        self.assertEqual(contact["contact_person"], "Mr. Kembo Mida, CPUC CEO")
+        self.assertEqual(contact["email"], "kembo.mida@cpuc.fm")
+        self.assertEqual(
+            contact["submission_method"],
+            "TenderLink portal: https://portal.tenderlink.com/cpuc",
+        )
+        self.assertIn("clayton.eliam@cpuc.fm", contact["document_access_notes"])
 
 
 if __name__ == "__main__":

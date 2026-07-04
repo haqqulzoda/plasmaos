@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import uuid4
 
@@ -41,6 +41,10 @@ from app.services.tender_sources.uzex_constants import (
     UZEX_ENTERPRISE_LOTS_URL,
     UZEX_ENTERPRISE_TYPE_ID,
 )
+from app.services.tender_sources.uzex_contact import (
+    extract_uzex_contact_info,
+    extract_uzex_trade_list_contact_metadata,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +61,11 @@ class ScrapedTender:
     currency: str
     region: Optional[str]
     source_url: str
+    buyer: Optional[str] = None
     category: str = "Other"
     publication_date: Optional[datetime] = None
     deadline: Optional[datetime] = None
+    source_metadata_json: Optional[dict[str, Any]] = None
 
 
 # Category classification keywords
@@ -122,17 +128,17 @@ DOCUMENT_ATTRIBUTE_NAMES = (
     "data-path",
     "data-file",
 )
-API_TRADE_FILE_PATH_FIELDS = {
+API_TRADE_FILE_PATH_FIELDS = (
     "tech_file_path",
+    "expertise_file_path",
     "tech_doc_file_path",
     "contract_proform_file_path",
-    "expertise_file_path",
     "add_file_path",
-}
-API_QUALIFICATION_FIELD_CONTAINERS = {
+)
+API_QUALIFICATION_FIELD_CONTAINERS = (
     "qualification_fields",
     "js_qualification_fields",
-}
+)
 
 
 class TransientPortalError(Exception):
@@ -1266,6 +1272,16 @@ class UzExScraper:
             and normalized_file_root.startswith(("files/", "tender/user-files/"))
             and _detect_file_extension(normalized_file_path) in KNOWN_FILE_EXTENSIONS
         )
+        strategy_errors: list[str] = []
+
+        def record_strategy_error(label: str, detail: object) -> None:
+            normalized_detail = str(detail).strip().replace("\n", " ")
+            strategy_errors.append(f"{label}: {normalized_detail[:500]}")
+
+        def strategy_error_summary() -> str:
+            if not strategy_errors:
+                return "no strategy diagnostics recorded"
+            return "; ".join(strategy_errors[-12:])
 
         def remove_invalid_download() -> None:
             try:
@@ -1296,11 +1312,6 @@ class UzExScraper:
                     follow_redirects=True,
                 ) as response:
                     response_content_type = response.headers.get("content-type", "")
-                    if response.status_code in TRANSIENT_HTTP_STATUS_CODES:
-                        raise TransientPortalError(
-                            f"UzEx fallback URL returned retryable HTTP {response.status_code}",
-                            status_code=response.status_code,
-                        )
 
                     with destination.open("wb") as file_handle:
                         for chunk in response.iter_bytes(chunk_size=1024 * 1024):
@@ -1326,6 +1337,14 @@ class UzExScraper:
                         )
                         return resolved_name
 
+                    record_strategy_error(
+                        label,
+                        (
+                            f"rejected payload http={response.status_code} "
+                            f"bytes={file_size} content_type={response_content_type} "
+                            f"url={normalized_url}"
+                        ),
+                    )
                     logger.warning(
                         "[DOWNLOAD] %s stream fallback rejected payload: HTTP %s, %s bytes, ct=%s",
                         label,
@@ -1335,11 +1354,14 @@ class UzExScraper:
                     )
                     remove_invalid_download()
                     return ""
-            except (httpx.TimeoutException, httpx.TransportError, TransientPortalError):
+            except (httpx.TimeoutException, httpx.TransportError, TransientPortalError) as exc:
                 remove_invalid_download()
-                raise
+                record_strategy_error(label, exc)
+                logger.warning("[DOWNLOAD] %s stream fallback transport error: %s", label, exc)
+                return ""
             except Exception as exc:
                 remove_invalid_download()
+                record_strategy_error(label, exc)
                 logger.warning("[DOWNLOAD] %s stream fallback error: %s", label, exc)
                 return ""
 
@@ -1369,11 +1391,6 @@ class UzExScraper:
                         follow_redirects=True,
                     ) as response:
                         response_content_type = response.headers.get("content-type", "")
-                        if response.status_code in TRANSIENT_HTTP_STATUS_CODES:
-                            raise TransientPortalError(
-                                f"UzEx download API returned retryable HTTP {response.status_code}",
-                                status_code=response.status_code,
-                            )
 
                         with destination.open("wb") as file_handle:
                             for chunk in response.iter_bytes(chunk_size=1024 * 1024):
@@ -1395,6 +1412,14 @@ class UzExScraper:
                             )
                             return filename
 
+                        record_strategy_error(
+                            "downloadfile-post",
+                            (
+                                f"rejected payload http={response.status_code} "
+                                f"bytes={file_size} content_type={response_content_type} "
+                                f"api_path={api_file_path} variant={variant_index}/{len(api_path_variants)}"
+                            ),
+                        )
                         logger.warning(
                             "[DOWNLOAD] Strategy 1 POST stream rejected payload: HTTP %s, %s bytes, ct=%s api_path=%s variant=%s/%s",
                             response.status_code,
@@ -1405,14 +1430,29 @@ class UzExScraper:
                             len(api_path_variants),
                         )
                         remove_invalid_download()
-                except (httpx.TimeoutException, httpx.TransportError):
+                except (httpx.TimeoutException, httpx.TransportError) as exc:
                     remove_invalid_download()
-                    raise
-                except TransientPortalError:
+                    record_strategy_error("downloadfile-post", f"{type(exc).__name__}: {exc}")
+                    logger.warning(
+                        "[DOWNLOAD] Strategy 1 POST stream transport error for api_path=%s variant=%s/%s: %s",
+                        api_file_path,
+                        variant_index,
+                        len(api_path_variants),
+                        exc,
+                    )
+                except TransientPortalError as exc:
                     remove_invalid_download()
-                    raise
+                    record_strategy_error("downloadfile-post", f"{type(exc).__name__}: {exc}")
+                    logger.warning(
+                        "[DOWNLOAD] Strategy 1 POST stream transient error for api_path=%s variant=%s/%s: %s",
+                        api_file_path,
+                        variant_index,
+                        len(api_path_variants),
+                        exc,
+                    )
                 except Exception as exc:
                     remove_invalid_download()
+                    record_strategy_error("downloadfile-post", f"{type(exc).__name__}: {exc}")
                     logger.warning(
                         "[DOWNLOAD] Strategy 1 POST stream error for api_path=%s variant=%s/%s: %s",
                         api_file_path,
@@ -1483,18 +1523,26 @@ class UzExScraper:
                     label,
                     file_size,
                     validation_name,
+                    )
+                record_strategy_error(
+                    label,
+                    f"rejected payload bytes={file_size} validation_name={validation_name}",
                 )
                 remove_invalid_download()
                 return ""
             except PlaywrightTimeout as exc:
                 remove_invalid_download()
+                record_strategy_error(label, f"timeout: {exc}")
                 logger.warning("[DOWNLOAD] %s browser navigation download timed out: %s", label, exc)
                 return ""
-            except TransientPortalError:
+            except TransientPortalError as exc:
                 remove_invalid_download()
-                raise
+                record_strategy_error(label, f"{type(exc).__name__}: {exc}")
+                logger.warning("[DOWNLOAD] %s browser navigation download transient error: %s", label, exc)
+                return ""
             except Exception as exc:
                 remove_invalid_download()
+                record_strategy_error(label, f"{type(exc).__name__}: {exc}")
                 logger.warning("[DOWNLOAD] %s browser navigation download error: %s", label, exc)
                 return ""
             finally:
@@ -1556,9 +1604,17 @@ class UzExScraper:
                     if resolved_name:
                         return resolved_name
 
-                    raise Exception(
-                        "UzEx direct document URL download failed after API POST and browser navigation "
-                        f"fallback: {normalized_static_url}"
+                    record_strategy_error(
+                        "static-file-url",
+                        (
+                            "API/direct/browser-navigation strategies failed; "
+                            f"falling back to DOM button index {button_index} for {normalized_static_url}"
+                        ),
+                    )
+                    logger.warning(
+                        "[DOWNLOAD] Static UzEx URL strategies failed for %s; falling back to DOM button index %s",
+                        normalized_static_url,
+                        button_index,
                     )
 
                 if parsed_file_path.scheme in {"http", "https"} and parsed_file_path.netloc:
@@ -1593,7 +1649,8 @@ class UzExScraper:
                 if button_index >= len(download_btns):
                     raise Exception(
                         f"Button index {button_index} out of bounds for "
-                        f"{len(download_btns)} buttons on {tender_url}"
+                        f"{len(download_btns)} buttons on {tender_url}. "
+                        f"Strategies tried: {strategy_error_summary()}"
                     )
 
                 target_btn = download_btns[button_index]
@@ -1602,9 +1659,57 @@ class UzExScraper:
                 except Exception:
                     pass
 
+                try:
+                    logger.info(
+                        "[DOWNLOAD] DOM expect_download click at index %s",
+                        button_index,
+                    )
+                    with page.expect_download(timeout=30000) as download_info:
+                        target_btn.click(force=True, timeout=90000)
+                    download = download_info.value
+                    download.save_as(str(destination))
+                    suggested = download.suggested_filename or filename
+                    validation_name = suggested if _detect_file_extension(suggested) else file_path
+                    file_size = destination.stat().st_size if destination.exists() else 0
+
+                    if _is_valid_file_path_payload(str(destination), "", validation_name):
+                        logger.info(
+                            "[DOWNLOAD] DOM expect_download success at index %s: %s bytes, name=%s path=%s",
+                            button_index,
+                            file_size,
+                            suggested,
+                            destination,
+                        )
+                        return suggested
+
+                    record_strategy_error(
+                        "dom-expect-download",
+                        f"invalid payload bytes={file_size} validation_name={validation_name}",
+                    )
+                    remove_invalid_download()
+                except PlaywrightTimeout as exc:
+                    remove_invalid_download()
+                    record_strategy_error("dom-expect-download", f"timeout: {exc}")
+                    logger.warning(
+                        "[DOWNLOAD] DOM expect_download timed out at index %s: %s",
+                        button_index,
+                        exc,
+                    )
+                except Exception as exc:
+                    remove_invalid_download()
+                    record_strategy_error("dom-expect-download", f"{type(exc).__name__}: {exc}")
+                    logger.warning(
+                        "[DOWNLOAD] DOM expect_download failed at index %s: %s",
+                        button_index,
+                        exc,
+                    )
+
                 fallback_candidates = _extract_download_candidates_from_element(target_btn)
                 popup_urls: list[str] = []
                 download_events: list = []
+                download_response_errors: list[str] = []
+                download_response_error_seen_at: list[float] = []
+                target_download_key = _download_target_key(file_path)
 
                 def capture_popup(popup):
                     try:
@@ -1631,8 +1736,53 @@ class UzExScraper:
                         download.suggested_filename,
                     )
 
+                def capture_download_response(response):
+                    try:
+                        response_url = response.url
+                    except Exception:
+                        return
+
+                    response_url_lower = response_url.lower()
+                    if not any(marker in response_url_lower for marker in DOWNLOAD_URL_MARKERS):
+                        return
+
+                    try:
+                        response_status = response.status
+                    except Exception:
+                        response_status = None
+                    try:
+                        response_content_type = response.headers.get("content-type", "")
+                    except Exception:
+                        response_content_type = ""
+
+                    response_key = _download_target_key(response_url)
+                    if target_download_key and response_key and response_key != target_download_key:
+                        detail = (
+                            f"non-target response http={response_status} "
+                            f"key={response_key} expected={target_download_key} url={response_url}"
+                        )
+                        download_response_errors.append(detail)
+                        download_response_error_seen_at.append(time.monotonic())
+                        record_strategy_error("dom-download-response", detail)
+                        return
+
+                    normalized_response_content_type = response_content_type.lower()
+                    if (
+                        response_status != 200
+                        or "html" in normalized_response_content_type
+                        or "json" in normalized_response_content_type
+                    ):
+                        detail = (
+                            f"failed response http={response_status} "
+                            f"content_type={response_content_type} url={response_url}"
+                        )
+                        download_response_errors.append(detail)
+                        download_response_error_seen_at.append(time.monotonic())
+                        record_strategy_error("dom-download-response", detail)
+
                 page.on("popup", capture_popup)
                 page.on("download", capture_download)
+                page.on("response", capture_download_response)
 
                 try:
                     target_btn.click(force=True, timeout=90000, no_wait_after=True)
@@ -1647,7 +1797,11 @@ class UzExScraper:
                         resolved_name = stream_url_to_destination(candidate, "button-attribute")
                         if resolved_name:
                             return resolved_name
-                    raise
+                    record_strategy_error("dom-button-click", click_exc)
+                    raise Exception(
+                        f"Button {button_index} click failed after attribute fallback. "
+                        f"Strategies tried: {strategy_error_summary()}"
+                    ) from click_exc
 
                 deadline = time.monotonic() + 90
                 while time.monotonic() < deadline:
@@ -1666,10 +1820,11 @@ class UzExScraper:
 
                         if not _is_valid_file_path_payload(str(destination), "", validation_name):
                             remove_invalid_download()
-                            raise Exception(
-                                f"Browser download event returned invalid payload: "
-                                f"{file_size} bytes ({validation_name})"
+                            record_strategy_error(
+                                "dom-download-event",
+                                f"invalid payload bytes={file_size} validation_name={validation_name}",
                             )
+                            continue
 
                         logger.info(
                             "[DOWNLOAD] Browser download disk success at index %s: %s bytes, name=%s path=%s",
@@ -1679,6 +1834,15 @@ class UzExScraper:
                             destination,
                         )
                         return suggested
+
+                    if download_response_errors and download_response_error_seen_at:
+                        if time.monotonic() - download_response_error_seen_at[0] >= 3:
+                            logger.warning(
+                                "[DOWNLOAD] Button %s produced failed/non-target DownloadFile response(s); stopping DOM wait: %s",
+                                button_index,
+                                download_response_errors[-3:],
+                            )
+                            break
 
                     page.wait_for_timeout(500)
 
@@ -1692,8 +1856,9 @@ class UzExScraper:
                     if resolved_name:
                         return resolved_name
 
-                raise PlaywrightTimeout(
-                    f"Timed out after 90000ms waiting for download or popup from button {button_index}"
+                raise RuntimeError(
+                    f"Timed out after 90000ms waiting for download or popup from button {button_index}. "
+                    f"Strategies tried: {strategy_error_summary()}"
                 )
 
             finally:
@@ -1850,6 +2015,38 @@ class UzExScraper:
                         return rows
             return []
 
+        async def _fetch_trade_contact_metadata(
+            client: httpx.AsyncClient,
+            *,
+            lot_id: str,
+            source_url: str,
+        ) -> dict[str, Any]:
+            trade_url = (
+                "https://apietender.uzex.uz/api/common/GetTrade/"
+                f"{quote(lot_id, safe='')}/0"
+            )
+            try:
+                response = await client.get(
+                    trade_url,
+                    headers={
+                        "Accept": "application/json",
+                        "Referer": source_url,
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+            except Exception as exc:
+                logger.warning(
+                    "[API] Failed to fetch UzEx contact detail for lot %s: %s",
+                    lot_id,
+                    exc,
+                )
+                return {}
+
+            return extract_uzex_contact_info(
+                payload if isinstance(payload, dict) else None
+            )
+
         seen_lot_ids: set[str] = set()
 
         try:
@@ -1873,69 +2070,81 @@ class UzExScraper:
                     UZEX_ENTERPRISE_TYPE_ID,
                 )
 
-            for lot in lots:
-                try:
-                    if not isinstance(lot, dict):
-                        continue
-                    lot_id = str(lot.get("id", ""))
-                    if not lot_id or lot_id in seen_lot_ids:
-                        continue
-                    seen_lot_ids.add(lot_id)
-                    title = lot.get("name", "").strip()
-                    if not title:
-                        continue
-                    cost = float(lot.get("cost", 0) or 0)
-                    currency = lot.get("currency_codeabc", "UZS") or "UZS"
-                    
-                    # Parse publication/start date and deadline.
-                    publication_date = None
-                    start_date_str = lot.get("start_date")
-                    if start_date_str:
-                        try:
-                            publication_date = datetime.fromisoformat(start_date_str).replace(tzinfo=timezone.utc)
-                        except (ValueError, TypeError):
-                            pass
+            async with httpx.AsyncClient(timeout=30.0) as detail_client:
+                for lot in lots:
+                    try:
+                        if not isinstance(lot, dict):
+                            continue
+                        lot_id = str(lot.get("id", ""))
+                        if not lot_id or lot_id in seen_lot_ids:
+                            continue
+                        seen_lot_ids.add(lot_id)
+                        title = lot.get("name", "").strip()
+                        if not title:
+                            continue
+                        cost = float(lot.get("cost", 0) or 0)
+                        currency = lot.get("currency_codeabc", "UZS") or "UZS"
+                        
+                        # Parse publication/start date and deadline.
+                        publication_date = None
+                        start_date_str = lot.get("start_date")
+                        if start_date_str:
+                            try:
+                                publication_date = datetime.fromisoformat(start_date_str).replace(tzinfo=timezone.utc)
+                            except (ValueError, TypeError):
+                                pass
 
-                    deadline = None
-                    end_date_str = lot.get("end_date")
-                    if end_date_str:
-                        try:
-                            deadline = datetime.fromisoformat(end_date_str).replace(tzinfo=timezone.utc)
-                        except (ValueError, TypeError):
-                            pass
-                    
-                    # Map region from Russian to English
-                    region_raw = lot.get("region_name", "") or ""
-                    region = None
-                    for ru_key, en_name in REGION_MAP.items():
-                        if ru_key in region_raw.lower():
-                            region = en_name
-                            break
-                    if not region and region_raw:
-                        region = region_raw  # Keep original if no mapping found
-                    
-                    # Detect category from title
-                    category = detect_category(title)
-                    
-                    source_url = f"{self.BASE_URL}/lot/{lot_id}"
-                    
-                    tender = ScrapedTender(
-                        external_id=lot_id,
-                        title=title,
-                        budget=cost,
-                        currency=currency,
-                        region=region,
-                        source_url=source_url,
-                        category=category,
-                        publication_date=publication_date,
-                        deadline=deadline,
-                    )
-                    tenders.append(tender)
-                    logger.info(f"[API] [{category}] {lot_id}: {title[:50]}...")
-                    
-                except Exception as e:
-                    logger.warning(f"[API] Failed to parse lot: {e}")
-                    continue
+                        deadline = None
+                        end_date_str = lot.get("end_date")
+                        if end_date_str:
+                            try:
+                                deadline = datetime.fromisoformat(end_date_str).replace(tzinfo=timezone.utc)
+                            except (ValueError, TypeError):
+                                pass
+                        
+                        # Map region from Russian to English
+                        region_raw = lot.get("region_name", "") or ""
+                        region = None
+                        for ru_key, en_name in REGION_MAP.items():
+                            if ru_key in region_raw.lower():
+                                region = en_name
+                                break
+                        if not region and region_raw:
+                            region = region_raw  # Keep original if no mapping found
+                        
+                        # Detect category from title
+                        category = detect_category(title)
+                        
+                        source_url = f"{self.BASE_URL}/lot/{lot_id}"
+                        source_metadata = extract_uzex_trade_list_contact_metadata(lot)
+                        source_metadata.update(
+                            await _fetch_trade_contact_metadata(
+                                detail_client,
+                                lot_id=lot_id,
+                                source_url=source_url,
+                            )
+                        )
+                        buyer = source_metadata.get("buyer_agency")
+                        
+                        tender = ScrapedTender(
+                            external_id=lot_id,
+                            title=title,
+                            budget=cost,
+                            currency=currency,
+                            region=region,
+                            source_url=source_url,
+                            buyer=str(buyer) if buyer else None,
+                            category=category,
+                            publication_date=publication_date,
+                            deadline=deadline,
+                            source_metadata_json=source_metadata,
+                        )
+                        tenders.append(tender)
+                        logger.info(f"[API] [{category}] {lot_id}: {title[:50]}...")
+                        
+                    except Exception as e:
+                        logger.warning(f"[API] Failed to parse lot: {e}")
+                        continue
                     
         except Exception as e:
             logger.error(f"[API] TradeList fetch failed: {e}")

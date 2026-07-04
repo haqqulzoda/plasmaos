@@ -74,8 +74,19 @@ def uzex_enterprise_tender_condition(tender_model: Any):
 
 
 def customer_visible_tender_condition(tender_model: Any):
-    """Customer corpus guard: keep non-UzEx sources and confirmed enterprise UzEx."""
+    """Customer corpus guard: keep valid non-UzEx sources and confirmed enterprise UzEx."""
+    metadata_text = func.lower(func.coalesce(cast(tender_model.source_metadata_json, Text), ""))
+    hidden_giz_condition = and_(
+        tender_model.source_system == "giz",
+        or_(
+            metadata_text.like('%"giz_visibility": "hidden"%'),
+            metadata_text.like('%"giz_visibility":"hidden"%'),
+        ),
+    )
     return or_(
-        tender_model.source_system != "uzex",
+        and_(
+            tender_model.source_system != "uzex",
+            ~hidden_giz_condition,
+        ),
         uzex_enterprise_tender_condition(tender_model),
     )

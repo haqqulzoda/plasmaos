@@ -167,13 +167,15 @@ class P0SecurityStaticTests(unittest.TestCase):
         self.assertNotIn('"TypeId": 1', scraper)
         self.assertIn('"TypeId": UZEX_ENTERPRISE_TYPE_ID', tenders)
 
-        self.assertIn("source_metadata_json=uzex_source_metadata()", uzex_source)
+        self.assertIn("source_metadata = uzex_source_metadata()", uzex_source)
+        self.assertIn("source_metadata.update(raw.source_metadata_json)", uzex_source)
+        self.assertIn("source_metadata_json=source_metadata", uzex_source)
         self.assertIn("delete(Tender)", purge_script)
         self.assertIn("UZEX_UNKNOWN", purge_script)
         self.assertIn("_fetch_live_uzex_ids", purge_script)
         self.assertIn("Dependent rows covered by tender FK cascades", purge_script)
         self.assertIn("UzEx enterprise", frontend_tenders)
-        self.assertNotIn("{ value: 'uzex', label: 'UzEx' }", frontend_tenders)
+        self.assertIn("{ value: 'uzex', label: 'UzEx' }", frontend_tenders)
 
     def test_compiled_text_has_dedicated_authenticated_route(self) -> None:
         tenders = read("app/api/endpoints/tenders.py")
@@ -185,7 +187,7 @@ class P0SecurityStaticTests(unittest.TestCase):
         )
         self.assertRegex(
             tenders,
-            r"get_tender_compiled_text[\s\S]+?current_user: User = Depends\(get_current_user\)",
+            r"get_tender_compiled_text[\s\S]+?current_user: User = Depends\(require_approved_pilot_access\)",
         )
 
     def test_analysis_and_override_routes_are_owner_gated(self) -> None:
@@ -261,12 +263,12 @@ class P0SecurityStaticTests(unittest.TestCase):
         )
         self.assertIn("async def require_operator_or_admin", deps)
         self.assertIn("PLASMA_OPERATOR_EMAILS", deps)
-        self.assertIn('"is_operator"', deps)
-        self.assertIn('"is_founder"', deps)
+        self.assertIn("PLATFORM_ROLE_OPERATOR", deps)
+        self.assertIn("PLATFORM_ROLE_ADMIN", deps)
         self.assertIn("Operator access required", deps)
 
         self.assertIn("Depends(require_admin)", users)
-        self.assertIn("current_user: User = Depends(get_current_user)", audit)
+        self.assertIn("current_user: User = Depends(require_approved_pilot_access)", audit)
         self.assertIn("user_id=str(current_user.id)", audit)
         self.assertNotIn("user_id=request.user_id", audit)
 

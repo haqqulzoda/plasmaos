@@ -14,14 +14,18 @@ from app.services.tender_sources.keys import (
 try:
     from app.models.all_models import Tender, TenderStatus
     from app.services.tender_sources.base import (
+        CanonicalDocument,
         NormalizedTender,
+        assert_source_scope,
         upsert_tender,
     )
 except ModuleNotFoundError as exc:  # pragma: no cover - local minimal env
     if exc.name == "sqlalchemy":
         Tender = None
         TenderStatus = None
+        CanonicalDocument = None
         NormalizedTender = None
+        assert_source_scope = None
         upsert_tender = None
         HAS_BACKEND_DEPS = False
     else:
@@ -37,6 +41,8 @@ class TenderSourceKeyTests(unittest.TestCase):
             "world_bank:OP00434599",
         )
         self.assertEqual(canonical_source_key("adb", "1142361"), "adb:1142361")
+        self.assertEqual(canonical_source_key("giz", "7000012992"), "giz:7000012992")
+        self.assertEqual(canonical_source_key("ebrd", "45376134"), "ebrd:45376134")
         self.assertEqual(canonical_source_key(" UzEx ", "488105"), "uzex:488105")
 
     def test_source_system_normalization_rejects_unknown_values(self) -> None:
@@ -114,6 +120,36 @@ def _normalized(
 
 @unittest.skipUnless(HAS_BACKEND_DEPS, "SQLAlchemy is not installed")
 class TenderSourceFoundationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_canonical_document_exposes_source_neutral_file_url(self) -> None:
+        assert CanonicalDocument is not None
+
+        document = CanonicalDocument(
+            source_system=" UzEx ",
+            source_document_url="/files/a.pdf",
+            file_type="PDF",
+        )
+
+        self.assertEqual(document.normalized_source_system, "uzex")
+        self.assertEqual(document.file_url, "/files/a.pdf")
+
+    async def test_source_scope_guard_rejects_cross_source_mutation(self) -> None:
+        assert assert_source_scope is not None
+
+        tender = Tender(
+            source_system="uzex",
+            external_id="10002898",
+            canonical_source_key="uzex:10002898",
+            source_url="https://example.test/uzex/10002898",
+            title="UzEx row",
+            budget=10.0,
+            currency="UZS",
+            status=TenderStatus.OPEN,
+            category="Other",
+        )
+
+        with self.assertRaises(ValueError):
+            assert_source_scope("giz", tender)
+
     async def test_upsert_prevents_duplicate_canonical_source_key(self) -> None:
         session = _FakeSession()
 
@@ -147,7 +183,51 @@ class TenderSourceFoundationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(wb_created)
         self.assertTrue(adb_created)
         self.assertNotEqual(wb.canonical_source_key, adb.canonical_source_key)
-        self.assertEqual(set(session.items), {"world_bank:123", "adb:123"})
+        giz, giz_created = await upsert_tender(
+            session,
+            _normalized(source_system="giz", external_id="123"),
+        )
+        ebrd, ebrd_created = await upsert_tender(
+            session,
+            _normalized(source_system="ebrd", external_id="123"),
+        )
+
+        self.assertTrue(giz_created)
+        self.assertTrue(ebrd_created)
+        self.assertNotEqual(wb.canonical_source_key, giz.canonical_source_key)
+        self.assertNotEqual(wb.canonical_source_key, ebrd.canonical_source_key)
+        self.assertEqual(
+            set(session.items),
+            {"world_bank:123", "adb:123", "giz:123", "ebrd:123"},
+        )
+
+    async def test_giz_upsert_cannot_modify_uzex_row_with_same_external_id(self) -> None:
+        session = _FakeSession()
+
+        uzex, uzex_created = await upsert_tender(
+            session,
+            _normalized(
+                source_system="uzex",
+                external_id="10002898",
+                title="Original UzEx row",
+            ),
+        )
+        giz, giz_created = await upsert_tender(
+            session,
+            _normalized(
+                source_system="giz",
+                external_id="10002898",
+                title="GIZ row",
+            ),
+        )
+
+        self.assertTrue(uzex_created)
+        self.assertTrue(giz_created)
+        self.assertNotEqual(uzex.id, giz.id)
+        self.assertEqual(uzex.canonical_source_key, "uzex:10002898")
+        self.assertEqual(giz.canonical_source_key, "giz:10002898")
+        self.assertEqual(uzex.title, "Original UzEx row")
+        self.assertEqual(giz.title, "GIZ row")
 
     async def test_upsert_falls_back_to_source_system_external_id(self) -> None:
         session = _FakeSession()

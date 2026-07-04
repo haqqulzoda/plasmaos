@@ -14,6 +14,45 @@ const backendApiBase = (
 // as the user is active.
 const REFRESH_WINDOW_SECONDS = 60 * 60; // 1 hour before expiry
 
+type BackendClaims = {
+  platform_role?: string;
+  approval_status?: string;
+  is_admin?: boolean;
+  onboarding_required?: boolean;
+  company_profile_id?: string | null;
+  company_approval_status?: string | null;
+  company_pilot_status?: string | null;
+};
+
+type BackendTokenPayload = {
+  access_token?: string;
+  token_type?: string;
+} & BackendClaims;
+
+function decodeBackendClaims(accessToken: string): BackendClaims {
+  try {
+    const parts = accessToken.split('.');
+    if (parts.length !== 3) return {};
+    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8')) as BackendClaims;
+  } catch {
+    return {};
+  }
+}
+
+function applyBackendClaims(
+  token: Record<string, unknown>,
+  payload: BackendTokenPayload,
+) {
+  const claims = payload.access_token ? decodeBackendClaims(payload.access_token) : {};
+  token.platform_role = payload.platform_role ?? claims.platform_role;
+  token.approval_status = payload.approval_status ?? claims.approval_status;
+  token.is_admin = payload.is_admin ?? claims.is_admin;
+  token.onboarding_required = payload.onboarding_required ?? claims.onboarding_required;
+  token.company_profile_id = payload.company_profile_id ?? claims.company_profile_id ?? null;
+  token.company_approval_status = payload.company_approval_status ?? claims.company_approval_status ?? null;
+  token.company_pilot_status = payload.company_pilot_status ?? claims.company_pilot_status ?? null;
+}
+
 const { handlers, auth } = NextAuth({
   secret: process.env.AUTH_SECRET,
   trustHost: true,
@@ -59,16 +98,14 @@ const { handlers, auth } = NextAuth({
           throw new Error('Backend Google bridge failed');
         }
 
-        const payload = (await response.json()) as {
-          access_token?: string;
-          token_type?: string;
-        };
+        const payload = (await response.json()) as BackendTokenPayload;
 
         if (!payload.access_token || payload.token_type !== 'bearer') {
           throw new Error('Invalid backend token payload');
         }
 
         token.accessToken = payload.access_token;
+        applyBackendClaims(token as Record<string, unknown>, payload);
         return token;
       }
 
@@ -96,13 +133,11 @@ const { handlers, auth } = NextAuth({
               });
 
               if (refreshResponse.ok) {
-                const refreshPayload = (await refreshResponse.json()) as {
-                  access_token?: string;
-                  token_type?: string;
-                };
+                const refreshPayload = (await refreshResponse.json()) as BackendTokenPayload;
 
                 if (refreshPayload.access_token && refreshPayload.token_type === 'bearer') {
                   token.accessToken = refreshPayload.access_token;
+                  applyBackendClaims(token as Record<string, unknown>, refreshPayload);
                 }
               }
               // If refresh fails the existing (still valid) token is kept;
@@ -119,6 +154,24 @@ const { handlers, auth } = NextAuth({
     async session({ session, token }) {
       (session as { accessToken?: string }).accessToken =
         typeof token.accessToken === 'string' ? token.accessToken : undefined;
+      session.platform_role = typeof token.platform_role === 'string' ? token.platform_role : undefined;
+      session.approval_status = typeof token.approval_status === 'string' ? token.approval_status : undefined;
+      session.is_admin = typeof token.is_admin === 'boolean' ? token.is_admin : undefined;
+      session.onboarding_required = typeof token.onboarding_required === 'boolean' ? token.onboarding_required : undefined;
+      session.company_profile_id = typeof token.company_profile_id === 'string' ? token.company_profile_id : null;
+      session.company_approval_status =
+        typeof token.company_approval_status === 'string' ? token.company_approval_status : null;
+      session.company_pilot_status =
+        typeof token.company_pilot_status === 'string' ? token.company_pilot_status : null;
+      if (session.user) {
+        session.user.platform_role = session.platform_role;
+        session.user.approval_status = session.approval_status;
+        session.user.is_admin = session.is_admin;
+        session.user.onboarding_required = session.onboarding_required;
+        session.user.company_profile_id = session.company_profile_id;
+        session.user.company_approval_status = session.company_approval_status;
+        session.user.company_pilot_status = session.company_pilot_status;
+      }
       return session;
     },
   },

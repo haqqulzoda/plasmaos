@@ -141,7 +141,7 @@ class Tender(Base):
     # Indexes
     __table_args__ = (
         CheckConstraint(
-            "source_system IN ('uzex', 'world_bank', 'adb')",
+            "source_system IN ('uzex', 'world_bank', 'adb', 'giz', 'ebrd')",
             name="ck_tenders_source_system_allowed",
         ),
         Index("ix_tenders_external_id", "external_id"),
@@ -364,7 +364,13 @@ class Proposal(Base):
 
 # Import modular models so Alembic autogenerate sees the full metadata graph.
 from app.models.audit import AuditLog, TenderAnalysis, TenderRecommendation  # noqa: E402,F401
-from app.models.company import Certification, CompanyProfile, FinancialHistory, License  # noqa: E402,F401
+from app.models.company import (  # noqa: E402,F401
+    Certification,
+    CompanyProfile,
+    FinancialHistory,
+    License,
+    ReadinessDocument,
+)
 from app.models.taxonomy import (  # noqa: E402,F401
     CompanyCredential,
     RiskOverrideLog,
@@ -390,6 +396,7 @@ __all__ = [
     "Certification",
     "License",
     "FinancialHistory",
+    "ReadinessDocument",
     "TaxonomyCategory",
     "TaxonomyNode",
     "CompanyCredential",

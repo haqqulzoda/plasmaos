@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api.endpoints import admin, auth, hunter, proposals, tenders, users, vault
+from app.api.endpoints import admin, auth, hunter, meta, proposals, tenders, users, vault
 from app.api.routers import audit
 from app.core.agents.requirement_extractor import EXTRACTOR_SCHEMA_VERSION
 from app.core.config import settings
@@ -78,6 +78,7 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(tenders.router, prefix="/api/v1/tenders", tags=["Tenders"])
 app.include_router(proposals.router, prefix="/api/v1/proposals", tags=["Proposals"])
+app.include_router(meta.router, prefix="/api/v1/meta", tags=["Meta"])
 app.include_router(vault.router, prefix="/api/v1", tags=["Vault"])
 app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
 app.include_router(audit.router, prefix="/audit", tags=["Audit"])

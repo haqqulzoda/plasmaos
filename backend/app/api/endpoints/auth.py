@@ -6,14 +6,26 @@ Google OAuth bridge endpoints.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import admin_email_allowlist, is_admin_user, operator_email_allowlist
+from app.core.access import (
+    PLATFORM_ROLE_ADMIN,
+    PLATFORM_ROLE_OPERATOR,
+    PLATFORM_ROLE_PILOT_USER,
+    USER_APPROVAL_APPROVED,
+    USER_APPROVAL_PENDING,
+)
 from app.core.security import create_access_token, get_current_user
 from app.db.session import get_db
 from app.models.all_models import User
+from app.models.company import CompanyProfile
 
 router = APIRouter()
 
@@ -28,6 +40,80 @@ class GoogleAuthRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str
+    platform_role: str
+    approval_status: str
+    is_admin: bool
+    onboarding_required: bool
+    company_profile_id: UUID | None = None
+    company_approval_status: str | None = None
+    company_pilot_status: str | None = None
+
+
+def _apply_email_bootstrap(user: User, *, email: str) -> None:
+    now = datetime.now(timezone.utc)
+    if user.is_admin or email in admin_email_allowlist():
+        user.platform_role = PLATFORM_ROLE_ADMIN
+        user.approval_status = USER_APPROVAL_APPROVED
+        user.is_admin = True
+        user.approved_at = user.approved_at or now
+        return
+
+    if email in operator_email_allowlist():
+        user.platform_role = PLATFORM_ROLE_OPERATOR
+        user.approval_status = USER_APPROVAL_APPROVED
+        user.approved_at = user.approved_at or now
+        return
+
+    if not user.platform_role:
+        user.platform_role = PLATFORM_ROLE_PILOT_USER
+    if not user.approval_status:
+        user.approval_status = USER_APPROVAL_PENDING
+
+
+async def _load_company_profile(
+    *,
+    db: AsyncSession,
+    user_id,
+) -> CompanyProfile | None:
+    result = await db.execute(
+        select(CompanyProfile).where(CompanyProfile.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+def _token_payload(user: User, profile: CompanyProfile | None) -> dict:
+    onboarding_required = profile is None
+    company_profile_id = str(profile.id) if profile is not None else None
+    company_approval_status = profile.approval_status if profile is not None else None
+    company_pilot_status = profile.pilot_status if profile is not None else None
+    return {
+        "sub": str(user.id),
+        "google_id": user.google_id,
+        "email": user.email,
+        "name": user.name,
+        "is_admin": is_admin_user(user),
+        "tier": user.subscription_tier.value,
+        "platform_role": user.platform_role,
+        "approval_status": user.approval_status,
+        "onboarding_required": onboarding_required,
+        "company_profile_id": company_profile_id,
+        "company_approval_status": company_approval_status,
+        "company_pilot_status": company_pilot_status,
+    }
+
+
+def _token_response(*, access_token: str, user: User, profile: CompanyProfile | None) -> TokenResponse:
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        platform_role=user.platform_role,
+        approval_status=user.approval_status,
+        is_admin=is_admin_user(user),
+        onboarding_required=profile is None,
+        company_profile_id=profile.id if profile is not None else None,
+        company_approval_status=profile.approval_status if profile is not None else None,
+        company_pilot_status=profile.pilot_status if profile is not None else None,
+    )
 
 @router.post("/google", response_model=TokenResponse)
 async def google_auth_bridge(
@@ -51,6 +137,8 @@ async def google_auth_bridge(
             email=email,
             name=name,
             avatar_url=avatar_url,
+            platform_role=PLATFORM_ROLE_PILOT_USER,
+            approval_status=USER_APPROVAL_PENDING,
         )
         db.add(user)
     else:
@@ -58,20 +146,13 @@ async def google_auth_bridge(
         user.email = email
         user.name = name
         user.avatar_url = avatar_url
+    _apply_email_bootstrap(user, email=email)
 
     await db.commit()
     await db.refresh(user)
+    profile = await _load_company_profile(db=db, user_id=user.id)
 
-    access_token = create_access_token(
-        data={
-            "sub": str(user.id),
-            "google_id": user.google_id,
-            "email": user.email,
-            "name": user.name,
-            "is_admin": user.is_admin,
-            "tier": user.subscription_tier.value,
-        }
-    )
+    access_token = create_access_token(data=_token_payload(user, profile))
 
     response.set_cookie(
         key="plasma_api_token",
@@ -83,7 +164,7 @@ async def google_auth_bridge(
         path="/",
     )
 
-    return TokenResponse(access_token=access_token, token_type="bearer")
+    return _token_response(access_token=access_token, user=user, profile=profile)
 
 
 @router.post("/logout")
@@ -96,6 +177,7 @@ async def logout(response: Response) -> dict[str, str]:
 async def refresh_token(
     response: Response,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     """
     Issue a fresh backend JWT for the authenticated user.
@@ -104,16 +186,8 @@ async def refresh_token(
     cookie — whichever ``get_current_user`` resolves.  Returns a new
     token with a full 8-hour lifetime and refreshes the cookie.
     """
-    access_token = create_access_token(
-        data={
-            "sub": str(current_user.id),
-            "google_id": current_user.google_id,
-            "email": current_user.email,
-            "name": current_user.name,
-            "is_admin": current_user.is_admin,
-            "tier": current_user.subscription_tier.value,
-        }
-    )
+    profile = await _load_company_profile(db=db, user_id=current_user.id)
+    access_token = create_access_token(data=_token_payload(current_user, profile))
 
     response.set_cookie(
         key="plasma_api_token",
@@ -125,5 +199,4 @@ async def refresh_token(
         path="/",
     )
 
-    return TokenResponse(access_token=access_token, token_type="bearer")
-
+    return _token_response(access_token=access_token, user=current_user, profile=profile)

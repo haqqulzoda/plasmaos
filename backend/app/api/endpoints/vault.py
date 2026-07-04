@@ -1,43 +1,76 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user
+from app.api.deps import require_approved_pilot_access
 from app.db.session import get_db
 from app.models.all_models import User
-from app.models.company import Certification, CompanyProfile, FinancialHistory, License
+from app.models.company import (
+    Certification,
+    CompanyProfile,
+    FinancialHistory,
+    License,
+    ReadinessDocument,
+)
 from app.schemas.vault import (
     CertificationItem,
     CompanyVaultResponse,
     CompanyVaultUpdate,
     FinancialHistoryItem,
     LicenseItem,
+    ReadinessDocumentCreate,
+    ReadinessDocumentResponse,
+    ReadinessDocumentUpdate,
 )
 
 router = APIRouter()
 
 
-async def _get_or_create_profile(db: AsyncSession, user_id) -> CompanyProfile:
+async def _get_profile_or_404(db: AsyncSession, user_id) -> CompanyProfile:
     result = await db.execute(
         select(CompanyProfile).where(CompanyProfile.user_id == user_id)
     )
     profile = result.scalar_one_or_none()
 
     if profile is None:
-        profile = CompanyProfile(user_id=user_id)
-        db.add(profile)
-        await db.flush()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company onboarding required",
+        )
 
     return profile
+
+
+async def _get_readiness_document_or_404(
+    *,
+    db: AsyncSession,
+    document_id: UUID,
+    company_profile_id: UUID,
+) -> ReadinessDocument:
+    result = await db.execute(
+        select(ReadinessDocument).where(
+            ReadinessDocument.id == document_id,
+            ReadinessDocument.company_profile_id == company_profile_id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Readiness document not found",
+        )
+    return document
 
 
 async def _load_profile_with_children(
     db: AsyncSession,
     user_id,
-) -> CompanyProfile:
+) -> CompanyProfile | None:
     result = await db.execute(
         select(CompanyProfile)
         .options(
@@ -48,23 +81,7 @@ async def _load_profile_with_children(
         .where(CompanyProfile.user_id == user_id)
     )
     profile = result.scalar_one_or_none()
-    if profile is not None:
-        return profile
-
-    profile = CompanyProfile(user_id=user_id)
-    db.add(profile)
-    await db.commit()
-
-    refreshed = await db.execute(
-        select(CompanyProfile)
-        .options(
-            selectinload(CompanyProfile.certifications),
-            selectinload(CompanyProfile.licenses),
-            selectinload(CompanyProfile.financial_history),
-        )
-        .where(CompanyProfile.user_id == user_id)
-    )
-    return refreshed.scalar_one()
+    return profile
 
 
 def _to_response(profile: CompanyProfile) -> CompanyVaultResponse:
@@ -101,6 +118,14 @@ def _to_response(profile: CompanyProfile) -> CompanyVaultResponse:
         mfo=profile.mfo,
         account_number=profile.account_number,
         inn=profile.inn,
+        industry=profile.industry,
+        website=profile.website,
+        target_regions=profile.target_regions,
+        target_countries=profile.target_countries,
+        target_services=profile.target_services,
+        notes=profile.notes,
+        pilot_status=profile.pilot_status,
+        approval_status=profile.approval_status,
         certifications=certifications,
         licenses=licenses,
         financial_history=financial_history,
@@ -109,20 +134,25 @@ def _to_response(profile: CompanyProfile) -> CompanyVaultResponse:
 
 @router.get("/vault", response_model=CompanyVaultResponse)
 async def get_company_vault(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> CompanyVaultResponse:
     profile = await _load_profile_with_children(db=db, user_id=current_user.id)
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company onboarding required",
+        )
     return _to_response(profile)
 
 
 @router.put("/vault", response_model=CompanyVaultResponse, status_code=status.HTTP_200_OK)
 async def update_company_vault(
     payload: CompanyVaultUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> CompanyVaultResponse:
-    profile = await _get_or_create_profile(db=db, user_id=current_user.id)
+    profile = await _get_profile_or_404(db=db, user_id=current_user.id)
 
     # Update root company profile fields
     profile.company_name = payload.company_name
@@ -133,6 +163,12 @@ async def update_company_vault(
     profile.mfo = payload.mfo
     profile.account_number = payload.account_number
     profile.inn = payload.inn
+    profile.industry = payload.industry
+    profile.website = payload.website
+    profile.target_regions = payload.target_regions
+    profile.target_countries = payload.target_countries
+    profile.target_services = payload.target_services
+    profile.notes = payload.notes
 
     user_company_ids = select(CompanyProfile.id).where(
         CompanyProfile.user_id == current_user.id
@@ -197,3 +233,82 @@ async def update_company_vault(
         )
     )
     return _to_response(refreshed.scalar_one())
+
+
+@router.get("/vault/readiness", response_model=list[ReadinessDocumentResponse])
+async def list_readiness_documents(
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> list[ReadinessDocumentResponse]:
+    profile = await _get_profile_or_404(db=db, user_id=current_user.id)
+    result = await db.execute(
+        select(ReadinessDocument)
+        .where(ReadinessDocument.company_profile_id == profile.id)
+        .order_by(ReadinessDocument.document_type, ReadinessDocument.document_name)
+    )
+    return [
+        ReadinessDocumentResponse.model_validate(document)
+        for document in result.scalars().all()
+    ]
+
+
+@router.post(
+    "/vault/readiness",
+    response_model=ReadinessDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_readiness_document(
+    payload: ReadinessDocumentCreate,
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> ReadinessDocumentResponse:
+    profile = await _get_profile_or_404(db=db, user_id=current_user.id)
+    document = ReadinessDocument(
+        company_profile_id=profile.id,
+        **payload.model_dump(),
+    )
+    db.add(document)
+    await db.commit()
+    await db.refresh(document)
+    return ReadinessDocumentResponse.model_validate(document)
+
+
+@router.put(
+    "/vault/readiness/{document_id}",
+    response_model=ReadinessDocumentResponse,
+)
+async def update_readiness_document(
+    document_id: UUID,
+    payload: ReadinessDocumentUpdate,
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> ReadinessDocumentResponse:
+    profile = await _get_profile_or_404(db=db, user_id=current_user.id)
+    document = await _get_readiness_document_or_404(
+        db=db,
+        document_id=document_id,
+        company_profile_id=profile.id,
+    )
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(document, field, value)
+
+    await db.commit()
+    await db.refresh(document)
+    return ReadinessDocumentResponse.model_validate(document)
+
+
+@router.delete("/vault/readiness/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_readiness_document(
+    document_id: UUID,
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    profile = await _get_profile_or_404(db=db, user_id=current_user.id)
+    document = await _get_readiness_document_or_404(
+        db=db,
+        document_id=document_id,
+        company_profile_id=profile.id,
+    )
+    await db.delete(document)
+    await db.commit()

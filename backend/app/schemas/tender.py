@@ -5,6 +5,7 @@ Pydantic models for tender API requests and responses.
 """
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -22,6 +23,23 @@ class TenderBase(BaseModel):
     region: str | None = None
     status: TenderStatus = TenderStatus.OPEN
     category: str = "Other"
+
+
+class TenderContactSubmissionResponse(BaseModel):
+    """Safe contact and submission fields derived for tender detail views."""
+
+    buyer_agency: str | None = None
+    contact_person: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    submission_method: str | None = None
+    submission_deadline: datetime | None = None
+    question_deadline: datetime | None = None
+    procedure_type: str | None = None
+    participation_instructions: str | None = None
+    source_url: str | None = None
+    document_access_notes: str | None = None
 
 
 class TenderResponse(TenderBase):
@@ -46,10 +64,14 @@ class TenderResponse(TenderBase):
     document_status: str = "no_documents_found"
     document_count: int = 0
     available_document_count: int = 0
+    downloadable_document_count: int = 0
+    missing_file_document_count: int = 0
+    parsed_document_count: int = 0
     metadata_only_document_count: int = 0
     failed_document_count: int = 0
     compliance_analysis_available: bool = False
     compliance_unavailable_reason: str | None = None
+    contact_submission: TenderContactSubmissionResponse | None = None
     created_at: datetime
     
     model_config = {"from_attributes": True}
@@ -94,3 +116,72 @@ class TenderDocumentResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+CompetitorParticipationType = Literal[
+    "winner",
+    "participant",
+    "similar_market_actor",
+]
+CompetitorConfidence = Literal["high", "medium", "low"]
+DeadlineUrgency = Literal["expired", "urgent", "soon", "normal", "unknown"]
+ContactAvailability = Literal["available", "partial", "missing"]
+AvailabilityStatus = Literal["available", "unavailable"]
+
+
+class TenderDecisionSnapshotResponse(BaseModel):
+    """Compact decision-support facts for tender detail."""
+
+    tender_id: UUID
+    source: str
+    country: str | None = None
+    region: str | None = None
+    service_category: str | None = None
+    deadline: datetime | None = None
+    deadline_urgency: DeadlineUrgency = "unknown"
+    price_amount: float | None = None
+    price_currency: str | None = None
+    price_display: str | None = None
+    document_status: str = "no_documents_found"
+    document_count: int = 0
+    downloadable_document_count: int = 0
+    missing_file_document_count: int = 0
+    parsed_document_count: int = 0
+    contact_availability: ContactAvailability = "missing"
+    competitor_intelligence_status: AvailabilityStatus = "unavailable"
+    compliance_availability: AvailabilityStatus = "unavailable"
+    source_notice_available: bool = False
+
+
+class TenderCompetitorResponse(BaseModel):
+    """Whitelisted competitor intelligence derived from public source evidence."""
+
+    company_name: str
+    industry: str
+    service_category: str
+    source: str
+    related_tender_id: UUID | None = None
+    buyer: str | None = None
+    country: str | None = None
+    sector: str | None = None
+    category: str | None = None
+    participation_type: CompetitorParticipationType
+    confidence: CompetitorConfidence
+    reason: str
+    evidence_source: str | None = None
+
+
+class TenderCompetitorGroup(BaseModel):
+    """Competitors grouped by industry/service category."""
+
+    industry: str
+    service_category: str
+    competitors: list[TenderCompetitorResponse] = Field(default_factory=list)
+
+
+class TenderCompetitorIntelligenceResponse(BaseModel):
+    """Tender-level competitor intelligence payload."""
+
+    tender_id: UUID
+    message: str
+    groups: list[TenderCompetitorGroup] = Field(default_factory=list)

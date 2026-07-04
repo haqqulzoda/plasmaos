@@ -17,14 +17,17 @@ import {
     RefreshCw,
     Search,
     ShieldCheck,
+    X,
 } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { CENTRAL_ASIA_REGION, useGeographyMeta } from '@/lib/geography';
+import { labelForService, useServiceMeta } from '@/lib/services';
 import type { Tender } from '@/types/tender';
 import {
     complianceUnavailableMessage,
+    documentAggregateLabel,
     documentStatusClasses,
-    documentStatusLabel,
     sourceBadgeClasses,
     sourceLabel,
 } from '@/types/tender';
@@ -34,6 +37,8 @@ const SOURCE_FILTERS = [
     { value: 'uzex', label: 'UzEx' },
     { value: 'world_bank', label: 'World Bank' },
     { value: 'adb', label: 'ADB' },
+    { value: 'giz', label: 'GIZ' },
+    { value: 'ebrd', label: 'EBRD' },
 ];
 
 const DEADLINE_FILTERS = [
@@ -43,10 +48,31 @@ const DEADLINE_FILTERS = [
     { value: 'unknown', label: 'Unknown' },
 ];
 
+const DOCUMENT_STATUS_FILTERS = [
+    { value: 'All', label: 'Any docs' },
+    { value: 'documents_available', label: 'Available' },
+    { value: 'files_missing', label: 'Missing files' },
+    { value: 'metadata_only', label: 'Metadata' },
+    { value: 'access_required', label: 'Access required' },
+    { value: 'processing', label: 'Processing' },
+    { value: 'failed', label: 'Failed' },
+    { value: 'no_documents_found', label: 'No docs' },
+];
+
+const SORT_OPTIONS = [
+    { value: 'newest', label: 'Newest' },
+    { value: 'deadline_soonest', label: 'Deadline soonest' },
+    { value: 'highest_price', label: 'Highest price' },
+    { value: 'document_availability', label: 'Document availability' },
+    { value: 'source', label: 'Source' },
+];
+
 const SOURCE_REFRESH_ACTIONS = [
     { value: 'uzex', label: 'UzEx', endpoint: '/tenders/refresh' },
     { value: 'world_bank', label: 'World Bank', endpoint: '/tenders/sources/world-bank/sync' },
     { value: 'adb', label: 'ADB', endpoint: '/tenders/sources/adb/sync' },
+    { value: 'giz', label: 'GIZ', endpoint: '/tenders/sources/giz/sync' },
+    { value: 'ebrd', label: 'EBRD', endpoint: '/tenders/sources/ebrd/sync' },
 ] as const;
 
 type SourceRefreshTarget = (typeof SOURCE_REFRESH_ACTIONS)[number]['value'];
@@ -102,6 +128,8 @@ function priceDisplay(tender: Tender) {
 export default function TendersPage() {
     const router = useRouter();
     const fetchRequestId = useRef(0);
+    const geography = useGeographyMeta();
+    const serviceOptions = useServiceMeta();
     const [tenders, setTenders] = useState<Tender[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [refreshingSource, setRefreshingSource] = useState<SourceRefreshTarget | null>(null);
@@ -112,12 +140,18 @@ export default function TendersPage() {
     const [toastMessage, setToastMessage] = useState('');
 
     const [sourceFilter, setSourceFilter] = useState('All');
+    const [regionFilter, setRegionFilter] = useState('');
+    const [countryFilters, setCountryFilters] = useState<string[]>([]);
+    const [serviceFilters, setServiceFilters] = useState<string[]>([]);
     const [deadlineFilter, setDeadlineFilter] = useState('All');
+    const [documentStatusFilter, setDocumentStatusFilter] = useState('All');
+    const [sortFilter, setSortFilter] = useState('newest');
+    const [priceMin, setPriceMin] = useState('');
+    const [priceMax, setPriceMax] = useState('');
     const [keyword, setKeyword] = useState('');
-    const [country, setCountry] = useState('');
-    const [category, setCategory] = useState('');
     const isRefreshing = refreshingSource !== null;
     const refreshingLabel = SOURCE_REFRESH_ACTIONS.find((item) => item.value === refreshingSource)?.label;
+    const centralAsiaCountries = geography.central_asia_countries;
 
     const showNotification = (message: string) => {
         setToastMessage(message);
@@ -138,10 +172,15 @@ export default function TendersPage() {
                 offset,
             };
             if (sourceFilter !== 'All') params.source_system = sourceFilter;
+            if (regionFilter) params.region = regionFilter;
+            if (countryFilters.length > 0) params.countries = countryFilters.join(',');
+            if (serviceFilters.length > 0) params.services = serviceFilters.join(',');
             if (deadlineFilter !== 'All') params.deadline_status = deadlineFilter;
+            if (documentStatusFilter !== 'All') params.document_status = documentStatusFilter;
+            if (sortFilter) params.sort = sortFilter;
+            if (priceMin.trim()) params.price_min = priceMin.trim();
+            if (priceMax.trim()) params.price_max = priceMax.trim();
             if (keyword.trim()) params.q = keyword.trim();
-            if (country.trim()) params.country = country.trim();
-            if (category.trim()) params.category = category.trim();
 
             const response = await api.get<Tender[]>('/tenders', { params });
             if (requestId !== fetchRequestId.current) return;
@@ -159,7 +198,18 @@ export default function TendersPage() {
                 setIsLoadingMore(false);
             }
         }
-    }, [category, country, deadlineFilter, keyword, sourceFilter]);
+    }, [
+        countryFilters,
+        deadlineFilter,
+        documentStatusFilter,
+        keyword,
+        priceMax,
+        priceMin,
+        regionFilter,
+        serviceFilters,
+        sortFilter,
+        sourceFilter,
+    ]);
 
     useEffect(() => {
         setIsLoading(true);
@@ -167,6 +217,90 @@ export default function TendersPage() {
         setHasMore(false);
         fetchTenders();
     }, [fetchTenders]);
+
+    const toggleCountry = (countryName: string) => {
+        setCountryFilters((current) => current.includes(countryName)
+            ? current.filter((item) => item !== countryName)
+            : [...current, countryName]);
+    };
+
+    const toggleService = (serviceName: string) => {
+        setServiceFilters((current) => current.includes(serviceName)
+            ? current.filter((item) => item !== serviceName)
+            : [...current, serviceName]);
+    };
+
+    const toggleCentralAsia = () => {
+        setRegionFilter((current) => current === CENTRAL_ASIA_REGION ? '' : CENTRAL_ASIA_REGION);
+    };
+
+    const resetFilters = () => {
+        setSourceFilter('All');
+        setRegionFilter('');
+        setCountryFilters([]);
+        setServiceFilters([]);
+        setDeadlineFilter('All');
+        setDocumentStatusFilter('All');
+        setSortFilter('newest');
+        setPriceMin('');
+        setPriceMax('');
+        setKeyword('');
+    };
+
+    const activeFilterBadges = [
+        ...(sourceFilter !== 'All'
+            ? [{
+                key: 'source',
+                label: `Source: ${SOURCE_FILTERS.find((item) => item.value === sourceFilter)?.label ?? sourceFilter}`,
+                onRemove: () => setSourceFilter('All'),
+            }]
+            : []),
+        ...(regionFilter
+            ? [{
+                key: 'region',
+                label: `Region: ${regionFilter}`,
+                onRemove: () => setRegionFilter(''),
+            }]
+            : []),
+        ...countryFilters.map((countryName) => ({
+            key: `country-${countryName}`,
+            label: countryName,
+            onRemove: () => setCountryFilters((current) => current.filter((item) => item !== countryName)),
+        })),
+        ...serviceFilters.map((serviceName) => ({
+            key: `service-${serviceName}`,
+            label: labelForService(serviceName, serviceOptions),
+            onRemove: () => setServiceFilters((current) => current.filter((item) => item !== serviceName)),
+        })),
+        ...(deadlineFilter !== 'All'
+            ? [{
+                key: 'deadline',
+                label: `Deadline: ${DEADLINE_FILTERS.find((item) => item.value === deadlineFilter)?.label ?? deadlineFilter}`,
+                onRemove: () => setDeadlineFilter('All'),
+            }]
+            : []),
+        ...(documentStatusFilter !== 'All'
+            ? [{
+                key: 'documents',
+                label: `Docs: ${DOCUMENT_STATUS_FILTERS.find((item) => item.value === documentStatusFilter)?.label ?? documentStatusFilter}`,
+                onRemove: () => setDocumentStatusFilter('All'),
+            }]
+            : []),
+        ...(priceMin.trim()
+            ? [{
+                key: 'price-min',
+                label: `Min: ${priceMin}`,
+                onRemove: () => setPriceMin(''),
+            }]
+            : []),
+        ...(priceMax.trim()
+            ? [{
+                key: 'price-max',
+                label: `Max: ${priceMax}`,
+                onRemove: () => setPriceMax(''),
+            }]
+            : []),
+    ];
 
     const handleRefresh = async (target: SourceRefreshTarget) => {
         const refreshAction = SOURCE_REFRESH_ACTIONS.find((item) => item.value === target);
@@ -234,7 +368,7 @@ export default function TendersPage() {
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold text-white">Tender Explorer</h1>
-                        <p className="text-zinc-400 text-sm mt-1">UzEx enterprise, World Bank, and ADB opportunities in one worklist</p>
+                        <p className="text-zinc-400 text-sm mt-1">UzEx enterprise, World Bank, ADB, GIZ, and EBRD opportunities in one worklist</p>
                     </div>
                 </div>
 
@@ -262,7 +396,7 @@ export default function TendersPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 space-y-4"
             >
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.4fr_0.8fr_0.8fr]">
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr]">
                     <label className="relative">
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                         <input
@@ -273,22 +407,35 @@ export default function TendersPage() {
                         />
                     </label>
                     <input
-                        value={country}
-                        onChange={(event) => setCountry(event.target.value)}
-                        placeholder="Country"
+                        value={priceMin}
+                        onChange={(event) => setPriceMin(event.target.value)}
+                        inputMode="decimal"
+                        placeholder="Min price"
                         className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
                     />
                     <input
-                        value={category}
-                        onChange={(event) => setCategory(event.target.value)}
-                        placeholder="Sector or category"
+                        value={priceMax}
+                        onChange={(event) => setPriceMax(event.target.value)}
+                        inputMode="decimal"
+                        placeholder="Max price"
                         className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
                     />
+                    <select
+                        value={sortFilter}
+                        onChange={(event) => setSortFilter(event.target.value)}
+                        className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
+                    >
+                        {SORT_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <Filter className="h-4 w-4 text-zinc-500" />
+                <div className="flex flex-wrap items-center gap-2">
+                    <Filter className="h-4 w-4 text-zinc-500" />
+                    <div className="flex flex-wrap items-center gap-2">
                         {SOURCE_FILTERS.map((source) => (
                             <button
                                 key={source.value}
@@ -303,7 +450,50 @@ export default function TendersPage() {
                         ))}
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                        onClick={toggleCentralAsia}
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${regionFilter === CENTRAL_ASIA_REGION
+                            ? 'border-emerald-500 bg-emerald-600 text-white'
+                            : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                            }`}
+                    >
+                        Central Asia
+                    </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    <MapPin className="h-4 w-4 text-zinc-500" />
+                    {centralAsiaCountries.map((countryName) => (
+                        <button
+                            key={countryName}
+                            onClick={() => toggleCountry(countryName)}
+                            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${countryFilters.includes(countryName)
+                                ? 'border-emerald-500 bg-emerald-600 text-white'
+                                : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                                }`}
+                        >
+                            {countryName}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    {serviceOptions.map((option) => (
+                        <button
+                            key={option.value}
+                            onClick={() => toggleService(option.value)}
+                            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${serviceFilters.includes(option.value)
+                                ? 'border-sky-500 bg-sky-600 text-white'
+                                : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                                }`}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
                         <CalendarClock className="h-4 w-4 text-zinc-500" />
                         {DEADLINE_FILTERS.map((filter) => (
                             <button
@@ -318,7 +508,44 @@ export default function TendersPage() {
                             </button>
                         ))}
                     </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        {DOCUMENT_STATUS_FILTERS.map((filter) => (
+                            <button
+                                key={filter.value}
+                                onClick={() => setDocumentStatusFilter(filter.value)}
+                                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${documentStatusFilter === filter.value
+                                    ? 'border-amber-500 bg-amber-600 text-white'
+                                    : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                                    }`}
+                            >
+                                {filter.label}
+                            </button>
+                        ))}
+                        <button
+                            onClick={resetFilters}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500"
+                        >
+                            <X className="h-3.5 w-3.5" />
+                            Reset
+                        </button>
+                    </div>
                 </div>
+
+                {activeFilterBadges.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 border-t border-zinc-900 pt-3">
+                        {activeFilterBadges.map((badge) => (
+                            <button
+                                key={badge.key}
+                                onClick={badge.onRemove}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-medium text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+                            >
+                                {badge.label}
+                                <X className="h-3 w-3" />
+                            </button>
+                        ))}
+                    </div>
+                )}
             </motion.div>
 
             {isRefreshing && (
@@ -386,7 +613,7 @@ export default function TendersPage() {
                                                 <span className="text-[11px] text-zinc-500">ID {tender.external_id}</span>
                                             )}
                                             <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${documentStatusClasses(tender.document_status)}`}>
-                                                {documentStatusLabel(tender.document_status)}
+                                                {documentAggregateLabel(tender)}
                                             </span>
                                         </div>
                                         <button

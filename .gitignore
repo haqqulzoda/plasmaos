@@ -10,5 +10,7 @@ backend/.venv/
 # Python cache files
 __pycache__/
 *.pyc
+data/documents/
+backend/backups/
 *.pyo
 *.pyd

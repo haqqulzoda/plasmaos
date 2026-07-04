@@ -9,6 +9,7 @@ from app.services.tender_sources.keys import canonical_source_key
 from app.services.tender_sources.world_bank import (
     clean_notice_html,
     extract_world_bank_attachment_links,
+    extract_world_bank_contact_info,
     is_actionable_notice,
     normalize_world_bank_notice_payload,
     parse_world_bank_deadline,
@@ -38,7 +39,14 @@ def _notice_fixture(**overrides):
             {"sector_description": "Energy Transmission and Distribution"},
         ],
         "agency_name": "Liberia Electricity Corporation",
+        "contact_address": "1 Energy Way",
+        "contact_city": "Monrovia",
+        "contact_ctry_name": "Liberia",
+        "contact_email": "jane.doe@example.org",
+        "contact_job_title": "Procurement Specialist",
+        "contact_name": "Jane Doe",
         "contact_organization": "Fallback Buyer",
+        "contact_phone_no": "+231 555 0199",
         "procurement_group_desc": "Works",
         "procurement_method_name": "Request for Bids",
         "project_id": "P179267",
@@ -72,6 +80,18 @@ class WorldBankConnectorTests(unittest.TestCase):
         self.assertIn("Renewable Energy Solar", payload["sector"])
         self.assertNotIn("<strong>", payload["description"])
         self.assertNotIn("alert", payload["description"])
+
+    def test_contact_information_extraction_from_procnotice_row(self) -> None:
+        contact = extract_world_bank_contact_info(_notice_fixture())
+
+        self.assertEqual(contact["buyer_agency"], "Fallback Buyer")
+        self.assertEqual(
+            contact["contact_person"],
+            "Jane Doe (Procurement Specialist)",
+        )
+        self.assertEqual(contact["email"], "jane.doe@example.org")
+        self.assertEqual(contact["phone"], "+231 555 0199")
+        self.assertEqual(contact["address"], "1 Energy Way; Monrovia; Liberia")
 
     def test_active_notice_filtering(self) -> None:
         self.assertTrue(

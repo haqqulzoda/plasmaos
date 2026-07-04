@@ -6,11 +6,16 @@ Public tender feed for the Autonomous Tender Officer.
 
 import asyncio
 import hashlib
+import html
 import json
 import logging
 import re
+import xml.etree.ElementTree as ET
+import zipfile
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from time import monotonic
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID, uuid4
@@ -19,15 +24,15 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only, selectinload
 
 from app.api.deps import (
-    get_current_user,
     is_operator_or_admin,
     require_admin,
+    require_approved_pilot_access,
     require_operator_or_admin,
 )
 from app.core.agents.requirement_extractor import (
@@ -53,6 +58,12 @@ from app.core.compliance_pdf import (
     compliance_report_filename,
 )
 from app.core.evaluator import DynamicComplianceResult, TaxNodeInfo
+from app.core.geography import (
+    CENTRAL_ASIA_REGION,
+    COUNTRIES_BY_REGION,
+    normalize_target_regions,
+)
+from app.core.parser import process_tender_document
 from app.core.reproducibility import (
     annotate_evidence_validation,
     annotate_hybrid_compliance,
@@ -70,6 +81,8 @@ from app.core.reproducibility import (
     stable_json_sha256,
 )
 from app.core.scraper import UzExScraper
+from app.core.storage_paths import normalize_storage_path, storage_file_exists
+from app.core.services import normalize_target_services, service_label
 from app.crud.crud_profile import get_profile_for_compliance_match
 from app.crud.exceptions import ProfileNotFoundException
 from app.db.session import get_db
@@ -87,7 +100,15 @@ from app.models.all_models import (
 )
 from app.models.company import CompanyProfile
 from app.models.taxonomy import CompanyCredential
-from app.schemas.tender import TenderDocumentResponse, TenderResponse
+from app.schemas.tender import (
+    TenderCompetitorGroup,
+    TenderCompetitorIntelligenceResponse,
+    TenderCompetitorResponse,
+    TenderContactSubmissionResponse,
+    TenderDecisionSnapshotResponse,
+    TenderDocumentResponse,
+    TenderResponse,
+)
 from app.schemas.vault import (
     CertificationItem,
     CompanyVaultResponse,
@@ -102,13 +123,39 @@ from app.services.compliance_engine import (
     RequirementMatchDetail,
     evaluate_tender_compliance,
 )
-from app.services.tender_sources.base import NormalizedTender
+from app.services.tender_sources.base import NormalizedTender, assert_source_scope
 from app.services.tender_sources.adb import AdbTenderSource
+from app.services.tender_sources.ebrd import EbrdTenderSource
+from app.services.tender_sources.giz import (
+    DEFAULT_GIZ_TENDER_PAGES,
+    MAX_ARCHIVE_COMPRESSED_BYTES as GIZ_MAX_ARCHIVE_COMPRESSED_BYTES,
+    MAX_ARCHIVE_EXTRACTED_BYTES as GIZ_MAX_ARCHIVE_EXTRACTED_BYTES,
+    MAX_ARCHIVE_FILE_COUNT as GIZ_MAX_ARCHIVE_FILE_COUNT,
+    MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES as GIZ_MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES,
+    MAX_ARCHIVE_NESTING_DEPTH as GIZ_MAX_ARCHIVE_NESTING_DEPTH,
+    GizTenderSource,
+    _extension_from_url as _giz_extension_from_url,
+    _safe_giz_url,
+)
 from app.services.tender_sources.uzex import UzExTenderSource
 from app.services.tender_sources.uzex_constants import UZEX_ENTERPRISE_TYPE_ID
+from app.services.tender_sources.uzex_contact import extract_uzex_contact_info
 from app.services.tender_sources.uzex_scope import customer_visible_tender_condition
-from app.services.tender_sources.world_bank import WorldBankTenderSource
-from app.workers.tender_tasks import process_tender_docs
+from app.services.tender_sources.world_bank import (
+    WORLD_BANK_PROC_DETAIL_URL,
+    WORLD_BANK_PROC_NOTICES_URL,
+    WorldBankTenderSource,
+    _sector_text as _world_bank_sector_text,
+    extract_world_bank_contact_info,
+)
+from app.workers.tender_tasks import (
+    _cleanup_temp_download,
+    _file_sha256,
+    _finalize_document_download,
+    _persist_document_bytes,
+    _reserve_document_download_path,
+    process_tender_docs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +317,1208 @@ UNAVAILABLE_LEGACY_DOCUMENT_STATUSES = {
     "failed",
     "processing",
 }
+FAILED_EXTRACTION_STATUS_MESSAGE = (
+    "ANALYSIS FAILED — Requirement extraction failed; do not rely on this "
+    "compliance result until extraction succeeds."
+)
+DOCUMENT_STATUS_FILTERS = {
+    "documents_available",
+    "files_missing",
+    "metadata_only",
+    "access_required",
+    "no_documents_found",
+    "processing",
+    "failed",
+}
+SORT_OPTIONS = {
+    "newest",
+    "deadline_soonest",
+    "highest_price",
+    "document_availability",
+    "source",
+}
+SERVICE_SEARCH_TERMS: dict[str, tuple[str, ...]] = {
+    "construction": (
+        "construction",
+        "civil works",
+        "building",
+        "road",
+        "bridge",
+        "rehabilitation",
+        "renovation",
+        "reconstruction",
+        "contractor",
+        "qurilish",
+        "қурилиш",
+        "строител",
+        "таъмир",
+        "ремонт",
+        "йўл",
+        "йул",
+        "yo'l",
+        "дорога",
+        "дамба",
+    ),
+    "medical": (
+        "medical",
+        "health",
+        "hospital",
+        "clinic",
+        "pharma",
+        "pharmaceutical",
+        "medicine",
+        "diagnostic",
+        "laboratory",
+        "tibbiy",
+        "тиббий",
+        "медицин",
+        "шифохона",
+        "больниц",
+        "дори",
+        "лекар",
+        "диагност",
+        "лаборатор",
+    ),
+    "IT": (
+        "IT",
+        "ICT",
+        "software",
+        "information technology",
+        "digital",
+        "computer",
+        "network",
+        "system",
+        "ахборот",
+        "информацион",
+        "компьютер",
+        "дастур",
+        "программ",
+        "тармоқ",
+        "тармок",
+    ),
+    "industrial services": (
+        "industrial",
+        "maintenance",
+        "repair",
+        "engineering",
+        "energy",
+        "utility",
+        "utilities",
+        "manufacturing",
+        "plant",
+        "саноат",
+        "производ",
+        "завод",
+        "энерг",
+        "коммунал",
+        "техник хизмат",
+    ),
+    "consulting": (
+        "consulting",
+        "consultant",
+        "advisory",
+        "technical assistance",
+        "supervision",
+        "feasibility",
+        "assessment",
+        "audit",
+        "консалт",
+        "маслаҳат",
+        "маслахат",
+        "maslahat",
+        "аудит",
+        "баҳолаш",
+        "бахолаш",
+    ),
+    "equipment supply": (
+        "equipment",
+        "supply",
+        "goods",
+        "materials",
+        "machinery",
+        "vehicle",
+        "device",
+        "procurement of",
+        "delivery",
+        "харид",
+        "поставка",
+        "етказиб",
+        "товар",
+        "ускуна",
+        "жиҳоз",
+        "жихоз",
+        "оборудован",
+        "материал",
+    ),
+    "other": ("other", "miscellaneous"),
+}
+COMPETITOR_EMPTY_MESSAGE = "No historical competitor intelligence available yet."
+COMPETITOR_AVAILABLE_MESSAGE = (
+    "Historical competitor intelligence is available from public source metadata."
+)
+COMPETITOR_MAX_RELATED_TENDERS = 250
+COMPETITOR_MAX_RESULTS = 30
+COMPETITOR_NAME_MAX_LENGTH = 180
+COMPETITOR_SOURCE_FETCH_TIMEOUT_SECONDS = 8.0
+COMPETITOR_LIVE_SOURCE_ROWS = 80
+COMPETITOR_LIVE_CACHE_TTL_SECONDS = 15 * 60
+UZEX_DEALS_LIST_URL = "https://apietender.uzex.uz/api/common/DealsList"
+ADB_CONTRACTS_AWARDED_RSS_URL = "http://feeds.feedburner.com/adb-contracts-awarded"
+CompetitorLiveCacheKey = tuple[str, str, str]
+_COMPETITOR_LIVE_CACHE: dict[
+    CompetitorLiveCacheKey,
+    tuple[float, list[TenderCompetitorResponse]],
+] = {}
+COMPETITOR_METADATA_KEYS: dict[str, tuple[str, ...]] = {
+    "winner": (
+        "awardee",
+        "awarded_company",
+        "awarded_supplier",
+        "awarded_supplier_name",
+        "awarded_to",
+        "contract_awardee",
+        "contract_winner",
+        "contractor_name",
+        "selected_consultant",
+        "selected_consultant_name",
+        "successful_supplier",
+        "successful_tenderer",
+        "supplier_name",
+        "vendor_name",
+        "winner",
+        "winner_name",
+        "winning_bidder",
+        "winning_bidder_name",
+    ),
+    "participant": (
+        "bidder_name",
+        "bidder_names",
+        "bidders",
+        "evaluated_bidders",
+        "participant_name",
+        "participant_names",
+        "participants",
+        "qualified_bidders",
+        "shortlisted_consultants",
+        "shortlisted_firms",
+        "submitted_bidders",
+    ),
+    "similar_market_actor": (
+        "known_market_actor",
+        "known_market_actors",
+        "market_actor",
+        "market_actors",
+        "similar_companies",
+        "similar_company_names",
+        "similar_market_actor",
+        "similar_market_actors",
+    ),
+}
+COMPETITOR_NESTED_NAME_KEYS = {
+    "company",
+    "company_name",
+    "contractor",
+    "contractor_name",
+    "firm",
+    "firm_name",
+    "name",
+    "organization",
+    "participant",
+    "participant_name",
+    "supplier",
+    "supplier_name",
+    "vendor",
+    "vendor_name",
+    "winner",
+    "winner_name",
+}
+COMPETITOR_NAME_STOPWORDS = {
+    "-",
+    "n/a",
+    "na",
+    "none",
+    "not applicable",
+    "not available",
+    "not specified",
+    "unknown",
+}
+COMPETITOR_KEY_LOOKUP = {
+    participation_type: {
+        re.sub(r"[^a-z0-9]+", "_", key.casefold()).strip("_")
+        for key in keys
+    }
+    for participation_type, keys in COMPETITOR_METADATA_KEYS.items()
+}
+
+
+def _normalized_metadata_key(key: object) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(key).strip().casefold()).strip("_")
+
+
+def _metadata_values_for_keys(value: Any, keys: set[str]):
+    if isinstance(value, dict):
+        for key, nested_value in value.items():
+            if _normalized_metadata_key(key) in keys:
+                yield nested_value
+            if isinstance(nested_value, (dict, list, tuple)):
+                yield from _metadata_values_for_keys(nested_value, keys)
+        return
+
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _metadata_values_for_keys(item, keys)
+
+
+def _competitor_name_values(value: Any):
+    if isinstance(value, str):
+        for part in re.split(r"[\n;|]+", value):
+            cleaned = part.strip(" \t\r\n,")
+            if cleaned:
+                yield cleaned
+        return
+
+    if isinstance(value, dict):
+        for key, nested_value in value.items():
+            if _normalized_metadata_key(key) in COMPETITOR_NESTED_NAME_KEYS:
+                yield from _competitor_name_values(nested_value)
+        return
+
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            yield from _competitor_name_values(item)
+        return
+
+    if value is not None and not isinstance(value, (bool, int, float)):
+        yield str(value)
+
+
+def _clean_competitor_name(value: Any, *, buyer: str | None = None) -> str | None:
+    cleaned = _clean_contact_text(value, max_length=COMPETITOR_NAME_MAX_LENGTH)
+    if not cleaned:
+        return None
+    cleaned = re.sub(r"[\"“”‘’`]+", "", cleaned.strip())
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(r"\s+\((?:\d{3,}|ID:?\s*\d+)\)$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.strip()
+    if cleaned.casefold() in COMPETITOR_NAME_STOPWORDS:
+        return None
+    if "@" in cleaned or cleaned.casefold().startswith(("http://", "https://")):
+        return None
+    if buyer and cleaned.casefold() == str(buyer).strip().casefold():
+        return None
+    return cleaned
+
+
+def _competitor_source_label(source_system: str) -> str:
+    if source_system == "world_bank":
+        return "World Bank"
+    if source_system == "adb":
+        return "ADB"
+    if source_system == "ebrd":
+        return "EBRD"
+    return "UzEx"
+
+
+def _source_record_as_tender_like(
+    *,
+    title: str | None,
+    description: str | None = None,
+    sector: str | None = None,
+    category: str | None = None,
+    procurement_category: str | None = None,
+    procurement_method: str | None = None,
+    notice_type: str | None = None,
+):
+    return SimpleNamespace(
+        title=title,
+        description=description,
+        sector=sector,
+        category=category,
+        procurement_category=procurement_category,
+        procurement_method=procurement_method,
+        notice_type=notice_type,
+    )
+
+
+def _text_matches_service_term(blob: str, term: str) -> bool:
+    cleaned = term.strip()
+    if not cleaned:
+        return False
+    if len(cleaned) <= 3 and re.fullmatch(r"[A-Za-z0-9]+", cleaned):
+        return re.search(
+            rf"(?<![A-Za-z0-9]){re.escape(cleaned)}(?![A-Za-z0-9])",
+            blob,
+            re.IGNORECASE,
+        ) is not None
+    return cleaned.casefold() in blob.casefold()
+
+
+def _tender_service_text(tender: Tender) -> str:
+    return " ".join(
+        str(getattr(tender, field, "") or "")
+        for field in (
+            "sector",
+            "category",
+            "procurement_category",
+            "procurement_method",
+            "notice_type",
+            "title",
+            "description",
+        )
+    )
+
+
+def _infer_tender_service_category(tender: Tender) -> str:
+    explicit_services = normalize_target_services(
+        [
+            getattr(tender, "sector", None),
+            getattr(tender, "category", None),
+            getattr(tender, "procurement_category", None),
+        ],
+        reject_invalid=False,
+    )
+    if explicit_services:
+        return explicit_services[0]
+
+    blob = _tender_service_text(tender)
+    for service, terms in SERVICE_SEARCH_TERMS.items():
+        if service == "other":
+            continue
+        if any(_text_matches_service_term(blob, term) for term in terms):
+            return service
+    return "other"
+
+
+def _same_text(left: str | None, right: str | None) -> bool:
+    return bool(left and right and left.strip().casefold() == right.strip().casefold())
+
+
+def _meaningful_competitor_filter_text(value: str | None) -> str | None:
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return None
+    if cleaned.casefold() in {"adb", "other", "uzex", "world bank"}:
+        return None
+    return cleaned
+
+
+def _related_tender_match_summary(
+    *,
+    target_tender: Tender,
+    related_tender: Tender,
+    service_category: str,
+) -> str:
+    matches: list[str] = []
+    if _same_text(getattr(target_tender, "buyer", None), getattr(related_tender, "buyer", None)):
+        matches.append("the same buyer")
+    if _same_text(getattr(target_tender, "country", None), getattr(related_tender, "country", None)):
+        matches.append("the same country")
+    if service_category != "other":
+        matches.append(f"the {service_label(service_category)} service category")
+    elif _same_text(getattr(target_tender, "sector", None), getattr(related_tender, "sector", None)):
+        matches.append("a matching sector")
+    elif _same_text(
+        getattr(target_tender, "procurement_category", None),
+        getattr(related_tender, "procurement_category", None),
+    ):
+        matches.append("a matching procurement category")
+
+    return ", ".join(dict.fromkeys(matches)) or "public historical procurement metadata"
+
+
+def _competitor_reason(
+    *,
+    participation_type: str,
+    match_summary: str,
+) -> str:
+    if participation_type == "winner":
+        return (
+            "Public winner data was found in a related historical tender "
+            f"sharing {match_summary}."
+        )
+    if participation_type == "participant":
+        return (
+            "Public participant data was found in a related historical tender "
+            f"sharing {match_summary}."
+        )
+    return (
+        "Public source metadata lists this company as a similar market actor "
+        f"for a tender sharing {match_summary}."
+    )
+
+
+def _live_source_reason(
+    *,
+    source_system: str,
+    participation_type: str,
+    match_summary: str,
+) -> str:
+    source_label = _competitor_source_label(source_system)
+    if participation_type == "winner":
+        return (
+            f"Public {source_label} historical award/deal data names this "
+            f"company for a record sharing {match_summary}."
+        )
+    if participation_type == "participant":
+        return (
+            f"Public {source_label} historical evaluation data names this "
+            f"company for a record sharing {match_summary}."
+        )
+    return (
+        f"Public {source_label} historical activity names this company for "
+        f"a record sharing {match_summary}."
+    )
+
+
+def _source_record_match_summary(
+    *,
+    target_tender: Tender,
+    source_system: str,
+    service_category: str,
+    source_country: str | None = None,
+    exact_service_match: bool = False,
+) -> str:
+    matches: list[str] = []
+    if source_country and _same_text(getattr(target_tender, "country", None), source_country):
+        matches.append("the same country")
+    if exact_service_match and service_category != "other":
+        matches.append(f"the {service_label(service_category)} service category")
+    if not matches:
+        matches.append(f"the {_competitor_source_label(source_system)} procurement source")
+    return ", ".join(dict.fromkeys(matches))
+
+
+def _extract_public_competitor_records(
+    *,
+    target_tender: Tender,
+    related_tender: Tender,
+    target_service_category: str,
+) -> list[TenderCompetitorResponse]:
+    metadata = getattr(related_tender, "source_metadata_json", None)
+    if not isinstance(metadata, dict):
+        return []
+
+    related_service_category = _infer_tender_service_category(related_tender)
+    service_category = (
+        target_service_category
+        if target_service_category != "other"
+        else related_service_category
+    )
+    industry = service_label(service_category)
+    match_summary = _related_tender_match_summary(
+        target_tender=target_tender,
+        related_tender=related_tender,
+        service_category=service_category,
+    )
+    evidence_source = _safe_source_notice_url(getattr(related_tender, "source_url", None))
+    records: list[TenderCompetitorResponse] = []
+    seen: set[tuple[str, str]] = set()
+
+    for participation_type, keys in COMPETITOR_KEY_LOOKUP.items():
+        for metadata_value in _metadata_values_for_keys(metadata, keys):
+            for raw_name in _competitor_name_values(metadata_value):
+                company_name = _clean_competitor_name(
+                    raw_name,
+                    buyer=getattr(related_tender, "buyer", None),
+                )
+                if not company_name:
+                    continue
+
+                dedupe_key = (company_name.casefold(), participation_type)
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+
+                confidence = (
+                    "high"
+                    if participation_type in {"winner", "participant"}
+                    else "low"
+                )
+                records.append(
+                    TenderCompetitorResponse(
+                        company_name=company_name,
+                        industry=industry,
+                        service_category=service_category,
+                        source=str(getattr(related_tender, "source_system", "") or ""),
+                        related_tender_id=getattr(related_tender, "id", None),
+                        buyer=getattr(related_tender, "buyer", None),
+                        country=getattr(related_tender, "country", None),
+                        sector=getattr(related_tender, "sector", None),
+                        category=(
+                            getattr(related_tender, "procurement_category", None)
+                            or getattr(related_tender, "category", None)
+                        ),
+                        participation_type=participation_type,
+                        confidence=confidence,
+                        reason=_competitor_reason(
+                            participation_type=participation_type,
+                            match_summary=match_summary,
+                        ),
+                        evidence_source=evidence_source,
+                    )
+                )
+
+    return records
+
+
+def _competitor_confidence_rank(value: str) -> int:
+    return {"high": 3, "medium": 2, "low": 1}.get(value, 0)
+
+
+def _competitor_participation_rank(value: str) -> int:
+    return {"winner": 3, "participant": 2, "similar_market_actor": 1}.get(value, 0)
+
+
+def _group_competitor_records(
+    records: list[TenderCompetitorResponse],
+) -> list[TenderCompetitorGroup]:
+    history_keys: dict[tuple[str, str], set[str]] = {}
+    for record in records:
+        key = (record.company_name.casefold(), record.service_category.casefold())
+        history_keys.setdefault(key, set()).add(
+            str(record.related_tender_id or record.evidence_source or record.source)
+        )
+
+    deduped: dict[tuple[str, str], TenderCompetitorResponse] = {}
+    for record in records:
+        key = (record.company_name.casefold(), record.service_category.casefold())
+        history_count = len(history_keys.get(key, set()))
+        candidate = record
+        if (
+            record.participation_type == "similar_market_actor"
+            and record.confidence == "low"
+            and history_count >= 2
+        ):
+            candidate = record.model_copy(
+                update={
+                    "confidence": "medium",
+                    "reason": (
+                        f"Repeated similar tender history appears in {history_count} "
+                        f"public records for {record.industry}."
+                    ),
+                }
+            )
+
+        existing = deduped.get(key)
+        if existing is None:
+            deduped[key] = candidate
+            continue
+
+        candidate_rank = (
+            _competitor_confidence_rank(candidate.confidence),
+            _competitor_participation_rank(candidate.participation_type),
+        )
+        existing_rank = (
+            _competitor_confidence_rank(existing.confidence),
+            _competitor_participation_rank(existing.participation_type),
+        )
+        if candidate_rank > existing_rank:
+            deduped[key] = candidate
+
+    grouped: dict[str, TenderCompetitorGroup] = {}
+    for record in sorted(
+        deduped.values(),
+        key=lambda item: (
+            item.industry.casefold(),
+            -_competitor_confidence_rank(item.confidence),
+            item.company_name.casefold(),
+        ),
+    )[:COMPETITOR_MAX_RESULTS]:
+        group = grouped.setdefault(
+            record.service_category,
+            TenderCompetitorGroup(
+                industry=record.industry,
+                service_category=record.service_category,
+                competitors=[],
+            ),
+        )
+        group.competitors.append(record)
+
+    return list(grouped.values())
+
+
+def _live_competitor_record(
+    *,
+    company_name: str,
+    source_system: str,
+    service_category: str,
+    participation_type: str,
+    confidence: str,
+    reason: str,
+    evidence_source: str | None,
+    buyer: str | None = None,
+    country: str | None = None,
+    sector: str | None = None,
+    category: str | None = None,
+) -> TenderCompetitorResponse:
+    return TenderCompetitorResponse(
+        company_name=company_name,
+        industry=service_label(service_category),
+        service_category=service_category,
+        source=source_system,
+        related_tender_id=None,
+        buyer=buyer,
+        country=country,
+        sector=sector,
+        category=category,
+        participation_type=participation_type,
+        confidence=confidence,
+        reason=reason,
+        evidence_source=evidence_source,
+    )
+
+
+def _source_record_exact_service_match(
+    *,
+    target_service_category: str,
+    source_service_category: str,
+) -> bool:
+    if target_service_category == "other":
+        return source_service_category != "other"
+    return target_service_category == source_service_category
+
+
+async def _fetch_json_payload(
+    *,
+    method: str,
+    url: str,
+    params: dict[str, Any] | None = None,
+    json_payload: dict[str, Any] | None = None,
+    referer: str | None = None,
+) -> Any:
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "PlasmaOS CompetitorIntelligence/1.0",
+    }
+    if referer:
+        headers["Referer"] = referer
+    async with httpx.AsyncClient(
+        timeout=COMPETITOR_SOURCE_FETCH_TIMEOUT_SECONDS,
+        follow_redirects=True,
+        headers=headers,
+    ) as client:
+        response = await client.request(
+            method,
+            url,
+            params=params,
+            json=json_payload,
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+async def _fetch_text_payload(
+    *,
+    url: str,
+    referer: str | None = None,
+) -> str:
+    headers = {
+        "Accept": "application/rss+xml, application/xml, text/xml, */*",
+        "User-Agent": "PlasmaOS CompetitorIntelligence/1.0",
+    }
+    if referer:
+        headers["Referer"] = referer
+    async with httpx.AsyncClient(
+        timeout=COMPETITOR_SOURCE_FETCH_TIMEOUT_SECONDS,
+        follow_redirects=True,
+        headers=headers,
+    ) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.text
+
+
+async def _live_uzex_competitor_records(
+    *,
+    target_tender: Tender,
+    target_service_category: str,
+) -> list[TenderCompetitorResponse]:
+    if getattr(target_tender, "source_system", None) != "uzex":
+        return []
+
+    try:
+        payload = await _fetch_json_payload(
+            method="POST",
+            url=UZEX_DEALS_LIST_URL,
+            json_payload={
+                "From": 1,
+                "To": COMPETITOR_LIVE_SOURCE_ROWS,
+                "TypeId": UZEX_ENTERPRISE_TYPE_ID,
+                "System_Id": 0,
+            },
+            referer="https://etender.uzex.uz/",
+        )
+    except Exception:
+        logger.exception(
+            "uzex_competitor_deals_fetch_failed tender_id=%s",
+            getattr(target_tender, "id", None),
+        )
+        return []
+
+    if not isinstance(payload, list):
+        return []
+
+    records: list[TenderCompetitorResponse] = []
+    broad_records: list[TenderCompetitorResponse] = []
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        company_name = _clean_competitor_name(
+            row.get("provider_name"),
+            buyer=row.get("customer_name"),
+        )
+        if not company_name:
+            continue
+
+        category = _clean_contact_text(row.get("category_name"), max_length=220)
+        source_like = _source_record_as_tender_like(
+            title=category,
+            description=category,
+            sector=category,
+            category=category,
+            procurement_category=category,
+        )
+        source_service_category = _infer_tender_service_category(source_like)
+        exact_service_match = _source_record_exact_service_match(
+            target_service_category=target_service_category,
+            source_service_category=source_service_category,
+        )
+        service_category = (
+            source_service_category
+            if target_service_category == "other" and source_service_category != "other"
+            else target_service_category
+        )
+        if service_category == "other":
+            service_category = source_service_category
+
+        match_summary = _source_record_match_summary(
+            target_tender=target_tender,
+            source_system="uzex",
+            service_category=service_category,
+            source_country="Uzbekistan",
+            exact_service_match=exact_service_match,
+        )
+        evidence_source = None
+        trade_id = row.get("trade_id")
+        if trade_id:
+            evidence_source = f"https://etender.uzex.uz/lot/{quote(str(trade_id), safe='')}"
+
+        record = _live_competitor_record(
+            company_name=company_name,
+            source_system="uzex",
+            service_category=service_category,
+            participation_type="winner",
+            confidence="high",
+            reason=_live_source_reason(
+                source_system="uzex",
+                participation_type="winner",
+                match_summary=match_summary,
+            ),
+            evidence_source=evidence_source,
+            buyer=_clean_contact_text(row.get("customer_name"), max_length=220),
+            country="Uzbekistan",
+            sector=category,
+            category=category,
+        )
+        if exact_service_match:
+            records.append(record)
+        else:
+            broad_records.append(record)
+
+    if target_service_category != "other":
+        return records[:COMPETITOR_MAX_RESULTS]
+    return (records or broad_records)[:COMPETITOR_MAX_RESULTS]
+
+
+WORLD_BANK_AWARD_SECTION_LABELS = (
+    "Awarded Bidder",
+    "Awarded Bidder(s)",
+    "Awarded Firm",
+    "Awarded Firm(s)",
+    "Evaluated Bidder",
+    "Evaluated Bidder(s)",
+    "Rejected Bidder",
+    "Rejected Bidder(s)",
+)
+
+
+def _strip_html_tags(value: str) -> str:
+    return re.sub(r"<[^>]+>", " ", html.unescape(value or "")).strip()
+
+
+def _world_bank_award_sections(
+    notice_text: str,
+    *,
+    label_patterns: tuple[str, ...],
+) -> list[str]:
+    start_positions = sorted(
+        match.start()
+        for pattern in label_patterns
+        for match in re.finditer(re.escape(pattern), notice_text, flags=re.IGNORECASE)
+    )
+    if not start_positions:
+        return []
+
+    all_label_positions = sorted(
+        match.start()
+        for label in WORLD_BANK_AWARD_SECTION_LABELS
+        for match in re.finditer(re.escape(label), notice_text, flags=re.IGNORECASE)
+    )
+    sections: list[str] = []
+    for start in start_positions:
+        following_label_positions = [
+            position
+            for position in all_label_positions
+            if position > start + 20
+        ]
+        end = min(following_label_positions) if following_label_positions else len(notice_text)
+        sections.append(notice_text[start:end])
+    return sections
+
+
+def _world_bank_award_names(
+    notice_text: str | None,
+    *,
+    participation_type: str,
+) -> list[str]:
+    if not notice_text:
+        return []
+    if participation_type == "winner":
+        sections = _world_bank_award_sections(
+            notice_text,
+            label_patterns=(
+                "Awarded Bidder",
+                "Awarded Bidder(s)",
+                "Awarded Firm",
+                "Awarded Firm(s)",
+            ),
+        )
+    else:
+        sections = _world_bank_award_sections(
+            notice_text,
+            label_patterns=(
+                "Evaluated Bidder",
+                "Evaluated Bidder(s)",
+                "Rejected Bidder",
+                "Rejected Bidder(s)",
+            ),
+        )
+    if not sections:
+        return []
+
+    names: list[str] = []
+    seen: set[str] = set()
+    for section in sections:
+        for match in re.finditer(r"<b>\s*(?P<name>[^<]{2,220})\s*</b>\s*<br\s*/?>", section, flags=re.IGNORECASE):
+            raw_name = _strip_html_tags(match.group("name"))
+            if re.search(
+                r"\b(?:awarded|evaluated|rejected|price|contract|project|method|scope|duration|currency|amount)\b",
+                raw_name,
+                flags=re.IGNORECASE,
+            ):
+                continue
+            company_name = _clean_competitor_name(raw_name)
+            if not company_name:
+                continue
+            key = company_name.casefold()
+            if key in seen:
+                continue
+            names.append(company_name)
+            seen.add(key)
+    return names
+
+
+async def _live_world_bank_competitor_records(
+    *,
+    target_tender: Tender,
+    target_service_category: str,
+) -> list[TenderCompetitorResponse]:
+    if getattr(target_tender, "source_system", None) != "world_bank":
+        return []
+
+    try:
+        payload = await _fetch_json_payload(
+            method="GET",
+            url=WORLD_BANK_PROC_NOTICES_URL,
+            params={
+                "format": "json",
+                "apilang": "en",
+                "fl": "*",
+                "rows": COMPETITOR_LIVE_SOURCE_ROWS,
+                "os": 0,
+                "notice_type": "Contract Award",
+                "srt": "noticedate desc,id asc",
+            },
+        )
+    except Exception:
+        logger.exception(
+            "world_bank_competitor_awards_fetch_failed tender_id=%s",
+            getattr(target_tender, "id", None),
+        )
+        return []
+
+    rows = payload.get("procnotices") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return []
+
+    records: list[TenderCompetitorResponse] = []
+    broad_records: list[TenderCompetitorResponse] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        source_like = _source_record_as_tender_like(
+            title=row.get("noticetitle") or row.get("bid_description"),
+            description=_strip_html_tags(str(row.get("notice_text") or "")),
+            sector=_world_bank_sector_text(row),
+            category=row.get("procurement_group_desc"),
+            procurement_category=row.get("procurement_group_desc"),
+            procurement_method=row.get("procurement_method_name"),
+            notice_type=row.get("notice_type"),
+        )
+        source_service_category = _infer_tender_service_category(source_like)
+        exact_service_match = _source_record_exact_service_match(
+            target_service_category=target_service_category,
+            source_service_category=source_service_category,
+        )
+        same_country = _same_text(
+            getattr(target_tender, "country", None),
+            row.get("project_ctry_name"),
+        )
+        if target_service_category != "other" and not exact_service_match:
+            continue
+        if target_service_category == "other" and not exact_service_match and not same_country:
+            continue
+
+        service_category = (
+            source_service_category
+            if target_service_category == "other" and source_service_category != "other"
+            else target_service_category
+        )
+        if service_category == "other":
+            service_category = source_service_category
+        match_summary = _source_record_match_summary(
+            target_tender=target_tender,
+            source_system="world_bank",
+            service_category=service_category,
+            source_country=row.get("project_ctry_name"),
+            exact_service_match=exact_service_match,
+        )
+        evidence_source = None
+        if row.get("id"):
+            evidence_source = WORLD_BANK_PROC_DETAIL_URL.format(id=quote(str(row["id"]), safe=""))
+
+        for participation_type in ("winner", "participant"):
+            for company_name in _world_bank_award_names(
+                row.get("notice_text"),
+                participation_type=participation_type,
+            ):
+                record = _live_competitor_record(
+                    company_name=company_name,
+                    source_system="world_bank",
+                    service_category=service_category,
+                    participation_type=participation_type,
+                    confidence="high",
+                    reason=_live_source_reason(
+                        source_system="world_bank",
+                        participation_type=participation_type,
+                        match_summary=match_summary,
+                    ),
+                    evidence_source=evidence_source,
+                    buyer=_clean_contact_text(row.get("agency_name"), max_length=220),
+                    country=_clean_contact_text(row.get("project_ctry_name"), max_length=120),
+                    sector=_world_bank_sector_text(row),
+                    category=_clean_contact_text(row.get("procurement_group_desc"), max_length=120),
+                )
+                if exact_service_match or same_country:
+                    records.append(record)
+                else:
+                    broad_records.append(record)
+
+    return (records or broad_records)[:COMPETITOR_MAX_RESULTS]
+
+
+def _adb_title_company_candidate(title: str | None) -> str | None:
+    text = _clean_contact_text(title, max_length=COMPETITOR_NAME_MAX_LENGTH)
+    if not text:
+        return None
+    match = re.search(
+        r"\b(?:awarded\s+to|contract\s+awarded\s+to|winner)\s+(.+)$",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    return _clean_competitor_name(match.group(1))
+
+
+async def _live_adb_competitor_records(
+    *,
+    target_tender: Tender,
+    target_service_category: str,
+) -> list[TenderCompetitorResponse]:
+    if getattr(target_tender, "source_system", None) != "adb":
+        return []
+
+    try:
+        rss_text = await _fetch_text_payload(url=ADB_CONTRACTS_AWARDED_RSS_URL)
+    except Exception:
+        logger.exception(
+            "adb_competitor_awards_fetch_failed tender_id=%s",
+            getattr(target_tender, "id", None),
+        )
+        return []
+
+    try:
+        root = ET.fromstring(rss_text)
+    except ET.ParseError:
+        return []
+
+    channel = root.find("channel")
+    if channel is None:
+        return []
+
+    records: list[TenderCompetitorResponse] = []
+    for item in channel.findall("item")[:COMPETITOR_LIVE_SOURCE_ROWS]:
+        title = item.findtext("title")
+        company_name = _adb_title_company_candidate(title)
+        if not company_name:
+            continue
+        categories = [
+            category.text or ""
+            for category in item.findall("category")
+            if category.text
+        ]
+        category_text = " | ".join(categories)
+        source_like = _source_record_as_tender_like(
+            title=title,
+            description=category_text,
+            sector=category_text,
+            category="ADB",
+        )
+        source_service_category = _infer_tender_service_category(source_like)
+        exact_service_match = _source_record_exact_service_match(
+            target_service_category=target_service_category,
+            source_service_category=source_service_category,
+        )
+        if not exact_service_match and target_service_category != "other":
+            continue
+        service_category = (
+            source_service_category
+            if target_service_category == "other" and source_service_category != "other"
+            else target_service_category
+        )
+        match_summary = _source_record_match_summary(
+            target_tender=target_tender,
+            source_system="adb",
+            service_category=service_category,
+            exact_service_match=exact_service_match,
+        )
+        records.append(
+            _live_competitor_record(
+                company_name=company_name,
+                source_system="adb",
+                service_category=service_category,
+                participation_type="winner",
+                confidence="high",
+                reason=_live_source_reason(
+                    source_system="adb",
+                    participation_type="winner",
+                    match_summary=match_summary,
+                ),
+                evidence_source=item.findtext("link"),
+                category="ADB awarded contract RSS",
+            )
+        )
+
+    return records[:COMPETITOR_MAX_RESULTS]
+
+
+def _competitor_live_cache_key(
+    *,
+    target_tender: Tender,
+    target_service_category: str,
+) -> CompetitorLiveCacheKey:
+    country = str(getattr(target_tender, "country", "") or "").strip().casefold()
+    return (
+        str(getattr(target_tender, "source_system", "") or "").strip().casefold(),
+        target_service_category.strip().casefold(),
+        country,
+    )
+
+
+def _copy_competitor_records(
+    records: list[TenderCompetitorResponse],
+) -> list[TenderCompetitorResponse]:
+    return [record.model_copy(deep=True) for record in records]
+
+
+def _get_live_competitor_cache(
+    key: CompetitorLiveCacheKey,
+    *,
+    allow_stale: bool = False,
+) -> list[TenderCompetitorResponse] | None:
+    cached = _COMPETITOR_LIVE_CACHE.get(key)
+    if cached is None:
+        return None
+    cached_at, records = cached
+    is_fresh = monotonic() - cached_at <= COMPETITOR_LIVE_CACHE_TTL_SECONDS
+    if not is_fresh and not allow_stale:
+        return None
+    return _copy_competitor_records(records)
+
+
+def _set_live_competitor_cache(
+    key: CompetitorLiveCacheKey,
+    records: list[TenderCompetitorResponse],
+) -> None:
+    _COMPETITOR_LIVE_CACHE[key] = (monotonic(), _copy_competitor_records(records))
+
+
+async def _live_source_competitor_records(
+    *,
+    target_tender: Tender,
+    target_service_category: str,
+) -> list[TenderCompetitorResponse]:
+    cache_key = _competitor_live_cache_key(
+        target_tender=target_tender,
+        target_service_category=target_service_category,
+    )
+    cached = _get_live_competitor_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    source_system = getattr(target_tender, "source_system", None)
+    try:
+        if source_system == "uzex":
+            records = await _live_uzex_competitor_records(
+                target_tender=target_tender,
+                target_service_category=target_service_category,
+            )
+        elif source_system == "world_bank":
+            records = await _live_world_bank_competitor_records(
+                target_tender=target_tender,
+                target_service_category=target_service_category,
+            )
+        elif source_system == "adb":
+            records = await _live_adb_competitor_records(
+                target_tender=target_tender,
+                target_service_category=target_service_category,
+            )
+        else:
+            records = []
+    except Exception:
+        logger.exception(
+            "competitor_live_source_dispatch_failed tender_id=%s source=%s",
+            getattr(target_tender, "id", None),
+            source_system,
+        )
+        return _get_live_competitor_cache(cache_key, allow_stale=True) or []
+
+    if records:
+        _set_live_competitor_cache(cache_key, records)
+        return records
+
+    return _get_live_competitor_cache(cache_key, allow_stale=True) or []
 
 
 def _normalize_tender_source_filter(source_system: str | None) -> str | None:
@@ -280,7 +1529,7 @@ def _normalize_tender_source_filter(source_system: str | None) -> str | None:
         return None
     if normalized_source == "worldbank":
         normalized_source = "world_bank"
-    if normalized_source not in {"uzex", "world_bank", "adb"}:
+    if normalized_source not in {"uzex", "world_bank", "adb", "giz", "ebrd"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unsupported source_system",
@@ -288,15 +1537,245 @@ def _normalize_tender_source_filter(source_system: str | None) -> str | None:
     return normalized_source
 
 
+def _split_query_values(values: list[str] | str | None) -> list[str]:
+    if values is None:
+        return []
+    raw_values = values if isinstance(values, list) else [values]
+    normalized: list[str] = []
+    for raw_value in raw_values:
+        for item in str(raw_value).split(","):
+            cleaned = item.strip()
+            if cleaned:
+                normalized.append(cleaned)
+    return normalized
+
+
+def _normalize_list_filter(
+    values: list[str] | str | None,
+    *,
+    supported_values: set[str] | None = None,
+    label: str,
+) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    supported_lookup = (
+        {value.casefold(): value for value in supported_values}
+        if supported_values is not None
+        else None
+    )
+    for item in _split_query_values(values):
+        if item.casefold() in {"all", "any"}:
+            continue
+        canonical = (
+            supported_lookup.get(item.casefold())
+            if supported_lookup is not None
+            else item
+        )
+        if canonical is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported {label}",
+            )
+        key = canonical.casefold()
+        if key not in seen:
+            normalized.append(canonical)
+            seen.add(key)
+    return normalized
+
+
+def _normalize_region_filter(region: str | list[str] | None) -> list[str]:
+    try:
+        return normalize_target_regions(_split_query_values(region)) or []
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+def _normalize_service_filter(services: str | list[str] | None) -> list[str]:
+    try:
+        return normalize_target_services(_split_query_values(services)) or []
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+def _expanded_region_countries(regions: list[str]) -> list[str]:
+    countries: list[str] = []
+    seen: set[str] = set()
+    for region in regions:
+        for country in COUNTRIES_BY_REGION.get(region, ()):
+            key = country.casefold()
+            if key not in seen:
+                countries.append(country)
+                seen.add(key)
+    return countries
+
+
+def _country_predicate(countries: list[str]):
+    return or_(*[Tender.country.ilike(f"%{country}%") for country in countries])
+
+
+def _service_predicate(services: list[str]):
+    searchable_columns = (
+        Tender.sector,
+        Tender.category,
+        Tender.procurement_category,
+        Tender.procurement_method,
+        Tender.notice_type,
+        Tender.title,
+        Tender.description,
+    )
+    predicates = []
+    for service in services:
+        service_terms = SERVICE_SEARCH_TERMS.get(service, (service,))
+        for term in service_terms:
+            pattern = f"%{term}%"
+            predicates.extend(column.ilike(pattern) for column in searchable_columns)
+    return or_(*predicates)
+
+
+def _document_availability_condition():
+    lowered_status = func.lower(
+        func.coalesce(func.nullif(func.trim(TenderDocument.download_status), ""), "")
+    )
+    storage_path_present = (
+        TenderDocument.storage_path.is_not(None)
+        & (func.length(func.trim(TenderDocument.storage_path)) > 0)
+    )
+    file_url_present = (
+        TenderDocument.file_url.is_not(None)
+        & (func.length(func.trim(TenderDocument.file_url)) > 0)
+    )
+    available_status_condition = lowered_status.in_(tuple(AVAILABLE_DOCUMENT_STATUSES))
+    unavailable_status_condition = lowered_status.in_(
+        tuple(UNAVAILABLE_LEGACY_DOCUMENT_STATUSES)
+    )
+    legacy_uzex_available_condition = (
+        (Tender.source_system == "uzex")
+        & file_url_present
+        & (~unavailable_status_condition)
+    )
+    return (
+        (available_status_condition | storage_path_present | legacy_uzex_available_condition)
+        & (~unavailable_status_condition)
+    )
+
+
+def _document_status_exists(condition):
+    return exists(
+        select(1).where(
+            TenderDocument.tender_id == Tender.id,
+            condition,
+        )
+    )
+
+
+def _document_status_predicate(document_status: str):
+    lowered_status = func.lower(
+        func.coalesce(func.nullif(func.trim(TenderDocument.download_status), ""), "")
+    )
+    available_exists = _document_status_exists(_document_availability_condition())
+    metadata_exists = _document_status_exists(lowered_status == "metadata_only")
+    access_required_exists = _document_status_exists(lowered_status == "access_required")
+    processing_exists = _document_status_exists(lowered_status == "processing")
+    failed_exists = _document_status_exists(lowered_status == "failed")
+    missing_file_exists = _document_status_exists(
+        TenderDocument.storage_path.is_not(None)
+        & (func.length(func.trim(TenderDocument.storage_path)) > 0)
+        & (~_document_availability_condition())
+    )
+
+    if document_status == "documents_available":
+        return available_exists & (~failed_exists)
+    if document_status == "files_missing":
+        return (~failed_exists) & (~available_exists) & missing_file_exists
+    if document_status == "metadata_only":
+        return (
+            (~failed_exists)
+            & (~available_exists)
+            & (~missing_file_exists)
+            & metadata_exists
+        )
+    if document_status == "access_required":
+        return (
+            (~failed_exists)
+            & (~available_exists)
+            & (~missing_file_exists)
+            & access_required_exists
+        )
+    if document_status == "processing":
+        return (
+            (~failed_exists)
+            & (~available_exists)
+            & (~missing_file_exists)
+            & (~metadata_exists)
+            & processing_exists
+        )
+    if document_status == "failed":
+        return failed_exists
+    return (
+        (~available_exists)
+        & (~missing_file_exists)
+        & (~metadata_exists)
+        & (~access_required_exists)
+        & (~processing_exists)
+        & (~failed_exists)
+    )
+
+
+def _apply_tender_sort(query, sort: str | None):
+    normalized_sort = (sort or "newest").strip().casefold().replace("-", "_")
+    if normalized_sort in {"", "default"}:
+        normalized_sort = "newest"
+    if normalized_sort not in SORT_OPTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported sort",
+        )
+
+    if normalized_sort == "deadline_soonest":
+        return query.order_by(
+            Tender.deadline.is_(None).asc(),
+            Tender.deadline.asc(),
+            Tender.created_at.desc(),
+        )
+    if normalized_sort == "highest_price":
+        return query.order_by(Tender.budget.desc(), Tender.created_at.desc())
+    if normalized_sort == "document_availability":
+        available_rank = case(
+            (_document_status_predicate("documents_available"), 0),
+            (_document_status_predicate("files_missing"), 1),
+            (_document_status_predicate("metadata_only"), 2),
+            (_document_status_predicate("processing"), 3),
+            (_document_status_predicate("failed"), 4),
+            else_=5,
+        )
+        return query.order_by(available_rank.asc(), Tender.created_at.desc())
+    if normalized_sort == "source":
+        return query.order_by(Tender.source_system.asc(), Tender.created_at.desc())
+    return query.order_by(
+        func.coalesce(Tender.publication_date, Tender.created_at).desc(),
+        Tender.created_at.desc(),
+    )
+
+
 def _document_status_from_summary(summary: DocumentSummary) -> str:
-    if int(summary.get("available_document_count") or 0) > 0:
+    if int(summary.get("failed_document_count") or 0) > 0:
+        return "failed"
+    if int(summary.get("downloadable_document_count") or 0) > 0:
         return "documents_available"
+    if int(summary.get("missing_file_document_count") or 0) > 0:
+        return "files_missing"
+    if bool(summary.get("access_required")):
+        return "access_required"
     if int(summary.get("metadata_only_document_count") or 0) > 0:
         return "metadata_only"
     if bool(summary.get("processing")):
         return "processing"
-    if int(summary.get("failed_document_count") or 0) > 0:
-        return "failed"
     return "no_documents_found"
 
 
@@ -305,11 +1784,30 @@ def _compliance_unavailable_reason(
     source_system: str,
     has_compiled_text: bool,
     document_status: str,
+    source_metadata: dict[str, Any] | None = None,
 ) -> str | None:
-    if has_compiled_text and document_status == "documents_available":
+    if source_system == "ebrd":
+        return "EBRD notices are metadata-only; participation documents require ECEPP registration and are not parsed for compliance."
+    if source_system == "giz":
+        coverage = (source_metadata or {}).get("giz_document_coverage")
+        coverage_status = (
+            str(coverage.get("coverage_status") or "").casefold()
+            if isinstance(coverage, dict)
+            else ""
+        )
+        if not has_compiled_text:
+            return "GIZ compliance requires parsed public procurement documents."
+        if coverage_status in {"failed", "unavailable"}:
+            return "GIZ document coverage is not sufficient for compliance analysis."
+        return None
+    if document_status == "failed":
+        return "Document ingestion failed or incomplete."
+    if has_compiled_text:
         return None
     if source_system == "adb" and document_status == "metadata_only":
         return "PDF notice discovered — download/parse required before analysis."
+    if document_status == "files_missing":
+        return "Document files need re-sync before analysis."
     return "Document ingestion required before analysis."
 
 
@@ -319,9 +1817,13 @@ def _empty_tender_summary(*, has_compiled_text: bool = False) -> DocumentSummary
         "document_status": "no_documents_found",
         "document_count": 0,
         "available_document_count": 0,
+        "downloadable_document_count": 0,
+        "missing_file_document_count": 0,
+        "parsed_document_count": 0,
         "metadata_only_document_count": 0,
         "failed_document_count": 0,
         "processing": False,
+        "access_required": False,
     }
 
 
@@ -350,62 +1852,59 @@ async def _batched_tender_summaries(
     for tender_id, has_compiled_text in text_rows.all():
         summaries[tender_id]["has_compiled_text"] = bool(has_compiled_text)
 
-    lowered_status = func.lower(
-        func.coalesce(func.nullif(func.trim(TenderDocument.download_status), ""), "")
-    )
-    storage_path_present = (
-        TenderDocument.storage_path.is_not(None)
-        & (func.length(func.trim(TenderDocument.storage_path)) > 0)
-    )
-    file_url_present = (
-        TenderDocument.file_url.is_not(None)
-        & (func.length(func.trim(TenderDocument.file_url)) > 0)
-    )
-    available_status_condition = lowered_status.in_(tuple(AVAILABLE_DOCUMENT_STATUSES))
-    legacy_uzex_available_condition = (
-        (Tender.source_system == "uzex")
-        & file_url_present
-        & (~lowered_status.in_(tuple(UNAVAILABLE_LEGACY_DOCUMENT_STATUSES)))
-    )
-    available_condition = (
-        available_status_condition
-        | storage_path_present
-        | legacy_uzex_available_condition
-    )
-    metadata_only_condition = lowered_status == "metadata_only"
-    failed_condition = lowered_status == "failed"
-    processing_condition = lowered_status == "processing"
-
     document_rows = await db.execute(
         select(
             TenderDocument.tender_id,
-            func.count(TenderDocument.id).label("document_count"),
-            func.sum(case((available_condition, 1), else_=0)).label(
-                "available_document_count"
-            ),
-            func.sum(case((metadata_only_condition, 1), else_=0)).label(
-                "metadata_only_document_count"
-            ),
-            func.sum(case((failed_condition, 1), else_=0)).label(
-                "failed_document_count"
-            ),
-            func.sum(case((processing_condition, 1), else_=0)).label(
-                "processing_document_count"
-            ),
+            TenderDocument.download_status,
+            TenderDocument.storage_path,
+            TenderDocument.file_url,
+            (
+                TenderDocument.parsed_text.is_not(None)
+                & (func.length(func.trim(TenderDocument.parsed_text)) > 0)
+            ).label("has_parsed_text"),
+            Tender.source_system,
         )
         .join(Tender, TenderDocument.tender_id == Tender.id)
         .where(TenderDocument.tender_id.in_(tender_ids))
-        .group_by(TenderDocument.tender_id)
     )
     for row in document_rows.mappings().all():
         tender_id = row["tender_id"]
-        summaries[tender_id].update(
-            document_count=int(row["document_count"] or 0),
-            available_document_count=int(row["available_document_count"] or 0),
-            metadata_only_document_count=int(row["metadata_only_document_count"] or 0),
-            failed_document_count=int(row["failed_document_count"] or 0),
-            processing=bool(row["processing_document_count"] or 0),
+        summary = summaries[tender_id]
+        summary["document_count"] = int(summary.get("document_count") or 0) + 1
+        status = _document_download_status(
+            SimpleNamespace(
+                download_status=row["download_status"],
+                storage_path=row["storage_path"],
+                file_url=row["file_url"],
+            ),
+            source_system=row["source_system"],
         )
+        if status == "available":
+            downloadable_count = (
+                int(summary.get("downloadable_document_count") or 0) + 1
+            )
+            summary["downloadable_document_count"] = downloadable_count
+            summary["available_document_count"] = downloadable_count
+        elif status == "missing_file":
+            summary["missing_file_document_count"] = (
+                int(summary.get("missing_file_document_count") or 0) + 1
+            )
+        elif status == "metadata_only":
+            summary["metadata_only_document_count"] = (
+                int(summary.get("metadata_only_document_count") or 0) + 1
+            )
+        elif status == "access_required":
+            summary["access_required"] = True
+        elif status == "failed":
+            summary["failed_document_count"] = (
+                int(summary.get("failed_document_count") or 0) + 1
+            )
+        elif status == "processing":
+            summary["processing"] = True
+        if row["has_parsed_text"]:
+            summary["parsed_document_count"] = (
+                int(summary.get("parsed_document_count") or 0) + 1
+            )
 
     for summary in summaries.values():
         summary["document_status"] = _document_status_from_summary(summary)
@@ -440,6 +1939,457 @@ def _safe_source_notice_url(source_url: str | None) -> str | None:
     }:
         return None
     return candidate
+
+
+CONTACT_TEXT_MAX_LENGTH = 500
+EMAIL_RE = re.compile(r"[\w.!#$%&'*+/=?^`{|}~-]+@[\w-]+(?:\.[\w-]+)+")
+LABELED_PHONE_RE = re.compile(
+    r"(?:phone|telephone|tel\.?|mobile|cell)\s*[:\-]?\s*"
+    r"(\+?[0-9][0-9\s()./\-]{6,})",
+    re.IGNORECASE,
+)
+INTERNAL_PATH_RE = re.compile(
+    r"^(?:/[^\s]+|[A-Za-z]:[\\/]|\\\\|file://)",
+    re.IGNORECASE,
+)
+
+CONTACT_METADATA_KEYS = {
+    "buyer_agency": (
+        "buyer_agency",
+        "buyer",
+        "buyer_name",
+        "agency_name",
+        "contact_organization",
+        "executing_agency",
+        "implementing_agency",
+        "borrower",
+    ),
+    "contact_person": (
+        "contact_person",
+        "contact_person_name",
+        "contact_name",
+        "procurement_contact_name",
+        "focal_point",
+    ),
+    "email": (
+        "email",
+        "e_mail",
+        "contact_email",
+        "contact_email_address",
+        "procurement_email",
+    ),
+    "phone": (
+        "phone",
+        "telephone",
+        "tel",
+        "contact_phone",
+        "contact_phone_no",
+        "contact_telephone",
+        "contact_tel",
+        "procurement_phone",
+    ),
+    "address": (
+        "address",
+        "contact_address",
+        "buyer_address",
+        "agency_address",
+        "procurement_address",
+    ),
+    "submission_method": (
+        "submission_method",
+        "submission_method_name",
+        "bid_submission_method",
+        "submission_channel",
+        "submission_instructions",
+        "delivery_method",
+    ),
+    "question_deadline": (
+        "question_deadline",
+        "clarification_deadline",
+        "inquiry_deadline",
+        "pre_bid_question_deadline",
+    ),
+    "procedure_type": (
+        "procedure_type",
+        "procurement_procedure_type",
+        "procedure_kind",
+        "procurement_method",
+    ),
+    "participation_instructions": (
+        "participation_instructions",
+        "participation_access_instructions",
+        "access_instructions",
+        "submission_access_instructions",
+    ),
+    "document_access_notes": (
+        "document_access_notes",
+        "document_access",
+        "access_notes",
+        "documents_access",
+        "document_obtaining",
+        "document_collection",
+    ),
+}
+
+
+def _clean_contact_text(
+    value: Any,
+    *,
+    max_length: int = CONTACT_TEXT_MAX_LENGTH,
+) -> str | None:
+    if value is None or isinstance(value, (dict, list, tuple, set)):
+        return None
+    cleaned = re.sub(r"\s+", " ", str(value)).strip()
+    if not cleaned or INTERNAL_PATH_RE.match(cleaned):
+        return None
+    return cleaned[:max_length]
+
+
+def _metadata_first_text(
+    metadata: dict[str, Any] | None,
+    keys: tuple[str, ...],
+) -> str | None:
+    if not isinstance(metadata, dict):
+        return None
+    normalized_keys = {key.casefold() for key in keys}
+    for key, value in metadata.items():
+        if str(key).casefold() in normalized_keys:
+            cleaned = _clean_contact_text(value)
+            if cleaned:
+                return cleaned
+    return None
+
+
+def _parse_contact_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return (
+            value.astimezone(timezone.utc)
+            if value.tzinfo
+            else value.replace(tzinfo=timezone.utc)
+        )
+    text = _clean_contact_text(value, max_length=80)
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        parsed = None
+    if parsed is None:
+        for fmt in ("%d-%b-%Y", "%d-%B-%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
+            try:
+                parsed = datetime.strptime(text, fmt)
+                break
+            except ValueError:
+                pass
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _metadata_first_datetime(
+    metadata: dict[str, Any] | None,
+    keys: tuple[str, ...],
+) -> datetime | None:
+    if not isinstance(metadata, dict):
+        return None
+    normalized_keys = {key.casefold() for key in keys}
+    for key, value in metadata.items():
+        if str(key).casefold() in normalized_keys:
+            parsed = _parse_contact_datetime(value)
+            if parsed:
+                return parsed
+    return None
+
+
+def _notice_text(metadata: dict[str, Any] | None) -> str | None:
+    if not isinstance(metadata, dict):
+        return None
+    return _clean_contact_text(metadata.get("notice_text"), max_length=MAX_PAYLOAD_CHARS)
+
+
+def _extract_email(metadata: dict[str, Any] | None) -> str | None:
+    structured = _metadata_first_text(metadata, CONTACT_METADATA_KEYS["email"])
+    if structured:
+        match = EMAIL_RE.search(structured)
+        if match:
+            return match.group(0)
+    text = _notice_text(metadata)
+    if not text:
+        return None
+    match = EMAIL_RE.search(text)
+    return match.group(0) if match else None
+
+
+def _extract_phone(metadata: dict[str, Any] | None) -> str | None:
+    structured = _metadata_first_text(metadata, CONTACT_METADATA_KEYS["phone"])
+    if structured:
+        return structured
+    text = _notice_text(metadata)
+    if not text:
+        return None
+    match = LABELED_PHONE_RE.search(text)
+    if not match:
+        return None
+    return _clean_contact_text(match.group(1), max_length=80)
+
+
+def _contact_submission_response(
+    tender: Tender,
+    *,
+    source_url: str | None,
+    include_metadata: bool,
+    metadata_override: dict[str, Any] | None = None,
+) -> TenderContactSubmissionResponse:
+    metadata = (
+        metadata_override
+        if metadata_override is not None
+        else tender.source_metadata_json if include_metadata else None
+    )
+    world_bank_contact = (
+        extract_world_bank_contact_info(metadata)
+        if tender.source_system == "world_bank"
+        else {}
+    )
+    buyer_agency = (
+        _clean_contact_text(world_bank_contact.get("buyer_agency"))
+        or _metadata_first_text(metadata, CONTACT_METADATA_KEYS["buyer_agency"])
+        or _clean_contact_text(getattr(tender, "buyer", None))
+    )
+    submission_deadline = getattr(tender, "deadline", None)
+    if not isinstance(submission_deadline, datetime):
+        submission_deadline = _metadata_first_datetime(
+            metadata,
+            ("submission_deadline", "submission_deadline_date", "submission_date"),
+        )
+
+    return TenderContactSubmissionResponse(
+        buyer_agency=buyer_agency,
+        contact_person=_clean_contact_text(world_bank_contact.get("contact_person"))
+        or _metadata_first_text(
+            metadata,
+            CONTACT_METADATA_KEYS["contact_person"],
+        ),
+        email=_clean_contact_text(world_bank_contact.get("email"))
+        or _extract_email(metadata),
+        phone=_clean_contact_text(world_bank_contact.get("phone"))
+        or _extract_phone(metadata),
+        address=_clean_contact_text(world_bank_contact.get("address"))
+        or _metadata_first_text(metadata, CONTACT_METADATA_KEYS["address"]),
+        submission_method=_metadata_first_text(
+            metadata,
+            CONTACT_METADATA_KEYS["submission_method"],
+        ),
+        submission_deadline=submission_deadline,
+        question_deadline=_metadata_first_datetime(
+            metadata,
+            CONTACT_METADATA_KEYS["question_deadline"],
+        ),
+        procedure_type=_metadata_first_text(
+            metadata,
+            CONTACT_METADATA_KEYS["procedure_type"],
+        ),
+        participation_instructions=_metadata_first_text(
+            metadata,
+            CONTACT_METADATA_KEYS["participation_instructions"],
+        ),
+        source_url=source_url,
+        document_access_notes=_metadata_first_text(
+            metadata,
+            CONTACT_METADATA_KEYS["document_access_notes"],
+        ),
+    )
+
+
+def _has_world_bank_contact_metadata(metadata: dict[str, Any] | None) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+    return any(
+        _clean_contact_text(metadata.get(key))
+        for key in (
+            "contact_name",
+            "contact_email",
+            "contact_phone_no",
+            "contact_phone",
+            "contact_address",
+            "contact_organization",
+        )
+    )
+
+
+async def _world_bank_contact_metadata_override(tender: Tender) -> dict[str, Any] | None:
+    if tender.source_system != "world_bank":
+        return None
+    metadata = tender.source_metadata_json
+    if _has_world_bank_contact_metadata(metadata):
+        return None
+
+    try:
+        detail = await WorldBankTenderSource(
+            rows=1,
+            max_pages=1,
+            timeout_seconds=8.0,
+            max_retries=1,
+        ).fetch_detail(tender.external_id)
+    except Exception:
+        logger.exception(
+            "world_bank_contact_detail_fetch_failed external_id=%s",
+            tender.external_id,
+        )
+        return None
+
+    if not isinstance(detail, dict) or not _has_world_bank_contact_metadata(detail):
+        return None
+    return {**(metadata or {}), **detail}
+
+
+def _has_adb_contact_metadata(metadata: dict[str, Any] | None) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+    return any(
+        _clean_contact_text(metadata.get(key))
+        for key in (
+            "contact_person",
+            "email",
+            "phone",
+            "address",
+            "buyer_agency",
+            "submission_method",
+        )
+    )
+
+
+async def _adb_contact_metadata_override(tender: Tender) -> dict[str, Any] | None:
+    if tender.source_system != "adb":
+        return None
+    metadata = tender.source_metadata_json or {}
+    if _has_adb_contact_metadata(metadata):
+        return None
+
+    try:
+        detail = await AdbTenderSource(
+            timeout_seconds=12.0,
+            max_retries=1,
+        ).fetch_contact_metadata(
+            node_url=str(metadata.get("node_url") or tender.source_url),
+            final_pdf_url=metadata.get("final_pdf_url"),
+        )
+    except Exception:
+        logger.exception(
+            "adb_contact_detail_fetch_failed external_id=%s",
+            tender.external_id,
+        )
+        return None
+
+    if not isinstance(detail, dict) or not _has_adb_contact_metadata(detail):
+        return None
+    return {**metadata, **detail}
+
+
+def _has_uzex_contact_metadata(metadata: dict[str, Any] | None) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+    return any(
+        _clean_contact_text(metadata.get(key))
+        for key in (
+            "contact_person",
+            "email",
+            "phone",
+            "address",
+            "submission_method",
+        )
+    )
+
+
+async def _uzex_contact_metadata_override(tender: Tender) -> dict[str, Any] | None:
+    if tender.source_system != "uzex":
+        return None
+    metadata = tender.source_metadata_json or {}
+    if _has_uzex_contact_metadata(metadata):
+        return None
+    external_id = str(tender.external_id or "").strip()
+    if not external_id:
+        return None
+
+    trade_url = (
+        "https://apietender.uzex.uz/api/common/GetTrade/"
+        f"{quote(external_id, safe='')}/0"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
+            response = await client.get(
+                trade_url,
+                headers={
+                    "Accept": "application/json",
+                    "Referer": str(tender.source_url or ""),
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+    except Exception:
+        logger.exception(
+            "uzex_contact_detail_fetch_failed external_id=%s",
+            tender.external_id,
+        )
+        return None
+
+    detail = extract_uzex_contact_info(
+        payload if isinstance(payload, dict) else None
+    )
+    if not detail or not _has_uzex_contact_metadata(detail):
+        return None
+    return {**metadata, **detail}
+
+
+def _has_giz_contact_metadata(metadata: dict[str, Any] | None) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+    return any(
+        _clean_contact_text(metadata.get(key))
+        for key in (
+            "contact_person",
+            "email",
+            "phone",
+            "address",
+            "submission_method",
+            "procedure_type",
+            "participation_instructions",
+        )
+    )
+
+
+async def _giz_contact_metadata_override(tender: Tender) -> dict[str, Any] | None:
+    if tender.source_system != "giz":
+        return None
+    metadata = tender.source_metadata_json or {}
+    if _has_giz_contact_metadata(metadata):
+        return None
+    project_url = str(
+        metadata.get("eproc_project_url")
+        or metadata.get("official_source_url")
+        or tender.source_url
+        or ""
+    )
+    if "ausschreibungen.giz.de" not in project_url:
+        return None
+    try:
+        detail = await GizTenderSource(
+            source_pages=[],
+            include_eproc=False,
+            timeout_seconds=12.0,
+            max_retries=1,
+        ).fetch_contact_metadata(project_url=project_url)
+    except Exception:
+        logger.exception(
+            "giz_contact_detail_fetch_failed external_id=%s",
+            tender.external_id,
+        )
+        return None
+    if not isinstance(detail, dict) or not _has_giz_contact_metadata(detail):
+        return None
+    return {**metadata, **detail}
 
 
 def _price_fields(tender: Tender) -> tuple[float | None, str | None, str | None]:
@@ -534,9 +2484,17 @@ def _serialize_tender(
     tender: Tender,
     *,
     summary: DocumentSummary | None = None,
+    include_contact_metadata: bool = False,
+    contact_metadata_override: dict[str, Any] | None = None,
 ) -> TenderResponse:
     payload = TenderResponse.model_validate(tender)
     payload.source_url = _safe_source_notice_url(payload.source_url)
+    payload.contact_submission = _contact_submission_response(
+        tender,
+        source_url=payload.source_url,
+        include_metadata=include_contact_metadata,
+        metadata_override=contact_metadata_override,
+    )
     (
         payload.price_amount,
         payload.price_currency,
@@ -551,6 +2509,13 @@ def _serialize_tender(
     payload.available_document_count = int(
         summary.get("available_document_count") or 0
     )
+    payload.downloadable_document_count = int(
+        summary.get("downloadable_document_count") or 0
+    )
+    payload.missing_file_document_count = int(
+        summary.get("missing_file_document_count") or 0
+    )
+    payload.parsed_document_count = int(summary.get("parsed_document_count") or 0)
     payload.metadata_only_document_count = int(
         summary.get("metadata_only_document_count") or 0
     )
@@ -559,10 +2524,100 @@ def _serialize_tender(
         source_system=payload.source_system,
         has_compiled_text=payload.has_compiled_text,
         document_status=payload.document_status,
+        source_metadata=tender.source_metadata_json,
     )
     payload.compliance_analysis_available = unavailable_reason is None
     payload.compliance_unavailable_reason = unavailable_reason
     return payload
+
+
+def _deadline_urgency(
+    deadline: datetime | None,
+    *,
+    now: datetime | None = None,
+) -> str:
+    if deadline is None:
+        return "unknown"
+
+    comparable_deadline = deadline
+    if comparable_deadline.tzinfo is None:
+        comparable_deadline = comparable_deadline.replace(tzinfo=timezone.utc)
+    else:
+        comparable_deadline = comparable_deadline.astimezone(timezone.utc)
+
+    comparable_now = now or datetime.now(timezone.utc)
+    if comparable_now.tzinfo is None:
+        comparable_now = comparable_now.replace(tzinfo=timezone.utc)
+    else:
+        comparable_now = comparable_now.astimezone(timezone.utc)
+
+    remaining = comparable_deadline - comparable_now
+    if remaining.total_seconds() < 0:
+        return "expired"
+    if remaining <= timedelta(days=7):
+        return "urgent"
+    if remaining <= timedelta(days=30):
+        return "soon"
+    return "normal"
+
+
+def _contact_availability(
+    contact: TenderContactSubmissionResponse | None,
+) -> str:
+    if contact is None:
+        return "missing"
+    if any(
+        _clean_contact_text(getattr(contact, field, None))
+        for field in ("contact_person", "email", "phone", "address")
+    ):
+        return "available"
+    if (
+        _clean_contact_text(contact.source_url, max_length=500)
+        or _clean_contact_text(contact.document_access_notes)
+    ):
+        return "partial"
+    return "missing"
+
+
+def _snapshot_service_category(tender: TenderResponse) -> str | None:
+    return (
+        _clean_contact_text(tender.sector)
+        or _clean_contact_text(tender.procurement_category)
+        or _clean_contact_text(tender.category)
+    )
+
+
+def _decision_snapshot_response(
+    tender: TenderResponse,
+    *,
+    competitor_intelligence: TenderCompetitorIntelligenceResponse,
+    now: datetime | None = None,
+) -> TenderDecisionSnapshotResponse:
+    return TenderDecisionSnapshotResponse(
+        tender_id=tender.id,
+        source=tender.source_system,
+        country=tender.country,
+        region=tender.region,
+        service_category=_snapshot_service_category(tender),
+        deadline=tender.deadline,
+        deadline_urgency=_deadline_urgency(tender.deadline, now=now),
+        price_amount=tender.price_amount,
+        price_currency=tender.price_currency,
+        price_display=tender.price_display,
+        document_status=tender.document_status,
+        document_count=tender.document_count,
+        downloadable_document_count=tender.downloadable_document_count,
+        missing_file_document_count=tender.missing_file_document_count,
+        parsed_document_count=tender.parsed_document_count,
+        contact_availability=_contact_availability(tender.contact_submission),
+        competitor_intelligence_status=(
+            "available" if competitor_intelligence.groups else "unavailable"
+        ),
+        compliance_availability=(
+            "available" if tender.compliance_analysis_available else "unavailable"
+        ),
+        source_notice_available=bool(tender.source_url),
+    )
 
 
 def _build_company_vault_response(profile: CompanyProfile) -> CompanyVaultResponse:
@@ -951,6 +3006,7 @@ def _guess_download_content_type(*, filename: str, file_type: str | None = None)
         "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "xls": "application/vnd.ms-excel",
         "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "rtf": "application/rtf",
         "zip": "application/zip",
         "rar": "application/vnd.rar",
         "7z": "application/x-7z-compressed",
@@ -979,7 +3035,8 @@ def _safe_content_disposition(disposition: str, filename: str) -> str:
 
 
 def _stored_download_name(storage_path: str) -> str:
-    stored_name = Path(storage_path).name
+    resolved_path = normalize_storage_path(storage_path)
+    stored_name = resolved_path.name if resolved_path is not None else ""
     prefix, _, remainder = stored_name.partition("_")
     if len(prefix) == 32 and remainder:
         return remainder
@@ -993,6 +3050,20 @@ def _filename_from_document_url(file_url: str) -> str | None:
     file_path = _extract_remote_file_path(file_url)
     filename = Path(file_path).name if file_path else ""
     return filename or None
+
+
+def _giz_inner_display_name_from_document_url(file_url: str | None) -> str | None:
+    raw_value = (file_url or "").strip()
+    if not raw_value:
+        return None
+    parsed = urlparse(raw_value)
+    if not parsed.fragment.startswith("giz-inner="):
+        return None
+    inner_path = unquote(parsed.fragment.split("=", 1)[1]).strip("/")
+    if not inner_path:
+        return None
+    archive_name = Path(parsed.path).name
+    return f"{archive_name}!/{inner_path}" if archive_name else inner_path
 
 
 def _has_filename_extension(filename: str | None) -> bool:
@@ -1030,6 +3101,10 @@ def _document_has_storage_path(doc: TenderDocument) -> bool:
     return bool((doc.storage_path or "").strip())
 
 
+def _document_storage_file_exists(doc: TenderDocument) -> bool:
+    return storage_file_exists(doc.storage_path)
+
+
 def _legacy_uzex_document_can_use_plasma_route(
     doc: TenderDocument,
     *,
@@ -1048,21 +3123,28 @@ def _document_download_status(
     source_system: str | None = None,
 ) -> str:
     raw_status = _normalized_document_download_status(doc)
-    if raw_status in AVAILABLE_DOCUMENT_STATUSES:
-        return "available"
+    if raw_status == "failed":
+        return "failed"
+    if raw_status == "processing":
+        return "processing"
+    if raw_status == "access_required":
+        return "access_required"
+    if raw_status == "metadata_only":
+        return "metadata_only"
     if _document_has_storage_path(doc):
-        return "available"
+        return "available" if _document_storage_file_exists(doc) else "missing_file"
+    if raw_status in AVAILABLE_DOCUMENT_STATUSES:
+        if _legacy_uzex_document_can_use_plasma_route(
+            doc,
+            source_system=source_system,
+        ):
+            return "available"
+        return "missing_file"
     if _legacy_uzex_document_can_use_plasma_route(
         doc,
         source_system=source_system,
     ):
         return "available"
-    if raw_status == "metadata_only":
-        return "metadata_only"
-    if raw_status == "failed":
-        return "failed"
-    if raw_status == "processing":
-        return "processing"
     return "metadata_only"
 
 
@@ -1071,13 +3153,13 @@ def _document_response(
     *,
     source_system: str | None = None,
 ) -> TenderDocumentResponse:
-    original_filename = _filename_from_document_url(
-        doc.source_document_url or doc.file_url
-    )
+    document_url = doc.source_document_url or doc.file_url
+    inner_display_name = _giz_inner_display_name_from_document_url(document_url)
+    original_filename = inner_display_name or _filename_from_document_url(document_url)
     storage_filename = _stored_download_name(doc.storage_path) if doc.storage_path else None
     display_name = (
         storage_filename if _has_filename_extension(storage_filename) else None
-    ) or original_filename or storage_filename or (
+    ) or inner_display_name or original_filename or storage_filename or (
         f"document.{doc.file_type}" if doc.file_type else "document"
     )
     parsed_source_filenames = _parsed_source_filenames(doc.parsed_text)
@@ -1182,6 +3264,77 @@ def _public_evidence_validation_payload(
     return payload
 
 
+def _public_coverage_metadata_payload(
+    coverage_metadata: dict[str, Any] | None,
+    *,
+    include_debug: bool = False,
+) -> dict[str, Any] | None:
+    if coverage_metadata is None:
+        return None
+    payload = dict(coverage_metadata)
+    if not include_debug:
+        payload.pop("technical_warnings", None)
+    return payload
+
+
+def _giz_document_coverage_payload(tender: Tender) -> dict[str, Any] | None:
+    if tender.source_system != "giz":
+        return None
+    metadata = tender.source_metadata_json or {}
+    coverage = metadata.get("giz_document_coverage")
+    return dict(coverage) if isinstance(coverage, dict) else None
+
+
+def _merge_giz_document_coverage(
+    coverage_metadata: dict[str, Any],
+    *,
+    tender: Tender,
+    analysis_warnings: list[str],
+) -> dict[str, Any]:
+    giz_coverage = _giz_document_coverage_payload(tender)
+    if not giz_coverage:
+        return coverage_metadata
+
+    merged = dict(coverage_metadata)
+    source_status = str(giz_coverage.get("coverage_status") or "").casefold()
+    merged["source_document_coverage"] = giz_coverage
+    coverage_warnings = list(merged.get("coverage_warnings") or [])
+    for warning in giz_coverage.get("coverage_warnings") or []:
+        if warning not in coverage_warnings:
+            coverage_warnings.append(warning)
+        if warning not in analysis_warnings:
+            analysis_warnings.append(warning)
+    if source_status in {"failed", "unavailable"}:
+        merged["coverage_status"] = "failed"
+    elif source_status == "partial" and merged.get("coverage_status") != "failed":
+        merged["coverage_status"] = "partial"
+    merged["coverage_warnings"] = coverage_warnings
+    return merged
+
+
+def _failed_analysis_evaluation_payload(
+    evaluation: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if evaluation is None:
+        return None
+    payload = dict(evaluation)
+    payload["is_compliant"] = False
+    payload["status_message"] = FAILED_EXTRACTION_STATUS_MESSAGE
+    return payload
+
+
+def _failed_analysis_hybrid_payload(
+    hybrid_compliance: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if hybrid_compliance is None:
+        return None
+    payload = dict(hybrid_compliance)
+    payload["is_eligible"] = False
+    payload["verdict_status"] = ComplianceVerdictStatus.NEEDS_REVIEW.value
+    payload["status_message"] = FAILED_EXTRACTION_STATUS_MESSAGE
+    return payload
+
+
 def _manual_review_detail_from_validation(req: Any) -> RequirementMatchDetail:
     category = req.category.value if hasattr(req.category, "value") else str(req.category)
     return RequirementMatchDetail(
@@ -1221,6 +3374,7 @@ def _serialize_cached_analysis_response(
     include_debug: bool = False,
 ) -> dict[str, Any]:
     cached_data = cached.analysis_json or {}
+    analysis_status = str(cached_data.get("analysis_status") or "completed")
     cached_reqs = ExtractedTenderRequirements.model_validate(
         cached_data.get("requirements", {})
     )
@@ -1238,6 +3392,22 @@ def _serialize_cached_analysis_response(
             )
         except (ValidationError, KeyError):
             pass
+
+    if analysis_status == "failed":
+        cached_eval = cached_eval.model_copy(
+            update={
+                "is_compliant": False,
+                "status_message": FAILED_EXTRACTION_STATUS_MESSAGE,
+            }
+        )
+        if cached_hybrid is not None:
+            cached_hybrid = cached_hybrid.model_copy(
+                update={
+                    "is_eligible": False,
+                    "verdict_status": ComplianceVerdictStatus.NEEDS_REVIEW,
+                    "status_message": FAILED_EXTRACTION_STATUS_MESSAGE,
+                }
+            )
 
     cached_strategy = None
     if "strategy_intelligence" in cached_data:
@@ -1265,8 +3435,11 @@ def _serialize_cached_analysis_response(
             include_debug=include_debug,
         ),
         "analysis_warnings": analysis_warnings,
-        "coverage_metadata": cached_data.get("coverage_metadata"),
-        "analysis_status": cached_data.get("analysis_status", "completed"),
+        "coverage_metadata": _public_coverage_metadata_payload(
+            cached_data.get("coverage_metadata"),
+            include_debug=include_debug,
+        ),
+        "analysis_status": analysis_status,
         "extraction_error": cached_data.get("extraction_error"),
     }
 
@@ -1275,7 +3448,7 @@ def _serialize_cached_analysis_response(
 async def analyze_tender(
     tender_id: UUID,
     force: bool = False,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
@@ -1391,9 +3564,15 @@ async def analyze_tender(
             sort_keys=True,
             separators=(",", ":"),
         )
+        source_coverage_cache_str = json.dumps(
+            _giz_document_coverage_payload(tender) or {},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         hash_input = (
             f"{EXTRACTOR_SCHEMA_VERSION}|{tender_text}|"
-            f"{sorted_cred_str}|{sorted_tax_str}|{vault_cache_str}"
+            f"{sorted_cred_str}|{sorted_tax_str}|{vault_cache_str}|"
+            f"{source_coverage_cache_str}"
         )
         current_content_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
 
@@ -1512,6 +3691,11 @@ async def analyze_tender(
             tender_text,
             coverage_metadata=coverage_metadata,
         )
+        coverage_metadata = _merge_giz_document_coverage(
+            coverage_metadata,
+            tender=tender,
+            analysis_warnings=analysis_warnings,
+        )
 
         if extraction_error and latest_cached is not None:
             cached_data = latest_cached.analysis_json or {}
@@ -1558,6 +3742,11 @@ async def analyze_tender(
         )
 
         coverage_status = str(coverage_metadata.get("coverage_status") or "")
+        giz_source_coverage_status = ""
+        if isinstance(coverage_metadata.get("source_document_coverage"), dict):
+            giz_source_coverage_status = str(
+                coverage_metadata["source_document_coverage"].get("coverage_status") or ""
+            ).casefold()
         if extraction_error or coverage_status == "failed":
             analysis_status = "failed"
             analysis_warnings.append(
@@ -1576,7 +3765,7 @@ async def analyze_tender(
 
         if extraction_error or coverage_status == "failed":
             hybrid_result = HybridComplianceResult(
-                is_eligible=True,
+                is_eligible=False,
                 total_requirements=0,
                 satisfied_count=0,
                 failed_count=0,
@@ -1588,10 +3777,7 @@ async def analyze_tender(
                 failed_dealbreakers=[],
                 manual_reviews_required=[],
                 satisfied_requirements=[],
-                status_message=(
-                    "NEEDS REVIEW — Requirement extraction failed; manual "
-                    "review is required before relying on this compliance result."
-                ),
+                status_message=FAILED_EXTRACTION_STATUS_MESSAGE,
             )
         else:
             hybrid_result = evaluate_tender_compliance(
@@ -1641,6 +3827,20 @@ async def analyze_tender(
                         "manual_reviews_required": manual_reviews_required,
                         "verdict_status": verdict_status,
                         "status_message": status_message,
+                    }
+                )
+            if (
+                tender.source_system == "giz"
+                and giz_source_coverage_status == "partial"
+                and hybrid_result.verdict_status == ComplianceVerdictStatus.COMPLIANT
+            ):
+                hybrid_result = hybrid_result.model_copy(
+                    update={
+                        "verdict_status": ComplianceVerdictStatus.ELIGIBLE_WITH_REVIEW,
+                        "status_message": (
+                            "ELIGIBLE WITH REVIEW — GIZ document coverage is partial; "
+                            "manual review is required before relying on this result."
+                        ),
                     }
                 )
 
@@ -1778,7 +3978,10 @@ async def analyze_tender(
             include_debug=current_user.is_admin,
         ),
         "analysis_warnings": analysis_warnings,
-        "coverage_metadata": coverage_metadata,
+        "coverage_metadata": _public_coverage_metadata_payload(
+            coverage_metadata,
+            include_debug=current_user.is_admin,
+        ),
         "analysis_status": analysis_status,
         "extraction_error": extraction_error,
     }
@@ -1853,7 +4056,7 @@ async def proxy_download(request: ProxyDownloadRequest):
 @router.get("/documents/{doc_id}/download")
 async def download_document(
     doc_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -1894,7 +4097,7 @@ async def download_document(
             ) from exc
         raise
 
-    local_path = Path(doc.storage_path) if doc.storage_path else None
+    local_path = normalize_storage_path(doc.storage_path)
 
     if local_path and local_path.is_file():
         resolved_name = _stored_download_name(doc.storage_path)
@@ -1979,15 +4182,26 @@ async def download_document(
 async def list_tenders(
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    source: str | None = Query(default=None),
     source_system: str | None = Query(default=None),
     q: str | None = Query(default=None),
+    region: list[str] | None = Query(default=None),
     country: str | None = Query(default=None),
+    countries: list[str] | None = Query(default=None),
+    service: str | None = Query(default=None),
+    services: list[str] | None = Query(default=None),
     deadline_status: str | None = Query(default=None),
+    deadline_from: datetime | None = Query(default=None),
+    deadline_to: datetime | None = Query(default=None),
+    price_min: float | None = Query(default=None, ge=0),
+    price_max: float | None = Query(default=None, ge=0),
+    document_status: str | None = Query(default=None),
     category: str | None = Query(default=None),
+    sort: str | None = Query(default="newest"),
     db: AsyncSession = Depends(get_db),
 ) -> list[TenderResponse]:
     """
-    List all tenders, sorted by created_at descending.
+    List customer-visible tenders with explorer filters.
 
     Returns a paginated tender list.
     """
@@ -2012,12 +4226,13 @@ async def list_tenders(
             Tender.procurement_method,
             Tender.notice_type,
             Tender.project_id,
+            Tender.source_metadata_json,
             Tender.status,
             Tender.category,
             Tender.created_at,
         )
     ).where(customer_visible_tender_condition(Tender))
-    normalized_source = _normalize_tender_source_filter(source_system)
+    normalized_source = _normalize_tender_source_filter(source_system or source)
     if normalized_source:
         query = query.where(Tender.source_system == normalized_source)
 
@@ -2039,9 +4254,28 @@ async def list_tenders(
             )
         )
 
-    country_filter = (country or "").strip()
-    if country_filter:
-        query = query.where(Tender.country.ilike(f"%{country_filter}%"))
+    normalized_regions = _normalize_region_filter(region)
+    normalized_countries = _normalize_list_filter(
+        [*(_split_query_values(country)), *(_split_query_values(countries))],
+        label="country",
+    )
+    region_countries = _expanded_region_countries(normalized_regions)
+    country_predicates = []
+    if normalized_countries:
+        country_predicates.append(_country_predicate(normalized_countries))
+    if region_countries:
+        country_predicates.append(_country_predicate(region_countries))
+    for selected_region in normalized_regions:
+        if selected_region != CENTRAL_ASIA_REGION:
+            country_predicates.append(Tender.region.ilike(f"%{selected_region}%"))
+    if country_predicates:
+        query = query.where(or_(*country_predicates))
+
+    normalized_services = _normalize_service_filter(
+        [*(_split_query_values(service)), *(_split_query_values(services))]
+    )
+    if normalized_services:
+        query = query.where(_service_predicate(normalized_services))
 
     normalized_deadline_status = (deadline_status or "").strip().casefold()
     if normalized_deadline_status:
@@ -2057,6 +4291,31 @@ async def list_tenders(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Unsupported deadline_status",
             )
+    if deadline_from is not None:
+        query = query.where(Tender.deadline.is_not(None), Tender.deadline >= deadline_from)
+    if deadline_to is not None:
+        query = query.where(Tender.deadline.is_not(None), Tender.deadline <= deadline_to)
+    if price_min is not None:
+        query = query.where(Tender.budget >= price_min)
+    if price_max is not None:
+        query = query.where(Tender.budget <= price_max)
+    if price_min is not None and price_max is not None and price_min > price_max:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="price_min cannot be greater than price_max",
+        )
+
+    normalized_document_status = (document_status or "").strip().casefold()
+    if normalized_document_status:
+        if normalized_document_status in {"all", "any"}:
+            normalized_document_status = ""
+        elif normalized_document_status not in DOCUMENT_STATUS_FILTERS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported document_status",
+            )
+    if normalized_document_status and normalized_document_status != "files_missing":
+        query = query.where(_document_status_predicate(normalized_document_status))
 
     category_filter = (category or "").strip()
     if category_filter and category_filter.casefold() not in {"all", "any"}:
@@ -2066,12 +4325,15 @@ async def list_tenders(
                 Tender.sector.ilike(pattern),
                 Tender.procurement_category.ilike(pattern),
                 Tender.category.ilike(pattern),
+                Tender.procurement_method.ilike(pattern),
+                Tender.notice_type.ilike(pattern),
+                Tender.title.ilike(pattern),
+                Tender.description.ilike(pattern),
             )
         )
 
     query = (
-        query
-        .order_by(Tender.created_at.desc())
+        _apply_tender_sort(query, sort)
         .offset(offset)
         .limit(limit)
     )
@@ -2086,10 +4348,17 @@ async def list_tenders(
     )
     await _apply_live_uzex_dates(tenders)
 
-    return [
+    serialized_tenders = [
         _serialize_tender(t, summary=summaries.get(t.id))
         for t in tenders
     ]
+    if normalized_document_status:
+        serialized_tenders = [
+            tender
+            for tender in serialized_tenders
+            if tender.document_status == normalized_document_status
+        ]
+    return serialized_tenders
 
 
 @router.get("/{tender_id}", response_model=TenderResponse)
@@ -2123,6 +4392,7 @@ async def get_tender(
                 Tender.procurement_method,
                 Tender.notice_type,
                 Tender.project_id,
+                Tender.source_metadata_json,
                 Tender.status,
                 Tender.category,
                 Tender.created_at,
@@ -2143,13 +4413,248 @@ async def get_tender(
     
     summary = await _single_tender_summary(db=db, tender_id=tender.id)
     await _apply_live_uzex_dates([tender])
-    return _serialize_tender(tender, summary=summary)
+    contact_metadata_override = (
+        await _world_bank_contact_metadata_override(tender)
+        or await _adb_contact_metadata_override(tender)
+        or await _uzex_contact_metadata_override(tender)
+        or await _giz_contact_metadata_override(tender)
+    )
+    return _serialize_tender(
+        tender,
+        summary=summary,
+        include_contact_metadata=True,
+        contact_metadata_override=contact_metadata_override,
+    )
+
+
+async def _build_tender_competitor_intelligence(
+    *,
+    db: AsyncSession,
+    target_tender: Tender,
+) -> TenderCompetitorIntelligenceResponse:
+    target_service_category = _infer_tender_service_category(target_tender)
+    related_query = (
+        select(Tender)
+        .options(
+            load_only(
+                Tender.id,
+                Tender.external_id,
+                Tender.source_system,
+                Tender.source_url,
+                Tender.title,
+                Tender.description,
+                Tender.country,
+                Tender.sector,
+                Tender.buyer,
+                Tender.procurement_category,
+                Tender.procurement_method,
+                Tender.notice_type,
+                Tender.category,
+                Tender.publication_date,
+                Tender.created_at,
+                Tender.source_metadata_json,
+            )
+        )
+        .where(
+            Tender.id != target_tender.id,
+            Tender.source_metadata_json.is_not(None),
+            customer_visible_tender_condition(Tender),
+        )
+    )
+
+    if target_service_category != "other":
+        related_query = related_query.where(
+            _service_predicate([target_service_category])
+        )
+    else:
+        fallback_predicates = []
+        target_buyer = _meaningful_competitor_filter_text(target_tender.buyer)
+        target_sector = _meaningful_competitor_filter_text(target_tender.sector)
+        target_category = _meaningful_competitor_filter_text(
+            target_tender.procurement_category or target_tender.category
+        )
+        if target_buyer:
+            fallback_predicates.append(Tender.buyer.ilike(target_buyer))
+        if target_sector:
+            fallback_predicates.append(Tender.sector.ilike(f"%{target_sector}%"))
+        if target_category:
+            fallback_predicates.append(
+                or_(
+                    Tender.procurement_category.ilike(f"%{target_category}%"),
+                    Tender.category.ilike(f"%{target_category}%"),
+                )
+            )
+        if not fallback_predicates:
+            return TenderCompetitorIntelligenceResponse(
+                tender_id=target_tender.id,
+                message=COMPETITOR_EMPTY_MESSAGE,
+                groups=[],
+            )
+        related_query = related_query.where(or_(*fallback_predicates))
+
+    related_result = await db.execute(
+        related_query.order_by(
+            func.coalesce(Tender.publication_date, Tender.created_at).desc(),
+            Tender.created_at.desc(),
+        ).limit(COMPETITOR_MAX_RELATED_TENDERS)
+    )
+    records: list[TenderCompetitorResponse] = []
+    for related_tender in related_result.scalars().all():
+        records.extend(
+            _extract_public_competitor_records(
+                target_tender=target_tender,
+                related_tender=related_tender,
+                target_service_category=target_service_category,
+            )
+        )
+    records.extend(
+        await _live_source_competitor_records(
+            target_tender=target_tender,
+            target_service_category=target_service_category,
+        )
+    )
+
+    groups = _group_competitor_records(records)
+    return TenderCompetitorIntelligenceResponse(
+        tender_id=target_tender.id,
+        message=COMPETITOR_AVAILABLE_MESSAGE if groups else COMPETITOR_EMPTY_MESSAGE,
+        groups=groups,
+    )
+
+
+@router.get(
+    "/{tender_id}/decision-snapshot",
+    response_model=TenderDecisionSnapshotResponse,
+)
+async def get_tender_decision_snapshot(
+    tender_id: UUID,
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> TenderDecisionSnapshotResponse:
+    """
+    Return compact, non-speculative decision-support facts for tender detail.
+    """
+    result = await db.execute(
+        select(Tender)
+        .options(
+            load_only(
+                Tender.id,
+                Tender.external_id,
+                Tender.source_system,
+                Tender.canonical_source_key,
+                Tender.source_url,
+                Tender.title,
+                Tender.description,
+                Tender.budget,
+                Tender.currency,
+                Tender.deadline,
+                Tender.publication_date,
+                Tender.country,
+                Tender.region,
+                Tender.sector,
+                Tender.buyer,
+                Tender.procurement_category,
+                Tender.procurement_method,
+                Tender.notice_type,
+                Tender.project_id,
+                Tender.source_metadata_json,
+                Tender.status,
+                Tender.category,
+                Tender.created_at,
+            )
+        )
+        .where(
+            Tender.id == tender_id,
+            customer_visible_tender_condition(Tender),
+        )
+    )
+    tender = result.scalar_one_or_none()
+    if tender is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
+
+    summary = await _single_tender_summary(db=db, tender_id=tender.id)
+    await _apply_live_uzex_dates([tender])
+    contact_metadata_override = (
+        await _world_bank_contact_metadata_override(tender)
+        or await _adb_contact_metadata_override(tender)
+        or await _uzex_contact_metadata_override(tender)
+        or await _giz_contact_metadata_override(tender)
+    )
+    serialized_tender = _serialize_tender(
+        tender,
+        summary=summary,
+        include_contact_metadata=True,
+        contact_metadata_override=contact_metadata_override,
+    )
+    competitor_intelligence = await _build_tender_competitor_intelligence(
+        db=db,
+        target_tender=tender,
+    )
+    return _decision_snapshot_response(
+        serialized_tender,
+        competitor_intelligence=competitor_intelligence,
+    )
+
+
+@router.get(
+    "/{tender_id}/competitors",
+    response_model=TenderCompetitorIntelligenceResponse,
+)
+async def get_tender_competitors(
+    tender_id: UUID,
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> TenderCompetitorIntelligenceResponse:
+    """
+    Return conservative competitor intelligence for a visible tender.
+
+    The response is derived only from whitelisted public historical source
+    metadata. It does not confirm participation in the current tender.
+    """
+    target_result = await db.execute(
+        select(Tender)
+        .options(
+            load_only(
+                Tender.id,
+                Tender.external_id,
+                Tender.source_system,
+                Tender.source_url,
+                Tender.title,
+                Tender.description,
+                Tender.country,
+                Tender.sector,
+                Tender.buyer,
+                Tender.procurement_category,
+                Tender.procurement_method,
+                Tender.notice_type,
+                Tender.category,
+            )
+        )
+        .where(
+            Tender.id == tender_id,
+            customer_visible_tender_condition(Tender),
+        )
+    )
+    target_tender = target_result.scalar_one_or_none()
+    if target_tender is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
+
+    return await _build_tender_competitor_intelligence(
+        db=db,
+        target_tender=target_tender,
+    )
 
 
 @router.get("/{tender_id}/compiled-text", response_model=TenderCompiledTextResponse)
 async def get_tender_compiled_text(
     tender_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> TenderCompiledTextResponse:
     """
@@ -2286,19 +4791,19 @@ async def sync_world_bank_tenders(
                 continue
 
             normalized = source.normalize(raw_notice)
-            attachments = await source.discover_attachments(normalized)
-            attachment_count += len(attachments)
+            documents = await source.discover_documents(normalized)
+            attachment_count += len(documents)
 
             if dry_run:
                 continue
 
             tender, created = await source.upsert(db, normalized)
             await db.flush()
-            if attachments:
-                await source.upsert_attachments(
+            if documents:
+                await source.upsert_documents(
                     db,
                     tender=tender,
-                    attachments=attachments,
+                    documents=documents,
                 )
             if created:
                 created_count += 1
@@ -2358,6 +4863,1031 @@ async def sync_world_bank_tenders(
                 "World Bank sync completed: "
                 f"{created_count} created, {updated_count} updated, "
                 f"{skipped_count} skipped, {failed_count} failed."
+            )
+        ),
+    )
+
+
+def _giz_payload_looks_like_html(file_bytes: bytes) -> bool:
+    head = file_bytes[:512].lstrip().lower()
+    return head.startswith((b"<!doctype html", b"<html", b"<head", b"<body")) or b"<html" in head[:200]
+
+
+GIZ_PARSEABLE_DOCUMENT_EXTENSIONS = {"pdf", "docx", "txt"}
+GIZ_ARCHIVE_DOCUMENT_EXTENSIONS = {"zip"}
+GIZ_DANGEROUS_DOCUMENT_EXTENSIONS = {
+    "app",
+    "bat",
+    "bin",
+    "cmd",
+    "com",
+    "cpl",
+    "dll",
+    "dmg",
+    "exe",
+    "hta",
+    "jar",
+    "js",
+    "jse",
+    "msi",
+    "msp",
+    "pif",
+    "ps1",
+    "scr",
+    "sh",
+    "vbe",
+    "vbs",
+    "wsf",
+}
+GIZ_MAX_COMPRESSION_RATIO = 100
+
+
+def _giz_archive_limits_payload() -> dict[str, int]:
+    return {
+        "max_compressed_archive_bytes": GIZ_MAX_ARCHIVE_COMPRESSED_BYTES,
+        "max_extracted_bytes": GIZ_MAX_ARCHIVE_EXTRACTED_BYTES,
+        "max_file_count": GIZ_MAX_ARCHIVE_FILE_COUNT,
+        "max_individual_file_bytes": GIZ_MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES,
+        "max_nesting_depth": GIZ_MAX_ARCHIVE_NESTING_DEPTH,
+        "max_compression_ratio": GIZ_MAX_COMPRESSION_RATIO,
+    }
+
+
+def _giz_official_listed_document_count(tender: Tender) -> int:
+    metadata = tender.source_metadata_json or {}
+    participation_documents = metadata.get("participation_documents")
+    if isinstance(participation_documents, list):
+        return len(participation_documents)
+    attachments = metadata.get("attachments")
+    if isinstance(attachments, list):
+        return len(attachments)
+    return 0
+
+
+def _giz_inner_source_url(archive_doc: TenderDocument, inner_path: str) -> str:
+    base_url = (archive_doc.source_document_url or archive_doc.file_url or "").split("#", 1)[0]
+    digest = hashlib.sha256(f"{base_url}|{inner_path}".encode("utf-8")).hexdigest()[:16]
+    quoted_path = quote(inner_path, safe="/")
+    candidate = f"{base_url}#giz-inner={quoted_path}"
+    if len(candidate) <= 1000:
+        return candidate
+    return f"{base_url}#giz-inner-sha={digest}"
+
+
+def _giz_file_url_for_source(source_url: str) -> str:
+    if len(source_url) <= 500:
+        return source_url
+    base_url = source_url.split("#", 1)[0]
+    digest = hashlib.sha256(source_url.encode("utf-8")).hexdigest()[:16]
+    return f"{base_url[:470]}#giz-inner-sha={digest}"
+
+
+def _giz_zip_member_name(raw_name: str) -> str | None:
+    normalized = raw_name.replace("\\", "/").strip()
+    if not normalized or normalized.endswith("/"):
+        return None
+    if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+        return None
+    path = PurePosixPath(normalized)
+    if any(part in {"", ".", ".."} for part in path.parts):
+        return None
+    return str(path)
+
+
+def _giz_zip_member_is_symlink(info: zipfile.ZipInfo) -> bool:
+    return ((info.external_attr >> 16) & 0o170000) == 0o120000
+
+
+def _giz_archive_member_extension(member_name: str) -> str:
+    return Path(member_name).suffix.lower().lstrip(".")
+
+
+def _giz_member_storage_filename(*, archive_name: str, inner_path: str) -> str:
+    safe_inner = re.sub(r"[^A-Za-z0-9._-]+", "_", inner_path).strip("._")
+    return f"{Path(archive_name).stem}__{safe_inner or Path(inner_path).name}"
+
+
+def _giz_relabel_parsed_text(parsed_text: str, source_label: str) -> str:
+    marker = f"[[FILE: {source_label}]]"
+    relabeled = _TRACE_FILE_MARKER_RE.sub(marker, parsed_text)
+    if "[[PAGE" not in relabeled:
+        relabeled = f"{marker}\n[[PAGE 1]]\n{relabeled.strip()}"
+    return relabeled.strip()
+
+
+async def _giz_upsert_inner_document(
+    db: AsyncSession,
+    *,
+    tender: Tender,
+    archive_doc: TenderDocument,
+    inner_path: str,
+    file_type: str,
+    file_size: int | None = None,
+) -> TenderDocument:
+    source_url = _giz_inner_source_url(archive_doc, inner_path)
+    result = await db.execute(
+        select(TenderDocument).where(
+            TenderDocument.tender_id == tender.id,
+            TenderDocument.source_document_url == source_url,
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if doc is None:
+        doc = TenderDocument(
+            tender_id=tender.id,
+            file_url=_giz_file_url_for_source(source_url),
+            file_type=file_type or "unknown",
+            source_document_url=source_url,
+            source_document_type=file_type or "unknown",
+            external_file_id=hashlib.sha256(source_url.encode("utf-8")).hexdigest()[:32],
+            download_status="metadata_only",
+            file_size=file_size,
+            mime_type=_guess_download_content_type(
+                filename=Path(inner_path).name,
+                file_type=file_type or None,
+            ),
+        )
+        db.add(doc)
+        await db.flush()
+    else:
+        doc.file_type = file_type or doc.file_type or "unknown"
+        doc.source_document_type = file_type or doc.source_document_type
+        if file_size is not None:
+            doc.file_size = file_size
+        if not doc.mime_type:
+            doc.mime_type = _guess_download_content_type(
+                filename=Path(inner_path).name,
+                file_type=file_type or None,
+            )
+    return doc
+
+
+async def _giz_find_duplicate_document_by_sha(
+    db: AsyncSession,
+    *,
+    tender: Tender,
+    sha256_digest: str,
+    excluding_doc_id: UUID,
+) -> TenderDocument | None:
+    result = await db.execute(
+        select(TenderDocument)
+        .where(
+            TenderDocument.tender_id == tender.id,
+            TenderDocument.id != excluding_doc_id,
+            TenderDocument.sha256 == sha256_digest,
+            TenderDocument.storage_path.is_not(None),
+        )
+        .order_by(TenderDocument.created_at.asc(), TenderDocument.id.asc())
+        .limit(1)
+    )
+    duplicate = result.scalar_one_or_none()
+    if duplicate is not None and storage_file_exists(duplicate.storage_path):
+        return duplicate
+    return None
+
+
+def _giz_mark_document_failed(doc: TenderDocument, message: str) -> None:
+    doc.download_status = "failed"
+    doc.download_error = message[:1000]
+
+
+async def _giz_parse_stored_document(
+    *,
+    doc: TenderDocument,
+    source_label: str,
+) -> bool:
+    previous_error = doc.download_error or ""
+    if (doc.download_status or "").casefold() == "failed" and (
+        previous_error.startswith("Unsupported GIZ")
+        or previous_error.startswith("GIZ document parsed to empty text")
+        or previous_error.startswith("GIZ document exceeds the individual")
+    ):
+        return False
+    extension = (doc.file_type or Path(source_label).suffix.lstrip(".")).strip().casefold()
+    if extension not in GIZ_PARSEABLE_DOCUMENT_EXTENSIONS:
+        _giz_mark_document_failed(
+            doc,
+            f"Unsupported GIZ document type for parsing: {extension or 'unknown'}.",
+        )
+        return False
+    local_path = normalize_storage_path(doc.storage_path)
+    if local_path is None or not local_path.is_file():
+        _giz_mark_document_failed(doc, "GIZ document file is missing from storage.")
+        return False
+    if local_path.stat().st_size > GIZ_MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES:
+        _giz_mark_document_failed(doc, "GIZ document exceeds the individual file parsing limit.")
+        return False
+    if doc.parsed_text and doc.parsed_text.strip():
+        doc.download_status = "downloaded"
+        doc.download_error = None
+        return False
+
+    file_bytes = await asyncio.to_thread(local_path.read_bytes)
+    parsed_text = await process_tender_document(file_bytes, filename=source_label)
+    if not parsed_text.strip():
+        _giz_mark_document_failed(doc, "GIZ document parsed to empty text.")
+        return False
+
+    doc.parsed_text = _giz_relabel_parsed_text(parsed_text, source_label)
+    doc.download_status = "downloaded"
+    doc.download_error = None
+    return True
+
+
+def _giz_zip_member_rejection_reason(
+    info: zipfile.ZipInfo,
+    *,
+    safe_name: str | None,
+    current_depth: int,
+) -> str | None:
+    if safe_name is None:
+        return "Rejected unsafe ZIP member path."
+    if _giz_zip_member_is_symlink(info):
+        return "Rejected ZIP symlink member."
+    extension = _giz_archive_member_extension(safe_name)
+    if extension in GIZ_DANGEROUS_DOCUMENT_EXTENSIONS:
+        return f"Rejected executable or script member: .{extension}."
+    if extension in GIZ_ARCHIVE_DOCUMENT_EXTENSIONS and current_depth >= GIZ_MAX_ARCHIVE_NESTING_DEPTH:
+        return "Rejected nested archive beyond the allowed GIZ nesting depth."
+    if info.file_size > GIZ_MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES:
+        return "Rejected ZIP member above the GIZ individual file size limit."
+    if info.compress_size > 0 and info.file_size / info.compress_size > GIZ_MAX_COMPRESSION_RATIO:
+        return "Rejected ZIP member with excessive compression ratio."
+    return None
+
+
+async def _giz_extract_supported_zip_members(
+    db: AsyncSession,
+    *,
+    tender: Tender,
+    archive_doc: TenderDocument,
+    current_depth: int = 0,
+) -> None:
+    archive_path = normalize_storage_path(archive_doc.storage_path)
+    if archive_path is None or not archive_path.is_file():
+        _giz_mark_document_failed(archive_doc, "GIZ ZIP archive is missing from storage.")
+        return
+    compressed_size = archive_path.stat().st_size
+    if compressed_size > GIZ_MAX_ARCHIVE_COMPRESSED_BYTES:
+        _giz_mark_document_failed(archive_doc, "GIZ ZIP archive exceeds the compressed size limit.")
+        return
+
+    archive_name = Path(archive_doc.source_document_url or archive_doc.file_url or archive_path.name).name
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            infos = [info for info in archive.infolist() if not info.is_dir()]
+            if len(infos) > GIZ_MAX_ARCHIVE_FILE_COUNT:
+                _giz_mark_document_failed(archive_doc, "GIZ ZIP archive exceeds the file count limit.")
+                return
+            total_uncompressed = sum(max(0, info.file_size) for info in infos)
+            total_compressed = sum(max(0, info.compress_size) for info in infos)
+            if total_uncompressed > GIZ_MAX_ARCHIVE_EXTRACTED_BYTES:
+                _giz_mark_document_failed(archive_doc, "GIZ ZIP archive exceeds the extracted size limit.")
+                return
+            if total_compressed > 0 and total_uncompressed / total_compressed > GIZ_MAX_COMPRESSION_RATIO:
+                _giz_mark_document_failed(archive_doc, "GIZ ZIP archive has excessive compression ratio.")
+                return
+
+            for info in infos:
+                safe_name = _giz_zip_member_name(info.filename)
+                file_type = _giz_archive_member_extension(safe_name or info.filename) or "unknown"
+                inner_doc = await _giz_upsert_inner_document(
+                    db,
+                    tender=tender,
+                    archive_doc=archive_doc,
+                    inner_path=safe_name or info.filename,
+                    file_type=file_type,
+                    file_size=max(0, info.file_size),
+                )
+                rejection_reason = _giz_zip_member_rejection_reason(
+                    info,
+                    safe_name=safe_name,
+                    current_depth=current_depth,
+                )
+                if rejection_reason:
+                    _giz_mark_document_failed(inner_doc, rejection_reason)
+                    continue
+                if file_type not in GIZ_PARSEABLE_DOCUMENT_EXTENSIONS:
+                    _giz_mark_document_failed(
+                        inner_doc,
+                        f"Unsupported GIZ archive member type for parsing: {file_type}.",
+                    )
+                    continue
+                if storage_file_exists(inner_doc.storage_path):
+                    await _giz_parse_stored_document(
+                        doc=inner_doc,
+                        source_label=f"{archive_name}!/{safe_name}",
+                    )
+                    continue
+
+                storage_filename = _giz_member_storage_filename(
+                    archive_name=archive_name,
+                    inner_path=safe_name,
+                )
+                temp_path, final_path = _reserve_document_download_path(
+                    tender_id=tender.id,
+                    filename=storage_filename,
+                )
+                try:
+                    total_written = 0
+                    with archive.open(info) as source_handle, Path(temp_path).open("wb") as target_handle:
+                        while True:
+                            chunk = source_handle.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            total_written += len(chunk)
+                            if total_written > GIZ_MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES:
+                                raise ValueError("ZIP member exceeded individual extraction limit")
+                            target_handle.write(chunk)
+                    storage_path, file_size, sha256_digest = _finalize_document_download(
+                        temp_path=temp_path,
+                        final_path=final_path,
+                    )
+                except Exception as exc:
+                    _cleanup_temp_download(temp_path)
+                    _giz_mark_document_failed(
+                        inner_doc,
+                        f"GIZ ZIP member extraction failed: {type(exc).__name__}.",
+                    )
+                    continue
+
+                duplicate = await _giz_find_duplicate_document_by_sha(
+                    db,
+                    tender=tender,
+                    sha256_digest=sha256_digest,
+                    excluding_doc_id=inner_doc.id,
+                )
+                if duplicate is not None:
+                    try:
+                        Path(storage_path).unlink(missing_ok=True)
+                    except OSError:
+                        logger.warning("Failed to remove duplicate GIZ extracted file: %s", storage_path)
+                    inner_doc.storage_path = duplicate.storage_path
+                    inner_doc.file_size = duplicate.file_size
+                    inner_doc.mime_type = duplicate.mime_type
+                    inner_doc.sha256 = duplicate.sha256
+                else:
+                    inner_doc.storage_path = storage_path
+                    inner_doc.file_size = file_size
+                    inner_doc.sha256 = sha256_digest
+                    inner_doc.mime_type = _guess_download_content_type(
+                        filename=safe_name,
+                        file_type=file_type,
+                    )
+                inner_doc.download_status = "downloaded"
+                inner_doc.download_error = None
+                await _giz_parse_stored_document(
+                    doc=inner_doc,
+                    source_label=f"{archive_name}!/{safe_name}",
+                )
+    except zipfile.BadZipFile:
+        _giz_mark_document_failed(archive_doc, "GIZ ZIP archive is corrupted or unreadable.")
+    except Exception as exc:
+        _giz_mark_document_failed(
+            archive_doc,
+            f"GIZ ZIP archive processing failed: {type(exc).__name__}.",
+        )
+
+
+async def _update_giz_document_coverage(
+    db: AsyncSession,
+    *,
+    tender: Tender,
+) -> dict[str, Any]:
+    result = await db.execute(
+        select(TenderDocument).where(TenderDocument.tender_id == tender.id)
+    )
+    docs = result.scalars().all()
+    official_count = _giz_official_listed_document_count(tender)
+    inner_docs = [
+        doc
+        for doc in docs
+        if "#giz-inner=" in (doc.source_document_url or doc.file_url or "")
+        or "#giz-inner-sha=" in (doc.source_document_url or doc.file_url or "")
+    ]
+    parsed_count = sum(1 for doc in docs if doc.parsed_text and doc.parsed_text.strip())
+    unsupported_count = sum(
+        1
+        for doc in docs
+        if "Unsupported GIZ" in (doc.download_error or "")
+        or "Rejected executable" in (doc.download_error or "")
+        or "Rejected nested archive" in (doc.download_error or "")
+    )
+    failed_count = sum(
+        1
+        for doc in docs
+        if (doc.download_status or "").casefold() == "failed"
+        and "Unsupported GIZ" not in (doc.download_error or "")
+    )
+    processed_count = parsed_count + unsupported_count + failed_count
+    missing_count = max(official_count - processed_count, 0)
+
+    if official_count == 0 and not docs:
+        coverage_status = "unavailable"
+    elif parsed_count == 0 and (failed_count or unsupported_count or docs):
+        coverage_status = "failed"
+    elif failed_count or unsupported_count or missing_count:
+        coverage_status = "partial"
+    else:
+        coverage_status = "complete"
+
+    warnings: list[str] = []
+    if unsupported_count:
+        warnings.append(f"{unsupported_count} GIZ document(s) are unsupported for parsing.")
+    if failed_count:
+        warnings.append(f"{failed_count} GIZ document(s) failed download, extraction, or parsing.")
+    if missing_count:
+        warnings.append(f"{missing_count} official GIZ document(s) are not yet parsed.")
+
+    coverage = {
+        "coverage_status": coverage_status,
+        "official_listed_document_count": official_count,
+        "extracted_file_count": len(inner_docs),
+        "parsed_file_count": parsed_count,
+        "unsupported_file_count": unsupported_count,
+        "failed_file_count": failed_count,
+        "missing_file_count": missing_count,
+        "limits": _giz_archive_limits_payload(),
+        "coverage_warnings": warnings,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    metadata = dict(tender.source_metadata_json or {})
+    metadata["giz_document_coverage"] = coverage
+    tender.source_metadata_json = metadata
+    return coverage
+
+
+def _giz_rejected_payload_content_type(content_type: str | None) -> bool:
+    normalized = (content_type or "").split(";", 1)[0].strip().casefold()
+    if not normalized:
+        return False
+    if "html" in normalized:
+        return True
+    return normalized in {"application/json", "text/json", "text/plain"}
+
+
+def _giz_valid_file_signature(
+    file_bytes: bytes,
+    extension: str,
+    content_type: str | None,
+) -> bool:
+    head = file_bytes[:16]
+    ext = extension.casefold()
+    normalized_type = (content_type or "").split(";", 1)[0].strip().casefold()
+    if ext == "pdf":
+        return file_bytes.lstrip().startswith(b"%PDF") or normalized_type == "application/pdf"
+    if ext == "zip":
+        return head.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"))
+    if ext in {"docx", "xlsx"}:
+        return head.startswith(b"PK\x03\x04")
+    if ext in {"doc", "xls"}:
+        return head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+    if ext == "rtf":
+        return file_bytes.lstrip().startswith(b"{\\rtf")
+    return normalized_type.startswith("application/")
+
+
+async def _download_giz_document_into_storage(
+    *,
+    client: httpx.AsyncClient,
+    tender: Tender,
+    doc: TenderDocument,
+    max_bytes: int,
+) -> bool:
+    assert_source_scope("giz", tender)
+    if doc.tender_id != tender.id:
+        raise ValueError("GIZ document does not belong to the supplied tender")
+    source_url = (doc.source_document_url or doc.file_url or "").strip()
+    if "#giz-inner=" in source_url or "#giz-inner-sha=" in source_url:
+        return False
+    if (doc.download_status or "").strip().casefold() == "access_required":
+        return False
+    extension = _giz_extension_from_url(source_url)
+    if not source_url or not extension or not _safe_giz_url(source_url):
+        if not storage_file_exists(doc.storage_path):
+            doc.download_status = doc.download_status or "metadata_only"
+        return False
+    if storage_file_exists(doc.storage_path):
+        doc.download_status = "downloaded"
+        doc.download_error = None
+        return False
+
+    request_url = source_url.split("#", 1)[0]
+    filename = Path(urlparse(request_url).path).name or f"giz-document.{extension}"
+    temp_path: str | None = None
+    try:
+        async with client.stream("GET", request_url) as response:
+            response.raise_for_status()
+            content_type = (response.headers.get("content-type") or "").split(";", 1)[0].strip()
+            content_length = response.headers.get("content-length")
+            try:
+                declared_length = int(content_length) if content_length else None
+            except ValueError:
+                declared_length = None
+            if declared_length is not None and declared_length > max_bytes:
+                doc.download_status = "failed"
+                doc.download_error = "Public GIZ document exceeds configured download size limit."
+                return False
+            if _giz_rejected_payload_content_type(content_type):
+                doc.download_status = "access_required" if "html" in content_type.casefold() else "failed"
+                doc.download_error = "Public GIZ document URL returned a page or error payload, not a document file."
+                return False
+
+            temp_path, final_path = _reserve_document_download_path(
+                tender_id=tender.id,
+                filename=filename,
+            )
+            first_bytes = bytearray()
+            total_bytes = 0
+            with Path(temp_path).open("wb") as file_handle:
+                async for chunk in response.aiter_bytes():
+                    if not chunk:
+                        continue
+                    total_bytes += len(chunk)
+                    if total_bytes > max_bytes:
+                        _cleanup_temp_download(temp_path)
+                        doc.download_status = "failed"
+                        doc.download_error = "Public GIZ document exceeds configured download size limit."
+                        return False
+                    if len(first_bytes) < 2048:
+                        first_bytes.extend(chunk[: 2048 - len(first_bytes)])
+                    file_handle.write(chunk)
+    except Exception as exc:
+        if temp_path:
+            _cleanup_temp_download(temp_path)
+        doc.download_status = "failed"
+        doc.download_error = f"GIZ public document download failed: {type(exc).__name__}"
+        logger.warning(
+            "giz_document_download_failed tender_id=%s doc_id=%s error_type=%s",
+            tender.id,
+            doc.id,
+            type(exc).__name__,
+        )
+        return False
+
+    file_head = bytes(first_bytes)
+    if total_bytes < 32:
+        if temp_path:
+            _cleanup_temp_download(temp_path)
+        doc.download_status = "failed"
+        doc.download_error = "GIZ public document download returned an empty or trivial file."
+        return False
+    if _giz_payload_looks_like_html(file_head):
+        if temp_path:
+            _cleanup_temp_download(temp_path)
+        doc.download_status = "access_required"
+        doc.download_error = "GIZ public document download returned HTML instead of a document."
+        return False
+    if not _giz_valid_file_signature(file_head, extension, content_type):
+        if temp_path:
+            _cleanup_temp_download(temp_path)
+        doc.download_status = "failed"
+        doc.download_error = "GIZ public document download did not match the expected file signature."
+        return False
+
+    storage_path, file_size, sha256_digest = await asyncio.to_thread(
+        _finalize_document_download,
+        temp_path=temp_path,
+        final_path=final_path,
+    )
+    if not storage_file_exists(storage_path):
+        doc.download_status = "failed"
+        doc.download_error = "GIZ public document was written but is not present on disk."
+        return False
+    doc.storage_path = storage_path
+    doc.file_size = file_size
+    doc.mime_type = content_type or doc.mime_type or _guess_download_content_type(
+        filename=filename,
+        file_type=extension,
+    )
+    doc.sha256 = sha256_digest
+    doc.download_status = "downloaded"
+    doc.download_error = None
+    return True
+
+
+async def _process_giz_documents_for_compliance(
+    db: AsyncSession,
+    *,
+    tender: Tender,
+) -> dict[str, Any]:
+    assert_source_scope("giz", tender)
+    result = await db.execute(
+        select(TenderDocument)
+        .where(TenderDocument.tender_id == tender.id)
+        .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
+    )
+    docs = result.scalars().all()
+    for doc in docs:
+        source_url = doc.source_document_url or doc.file_url or ""
+        if "#giz-inner=" in source_url or "#giz-inner-sha=" in source_url:
+            if storage_file_exists(doc.storage_path):
+                archive_name = Path(urlparse(source_url.split("#", 1)[0]).path).name
+                if "#giz-inner=" in source_url:
+                    inner_name = unquote(source_url.split("#giz-inner=", 1)[-1])
+                    source_label = f"{archive_name}!/{inner_name}" if archive_name else inner_name
+                else:
+                    source_label = _stored_download_name(doc.storage_path or "")
+                await _giz_parse_stored_document(doc=doc, source_label=source_label)
+            continue
+        extension = (doc.file_type or _giz_extension_from_url(source_url) or "").casefold()
+        if extension in GIZ_ARCHIVE_DOCUMENT_EXTENSIONS and storage_file_exists(doc.storage_path):
+            await _giz_extract_supported_zip_members(db, tender=tender, archive_doc=doc)
+        elif storage_file_exists(doc.storage_path):
+            display_name = Path(urlparse(source_url).path).name or _stored_download_name(doc.storage_path or "")
+            await _giz_parse_stored_document(doc=doc, source_label=display_name)
+
+    coverage = await _update_giz_document_coverage(db, tender=tender)
+    await _compile_tender_text_from_documents(db=db, tender=tender)
+    return coverage
+
+
+async def _compile_tender_text_from_documents(
+    *,
+    db: AsyncSession,
+    tender: Tender,
+) -> None:
+    result = await db.execute(
+        select(TenderDocument)
+        .where(TenderDocument.tender_id == tender.id)
+        .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
+    )
+    docs = result.scalars().all()
+    parsed_parts = [doc.parsed_text.strip() for doc in docs if doc.parsed_text and doc.parsed_text.strip()]
+    tender.compiled_master_text = "\n\n".join(parsed_parts) if parsed_parts else None
+
+
+def _giz_commit_error_message(exc: Exception) -> str:
+    error_text = str(exc)
+    if "ck_tenders_source_system_allowed" in error_text or "source_system" in error_text:
+        return (
+            "GIZ sync failed while saving tenders. "
+            "Database schema does not allow source_system='giz' yet; "
+            "run Alembic migration 20260702_0001_s5_1_giz_source."
+        )
+    return "GIZ sync failed while saving tenders."
+
+
+def _giz_invalid_visibility_reason(tender: Tender) -> str | None:
+    external_id = str(tender.external_id or "").strip()
+    title = str(tender.title or "").strip()
+    metadata = tender.source_metadata_json or {}
+    if external_id.startswith("page-"):
+        return "missing_official_stable_id"
+    if title.casefold() in {"bidding list", "tender", "tenders", "download", "downloads"}:
+        return "listing_or_download_placeholder"
+    if not str(tender.source_url or "").startswith(("https://www.giz.de/", "https://ausschreibungen.giz.de/")):
+        return "invalid_official_source_url"
+    if not external_id or not title:
+        return "missing_required_notice_identity"
+    if metadata.get("giz_visibility") == "hidden":
+        return str(metadata.get("giz_visibility_reason") or "previously_quarantined")
+    return None
+
+
+async def _quarantine_invalid_giz_tenders(db: AsyncSession) -> int:
+    result = await db.execute(select(Tender).where(Tender.source_system == "giz"))
+    changed = 0
+    for tender in result.scalars().all():
+        reason = _giz_invalid_visibility_reason(tender)
+        if not reason:
+            continue
+        metadata = dict(tender.source_metadata_json or {})
+        if (
+            metadata.get("giz_visibility") == "hidden"
+            and metadata.get("giz_visibility_reason") == reason
+        ):
+            continue
+        metadata["giz_visibility"] = "hidden"
+        metadata["giz_visibility_reason"] = reason
+        metadata["giz_quarantined_at"] = datetime.now(timezone.utc).isoformat()
+        tender.source_metadata_json = metadata
+        tender.scrape_status = "quarantined"
+        changed += 1
+    return changed
+
+
+async def _quarantine_stale_missing_giz_tenders(
+    db: AsyncSession,
+    *,
+    active_external_ids: set[str],
+) -> int:
+    if not active_external_ids:
+        return 0
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(Tender).where(
+            Tender.source_system == "giz",
+            Tender.external_id.not_in(active_external_ids),
+        )
+    )
+    changed = 0
+    for tender in result.scalars().all():
+        metadata = dict(tender.source_metadata_json or {})
+        if metadata.get("giz_visibility") == "hidden":
+            continue
+        deadline = tender.deadline
+        if deadline is None:
+            continue
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        if deadline >= now:
+            continue
+        metadata["giz_visibility"] = "hidden"
+        metadata["giz_visibility_reason"] = "stale_not_rediscovered"
+        metadata["giz_quarantined_at"] = now.isoformat()
+        tender.source_metadata_json = metadata
+        tender.scrape_status = "quarantined"
+        changed += 1
+    return changed
+
+
+@router.post(
+    "/sources/giz/sync",
+    response_model=SourceSyncResponse,
+    dependencies=[Depends(require_operator_or_admin)],
+)
+async def sync_giz_tenders(
+    max_pages: int = Query(default=6, ge=1, le=12),
+    dry_run: bool = Query(default=False),
+    download_documents: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+) -> SourceSyncResponse:
+    """
+    Import GIZ country-office tenders from official public giz.de tender pages.
+    """
+    source = GizTenderSource(
+        source_pages=DEFAULT_GIZ_TENDER_PAGES[:max_pages],
+        eproc_max_pages=max_pages,
+    )
+    errors: list[str] = []
+    fetched_count = 0
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+    failed_count = 0
+    attachment_count = 0
+    documents_downloaded = 0
+
+    try:
+        raw_notices = await source.list_opportunities()
+    except Exception as exc:
+        logger.exception("giz_sync_fetch_failed")
+        return SourceSyncResponse(
+            status="failed",
+            source_system=source.source_system,
+            failed_count=1,
+            dry_run=dry_run,
+            errors=[type(exc).__name__],
+            message="GIZ sync failed while fetching public tender pages.",
+        )
+
+    fetched_count = len(raw_notices)
+    quarantined_count = 0
+    if not dry_run:
+        quarantined_count = await _quarantine_invalid_giz_tenders(db)
+        quarantined_count += await _quarantine_stale_missing_giz_tenders(
+            db,
+            active_external_ids={
+                str(raw_notice.get("external_id") or "").strip()
+                for raw_notice in raw_notices
+                if str(raw_notice.get("external_id") or "").strip()
+            },
+        )
+    async with httpx.AsyncClient(
+        timeout=source.config.timeout_seconds,
+        headers={"User-Agent": "PlasmaOS GIZConnector/1.0"},
+        follow_redirects=True,
+    ) as client:
+        for raw_notice in raw_notices:
+            external_id = str(raw_notice.get("external_id") or "").strip()
+            try:
+                normalized = source.normalize(raw_notice)
+                documents = await source.discover_documents(normalized)
+                attachment_count += len(documents)
+
+                if dry_run:
+                    continue
+
+                tender, created = await source.upsert(db, normalized)
+                await db.flush()
+                if documents:
+                    await source.upsert_documents(
+                        db,
+                        tender=tender,
+                        documents=documents,
+                    )
+                    await db.flush()
+                if download_documents and documents:
+                    docs_result = await db.execute(
+                        select(TenderDocument).where(TenderDocument.tender_id == tender.id)
+                    )
+                    for doc in docs_result.scalars().all():
+                        if await _download_giz_document_into_storage(
+                            client=client,
+                            tender=tender,
+                            doc=doc,
+                            max_bytes=GIZ_MAX_ARCHIVE_COMPRESSED_BYTES,
+                        ):
+                            documents_downloaded += 1
+                    await _process_giz_documents_for_compliance(db, tender=tender)
+                if created:
+                    created_count += 1
+                else:
+                    updated_count += 1
+            except Exception as exc:
+                failed_count += 1
+                logger.warning(
+                    "giz_sync_notice_failed source_system=%s external_id=%s status=failed error_type=%s",
+                    source.source_system,
+                    external_id,
+                    type(exc).__name__,
+                )
+                if len(errors) < 10:
+                    errors.append(f"{external_id or 'unknown'}: {type(exc).__name__}")
+
+    if dry_run:
+        await db.rollback()
+    else:
+        try:
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            logger.exception("giz_sync_commit_failed")
+            return SourceSyncResponse(
+                status="failed",
+                source_system=source.source_system,
+                fetched_count=fetched_count,
+                created_count=created_count,
+                updated_count=updated_count,
+                skipped_count=skipped_count,
+                failed_count=failed_count + 1,
+                attachment_count=attachment_count,
+                documents_downloaded=documents_downloaded,
+                dry_run=dry_run,
+                errors=[*errors, f"commit: {type(exc).__name__}"][:10],
+                message=_giz_commit_error_message(exc),
+            )
+
+    status_value = "success" if failed_count == 0 else "partial"
+    return SourceSyncResponse(
+        status=status_value,
+        source_system=source.source_system,
+        fetched_count=fetched_count,
+        created_count=created_count,
+        updated_count=updated_count,
+        skipped_count=skipped_count,
+        failed_count=failed_count,
+        attachment_count=attachment_count,
+        documents_downloaded=documents_downloaded,
+        dry_run=dry_run,
+        errors=errors,
+        message=(
+            "GIZ sync dry run completed. No tenders were written."
+            if dry_run
+            else (
+                "GIZ sync completed: "
+                f"{created_count} created, {updated_count} updated, "
+                f"{quarantined_count} quarantined, "
+                f"{attachment_count} public document link(s), "
+                f"{documents_downloaded} downloaded, {failed_count} failed."
+            )
+        ),
+    )
+
+
+@router.post(
+    "/sources/ebrd/sync",
+    response_model=SourceSyncResponse,
+    dependencies=[Depends(require_operator_or_admin)],
+)
+async def sync_ebrd_tenders(
+    max_items: int = Query(default=50, ge=1, le=200),
+    detail_items: int = Query(default=25, ge=0, le=100),
+    active_only: bool = Query(default=True),
+    dry_run: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+) -> SourceSyncResponse:
+    """
+    Import EBRD ECEPP public procurement notices as metadata-only records.
+    """
+    source = EbrdTenderSource(
+        max_items=max_items,
+        detail_items=detail_items,
+        active_only=active_only,
+    )
+    errors: list[str] = []
+    fetched_count = 0
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+    failed_count = 0
+    attachment_count = 0
+
+    try:
+        raw_notices = await source.list_opportunities()
+    except Exception as exc:
+        logger.exception("ebrd_sync_fetch_failed")
+        return SourceSyncResponse(
+            status="failed",
+            source_system=source.source_system,
+            failed_count=1,
+            dry_run=dry_run,
+            errors=[type(exc).__name__],
+            message="EBRD sync failed while fetching ECEPP notices.",
+        )
+    if source.last_used_bootstrap_fallback and source.last_fetch_error_type:
+        errors.append(f"live_fetch: {source.last_fetch_error_type}; used bootstrap fallback")
+
+    fetched_count = len(raw_notices)
+    for raw_notice in raw_notices:
+        external_id = str(raw_notice.get("external_id") or "").strip()
+        try:
+            if not source.should_import(raw_notice):
+                skipped_count += 1
+                continue
+
+            normalized = source.normalize(raw_notice)
+            documents = await source.discover_documents(normalized)
+            attachment_count += len(documents)
+
+            if dry_run:
+                continue
+
+            tender, created = await source.upsert(db, normalized)
+            await db.flush()
+            if documents:
+                await source.upsert_documents(
+                    db,
+                    tender=tender,
+                    documents=documents,
+                )
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+        except Exception as exc:
+            failed_count += 1
+            logger.warning(
+                "ebrd_sync_notice_failed source_system=%s external_id=%s status=failed error_type=%s",
+                source.source_system,
+                external_id,
+                type(exc).__name__,
+            )
+            if len(errors) < 10:
+                errors.append(f"{external_id or 'unknown'}: {type(exc).__name__}")
+
+    if dry_run:
+        await db.rollback()
+    else:
+        try:
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            logger.exception("ebrd_sync_commit_failed")
+            return SourceSyncResponse(
+                status="failed",
+                source_system=source.source_system,
+                fetched_count=fetched_count,
+                created_count=created_count,
+                updated_count=updated_count,
+                skipped_count=skipped_count,
+                failed_count=failed_count + 1,
+                attachment_count=attachment_count,
+                dry_run=dry_run,
+                errors=[*errors, f"commit: {type(exc).__name__}"][:10],
+                message="EBRD sync failed while saving notices.",
+            )
+
+    status_value = "success" if failed_count == 0 else "partial"
+    if source.last_used_bootstrap_fallback and failed_count == 0:
+        status_value = "partial"
+    return SourceSyncResponse(
+        status=status_value,
+        source_system=source.source_system,
+        fetched_count=fetched_count,
+        created_count=created_count,
+        updated_count=updated_count,
+        skipped_count=skipped_count,
+        failed_count=failed_count,
+        attachment_count=attachment_count,
+        dry_run=dry_run,
+        errors=errors,
+        message=(
+            "EBRD sync dry run completed. No tenders were written."
+            if dry_run
+            else (
+                "EBRD sync completed from bundled public fallback metadata because "
+                f"live ECEPP fetch failed ({source.last_fetch_error_type}). "
+                f"{created_count} created, {updated_count} updated, "
+                f"{skipped_count} skipped, {failed_count} failed."
+            )
+            if source.last_used_bootstrap_fallback
+            else (
+                "EBRD sync completed: "
+                f"{created_count} created, {updated_count} updated, "
+                f"{skipped_count} skipped, {failed_count} failed. "
+                "Participation documents remain external-access only."
             )
         ),
     )
@@ -2427,19 +5957,19 @@ async def sync_adb_tenders(
                 continue
 
             normalized = source.normalize(raw_notice)
-            attachments = await source.discover_attachments(normalized)
-            attachments_discovered += len(attachments)
+            documents = await source.discover_documents(normalized)
+            attachments_discovered += len(documents)
 
             if dry_run:
                 continue
 
             tender, created = await source.upsert(db, normalized)
             await db.flush()
-            if attachments:
-                await source.upsert_attachments(
+            if documents:
+                await source.upsert_documents(
                     db,
                     tender=tender,
-                    attachments=attachments,
+                    documents=documents,
                 )
             if created:
                 created_count += 1
@@ -2733,7 +6263,7 @@ async def sync_tender_documents(
             "[[FILE]]/[[PAGE]] markers before rebuilding compiled text."
         ),
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> SyncDocsAcceptedResponse:
     """
@@ -2746,6 +6276,15 @@ async def sync_tender_documents(
         current_user=current_user,
         allow_operator=True,
     )
+    source_result = await db.execute(
+        select(Tender.source_system).where(Tender.id == tender_id)
+    )
+    source_system = source_result.scalar_one_or_none()
+    if source_system != "uzex":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Document sync worker is UzEx-only for this source.",
+        )
 
     existing_job = await _get_active_sync_job_for_user_tender(
         db=db,
@@ -2861,7 +6400,7 @@ async def sync_tender_documents(
 @router.get("/{tender_id}/sync-status", response_model=SyncStatusResponse)
 async def get_sync_status(
     tender_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> SyncStatusResponse:
     await _ensure_tender_access(
@@ -2907,12 +6446,20 @@ async def get_sync_status(
 @router.get("/{tender_id}/documents", response_model=list[TenderDocumentResponse])
 async def get_tender_documents(
     tender_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> list[TenderDocumentResponse]:
     """
     Return safe document metadata for a given tender.
     """
+    await _ensure_tender_access(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+        current_user=current_user,
+        allow_operator=True,
+    )
+
     tender_result = await db.execute(
         select(Tender.source_system).where(Tender.id == tender_id)
     )
@@ -2937,7 +6484,7 @@ async def get_tender_documents(
 @router.get("/{tender_id}/latest-analysis")
 async def get_latest_analysis(
     tender_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
@@ -3002,13 +6549,20 @@ async def get_latest_analysis(
     )
 
     analysis_data = analysis.analysis_json or {}
+    analysis_status = str(analysis_data.get("analysis_status") or "completed")
+    evaluation_payload = analysis_data.get("evaluation")
+    hybrid_payload = sanitize_internal_requirement_diagnostics(
+        analysis_data.get("hybrid_compliance")
+    )
+    if analysis_status == "failed":
+        evaluation_payload = _failed_analysis_evaluation_payload(evaluation_payload)
+        hybrid_payload = _failed_analysis_hybrid_payload(hybrid_payload)
+
     return {
         "analysis_id": str(analysis.id),
         "requirements": analysis_data.get("requirements"),
-        "evaluation": analysis_data.get("evaluation"),
-        "hybrid_compliance": sanitize_internal_requirement_diagnostics(
-            analysis_data.get("hybrid_compliance")
-        ),
+        "evaluation": evaluation_payload,
+        "hybrid_compliance": hybrid_payload,
         "content_hash": analysis.content_hash,
         "override_seal": analysis.override_seal,
         "evidence_validation": _public_evidence_validation_payload(
@@ -3016,8 +6570,11 @@ async def get_latest_analysis(
             include_debug=current_user.is_admin,
         ),
         "analysis_warnings": analysis_data.get("analysis_warnings") or [],
-        "coverage_metadata": analysis_data.get("coverage_metadata"),
-        "analysis_status": analysis_data.get("analysis_status", "completed"),
+        "coverage_metadata": _public_coverage_metadata_payload(
+            analysis_data.get("coverage_metadata"),
+            include_debug=current_user.is_admin,
+        ),
+        "analysis_status": analysis_status,
         "extraction_error": analysis_data.get("extraction_error"),
     }
 
@@ -3026,7 +6583,7 @@ async def get_latest_analysis(
 async def export_compliance_pdf(
     tender_id: UUID,
     analysis_id: UUID | None = Query(default=None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """
@@ -3167,7 +6724,7 @@ async def export_compliance_pdf(
 async def override_risk(
     tender_id: UUID,
     request: RiskOverrideRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
@@ -3287,7 +6844,7 @@ async def override_risk(
 async def get_risk_overrides(
     tender_id: UUID,
     analysis_id: UUID | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> RiskOverrideStatusResponse:
     """
@@ -3355,160 +6912,7 @@ async def seed_tenders(
     [DEV ONLY] Seed the database with realistic tenders for demo.
     Skips tenders that already exist (by external_id).
     """
-    now = datetime.now(timezone.utc)
-    
-    dummy_tenders = [
-        # === Construction (4) ===
-        {
-            "external_id": "467201",
-            "source_url": "https://etender.uzex.uz/lot/467201",
-            "title": "45-sonli umumta'lim maktabi tomini ta'mirlash ishlari (kapital ta'mir)",
-            "description": "Tom qoplama materiallarini almashtirish, gidroizolyatsiya, issiqlik izolyatsiyasi va suv oqish tizimini o'rnatish.",
-            "budget": 450_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=14),
-            "region": "Tashkent",
-            "category": "Construction",
-            "status": TenderStatus.OPEN,
-        },
-        {
-            "external_id": "467215",
-            "source_url": "https://etender.uzex.uz/lot/467215",
-            "title": "M39 avtomobil yo'lining 12 km qismini asfalt qoplama ta'mirlash ishlari",
-            "description": "Asfalt yuzasini yangilash, drenaj tizimini takomillashtirish va yo'l belgilarini chizish ishlari.",
-            "budget": 1_200_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=10),
-            "region": "Navoi",
-            "category": "Construction",
-            "status": TenderStatus.OPEN,
-        },
-        {
-            "external_id": "467230",
-            "source_url": "https://etender.uzex.uz/lot/467230",
-            "title": "Bolalar bog'chasi №12 uchun o'yin maydonchasi qurilishi",
-            "description": "Xavfsizlik qoplamasi, arqonli tirmashish, sirpanish va atraktsionlarni o'z ichiga olgan to'liq qurilish ishlari.",
-            "budget": 800_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=21),
-            "region": "Bukhara",
-            "category": "Construction",
-            "status": TenderStatus.OPEN,
-        },
-        {
-            "external_id": "467245",
-            "source_url": "https://etender.uzex.uz/lot/467245",
-            "title": "Tuman hokimligi binosi ichki va tashqi remont ishlari",
-            "description": "Bino ichki devorlarini suvash, bo'yash, pol yotqizish, tashqi fasadni yangilash va elektr tarmoqlarini almashtirish.",
-            "budget": 680_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=18),
-            "region": "Kashkadarya",
-            "category": "Construction",
-            "status": TenderStatus.OPEN,
-        },
-        # === IT & Tech (3) ===
-        {
-            "external_id": "467260",
-            "source_url": "https://etender.uzex.uz/lot/467260",
-            "title": "Soliq boshqarmasi uchun 50 dona kompyuter ta'minoti (i5/16GB/512GB SSD)",
-            "description": "Intel Core i5 12-avlod, 16GB RAM, 512GB SSD, 24 dyuymli monitor va klaviatura/sichqoncha to'plami.",
-            "budget": 1_250_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=7),
-            "region": "Samarkand",
-            "category": "IT & Tech",
-            "status": TenderStatus.OPEN,
-        },
-        {
-            "external_id": "467275",
-            "source_url": "https://etender.uzex.uz/lot/467275",
-            "title": "Server jihozlari va tarmoq infratuzilmasini modernizatsiya qilish",
-            "description": "2 dona rack server, UPS, tarmoq kommutatorlari, patch-panellar va optik tolali kabellar yetkazib berish.",
-            "budget": 890_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=12),
-            "region": "Tashkent",
-            "category": "IT & Tech",
-            "status": TenderStatus.OPEN,
-        },
-        {
-            "external_id": "467290",
-            "source_url": "https://etender.uzex.uz/lot/467290",
-            "title": "Printer va kartridj ta'minoti — HP LaserJet Pro 30 dona",
-            "description": "HP LaserJet Pro MFP M428fdn printerlari va har biriga 3 tadan zaxira kartridjlar.",
-            "budget": 320_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=9),
-            "region": "Fergana",
-            "category": "IT & Tech",
-            "status": TenderStatus.OPEN,
-        },
-        # === Medical (2) ===
-        {
-            "external_id": "467305",
-            "source_url": "https://etender.uzex.uz/lot/467305",
-            "title": "Tuman shifoxonasiga tibbiy asbob-uskunalar yetkazib berish",
-            "description": "MRT apparati, rentgen jihozi, UZI apparati va laboratoriya uskunalarini yetkazib berish va o'rnatish.",
-            "budget": 2_500_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=30),
-            "region": "Fergana",
-            "category": "Medical",
-            "status": TenderStatus.OPEN,
-        },
-        {
-            "external_id": "467320",
-            "source_url": "https://etender.uzex.uz/lot/467320",
-            "title": "Dori-darmon vositalari va tibbiy sarf materiallarini xarid qilish",
-            "description": "Oilaviy poliklinikalar uchun yillik dori-darmon ta'minoti: antibiotiklar, og'riq qoldiruvchilar, shpritslar, maskalar.",
-            "budget": 380_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=15),
-            "region": "Andijan",
-            "category": "Medical",
-            "status": TenderStatus.OPEN,
-        },
-        # === Office (2) ===
-        {
-            "external_id": "467335",
-            "source_url": "https://etender.uzex.uz/lot/467335",
-            "title": "Kantselyariya tovarlari va ofis jihozlari ta'minoti",
-            "description": "A4 qog'oz (500 qadoq), ruchka, papka, shtamp siyohi, steplyer va boshqa kantselyariya buyumlari.",
-            "budget": 85_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=5),
-            "region": "Tashkent",
-            "category": "Office",
-            "status": TenderStatus.OPEN,
-        },
-        {
-            "external_id": "467350",
-            "source_url": "https://etender.uzex.uz/lot/467350",
-            "title": "Maktab partalarini va stullarini xarid qilish — 200 to'plam",
-            "description": "O'quvchi parta va stullari (200 to'plam), o'qituvchi stoli (15 dona), shkaflar (10 dona).",
-            "budget": 240_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=20),
-            "region": "Namangan",
-            "category": "Office",
-            "status": TenderStatus.OPEN,
-        },
-        # === Other (1) ===
-        {
-            "external_id": "467365",
-            "source_url": "https://etender.uzex.uz/lot/467365",
-            "title": "Avtotransport xizmati — oylik reyslar uchun GMS yoqilg'i ta'minoti",
-            "description": "Davlat tashkiloti avtoparki uchun AI-92, AI-95 va dizel yoqilg'isi yillik ta'minot shartnomasi.",
-            "budget": 560_000_000.0,
-            "currency": "UZS",
-            "deadline": now + timedelta(days=25),
-            "region": "Jizzakh",
-            "category": "Other",
-            "status": TenderStatus.OPEN,
-        },
-    ]
-    
+    now = datetime.now(timezone.utc)    
     new_count = 0
     skip_count = 0
     

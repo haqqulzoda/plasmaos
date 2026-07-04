@@ -1,6 +1,6 @@
 """Dependency-free tender source key helpers."""
 
-VALID_SOURCE_SYSTEMS = frozenset({"uzex", "world_bank", "adb"})
+VALID_SOURCE_SYSTEMS = frozenset({"uzex", "world_bank", "adb", "giz", "ebrd"})
 
 
 def normalize_source_system(source_system: str) -> str:
