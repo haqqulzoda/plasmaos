@@ -84,6 +84,31 @@ async def get_current_user(
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    token_auth_version = payload.get("auth_version")
+    current_auth_version = int(getattr(user, "auth_version", 0) or 0)
+    if token_auth_version is None:
+        if current_auth_version != 0:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Fresh authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    else:
+        try:
+            normalized_token_auth_version = int(token_auth_version)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if normalized_token_auth_version != current_auth_version:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Fresh authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     return user
 
 

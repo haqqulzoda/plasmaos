@@ -363,7 +363,7 @@ class Proposal(Base):
 
 
 # Import modular models so Alembic autogenerate sees the full metadata graph.
-from app.models.audit import AuditLog, TenderAnalysis, TenderRecommendation  # noqa: E402,F401
+from app.models.audit import AdminActivityEvent, AuditLog, TenderAnalysis, TenderRecommendation  # noqa: E402,F401
 from app.models.company import (  # noqa: E402,F401
     Certification,
     CompanyProfile,
@@ -405,4 +405,5 @@ __all__ = [
     "TenderAnalysis",
     "TenderRecommendation",
     "AuditLog",
+    "AdminActivityEvent",
 ]

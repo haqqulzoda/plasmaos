@@ -5,18 +5,20 @@ Main application setup with CORS middleware and core endpoints.
 """
 
 from contextlib import asynccontextmanager
-import os
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_admin
 from app.api.endpoints import admin, auth, hunter, meta, proposals, tenders, users, vault
 from app.api.routers import audit
-from app.core.agents.requirement_extractor import EXTRACTOR_SCHEMA_VERSION
 from app.core.config import settings
-from app.db.session import engine
+from app.core.release import VERSION, public_release_metadata, release_metadata_with_database
+from app.db.session import engine, get_db
 from app.models.all_models import Base
+from app.models.user import User
 from app.models import audit as audit_models  # noqa: F401
 
 
@@ -48,9 +50,6 @@ async def lifespan(app: FastAPI):
     
     print("--- LIFESPAN: SHUTTING DOWN ---")
 
-
-# Application version
-VERSION = "0.2.0"
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -86,18 +85,27 @@ app.include_router(hunter.router, prefix="/api/v1/hunter", tags=["Hunter"])
 
 
 @app.get("/health")
-async def health_check() -> dict[str, str]:
+async def health_check() -> dict:
     """
     Health check endpoint for load balancers and monitoring.
     
     Returns:
         JSON object with service status, project name, and version.
     """
-    return {
-        "status": "ok",
-        "project": "Plasma AI",
-        "version": VERSION,
-        "build_sha": os.getenv("PLASMA_BUILD_SHA", "unknown"),
-        "build_time": os.getenv("PLASMA_BUILD_TIME", "unknown"),
-        "extractor_schema_version": EXTRACTOR_SCHEMA_VERSION,
-    }
+    return public_release_metadata()
+
+
+@app.get("/api/v1/health/version")
+async def health_version() -> dict:
+    """Return minimal public release identity."""
+    return public_release_metadata()
+
+
+@app.get("/api/v1/health/version/internal")
+async def health_version_internal(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> dict:
+    """Return admin-only release metadata and current database migration state."""
+    del current_user
+    return await release_metadata_with_database(db)

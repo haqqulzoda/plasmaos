@@ -4,11 +4,17 @@ Celery application configuration for asynchronous background jobs.
 
 from __future__ import annotations
 
+import logging
 import os
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import beat_init, worker_ready
 from kombu import Queue
+
+from app.core.release import public_release_metadata
+
+logger = logging.getLogger(__name__)
 
 
 default_redis_url = "redis://127.0.0.1:6379/0"
@@ -62,3 +68,19 @@ celery_app.conf.task_routes = {
     "app.workers.tender_tasks.*": {"queue": "heavy_dl_queue"},
     "app.workers.hunter_tasks.*": {"queue": "ai_fast_queue"},
 }
+
+
+def _log_release_identity(component: str) -> None:
+    payload = public_release_metadata()
+    payload["component"] = component
+    logger.info("plasma_release_identity %s", payload)
+
+
+@worker_ready.connect
+def log_worker_release_identity(**_: object) -> None:
+    _log_release_identity("celery_worker")
+
+
+@beat_init.connect
+def log_beat_release_identity(**_: object) -> None:
+    _log_release_identity("celery_beat")

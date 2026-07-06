@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, not_, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,10 +29,14 @@ from app.core.geography import normalize_target_countries, normalize_target_regi
 from app.core.reproducibility import requirement_route_records
 from app.core.services import normalize_target_services
 from app.db.session import get_db
-from app.models.audit import TenderAnalysis
-from app.models.all_models import Proposal, ProposalStatus, Tender, User
+from app.models.all_models import AdminActivityEvent, Proposal, ProposalStatus, Tender, TenderAnalysis, User
 from app.models.company import CompanyProfile, ReadinessDocument
 from app.schemas.vault import ReadinessDocumentResponse
+from app.services.admin_activity import (
+    bump_auth_version,
+    record_admin_activity,
+    user_role_snapshot,
+)
 from app.services.tender_sources.uzex_scope import (
     customer_visible_tender_condition,
     uzex_small_scale_tender_condition,
@@ -97,6 +101,15 @@ class AdminCompanyResponse(BaseModel):
     approval_status: str
 
 
+class AdminActivityEventResponse(BaseModel):
+    id: UUID
+    action: str
+    actor_label: str | None = None
+    target_email: str
+    reason: str | None = None
+    created_at: str | None = None
+
+
 class AdminActivityResponse(BaseModel):
     total_users: int
     pending_users: int
@@ -107,6 +120,7 @@ class AdminActivityResponse(BaseModel):
     analyses_count: int
     reports_count: int
     vault_records_count: int
+    recent_events: list[AdminActivityEventResponse] = Field(default_factory=list)
 
 
 class AdminCorpusHealthResponse(BaseModel):
@@ -182,6 +196,28 @@ def _clean_reason(reason: str | None) -> str | None:
     return stripped or None
 
 
+def _admin_activity_event_payload(
+    event: AdminActivityEvent,
+) -> AdminActivityEventResponse:
+    return AdminActivityEventResponse(
+        id=event.id,
+        action=event.action,
+        actor_label=event.actor_label,
+        target_email=event.target_email,
+        reason=event.reason,
+        created_at=event.created_at.isoformat() if event.created_at else None,
+    )
+
+
+async def _latest_admin_activity_events(db: AsyncSession) -> list[AdminActivityEventResponse]:
+    result = await db.execute(
+        select(AdminActivityEvent)
+        .order_by(AdminActivityEvent.created_at.desc(), AdminActivityEvent.id.desc())
+        .limit(20)
+    )
+    return [_admin_activity_event_payload(event) for event in result.scalars().all()]
+
+
 @router.get(
     "/activity",
     response_model=AdminActivityResponse,
@@ -221,6 +257,7 @@ async def get_admin_activity(
             Proposal.status == ProposalStatus.COMPLETED,
         ),
         vault_records_count=await _count_optional_model_rows(db, ReadinessDocument),
+        recent_events=await _latest_admin_activity_events(db),
     )
 
 
@@ -392,12 +429,22 @@ async def approve_user(
     db: AsyncSession = Depends(get_db),
 ) -> ApprovalQueueUser:
     user = await _get_user_or_404(db, user_id)
+    before = user_role_snapshot(user)
     user.approval_status = USER_APPROVAL_APPROVED
     user.approved_at = _utcnow()
     user.approved_by_user_id = current_user.id
     user.rejected_at = None
     user.rejection_reason = None
     user.disabled_at = None
+    bump_auth_version(user)
+    await record_admin_activity(
+        db,
+        action="user_approved",
+        actor_user=current_user,
+        target_user=user,
+        reason="Admin approved user account.",
+        metadata={"before": before, "after": user_role_snapshot(user)},
+    )
     await db.commit()
     await db.refresh(user)
     return _user_payload(user)
@@ -410,11 +457,20 @@ async def reject_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> ApprovalQueueUser:
-    del current_user
     user = await _get_user_or_404(db, user_id)
+    before = user_role_snapshot(user)
     user.approval_status = USER_APPROVAL_REJECTED
     user.rejected_at = _utcnow()
     user.rejection_reason = _clean_reason(payload.reason)
+    bump_auth_version(user)
+    await record_admin_activity(
+        db,
+        action="user_rejected",
+        actor_user=current_user,
+        target_user=user,
+        reason=_clean_reason(payload.reason) or "Admin rejected user account.",
+        metadata={"before": before, "after": user_role_snapshot(user)},
+    )
     await db.commit()
     await db.refresh(user)
     return _user_payload(user)
@@ -427,11 +483,20 @@ async def disable_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> ApprovalQueueUser:
-    del current_user
     user = await _get_user_or_404(db, user_id)
+    before = user_role_snapshot(user)
     user.approval_status = USER_APPROVAL_DISABLED
     user.disabled_at = _utcnow()
     user.rejection_reason = _clean_reason(payload.reason)
+    bump_auth_version(user)
+    await record_admin_activity(
+        db,
+        action="user_disabled",
+        actor_user=current_user,
+        target_user=user,
+        reason=_clean_reason(payload.reason) or "Admin disabled user account.",
+        metadata={"before": before, "after": user_role_snapshot(user)},
+    )
     await db.commit()
     await db.refresh(user)
     return _user_payload(user)

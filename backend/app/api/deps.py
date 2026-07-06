@@ -4,7 +4,6 @@ Plasma AI - API Dependencies
 Common dependencies for FastAPI endpoints including authentication and tier gating.
 """
 
-import os
 from typing import Callable
 
 from fastapi import Depends, HTTPException, status
@@ -16,7 +15,7 @@ from app.core.access import (
     PLATFORM_ROLE_ADMIN,
     PLATFORM_ROLE_OPERATOR,
     USER_APPROVAL_APPROVED,
-    parse_email_allowlist,
+    configured_email_allowlist,
 )
 from app.core.security import get_current_user as core_get_current_user
 from app.db.session import get_db
@@ -42,12 +41,12 @@ async def get_current_user(
 
 def admin_email_allowlist() -> set[str]:
     """Return configured bootstrap administrator emails."""
-    return parse_email_allowlist(os.getenv("PLASMA_ADMIN_EMAILS"))
+    return configured_email_allowlist("PLASMA_ADMIN_EMAILS")
 
 
 def operator_email_allowlist() -> set[str]:
     """Return configured operator emails."""
-    return parse_email_allowlist(os.getenv("PLASMA_OPERATOR_EMAILS"))
+    return configured_email_allowlist("PLASMA_OPERATOR_EMAILS")
 
 
 def _operator_email_allowlist() -> set[str]:

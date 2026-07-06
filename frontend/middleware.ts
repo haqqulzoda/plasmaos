@@ -1,10 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
-const PUBLIC_PATHS = ['/', '/api/auth', '/_next', '/favicon.ico'];
+const PUBLIC_PATHS = ['/', '/api/auth', '/api/build', '/_next', '/favicon.ico'];
+const PUBLIC_EXACT_PATHS = ['/api/v1/health/version'];
 
 function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+    if (PUBLIC_EXACT_PATHS.includes(pathname)) {
+        return true;
+    }
+    return PUBLIC_PATHS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 export async function middleware(request: NextRequest) {

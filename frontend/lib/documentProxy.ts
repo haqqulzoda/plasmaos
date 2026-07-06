@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/app/api/auth/[...nextauth]/route";
+import { resolveBackendApiBase } from "@/lib/backendApiBase";
 
-const backendApiBase = (
-  process.env.BACKEND_INTERNAL_URL ??
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"
-).replace(/\/$/, "");
+const backendApiBase = resolveBackendApiBase();
 
 function safeErrorDetail(status: number, rawBody: string): string {
   let detail = rawBody.trim();

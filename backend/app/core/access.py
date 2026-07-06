@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+import os
+from pathlib import Path
 from typing import Iterable
 
 USER_APPROVAL_PENDING = "pending"
@@ -44,6 +47,8 @@ COMPANY_APPROVAL_APPROVED = USER_APPROVAL_APPROVED
 COMPANY_APPROVAL_REJECTED = USER_APPROVAL_REJECTED
 COMPANY_APPROVAL_DISABLED = USER_APPROVAL_DISABLED
 COMPANY_APPROVAL_STATUSES = USER_APPROVAL_STATUSES
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+ENV_PATH = PROJECT_ROOT / ".env"
 
 
 def sql_string_values(values: Iterable[str]) -> str:
@@ -58,3 +63,24 @@ def parse_email_allowlist(raw_emails: str | None) -> set[str]:
         for email in (raw_emails or "").split(",")
         if email.strip()
     }
+
+
+@lru_cache(maxsize=32)
+def _dotenv_value(name: str) -> str | None:
+    if not ENV_PATH.exists():
+        return None
+    prefix = f"{name}="
+    for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or not stripped.startswith(prefix):
+            continue
+        value = stripped.split("=", 1)[1].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        return value
+    return None
+
+
+def configured_email_allowlist(env_name: str) -> set[str]:
+    """Read an email allowlist from process env, falling back to project .env."""
+    return parse_email_allowlist(os.getenv(env_name) or _dotenv_value(env_name))

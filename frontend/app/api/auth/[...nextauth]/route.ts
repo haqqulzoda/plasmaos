@@ -1,13 +1,11 @@
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 
+import { resolveBackendApiBase } from '@/lib/backendApiBase';
+
 // Server-side calls (NextAuth callbacks) use BACKEND_INTERNAL_URL to reach
 // the backend via Docker's internal network.  Falls back to the public URL.
-const backendApiBase = (
-  process.env.BACKEND_INTERNAL_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  'http://localhost:8000/api/v1'
-).replace(/\/$/, '');
+const backendApiBase = resolveBackendApiBase();
 
 // Backend JWT lifetime is 8 hours.  We attempt a silent refresh when the
 // token is within 1 hour of expiring, keeping the session alive as long

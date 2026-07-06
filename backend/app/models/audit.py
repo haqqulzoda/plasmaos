@@ -128,6 +128,45 @@ class AuditLog(Base):
     )
 
 
+class AdminActivityEvent(Base):
+    """Administrative account-management event log."""
+
+    __tablename__ = "admin_activity_events"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    actor_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    actor_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    target_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    target_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("ix_admin_activity_events_action", "action"),
+        Index("ix_admin_activity_events_target_user_id", "target_user_id"),
+        Index("ix_admin_activity_events_target_email", "target_email"),
+        Index("ix_admin_activity_events_created_at", "created_at"),
+    )
+
+
 class TenderRecommendation(Base):
     """
     Stores AI-generated tender opportunities for each company profile.

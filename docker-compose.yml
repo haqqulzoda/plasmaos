@@ -69,6 +69,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       TENDER_DOCUMENTS_ROOT: /app/data/documents
       AUTO_CREATE_TABLES: "false"
+      PLASMA_SERVICE_NAME: backend
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -79,7 +80,8 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_API_URL: ${FRONTEND_NEXT_PUBLIC_API_URL:-/api/v1}
+        BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000/api/v1}
         PLASMA_BUILD_SHA: ${PLASMA_BUILD_SHA:-unknown}
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_frontend
@@ -89,6 +91,8 @@ services:
     environment:
       # Internal Docker network URL for server-side API calls (NextAuth)
       BACKEND_INTERNAL_URL: http://backend:8000/api/v1
+      NEXT_PUBLIC_API_URL: ${FRONTEND_NEXT_PUBLIC_API_URL:-/api/v1}
+      PLASMA_SERVICE_NAME: frontend
       AUTH_SECRET: ${AUTH_SECRET}
       NEXTAUTH_URL: https://console.plasmaos.uz
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
@@ -115,6 +119,7 @@ services:
       POSTGRES_PORT: 5432
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PLASMA_SERVICE_NAME: celery_worker
     command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "celery,ai_fast_queue" ]
 
   worker_heavy:
@@ -137,6 +142,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       CELERY_WORKER_MAX_TASKS_PER_CHILD: 10
       TENDER_DOCUMENTS_ROOT: /app/data/documents
+      PLASMA_SERVICE_NAME: worker_heavy
     command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "heavy_dl_queue", "--concurrency=1", "--max-tasks-per-child=10" ]
     volumes:
       - tender_documents_data:/app/data
@@ -160,6 +166,7 @@ services:
       POSTGRES_PORT: 5432
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PLASMA_SERVICE_NAME: celery_beat
     command: [ "celery", "-A", "app.core.celery_app", "beat", "--loglevel=info" ]
 
 

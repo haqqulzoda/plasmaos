@@ -26,6 +26,11 @@ from app.core.security import create_access_token, get_current_user
 from app.db.session import get_db
 from app.models.all_models import User
 from app.models.company import CompanyProfile
+from app.services.admin_activity import (
+    bump_auth_version,
+    record_admin_activity,
+    user_role_snapshot,
+)
 
 router = APIRouter()
 
@@ -70,6 +75,11 @@ def _apply_email_bootstrap(user: User, *, email: str) -> None:
         user.approval_status = USER_APPROVAL_PENDING
 
 
+def _role_state_changed(before: dict, user: User) -> bool:
+    after = user_role_snapshot(user)
+    return any(before.get(key) != after.get(key) for key in ("platform_role", "approval_status", "is_admin"))
+
+
 async def _load_company_profile(
     *,
     db: AsyncSession,
@@ -95,6 +105,7 @@ def _token_payload(user: User, profile: CompanyProfile | None) -> dict:
         "tier": user.subscription_tier.value,
         "platform_role": user.platform_role,
         "approval_status": user.approval_status,
+        "auth_version": getattr(user, "auth_version", 0),
         "onboarding_required": onboarding_required,
         "company_profile_id": company_profile_id,
         "company_approval_status": company_approval_status,
@@ -146,7 +157,24 @@ async def google_auth_bridge(
         user.email = email
         user.name = name
         user.avatar_url = avatar_url
+    before_role_state = user_role_snapshot(user)
     _apply_email_bootstrap(user, email=email)
+    if _role_state_changed(before_role_state, user):
+        bump_auth_version(user)
+        await db.flush()
+        await record_admin_activity(
+            db,
+            action="auth_allowlist_reconciled",
+            target_user=user,
+            actor_label="auth/google",
+            reason="Successful Google authentication matched configured role allowlist.",
+            metadata={
+                "before": before_role_state,
+                "after": user_role_snapshot(user),
+                "admin_allowlist_match": email in admin_email_allowlist(),
+                "operator_allowlist_match": email in operator_email_allowlist(),
+            },
+        )
 
     await db.commit()
     await db.refresh(user)
