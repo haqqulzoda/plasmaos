@@ -12,5 +12,7 @@ __pycache__/
 *.pyc
 data/documents/
 backend/backups/
+backups/
+*.dump
 *.pyo
 *.pyd
