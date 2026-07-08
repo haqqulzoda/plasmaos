@@ -65,7 +65,18 @@ celery_app.conf.task_queues = (
 )
 
 celery_app.conf.task_routes = {
-    "app.workers.tender_tasks.*": {"queue": "heavy_dl_queue"},
+    "app.workers.tender_tasks.hydrate_giz_documents": {
+        "queue": "heavy_dl_queue",
+        "routing_key": "heavy_dl_queue",
+    },
+    "app.workers.tender_tasks.process_tender_docs": {
+        "queue": "heavy_dl_queue",
+        "routing_key": "heavy_dl_queue",
+    },
+    "app.workers.tender_tasks.*": {
+        "queue": "heavy_dl_queue",
+        "routing_key": "heavy_dl_queue",
+    },
     "app.workers.hunter_tasks.*": {"queue": "ai_fast_queue"},
 }
 

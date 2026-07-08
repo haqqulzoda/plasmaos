@@ -123,6 +123,9 @@ from app.services.compliance_engine import (
     RequirementMatchDetail,
     evaluate_tender_compliance,
 )
+from app.services.giz_document_hydration import (
+    hydrate_giz_tender_documents as hydrate_giz_tender_documents_inline,
+)
 from app.services.tender_sources.base import NormalizedTender, assert_source_scope
 from app.services.tender_sources.adb import AdbTenderSource
 from app.services.tender_sources.ebrd import EbrdTenderSource
@@ -154,6 +157,7 @@ from app.workers.tender_tasks import (
     _finalize_document_download,
     _persist_document_bytes,
     _reserve_document_download_path,
+    hydrate_giz_documents,
     process_tender_docs,
 )
 
@@ -217,6 +221,34 @@ class SyncDocsAcceptedResponse(BaseModel):
     reparse_markerless: bool = False
 
 
+class GizHydrateRequest(BaseModel):
+    """Operator request for targeted GIZ document hydration."""
+
+    external_ids: list[str] = Field(min_length=1, max_length=50)
+    force: bool = False
+
+
+class GizHydrateJobResponse(BaseModel):
+    external_id: str
+    tender_id: UUID
+    job_id: str
+    status: str
+    progress: int
+    queued: bool
+    message: str
+
+
+class GizHydrateAcceptedResponse(BaseModel):
+    message: str
+    source_system: str = "giz"
+    force: bool = False
+    requested_count: int = 0
+    accepted_count: int = 0
+    enqueued_count: int = 0
+    already_running_count: int = 0
+    jobs: list[GizHydrateJobResponse] = Field(default_factory=list)
+
+
 class SyncMarkerDiagnostics(BaseModel):
     """Marker provenance diagnostics for compiled tender text."""
 
@@ -236,6 +268,8 @@ class SyncStatusResponse(BaseModel):
     progress: int
     docs_parsed: int
     error: str | None = None
+    source_system: str | None = None
+    coverage_status: str | None = None
     diagnostics: SyncMarkerDiagnostics | None = None
 
 
@@ -1779,36 +1813,42 @@ def _document_status_from_summary(summary: DocumentSummary) -> str:
     return "no_documents_found"
 
 
+def _giz_coverage_status_from_metadata(
+    source_metadata: dict[str, Any] | None,
+) -> str | None:
+    coverage = (source_metadata or {}).get("giz_document_coverage")
+    if not isinstance(coverage, dict):
+        return None
+    coverage_status = str(coverage.get("coverage_status") or "").strip().casefold()
+    return coverage_status or None
+
+
 def _compliance_unavailable_reason(
     *,
     source_system: str,
     has_compiled_text: bool,
     document_status: str,
+    parsed_document_count: int = 0,
     source_metadata: dict[str, Any] | None = None,
 ) -> str | None:
     if source_system == "ebrd":
         return "EBRD notices are metadata-only; participation documents require ECEPP registration and are not parsed for compliance."
     if source_system == "giz":
-        coverage = (source_metadata or {}).get("giz_document_coverage")
-        coverage_status = (
-            str(coverage.get("coverage_status") or "").casefold()
-            if isinstance(coverage, dict)
-            else ""
-        )
-        if not has_compiled_text:
-            return "GIZ compliance requires parsed public procurement documents."
+        coverage_status = _giz_coverage_status_from_metadata(source_metadata) or ""
+        if not has_compiled_text or parsed_document_count <= 0:
+            return "Prepare documents for analysis"
         if coverage_status in {"failed", "unavailable"}:
-            return "GIZ document coverage is not sufficient for compliance analysis."
+            return "Preparation failed"
         return None
     if document_status == "failed":
-        return "Document ingestion failed or incomplete."
+        return "Preparation failed"
     if has_compiled_text:
         return None
     if source_system == "adb" and document_status == "metadata_only":
-        return "PDF notice discovered — download/parse required before analysis."
+        return "Document discovered — preparation required before analysis."
     if document_status == "files_missing":
-        return "Document files need re-sync before analysis."
-    return "Document ingestion required before analysis."
+        return "Preparation failed. Try preparing documents again before analysis."
+    return "Prepare documents for analysis"
 
 
 def _empty_tender_summary(*, has_compiled_text: bool = False) -> DocumentSummary:
@@ -2520,10 +2560,26 @@ def _serialize_tender(
         summary.get("metadata_only_document_count") or 0
     )
     payload.failed_document_count = int(summary.get("failed_document_count") or 0)
+    giz_coverage_status = _giz_coverage_status_from_metadata(tender.source_metadata_json)
+    if (
+        payload.source_system == "giz"
+        and giz_coverage_status == "partial"
+        and payload.has_compiled_text
+        and payload.parsed_document_count > 0
+    ):
+        payload.document_status = "partial"
+    elif (
+        payload.source_system == "giz"
+        and giz_coverage_status == "complete"
+        and payload.has_compiled_text
+        and payload.parsed_document_count > 0
+    ):
+        payload.document_status = "documents_available"
     unavailable_reason = _compliance_unavailable_reason(
         source_system=payload.source_system,
         has_compiled_text=payload.has_compiled_text,
         document_status=payload.document_status,
+        parsed_document_count=payload.parsed_document_count,
         source_metadata=tender.source_metadata_json,
     )
     payload.compliance_analysis_available = unavailable_reason is None
@@ -3185,6 +3241,7 @@ def _document_response(
         storage_filename=storage_filename,
         parsed_source_filenames=parsed_source_filenames,
         archive_inner_filenames=archive_inner_filenames,
+        analysis_text_available=bool(doc.parsed_text and doc.parsed_text.strip()),
         file_size=doc.file_size,
         created_at=doc.created_at,
     )
@@ -5654,57 +5711,46 @@ async def sync_giz_tenders(
                 if str(raw_notice.get("external_id") or "").strip()
             },
         )
-    async with httpx.AsyncClient(
-        timeout=source.config.timeout_seconds,
-        headers={"User-Agent": "PlasmaOS GIZConnector/1.0"},
-        follow_redirects=True,
-    ) as client:
-        for raw_notice in raw_notices:
-            external_id = str(raw_notice.get("external_id") or "").strip()
-            try:
-                normalized = source.normalize(raw_notice)
-                documents = await source.discover_documents(normalized)
-                attachment_count += len(documents)
+    for raw_notice in raw_notices:
+        external_id = str(raw_notice.get("external_id") or "").strip()
+        try:
+            normalized = source.normalize(raw_notice)
+            documents = await source.discover_documents(normalized)
+            attachment_count += len(documents)
 
-                if dry_run:
-                    continue
+            if dry_run:
+                continue
 
-                tender, created = await source.upsert(db, normalized)
-                await db.flush()
-                if documents:
-                    await source.upsert_documents(
-                        db,
-                        tender=tender,
-                        documents=documents,
-                    )
-                    await db.flush()
-                if download_documents and documents:
-                    docs_result = await db.execute(
-                        select(TenderDocument).where(TenderDocument.tender_id == tender.id)
-                    )
-                    for doc in docs_result.scalars().all():
-                        if await _download_giz_document_into_storage(
-                            client=client,
-                            tender=tender,
-                            doc=doc,
-                            max_bytes=GIZ_MAX_ARCHIVE_COMPRESSED_BYTES,
-                        ):
-                            documents_downloaded += 1
-                    await _process_giz_documents_for_compliance(db, tender=tender)
-                if created:
-                    created_count += 1
-                else:
-                    updated_count += 1
-            except Exception as exc:
-                failed_count += 1
-                logger.warning(
-                    "giz_sync_notice_failed source_system=%s external_id=%s status=failed error_type=%s",
-                    source.source_system,
-                    external_id,
-                    type(exc).__name__,
+            tender, created = await source.upsert(db, normalized)
+            await db.flush()
+            if documents:
+                await source.upsert_documents(
+                    db,
+                    tender=tender,
+                    documents=documents,
                 )
-                if len(errors) < 10:
-                    errors.append(f"{external_id or 'unknown'}: {type(exc).__name__}")
+                await db.flush()
+            if download_documents and documents:
+                hydration_result = await hydrate_giz_tender_documents_inline(
+                    db,
+                    tender=tender,
+                    force=False,
+                )
+                documents_downloaded += int(hydration_result.get("documents_downloaded") or 0)
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+        except Exception as exc:
+            failed_count += 1
+            logger.warning(
+                "giz_sync_notice_failed source_system=%s external_id=%s status=failed error_type=%s",
+                source.source_system,
+                external_id,
+                type(exc).__name__,
+            )
+            if len(errors) < 10:
+                errors.append(f"{external_id or 'unknown'}: {type(exc).__name__}")
 
     if dry_run:
         await db.rollback()
@@ -5753,6 +5799,244 @@ async def sync_giz_tenders(
                 f"{documents_downloaded} downloaded, {failed_count} failed."
             )
         ),
+    )
+
+
+@router.post(
+    "/sources/giz/hydrate",
+    response_model=GizHydrateAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def hydrate_giz_tenders(
+    payload: GizHydrateRequest,
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> GizHydrateAcceptedResponse:
+    """
+    Enqueue targeted document hydration for exact persisted GIZ external IDs.
+
+    Approved pilots may hydrate one accessible tender with force=false.
+    Operators and admins may hydrate batches and force refreshes.
+    """
+    external_ids: list[str] = []
+    seen_external_ids: set[str] = set()
+    for raw_external_id in payload.external_ids:
+        external_id = str(raw_external_id or "").strip()
+        if not external_id:
+            continue
+        if external_id in seen_external_ids:
+            continue
+        seen_external_ids.add(external_id)
+        external_ids.append(external_id)
+
+    if not external_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one exact GIZ external_id is required.",
+        )
+
+    has_operator_scope = is_operator_or_admin(current_user)
+    if not has_operator_scope and payload.force:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Force GIZ hydration requires operator access.",
+        )
+    if not has_operator_scope and len(external_ids) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Batch GIZ hydration requires operator access.",
+        )
+
+    tenders_result = await db.execute(
+        select(Tender).where(
+            Tender.source_system == "giz",
+            Tender.external_id.in_(external_ids),
+        )
+    )
+    tenders_by_external_id = {
+        str(tender.external_id): tender
+        for tender in tenders_result.scalars().all()
+    }
+    missing_external_ids = [
+        external_id
+        for external_id in external_ids
+        if external_id not in tenders_by_external_id
+    ]
+    if missing_external_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "message": "GIZ tender(s) were not found for exact external_id values.",
+                "missing_external_ids": missing_external_ids,
+            },
+        )
+
+    jobs: list[GizHydrateJobResponse] = []
+    enqueued_count = 0
+    already_running_count = 0
+
+    for external_id in external_ids:
+        tender = tenders_by_external_id[external_id]
+        assert_source_scope("giz", tender)
+        if not has_operator_scope:
+            await _ensure_tender_access(
+                db=db,
+                tender_id=tender.id,
+                user_id=current_user.id,
+                current_user=current_user,
+                allow_operator=False,
+            )
+
+        await db.execute(
+            select(Tender)
+            .where(Tender.id == tender.id)
+            .with_for_update()
+        )
+        existing_job = await _get_active_sync_job_for_tender(
+            db=db,
+            tender_id=tender.id,
+        )
+        if existing_job is not None:
+            already_running_count += 1
+            jobs.append(
+                GizHydrateJobResponse(
+                    external_id=external_id,
+                    tender_id=tender.id,
+                    job_id=existing_job.job_id,
+                    status=existing_job.status.value,
+                    progress=existing_job.progress,
+                    queued=False,
+                    message="GIZ hydration already in progress",
+                )
+            )
+            continue
+
+        new_job = TenderSyncJob(
+            id=uuid4(),
+            job_id=str(uuid4()),
+            tender_id=tender.id,
+            user_id=current_user.id,
+            status=TenderSyncStatus.PENDING,
+            progress=0,
+            error_message=None,
+        )
+        db.add(new_job)
+        try:
+            await db.commit()
+            await db.refresh(new_job)
+        except IntegrityError:
+            await db.rollback()
+            existing_job = await _get_active_sync_job_for_tender(
+                db=db,
+                tender_id=tender.id,
+            )
+            if existing_job is not None:
+                already_running_count += 1
+                jobs.append(
+                    GizHydrateJobResponse(
+                        external_id=external_id,
+                        tender_id=tender.id,
+                        job_id=existing_job.job_id,
+                        status=existing_job.status.value,
+                        progress=existing_job.progress,
+                        queued=False,
+                        message="GIZ hydration already in progress",
+                    )
+                )
+                continue
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A hydration job already exists for this GIZ tender.",
+            )
+        except SQLAlchemyError as exc:
+            await db.rollback()
+            logger.exception("Failed to persist GIZ hydration job before enqueue")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Database write failed: {exc}",
+            ) from exc
+
+        try:
+            task_result = hydrate_giz_documents.apply_async(
+                args=[str(tender.id), new_job.job_id],
+                kwargs={"force": payload.force},
+                task_id=new_job.job_id,
+                queue="heavy_dl_queue",
+                routing_key="heavy_dl_queue",
+                retry=True,
+                retry_policy={
+                    "max_retries": 3,
+                    "interval_start": 0,
+                    "interval_step": 0.2,
+                    "interval_max": 1,
+                },
+            )
+            logger.info(
+                "Enqueued GIZ hydration task tender_id=%s external_id=%s job_id=%s celery_task_id=%s queue=%s",
+                tender.id,
+                external_id,
+                new_job.job_id,
+                task_result.id,
+                "heavy_dl_queue",
+            )
+            enqueued_count += 1
+            jobs.append(
+                GizHydrateJobResponse(
+                    external_id=external_id,
+                    tender_id=tender.id,
+                    job_id=new_job.job_id,
+                    status=new_job.status.value,
+                    progress=new_job.progress,
+                    queued=True,
+                    message="GIZ hydration enqueued",
+                )
+            )
+        except Exception as exc:
+            error_type = type(exc).__name__
+            logger.exception(
+                "Failed to enqueue GIZ hydration task tender_id=%s external_id=%s job_id=%s error_type=%s",
+                tender.id,
+                external_id,
+                new_job.job_id,
+                error_type,
+            )
+            try:
+                new_job.status = TenderSyncStatus.FAILED
+                new_job.progress = 0
+                new_job.error_message = "Failed to enqueue GIZ hydration worker task."
+                await db.commit()
+            except SQLAlchemyError:
+                await db.rollback()
+                logger.exception(
+                    "Failed to persist GIZ hydration enqueue failure for job %s",
+                    new_job.job_id,
+                )
+            jobs.append(
+                GizHydrateJobResponse(
+                    external_id=external_id,
+                    tender_id=tender.id,
+                    job_id=new_job.job_id,
+                    status=TenderSyncStatus.FAILED.value,
+                    progress=0,
+                    queued=False,
+                    message=(
+                        "Failed to enqueue GIZ hydration worker task. "
+                        "Check Redis and the heavy document worker."
+                    ),
+                )
+            )
+
+    return GizHydrateAcceptedResponse(
+        message=(
+            "GIZ hydration accepted: "
+            f"{enqueued_count} enqueued, {already_running_count} already running."
+        ),
+        force=payload.force,
+        requested_count=len(external_ids),
+        accepted_count=len(jobs),
+        enqueued_count=enqueued_count,
+        already_running_count=already_running_count,
+        jobs=jobs,
     )
 
 
@@ -6166,6 +6450,20 @@ async def _get_latest_sync_job_for_user_tender(
     return result.scalar_one_or_none()
 
 
+async def _get_latest_sync_job_for_tender(
+    *,
+    db: AsyncSession,
+    tender_id: UUID,
+) -> TenderSyncJob | None:
+    result = await db.execute(
+        select(TenderSyncJob)
+        .where(TenderSyncJob.tender_id == tender_id)
+        .order_by(TenderSyncJob.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def _get_active_sync_job_for_user_tender(
     *,
     db: AsyncSession,
@@ -6178,6 +6476,24 @@ async def _get_active_sync_job_for_user_tender(
         .where(
             TenderSyncJob.tender_id == tender_id,
             TenderSyncJob.user_id == user_id,
+            TenderSyncJob.status.in_(active_statuses),
+        )
+        .order_by(TenderSyncJob.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _get_active_sync_job_for_tender(
+    *,
+    db: AsyncSession,
+    tender_id: UUID,
+) -> TenderSyncJob | None:
+    active_statuses = (TenderSyncStatus.PENDING, TenderSyncStatus.IN_PROGRESS)
+    result = await db.execute(
+        select(TenderSyncJob)
+        .where(
+            TenderSyncJob.tender_id == tender_id,
             TenderSyncJob.status.in_(active_statuses),
         )
         .order_by(TenderSyncJob.created_at.desc())
@@ -6411,11 +6727,36 @@ async def get_sync_status(
         allow_operator=True,
     )
 
-    latest_job = await _get_latest_sync_job_for_user_tender(
-        db=db,
-        tender_id=tender_id,
-        user_id=current_user.id,
+    tender_result = await db.execute(
+        select(Tender.source_system, Tender.source_metadata_json).where(
+            Tender.id == tender_id
+        )
     )
+    tender_row = tender_result.one_or_none()
+    if tender_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
+
+    tender_mapping = tender_row._mapping
+    source_system = str(tender_mapping["source_system"] or "")
+    coverage_status = (
+        _giz_coverage_status_from_metadata(tender_mapping["source_metadata_json"])
+        if source_system == "giz"
+        else None
+    )
+    if source_system == "giz":
+        latest_job = await _get_latest_sync_job_for_tender(
+            db=db,
+            tender_id=tender_id,
+        )
+    else:
+        latest_job = await _get_latest_sync_job_for_user_tender(
+            db=db,
+            tender_id=tender_id,
+            user_id=current_user.id,
+        )
     docs_parsed = await _count_parsed_documents(
         db=db,
         tender_id=tender_id,
@@ -6431,6 +6772,8 @@ async def get_sync_status(
             progress=100 if docs_parsed > 0 else 0,
             docs_parsed=docs_parsed,
             error=None,
+            source_system=source_system,
+            coverage_status=coverage_status,
             diagnostics=diagnostics,
         )
 
@@ -6439,6 +6782,8 @@ async def get_sync_status(
         progress=latest_job.progress,
         docs_parsed=docs_parsed,
         error=latest_job.error_message,
+        source_system=source_system,
+        coverage_status=coverage_status,
         diagnostics=diagnostics,
     )
 

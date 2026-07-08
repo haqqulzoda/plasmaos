@@ -112,6 +112,7 @@ class TenderDocumentResponse(BaseModel):
     storage_filename: str | None = None
     parsed_source_filenames: list[str] = Field(default_factory=list)
     archive_inner_filenames: list[str] = Field(default_factory=list)
+    analysis_text_available: bool = False
     file_size: int | None = None
     created_at: datetime
 

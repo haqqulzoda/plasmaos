@@ -140,12 +140,16 @@ class CrossSourceStaticGateTests(unittest.TestCase):
     def test_document_write_paths_are_source_guarded(self) -> None:
         tenders = read("app/api/endpoints/tenders.py")
         worker = read("app/workers/tender_tasks.py")
+        hunter = read("app/workers/hunter_tasks.py")
+        giz_hydration = read("app/services/giz_document_hydration.py")
         world_bank = read("app/services/tender_sources/world_bank.py")
         adb = read("app/services/tender_sources/adb.py")
         ebrd = read("app/services/tender_sources/ebrd.py")
         giz = read("app/services/tender_sources/giz.py")
 
         self.assertIn('assert_source_scope("uzex", tender)', worker)
+        self.assertIn('assert_source_scope("giz", tender)', worker)
+        self.assertIn('assert_source_scope("giz", tender)', giz_hydration)
         self.assertIn('assert_source_scope("giz", tender)', tenders)
         self.assertIn("assert_source_scope(self.source_system, tender)", world_bank)
         self.assertIn("assert_source_scope(self.source_system, tender)", adb)
@@ -153,6 +157,11 @@ class CrossSourceStaticGateTests(unittest.TestCase):
         self.assertIn('assert_source_scope("giz", tender)', giz)
         self.assertIn('source_system != "uzex"', tenders)
         self.assertIn("Document sync worker is UzEx-only", tenders)
+        self.assertIn('tender.source_system != "uzex"', hunter)
+        self.assertIn("hydrate_giz_documents", worker)
+        self.assertIn("hydrate_giz_documents.apply_async", tenders)
+        self.assertIn('queue="heavy_dl_queue"', tenders)
+        self.assertIn('routing_key="heavy_dl_queue"', tenders)
 
     def test_source_sync_does_not_touch_analysis_rows(self) -> None:
         tenders = read("app/api/endpoints/tenders.py")

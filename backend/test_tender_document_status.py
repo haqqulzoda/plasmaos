@@ -88,7 +88,7 @@ class TenderDocumentStatusStaticTests(unittest.TestCase):
         self.assertIn("status_code=404", download_route)
         self.assertNotIn("RedirectResponse", download_route)
 
-    def test_frontend_status_labels_match_int4b_copy(self) -> None:
+    def test_frontend_status_labels_are_source_neutral(self) -> None:
         tender_types = (ROOT.parent / "frontend/types/tender.ts").read_text(
             encoding="utf-8"
         )
@@ -96,16 +96,13 @@ class TenderDocumentStatusStaticTests(unittest.TestCase):
             ROOT.parent / "frontend/app/dashboard/tenders/[tenderId]/page.tsx"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("return 'Documents available'", tender_types)
-        self.assertIn("return 'PDF notice discovered'", tender_types)
-        self.assertIn(
-            "return 'File missing from Plasma storage. Re-sync required.'",
-            tender_detail_page,
-        )
-        self.assertIn("return 'Analysis available · files need re-sync'", tender_types)
-        self.assertIn("return 'Files need re-sync'", tender_types)
-        self.assertIn("return 'Processing documents'", tender_types)
-        self.assertIn("return 'Document processing failed'", tender_types)
+        self.assertIn("return 'Ready for analysis'", tender_types)
+        self.assertIn("return 'Document discovered'", tender_types)
+        self.assertIn("return 'Partial coverage'", tender_types)
+        self.assertIn("return 'Preparation failed'", tender_types)
+        self.assertIn("return 'Prepare documents for analysis'", tender_types)
+        self.assertIn("return 'Unsupported format'", tender_detail_page)
+        self.assertIn("Prepare documents for analysis", tender_detail_page)
         self.assertIn("return 'Documents unavailable'", tender_types)
 
     def test_failed_extraction_response_does_not_claim_compliance(self) -> None:
@@ -252,7 +249,7 @@ class TenderDocumentStatusBehaviorTests(unittest.TestCase):
                 has_compiled_text=True,
                 document_status=document_status,
             ),
-            "Document ingestion failed or incomplete.",
+            "Preparation failed",
         )
 
     def test_explicit_failed_status_is_not_legacy_uzex_available(self) -> None:

@@ -87,6 +87,8 @@ async def _run_hunter_sweep_async() -> dict[str, int]:
                     tenders = tenders_result.scalars().all()
 
                     for tender in tenders:
+                        if tender.source_system != "uzex":
+                            continue
                         if tender.id in dispatched_docs:
                             continue
 

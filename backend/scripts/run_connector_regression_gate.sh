@@ -14,6 +14,7 @@ python3 -m pytest -s -q \
   test_adb_connector.py \
   test_ebrd_connector.py \
   test_giz_connector.py \
+  test_giz_hydration_worker.py \
   test_parser_traceability.py \
   test_reproducibility_snapshot.py \
   test_s1_access_foundation.py \

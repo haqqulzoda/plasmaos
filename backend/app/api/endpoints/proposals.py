@@ -229,6 +229,7 @@ async def list_proposals(
             tender_currency=p.tender.currency if p.tender else "UZS",
             tender_deadline=p.tender.deadline if p.tender else None,
             tender_region=p.tender.region if p.tender else None,
+            tender_source_system=p.tender.source_system if p.tender else "uzex",
         )
         response.append(data)
     
@@ -277,6 +278,7 @@ async def get_proposal(
         tender_currency=proposal.tender.currency if proposal.tender else "UZS",
         tender_deadline=proposal.tender.deadline if proposal.tender else None,
         tender_region=proposal.tender.region if proposal.tender else None,
+        tender_source_system=proposal.tender.source_system if proposal.tender else "uzex",
     )
 
 

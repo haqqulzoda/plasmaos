@@ -7,9 +7,17 @@ export type TenderDocumentStatus =
     | 'access_required'
     | 'no_documents_found'
     | 'processing'
+    | 'partial'
     | 'failed';
 
-export type DocumentDownloadStatus = 'available' | 'metadata_only' | 'failed' | 'missing_file' | string;
+export type DocumentDownloadStatus =
+    | 'available'
+    | 'metadata_only'
+    | 'failed'
+    | 'missing_file'
+    | 'processing'
+    | 'access_required'
+    | string;
 export type CompetitorParticipationType = 'winner' | 'participant' | 'similar_market_actor';
 export type CompetitorConfidence = 'high' | 'medium' | 'low';
 export type TenderDeadlineUrgency = 'expired' | 'urgent' | 'soon' | 'normal' | 'unknown';
@@ -81,6 +89,7 @@ export interface TenderDocument {
     storage_filename?: string | null;
     parsed_source_filenames?: string[];
     archive_inner_filenames?: string[];
+    analysis_text_available?: boolean;
     file_size?: number | null;
     created_at: string;
 }
@@ -160,12 +169,13 @@ export const sourceBadgeClasses = (source?: string | null) => {
 };
 
 export const documentStatusLabel = (status?: string | null) => {
-    if (status === 'documents_available') return 'Documents available';
-    if (status === 'files_missing') return 'Files need re-sync';
-    if (status === 'metadata_only') return 'PDF notice discovered';
-    if (status === 'access_required') return 'Participation required';
-    if (status === 'processing') return 'Processing documents';
-    if (status === 'failed') return 'Document processing failed';
+    if (status === 'documents_available') return 'Ready for analysis';
+    if (status === 'files_missing') return 'Preparation failed';
+    if (status === 'metadata_only') return 'Document discovered';
+    if (status === 'access_required') return 'Document discovered';
+    if (status === 'processing') return 'Processing';
+    if (status === 'partial') return 'Partial coverage';
+    if (status === 'failed') return 'Preparation failed';
     return 'Documents unavailable';
 };
 
@@ -184,6 +194,9 @@ export const documentStatusClasses = (status?: string | null) => {
     }
     if (status === 'processing') {
         return 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300';
+    }
+    if (status === 'partial') {
+        return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
     }
     if (status === 'failed') {
         return 'border-red-500/30 bg-red-500/10 text-red-300';
@@ -212,12 +225,14 @@ export const documentAggregateLabel = (aggregate: TenderDocumentAggregate) => {
         parsedCount > 0,
     );
 
-    if (downloadableCount > 0) return 'Documents available';
+    if (aggregate.document_status === 'partial') return 'Partial coverage';
+    if (downloadableCount > 0 && analysisAvailable) return 'Ready for analysis';
+    if (downloadableCount > 0) return 'Document discovered';
     if (missingCount > 0 && analysisAvailable) {
-        return 'Analysis available · files need re-sync';
+        return 'Partial coverage';
     }
-    if (missingCount > 0) return 'Files need re-sync';
-    if (analysisAvailable) return 'Analysis available';
+    if (missingCount > 0) return 'Preparation failed';
+    if (analysisAvailable) return 'Ready for analysis';
     return documentStatusLabel(aggregate.document_status);
 };
 
@@ -253,7 +268,7 @@ export const competitorStatusLabel = (status?: string | null) =>
     status === 'available' ? 'Competitor data available' : 'No competitor data yet';
 
 export const complianceAvailabilityLabel = (status?: string | null) =>
-    status === 'available' ? 'Ready for analysis' : 'Metadata only';
+    status === 'available' ? 'Ready for analysis' : 'Prepare documents for analysis';
 
 export const availabilityClasses = (status?: string | null) =>
     status === 'available'
@@ -285,13 +300,13 @@ export const competitorParticipationLabel = (participation?: string | null) => {
 export const complianceUnavailableMessage = (tender: Tender) => {
     if (tender.compliance_unavailable_reason) return tender.compliance_unavailable_reason;
     if (tender.source_system === 'adb' && tender.document_status === 'metadata_only') {
-        return 'PDF notice discovered — download/parse required before analysis.';
+        return 'Document discovered — preparation required before analysis.';
     }
     if (tender.source_system === 'ebrd') {
         return 'EBRD notices are metadata-only; participation documents require ECEPP registration.';
     }
     if (tender.document_status === 'files_missing') {
-        return 'Document files need re-sync before analysis.';
+        return 'Preparation failed. Try preparing documents again before analysis.';
     }
-    return 'Document ingestion required before analysis.';
+    return 'Prepare documents for analysis';
 };

@@ -44,6 +44,34 @@ import {
     sourceLabel,
 } from '@/types/tender';
 
+type TenderSyncState = 'IDLE' | 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
+type HydrationStage = 'queued' | 'downloading' | 'processing' | 'complete' | 'partial' | 'failed';
+
+interface TenderSyncStatusResponse {
+    state: TenderSyncState;
+    progress: number;
+    docs_parsed: number;
+    error: string | null;
+    source_system?: string | null;
+    coverage_status?: string | null;
+}
+
+interface GizHydrateJobResponse {
+    external_id: string;
+    tender_id: string;
+    job_id: string;
+    status: TenderSyncState;
+    progress: number;
+    queued: boolean;
+    message: string;
+}
+
+interface GizHydrateAcceptedResponse {
+    jobs: GizHydrateJobResponse[];
+}
+
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
 function formatDate(value: string | null) {
     if (!value) return 'Unknown';
     return new Date(value).toLocaleDateString('en-US', {
@@ -164,19 +192,32 @@ function filenameForDocument(doc: TenderDocument) {
     return doc.display_name || doc.original_filename || (doc.file_type ? `document.${doc.file_type}` : 'document');
 }
 
-function downloadStatusText(doc: TenderDocument) {
-    if (doc.download_status === 'available') return 'Available in Plasma';
-    if (doc.download_status === 'metadata_only') return 'PDF notice discovered — not downloaded into Plasma yet.';
-    if (doc.download_status === 'access_required') return 'Participation or login is required on the source platform.';
-    if (doc.download_status === 'missing_file') return 'File missing from Plasma storage. Re-sync required.';
-    if (doc.download_status === 'failed') return 'Document processing failed.';
-    return 'Document unavailable.';
+function documentExtension(doc: TenderDocument) {
+    const filename = filenameForDocument(doc).split('?')[0].split('#')[0];
+    const extension = filename.includes('.') ? filename.split('.').pop() : doc.file_type;
+    return (extension || '').trim().toLowerCase();
 }
 
-function downloadStatusClasses(status: string | null | undefined) {
-    if (status === 'available') return 'text-emerald-300';
-    if (status === 'failed' || status === 'missing_file') return 'text-red-300';
-    if (status === 'access_required') return 'text-sky-300';
+function isUnsupportedDocument(doc: TenderDocument) {
+    return ['doc', 'xls', 'xlsx', 'rtf', 'rar', '7z', 'tar', 'gz'].includes(documentExtension(doc));
+}
+
+function downloadStatusText(doc: TenderDocument) {
+    if (doc.analysis_text_available) return 'Ready for analysis';
+    if (doc.download_status === 'processing') return 'Processing';
+    if (doc.download_status === 'metadata_only' || doc.download_status === 'access_required') return 'Document discovered';
+    if (doc.download_status === 'missing_file') return 'Preparation failed';
+    if (doc.download_status === 'failed' && isUnsupportedDocument(doc)) return 'Unsupported format';
+    if (doc.download_status === 'failed') return 'Preparation failed';
+    if (doc.download_status === 'available') return 'Document discovered';
+    return 'Document discovered';
+}
+
+function downloadStatusClasses(doc: TenderDocument) {
+    if (doc.analysis_text_available) return 'text-emerald-300';
+    if (doc.download_status === 'processing') return 'text-indigo-300';
+    if (doc.download_status === 'failed' && isUnsupportedDocument(doc)) return 'text-amber-300';
+    if (doc.download_status === 'failed' || doc.download_status === 'missing_file') return 'text-red-300';
     return 'text-amber-300';
 }
 
@@ -184,12 +225,32 @@ function documentAggregateSummary(tender: Tender) {
     const parts = [`${tender.document_count} captured records`];
     parts.push(`${tender.downloadable_document_count ?? tender.available_document_count} downloadable`);
     if (tender.missing_file_document_count > 0) {
-        parts.push(`${tender.missing_file_document_count} need re-sync`);
+        parts.push(`${tender.missing_file_document_count} need preparation`);
     }
     if (tender.parsed_document_count > 0 || tender.has_compiled_text) {
         parts.push('analysis text available');
     }
     return `${parts.join(', ')}.`;
+}
+
+function hydrationStageFromStatus(status: TenderSyncStatusResponse): HydrationStage {
+    const coverage = (status.coverage_status || '').toLowerCase();
+    if (status.state === 'PENDING') return 'queued';
+    if (status.state === 'IN_PROGRESS') return status.progress < 60 ? 'downloading' : 'processing';
+    if (status.state === 'SUCCESS') return coverage === 'partial' ? 'partial' : 'complete';
+    if (status.state === 'FAILED') return 'failed';
+    if (status.docs_parsed > 0) return coverage === 'partial' ? 'partial' : 'complete';
+    return 'queued';
+}
+
+function hydrationStageLabel(stage: HydrationStage | null) {
+    if (stage === 'queued') return 'queued';
+    if (stage === 'downloading') return 'downloading';
+    if (stage === 'processing') return 'processing';
+    if (stage === 'complete') return 'complete';
+    if (stage === 'partial') return 'partial coverage';
+    if (stage === 'failed') return 'failed';
+    return 'queued';
 }
 
 export default function TenderDetailPage({ params }: { params: Promise<{ tenderId: string }> }) {
@@ -208,116 +269,226 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
     const [snapshotError, setSnapshotError] = useState<string | null>(null);
     const [documentError, setDocumentError] = useState<string | null>(null);
     const [competitorError, setCompetitorError] = useState<string | null>(null);
+    const [isPreparingDocuments, setIsPreparingDocuments] = useState(false);
+    const [prepareProgress, setPrepareProgress] = useState(0);
+    const [prepareStage, setPrepareStage] = useState<HydrationStage | null>(null);
+    const [prepareError, setPrepareError] = useState<string | null>(null);
 
-    useEffect(() => {
-        let isActive = true;
-
-        const loadTender = async () => {
+    const loadTender = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+        if (!silent) {
             setIsLoading(true);
             setError(null);
-            try {
-                const { data } = await api.get<Tender>(`/tenders/${tenderId}`);
-                if (isActive) setTender(data);
-            } catch (err) {
-                const axiosErr = err as { response?: { data?: { detail?: string } } };
-                if (isActive) {
-                    setError(axiosErr.response?.data?.detail || 'Tender could not be loaded.');
-                }
-            } finally {
-                if (isActive) setIsLoading(false);
-            }
-        };
-
-        loadTender();
-        return () => {
-            isActive = false;
-        };
+        }
+        try {
+            const { data } = await api.get<Tender>(`/tenders/${tenderId}`);
+            setTender(data);
+            return data;
+        } catch (err) {
+            const axiosErr = err as { response?: { data?: { detail?: string } } };
+            setError(axiosErr.response?.data?.detail || 'Tender could not be loaded.');
+            throw err;
+        } finally {
+            if (!silent) setIsLoading(false);
+        }
     }, [tenderId]);
 
-    useEffect(() => {
-        let isActive = true;
-
-        const loadDecisionSnapshot = async () => {
+    const loadDecisionSnapshot = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+        if (!silent) {
             setIsLoadingSnapshot(true);
             setSnapshotError(null);
-            try {
-                const { data } = await api.get<TenderDecisionSnapshot>(`/tenders/${tenderId}/decision-snapshot`);
-                if (isActive) setDecisionSnapshot(data);
-            } catch (err) {
-                const axiosErr = err as { response?: { data?: { detail?: string } } };
-                if (isActive) {
-                    setDecisionSnapshot(null);
-                    setSnapshotError(axiosErr.response?.data?.detail || 'Decision snapshot could not be loaded.');
-                }
-            } finally {
-                if (isActive) setIsLoadingSnapshot(false);
-            }
-        };
-
-        loadDecisionSnapshot();
-        return () => {
-            isActive = false;
-        };
+        }
+        try {
+            const { data } = await api.get<TenderDecisionSnapshot>(`/tenders/${tenderId}/decision-snapshot`);
+            setDecisionSnapshot(data);
+            return data;
+        } catch (err) {
+            const axiosErr = err as { response?: { data?: { detail?: string } } };
+            setDecisionSnapshot(null);
+            setSnapshotError(axiosErr.response?.data?.detail || 'Decision snapshot could not be loaded.');
+            throw err;
+        } finally {
+            if (!silent) setIsLoadingSnapshot(false);
+        }
     }, [tenderId]);
 
-    useEffect(() => {
-        let isActive = true;
-
-        const loadDocuments = async () => {
+    const loadDocuments = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+        if (!silent) {
             setIsLoadingDocuments(true);
             setDocumentError(null);
-            try {
-                const { data } = await api.get<TenderDocument[]>(`/tenders/${tenderId}/documents`);
-                if (isActive) setDocuments(Array.isArray(data) ? data : []);
-            } catch (err) {
-                const axiosErr = err as { response?: { data?: { detail?: string } } };
-                if (isActive) {
-                    setDocuments([]);
-                    setDocumentError(axiosErr.response?.data?.detail || 'Document metadata could not be loaded.');
-                }
-            } finally {
-                if (isActive) setIsLoadingDocuments(false);
-            }
-        };
-
-        loadDocuments();
-        return () => {
-            isActive = false;
-        };
+        }
+        try {
+            const { data } = await api.get<TenderDocument[]>(`/tenders/${tenderId}/documents`);
+            const nextDocuments = Array.isArray(data) ? data : [];
+            setDocuments(nextDocuments);
+            return nextDocuments;
+        } catch (err) {
+            const axiosErr = err as { response?: { data?: { detail?: string } } };
+            setDocuments([]);
+            setDocumentError(axiosErr.response?.data?.detail || 'Document metadata could not be loaded.');
+            throw err;
+        } finally {
+            if (!silent) setIsLoadingDocuments(false);
+        }
     }, [tenderId]);
+
+    const loadCompetitors = useCallback(async () => {
+        setIsLoadingCompetitors(true);
+        setCompetitorError(null);
+        try {
+            const { data } = await api.get<TenderCompetitorIntelligence>(`/tenders/${tenderId}/competitors`);
+            setCompetitorIntel(data);
+        } catch (err) {
+            const axiosErr = err as { response?: { data?: { detail?: string } } };
+            setCompetitorIntel(null);
+            setCompetitorError(axiosErr.response?.data?.detail || 'Competitor intelligence could not be loaded.');
+        } finally {
+            setIsLoadingCompetitors(false);
+        }
+    }, [tenderId]);
+
+    const fetchTenderSyncStatus = useCallback(async () => {
+        const { data } = await api.get<TenderSyncStatusResponse>(`/tenders/${tenderId}/sync-status`);
+        return data;
+    }, [tenderId]);
+
+    const refreshTenderAnalysisState = useCallback(async () => {
+        await Promise.allSettled([
+            loadTender({ silent: true }),
+            loadDecisionSnapshot({ silent: true }),
+            loadDocuments({ silent: true }),
+        ]);
+    }, [loadDecisionSnapshot, loadDocuments, loadTender]);
+
+    const pollGizHydration = useCallback(async () => {
+        for (let attempt = 0; attempt < 80; attempt += 1) {
+            const status = await fetchTenderSyncStatus();
+            const stage = hydrationStageFromStatus(status);
+            setPrepareStage(stage);
+            setPrepareProgress(status.progress);
+
+            if (status.state === 'SUCCESS') {
+                await refreshTenderAnalysisState();
+                return;
+            }
+
+            if (status.state === 'FAILED') {
+                throw new Error(status.error || 'Document preparation failed.');
+            }
+
+            if (attempt > 0 && status.progress >= 60) {
+                await loadDocuments({ silent: true }).catch(() => undefined);
+            }
+
+            await wait(3000);
+        }
+
+        throw new Error('Document preparation is taking longer than expected. Reload this page in a minute.');
+    }, [fetchTenderSyncStatus, loadDocuments, refreshTenderAnalysisState]);
 
     useEffect(() => {
         let isActive = true;
 
-        const loadCompetitors = async () => {
-            setIsLoadingCompetitors(true);
-            setCompetitorError(null);
-            try {
-                const { data } = await api.get<TenderCompetitorIntelligence>(`/tenders/${tenderId}/competitors`);
-                if (isActive) {
-                    setCompetitorIntel(data);
-                }
-            } catch (err) {
-                const axiosErr = err as { response?: { data?: { detail?: string } } };
-                if (isActive) {
-                    setCompetitorIntel(null);
-                    setCompetitorError(axiosErr.response?.data?.detail || 'Competitor intelligence could not be loaded.');
-                }
-            } finally {
-                if (isActive) setIsLoadingCompetitors(false);
-            }
-        };
+        loadTender().catch(() => undefined).finally(() => {
+            if (!isActive) return;
+        });
 
-        loadCompetitors();
         return () => {
             isActive = false;
         };
-    }, [tenderId]);
+    }, [loadTender]);
+
+    useEffect(() => {
+        let isActive = true;
+
+        loadDecisionSnapshot().catch(() => undefined).finally(() => {
+            if (!isActive) return;
+        });
+
+        return () => {
+            isActive = false;
+        };
+    }, [loadDecisionSnapshot]);
+
+    useEffect(() => {
+        let isActive = true;
+
+        loadDocuments().catch(() => undefined).finally(() => {
+            if (!isActive) return;
+        });
+
+        return () => {
+            isActive = false;
+        };
+    }, [loadDocuments]);
+
+    useEffect(() => {
+        let isActive = true;
+
+        loadCompetitors().finally(() => {
+            if (!isActive) return;
+        });
+
+        return () => {
+            isActive = false;
+        };
+    }, [loadCompetitors]);
+
+    const handlePrepareGizDocuments = useCallback(async () => {
+        if (!tender || tender.source_system !== 'giz' || isPreparingDocuments) return;
+
+        setIsPreparingDocuments(true);
+        setPrepareError(null);
+        setDocumentError(null);
+        setPrepareStage('queued');
+        setPrepareProgress(0);
+
+        try {
+            const response = await api.post<GizHydrateAcceptedResponse>('/tenders/sources/giz/hydrate', {
+                external_ids: [tender.external_id],
+                force: false,
+            });
+            const job = response.data.jobs.find((item) => item.external_id === tender.external_id) ?? response.data.jobs[0];
+            if (job) {
+                setPrepareProgress(job.progress);
+                setPrepareStage(
+                    job.status === 'PENDING'
+                        ? 'queued'
+                        : job.status === 'IN_PROGRESS'
+                            ? 'downloading'
+                            : job.status === 'FAILED'
+                                ? 'failed'
+                                : 'complete',
+                );
+                if (job.status === 'FAILED') {
+                    throw new Error(job.message || 'Document preparation failed.');
+                }
+            }
+            await pollGizHydration();
+        } catch (err) {
+            const axiosErr = err as { response?: { data?: { detail?: string | { message?: string } } } };
+            const detail = axiosErr.response?.data?.detail;
+            const detailMessage = typeof detail === 'string' ? detail : detail?.message;
+            setPrepareStage('failed');
+            setPrepareError(
+                detailMessage ||
+                (err instanceof Error ? err.message : null) ||
+                'Document preparation failed.',
+            );
+        } finally {
+            setIsPreparingDocuments(false);
+        }
+    }, [isPreparingDocuments, pollGizHydration, tender]);
 
     const canAnalyze = Boolean(tender?.compliance_analysis_available);
     const unavailableMessage = useMemo(
-        () => tender ? complianceUnavailableMessage(tender) : 'Document ingestion required before analysis.',
+        () => tender ? complianceUnavailableMessage(tender) : 'Prepare documents for analysis',
         [tender],
+    );
+    const isPreparationTerminal = prepareStage === 'complete' || prepareStage === 'partial' || prepareStage === 'failed';
+    const showPreparationBanner = Boolean(
+        tender?.document_status === 'processing' ||
+        isPreparingDocuments ||
+        prepareStage,
     );
     const contact = tender?.contact_submission ?? null;
     const contactSourceUrl = contact?.source_url || tender?.source_url || null;
@@ -754,15 +925,43 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
                             {documentAggregateSummary(tender)}
                         </p>
                     </div>
-                    <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${documentStatusClasses(tender.document_status)}`}>
-                        {documentAggregateLabel(tender)}
-                    </span>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        {tender.source_system === 'giz' && (
+                            <button
+                                onClick={handlePrepareGizDocuments}
+                                disabled={isPreparingDocuments}
+                                className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-400 hover:text-cyan-100 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-500"
+                            >
+                                {isPreparingDocuments ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    <FileSearch className="h-3.5 w-3.5" />
+                                )}
+                                Prepare documents for analysis
+                            </button>
+                        )}
+                        <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${documentStatusClasses(tender.document_status)}`}>
+                            {documentAggregateLabel(tender)}
+                        </span>
+                    </div>
                 </div>
 
-                {tender.document_status === 'processing' && (
+                {showPreparationBanner && (
                     <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Document ingestion is processing.
+                        {isPreparingDocuments || !isPreparationTerminal ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <CheckCircle2 className="h-4 w-4" />
+                        )}
+                        Document preparation is {hydrationStageLabel(prepareStage ?? (tender.document_status === 'processing' ? 'processing' : 'queued'))}
+                        {isPreparingDocuments ? ` (${prepareProgress}%).` : '.'}
+                    </div>
+                )}
+
+                {prepareError && (
+                    <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                        <AlertCircle className="h-4 w-4" />
+                        {prepareError}
                     </div>
                 )}
 
@@ -802,7 +1001,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
                                             )}
                                             <span className="truncate">{filenameForDocument(doc)}</span>
                                         </div>
-                                        <div className={downloadStatusClasses(doc.download_status)}>
+                                        <div className={downloadStatusClasses(doc)}>
                                             {downloadStatusText(doc)}
                                         </div>
                                         <div>

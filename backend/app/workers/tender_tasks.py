@@ -14,6 +14,7 @@ import re
 import shutil
 import time
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID, uuid4
 
@@ -35,6 +36,7 @@ from app.core.scraper import UzExScraper
 from app.core.storage_paths import normalize_storage_path, storage_file_exists
 from app.db.session import AsyncSessionLocal, engine
 from app.services.tender_sources.base import CanonicalDocument, assert_source_scope
+from app.services.giz_document_hydration import hydrate_giz_tender_documents
 from app.services.tender_sources.uzex import UzExTenderSource
 
 logger = logging.getLogger(__name__)
@@ -1251,5 +1253,135 @@ def process_tender_docs(
             tender_uuid,
             job_id=job_id,
             reparse_markerless=reparse_markerless,
+        )
+    )
+
+
+async def _hydrate_giz_documents_async(
+    tender_uuid: UUID,
+    *,
+    job_id: str | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    task_started_at = time.monotonic()
+    _log_sync_event(
+        logging.INFO,
+        "giz_hydration_start",
+        tender_id=tender_uuid,
+        job_id=job_id,
+        force=force,
+    )
+    try:
+        async with AsyncSessionLocal() as db:
+            try:
+                tender_result = await db.execute(select(Tender).where(Tender.id == tender_uuid))
+                tender = tender_result.scalar_one_or_none()
+                if tender is None:
+                    raise ValueError("Tender not found")
+                assert_source_scope("giz", tender)
+
+                await _persist_sync_job_state(
+                    job_id=job_id,
+                    status=TenderSyncStatus.IN_PROGRESS,
+                    progress=5,
+                )
+
+                async def record_hydration_progress(progress: int) -> None:
+                    await _persist_sync_job_state(
+                        job_id=job_id,
+                        status=TenderSyncStatus.IN_PROGRESS,
+                        progress=progress,
+                    )
+
+                result = await hydrate_giz_tender_documents(
+                    db,
+                    tender=tender,
+                    force=force,
+                    progress_callback=record_hydration_progress,
+                )
+                await db.flush()
+                await db.commit()
+
+                coverage = result.get("coverage") if isinstance(result.get("coverage"), dict) else {}
+                coverage_status = str(coverage.get("coverage_status") or result.get("status") or "")
+                parsed_count = int(result.get("documents_parsed") or 0)
+                failed_count = int(result.get("documents_failed") or 0)
+                if coverage_status == "failed" or (parsed_count == 0 and failed_count > 0):
+                    job_status = TenderSyncStatus.FAILED
+                    result_status = "failed"
+                    error_message = "GIZ document hydration completed without parsed documents."
+                else:
+                    job_status = TenderSyncStatus.SUCCESS
+                    result_status = coverage_status or "success"
+                    error_message = None
+
+                await _persist_sync_job_state(
+                    job_id=job_id,
+                    status=job_status,
+                    progress=100,
+                    error_message=error_message,
+                )
+                result["status"] = result_status
+                result["job_id"] = job_id or ""
+                result["elapsed_ms"] = int((time.monotonic() - task_started_at) * 1000)
+                _log_sync_event(
+                    logging.INFO if job_status == TenderSyncStatus.SUCCESS else logging.ERROR,
+                    "giz_hydration_done",
+                    tender_id=tender_uuid,
+                    job_id=job_id,
+                    status=result_status,
+                    coverage_status=coverage_status,
+                    documents_downloaded=result.get("documents_downloaded"),
+                    documents_parsed=parsed_count,
+                    documents_failed=failed_count,
+                    compiled_chars=result.get("compiled_master_text_length"),
+                    compiled_file_markers=result.get("compiled_file_marker_count"),
+                    compiled_page_markers=result.get("compiled_page_marker_count"),
+                    elapsed_ms=result["elapsed_ms"],
+                )
+                return result
+            except Exception as exc:
+                await db.rollback()
+                _log_sync_event(
+                    logging.ERROR,
+                    "giz_hydration_failed",
+                    tender_id=tender_uuid,
+                    job_id=job_id,
+                    error_type=type(exc).__name__,
+                    error=exc,
+                    elapsed_ms=int((time.monotonic() - task_started_at) * 1000),
+                )
+                await _mark_sync_job_failed(
+                    job_id=job_id,
+                    error_message=str(exc) or "GIZ document hydration failed.",
+                )
+                raise
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(bind=True)
+def hydrate_giz_documents(
+    self,
+    tender_id: str,
+    job_id: str | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    try:
+        tender_uuid = UUID(tender_id)
+    except ValueError as exc:
+        raise ValueError(f"Invalid tender id: {tender_id}") from exc
+
+    logger.info(
+        "Starting GIZ document hydration task for tender %s (job_id=%s, force=%s)",
+        tender_id,
+        job_id,
+        force,
+    )
+    return asyncio.run(
+        _hydrate_giz_documents_async(
+            tender_uuid,
+            job_id=job_id,
+            force=force,
         )
     )

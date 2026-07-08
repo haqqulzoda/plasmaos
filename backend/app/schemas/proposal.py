@@ -61,3 +61,4 @@ class ProposalWithTenderResponse(ProposalResponse):
     tender_currency: str
     tender_deadline: datetime | None
     tender_region: str | None
+    tender_source_system: str = "uzex"

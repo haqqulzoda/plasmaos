@@ -65,6 +65,7 @@ interface Proposal {
   tender_currency: string;
   tender_deadline: string | null;
   tender_region: string | null;
+  tender_source_system: string;
 }
 
 interface StrategicDraftResponse {
@@ -267,7 +268,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
       }
 
       if (status.state === 'FAILED') {
-        throw new Error(status.error || 'Tender document sync failed.');
+        throw new Error(status.error || 'Document preparation failed.');
       }
 
       if (attempt > 0 && status.docs_parsed > 0) {
@@ -277,14 +278,14 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
             setDocuments(docsResponse.data);
           }
         } catch {
-          // Ignore intermediate fetch failures while the sync job is still running.
+          // Ignore intermediate fetch failures while document preparation is still running.
         }
       }
 
       await wait(5000);
     }
 
-    throw new Error('Document sync is taking longer than expected. Please reload the page in a minute.');
+    throw new Error('Document preparation is taking longer than expected. Please reload the page in a minute.');
   }, [fetchTenderSyncStatus]);
 
   useEffect(() => {
@@ -356,14 +357,16 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
 
         setDocsSyncProgress(initialStatus.progress);
 
+        const isGizTender = proposal.tender_source_system === 'giz';
         const shouldStartSync =
+          !isGizTender &&
           (initialStatus.state === 'IDLE' || initialStatus.state === 'FAILED') &&
           initialStatus.docs_parsed === 0;
         const shouldPollExisting =
           initialStatus.state === 'PENDING' || initialStatus.state === 'IN_PROGRESS';
 
         if (initialStatus.state === 'FAILED' && !shouldStartSync) {
-          setDocsSyncError(initialStatus.error || 'Tender document sync failed.');
+          setDocsSyncError(initialStatus.error || 'Document preparation failed.');
         }
 
         if (shouldStartSync) {
@@ -407,7 +410,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
         setDocsSyncError(
           axiosError.response?.data?.detail ||
           thrownError ||
-          'Tender documents are still syncing or could not be fetched right now.',
+          'Tender documents are still preparing or could not be fetched right now.',
         );
       } finally {
         if (isActive) {
@@ -889,7 +892,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
             {(isLoadingDocs || isSyncingDocs) && (
               <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Synchronizing tender documents ({docsSyncProgress}%).
+                Preparing tender documents ({docsSyncProgress}%).
               </div>
             )}
             {docsSyncError && (
@@ -898,7 +901,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
               </div>
             )}
             {!isLoadingDocs && !isSyncingDocs && !docsSyncError && documents.length === 0 && (
-              <p className="text-sm text-zinc-500">No synchronized documents found for this tender.</p>
+              <p className="text-sm text-zinc-500">No prepared documents found for this tender.</p>
             )}
             <div className="space-y-2">
               {documents.map((doc) => {
@@ -911,11 +914,16 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
                 const isPreviewAction = isPdf;
                 const isBusy = isPreviewAction ? previewingDocId === doc.id : downloadingDocId === doc.id;
                 const typeLabel = (ext || doc.file_type || 'file').toUpperCase();
-                const statusLabel = doc.download_status === 'metadata_only'
-                  ? 'PDF notice discovered — not downloaded into Plasma yet.'
-                  : doc.download_status === 'failed'
-                    ? 'Document processing failed.'
-                    : 'Unavailable';
+                const isUnsupported = ['doc', 'xls', 'xlsx', 'rtf'].includes(ext || doc.file_type?.toLowerCase());
+                const statusLabel = doc.analysis_text_available
+                  ? 'Ready for analysis'
+                  : doc.download_status === 'metadata_only' || doc.download_status === 'access_required'
+                    ? 'Document discovered'
+                    : doc.download_status === 'failed' && isUnsupported
+                      ? 'Unsupported format'
+                      : doc.download_status === 'failed'
+                        ? 'Preparation failed'
+                        : 'Document discovered';
 
                 return (
                   <button
