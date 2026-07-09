@@ -1,12 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
     AlertCircle,
     ArrowRight,
-    CalendarClock,
     CheckCircle,
     Clock,
     FileText,
@@ -41,24 +40,6 @@ const SOURCE_FILTERS = [
     { value: 'ebrd', label: 'EBRD' },
 ];
 
-const DEADLINE_FILTERS = [
-    { value: 'All', label: 'Any deadline' },
-    { value: 'active', label: 'Active' },
-    { value: 'expired', label: 'Expired' },
-    { value: 'unknown', label: 'Unknown' },
-];
-
-const DOCUMENT_STATUS_FILTERS = [
-    { value: 'All', label: 'Any docs' },
-    { value: 'documents_available', label: 'Available' },
-    { value: 'files_missing', label: 'Missing files' },
-    { value: 'metadata_only', label: 'Metadata' },
-    { value: 'access_required', label: 'Access required' },
-    { value: 'processing', label: 'Processing' },
-    { value: 'failed', label: 'Failed' },
-    { value: 'no_documents_found', label: 'No docs' },
-];
-
 const SORT_OPTIONS = [
     { value: 'newest', label: 'Newest' },
     { value: 'deadline_soonest', label: 'Deadline soonest' },
@@ -78,6 +59,76 @@ const SOURCE_REFRESH_ACTIONS = [
 type SourceRefreshTarget = (typeof SOURCE_REFRESH_ACTIONS)[number]['value'];
 
 const PAGE_SIZE = 50;
+const EXPLORER_RESTORE_KEY = 'plasmaos:tender-explorer:return';
+const EXPLORER_PATH = '/dashboard/tenders';
+
+interface ExplorerQueryState {
+    source: string;
+    region: string;
+    countries: string[];
+    services: string[];
+    sort: string;
+    priceMin: string;
+    priceMax: string;
+    keyword: string;
+    page: number;
+}
+
+interface ExplorerRestoreState {
+    explorerUrl: string;
+    tenderId: string;
+    scrollY: number;
+    page: number;
+    cursor: number;
+    createdAt: number;
+}
+
+function splitList(value: string | null) {
+    if (!value) return [];
+    return value.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function positiveInteger(value: string | null) {
+    if (!value) return null;
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseExplorerQuery(searchParams: URLSearchParams): ExplorerQueryState {
+    const cursorPage = Math.floor((positiveInteger(searchParams.get('cursor')) ?? 0) / PAGE_SIZE) + 1;
+    const page = positiveInteger(searchParams.get('page')) ?? cursorPage;
+
+    return {
+        source: searchParams.get('source') || searchParams.get('source_system') || 'All',
+        region: searchParams.get('region') || '',
+        countries: splitList(searchParams.get('countries')),
+        services: splitList(searchParams.get('services')),
+        sort: searchParams.get('sort') || 'newest',
+        priceMin: searchParams.get('min_price') || searchParams.get('price_min') || '',
+        priceMax: searchParams.get('max_price') || searchParams.get('price_max') || '',
+        keyword: searchParams.get('search') || searchParams.get('q') || '',
+        page: Math.max(1, page),
+    };
+}
+
+function buildExplorerSearch(query: ExplorerQueryState) {
+    const params = new URLSearchParams();
+    if (query.source !== 'All') params.set('source', query.source);
+    if (query.region) params.set('region', query.region);
+    if (query.countries.length > 0) params.set('countries', query.countries.join(','));
+    if (query.services.length > 0) params.set('services', query.services.join(','));
+    if (query.keyword.trim()) params.set('search', query.keyword.trim());
+    if (query.priceMin.trim()) params.set('min_price', query.priceMin.trim());
+    if (query.priceMax.trim()) params.set('max_price', query.priceMax.trim());
+    if (query.sort !== 'newest') params.set('sort', query.sort);
+    if (query.page > 1) params.set('page', String(query.page));
+    return params.toString();
+}
+
+function explorerHref(query: ExplorerQueryState) {
+    const search = buildExplorerSearch(query);
+    return search ? `${EXPLORER_PATH}?${search}` : EXPLORER_PATH;
+}
 
 function formatDate(value: string | null) {
     if (!value) return 'Unknown';
@@ -125,9 +176,11 @@ function priceDisplay(tender: Tender) {
     return 'Price not specified';
 }
 
-export default function TendersPage() {
+function TendersPageContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const fetchRequestId = useRef(0);
+    const skipNextUrlFetchRef = useRef(false);
     const geography = useGeographyMeta();
     const serviceOptions = useServiceMeta();
     const [tenders, setTenders] = useState<Tender[]>([]);
@@ -138,20 +191,17 @@ export default function TendersPage() {
     const [error, setError] = useState<string | null>(null);
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
+    const [draftKeyword, setDraftKeyword] = useState('');
 
-    const [sourceFilter, setSourceFilter] = useState('All');
-    const [regionFilter, setRegionFilter] = useState('');
-    const [countryFilters, setCountryFilters] = useState<string[]>([]);
-    const [serviceFilters, setServiceFilters] = useState<string[]>([]);
-    const [deadlineFilter, setDeadlineFilter] = useState('All');
-    const [documentStatusFilter, setDocumentStatusFilter] = useState('All');
-    const [sortFilter, setSortFilter] = useState('newest');
-    const [priceMin, setPriceMin] = useState('');
-    const [priceMax, setPriceMax] = useState('');
-    const [keyword, setKeyword] = useState('');
+    const searchString = searchParams.toString();
+    const queryState = useMemo(
+        () => parseExplorerQuery(new URLSearchParams(searchString)),
+        [searchString],
+    );
     const isRefreshing = refreshingSource !== null;
     const refreshingLabel = SOURCE_REFRESH_ACTIONS.find((item) => item.value === refreshingSource)?.label;
     const centralAsiaCountries = geography.central_asia_countries;
+    const normalizedHref = useMemo(() => explorerHref(queryState), [queryState]);
 
     const showNotification = (message: string) => {
         setToastMessage(message);
@@ -159,7 +209,31 @@ export default function TendersPage() {
         setTimeout(() => setShowToast(false), 4000);
     };
 
-    const fetchTenders = useCallback(async (offset = 0, append = false) => {
+    const clearStoredRestoreState = useCallback(() => {
+        if (typeof window !== 'undefined') {
+            window.sessionStorage.removeItem(EXPLORER_RESTORE_KEY);
+        }
+    }, []);
+
+    const replaceQuery = useCallback((patch: Partial<ExplorerQueryState>, resetPage = true) => {
+        const nextQuery = {
+            ...queryState,
+            ...patch,
+            page: resetPage ? 1 : (patch.page ?? queryState.page),
+        };
+        clearStoredRestoreState();
+        router.replace(explorerHref(nextQuery), { scroll: false });
+    }, [clearStoredRestoreState, queryState, router]);
+
+    const fetchTenders = useCallback(async ({
+        offset = 0,
+        append = false,
+        limit = PAGE_SIZE,
+    }: {
+        offset?: number;
+        append?: boolean;
+        limit?: number;
+    } = {}) => {
         const requestId = fetchRequestId.current + 1;
         fetchRequestId.current = requestId;
         if (append) {
@@ -168,26 +242,25 @@ export default function TendersPage() {
 
         try {
             const params: Record<string, string | number> = {
-                limit: PAGE_SIZE,
+                limit,
                 offset,
             };
-            if (sourceFilter !== 'All') params.source_system = sourceFilter;
-            if (regionFilter) params.region = regionFilter;
-            if (countryFilters.length > 0) params.countries = countryFilters.join(',');
-            if (serviceFilters.length > 0) params.services = serviceFilters.join(',');
-            if (deadlineFilter !== 'All') params.deadline_status = deadlineFilter;
-            if (documentStatusFilter !== 'All') params.document_status = documentStatusFilter;
-            if (sortFilter) params.sort = sortFilter;
-            if (priceMin.trim()) params.price_min = priceMin.trim();
-            if (priceMax.trim()) params.price_max = priceMax.trim();
-            if (keyword.trim()) params.q = keyword.trim();
+            if (queryState.source !== 'All') params.source_system = queryState.source;
+            if (queryState.region) params.region = queryState.region;
+            if (queryState.countries.length > 0) params.countries = queryState.countries.join(',');
+            if (queryState.services.length > 0) params.services = queryState.services.join(',');
+            if (queryState.sort) params.sort = queryState.sort;
+            if (queryState.priceMin.trim()) params.price_min = queryState.priceMin.trim();
+            if (queryState.priceMax.trim()) params.price_max = queryState.priceMax.trim();
+            if (queryState.keyword.trim()) params.q = queryState.keyword.trim();
 
             const response = await api.get<Tender[]>('/tenders', { params });
             if (requestId !== fetchRequestId.current) return;
 
             setTenders((prev) => append ? [...prev, ...response.data] : response.data);
-            setHasMore(response.data.length === PAGE_SIZE);
+            setHasMore(response.data.length === limit);
             setError(null);
+            return response.data;
         } catch (err) {
             if (requestId !== fetchRequestId.current) return;
             console.error('Failed to fetch tenders:', err);
@@ -198,106 +271,152 @@ export default function TendersPage() {
                 setIsLoadingMore(false);
             }
         }
-    }, [
-        countryFilters,
-        deadlineFilter,
-        documentStatusFilter,
-        keyword,
-        priceMax,
-        priceMin,
-        regionFilter,
-        serviceFilters,
-        sortFilter,
-        sourceFilter,
-    ]);
+    }, [queryState]);
 
     useEffect(() => {
+        if (normalizedHref !== `${EXPLORER_PATH}${searchString ? `?${searchString}` : ''}`) {
+            router.replace(normalizedHref, { scroll: false });
+        }
+    }, [normalizedHref, router, searchString]);
+
+    useEffect(() => {
+        setDraftKeyword(queryState.keyword);
+    }, [queryState.keyword]);
+
+    useEffect(() => {
+        if (draftKeyword === queryState.keyword) return;
+
+        const timeout = window.setTimeout(() => {
+            replaceQuery({ keyword: draftKeyword });
+        }, 350);
+
+        return () => window.clearTimeout(timeout);
+    }, [draftKeyword, queryState.keyword, replaceQuery]);
+
+    useEffect(() => {
+        if (skipNextUrlFetchRef.current) {
+            skipNextUrlFetchRef.current = false;
+            return;
+        }
+
         setIsLoading(true);
         setTenders([]);
         setHasMore(false);
-        fetchTenders();
-    }, [fetchTenders]);
+        fetchTenders({ limit: PAGE_SIZE * queryState.page });
+    }, [fetchTenders, queryState.page]);
+
+    useEffect(() => {
+        if (isLoading || isLoadingMore || typeof window === 'undefined') return;
+
+        const rawState = window.sessionStorage.getItem(EXPLORER_RESTORE_KEY);
+        if (!rawState) return;
+
+        let restoreState: ExplorerRestoreState | null = null;
+        try {
+            restoreState = JSON.parse(rawState) as ExplorerRestoreState;
+        } catch {
+            window.sessionStorage.removeItem(EXPLORER_RESTORE_KEY);
+            return;
+        }
+
+        if (!restoreState || restoreState.explorerUrl !== normalizedHref) return;
+
+        const row = window.document.querySelector<HTMLElement>(`[data-tender-id="${CSS.escape(restoreState.tenderId)}"]`);
+        window.requestAnimationFrame(() => {
+            if (row) {
+                row.scrollIntoView({ block: 'center' });
+            } else {
+                window.scrollTo({ top: restoreState.scrollY, behavior: 'auto' });
+            }
+            window.sessionStorage.removeItem(EXPLORER_RESTORE_KEY);
+        });
+    }, [isLoading, isLoadingMore, normalizedHref, tenders]);
 
     const toggleCountry = (countryName: string) => {
-        setCountryFilters((current) => current.includes(countryName)
-            ? current.filter((item) => item !== countryName)
-            : [...current, countryName]);
+        replaceQuery({
+            countries: queryState.countries.includes(countryName)
+                ? queryState.countries.filter((item) => item !== countryName)
+                : [...queryState.countries, countryName],
+        });
     };
 
     const toggleService = (serviceName: string) => {
-        setServiceFilters((current) => current.includes(serviceName)
-            ? current.filter((item) => item !== serviceName)
-            : [...current, serviceName]);
+        replaceQuery({
+            services: queryState.services.includes(serviceName)
+                ? queryState.services.filter((item) => item !== serviceName)
+                : [...queryState.services, serviceName],
+        });
     };
 
     const toggleCentralAsia = () => {
-        setRegionFilter((current) => current === CENTRAL_ASIA_REGION ? '' : CENTRAL_ASIA_REGION);
+        replaceQuery({ region: queryState.region === CENTRAL_ASIA_REGION ? '' : CENTRAL_ASIA_REGION });
     };
 
     const resetFilters = () => {
-        setSourceFilter('All');
-        setRegionFilter('');
-        setCountryFilters([]);
-        setServiceFilters([]);
-        setDeadlineFilter('All');
-        setDocumentStatusFilter('All');
-        setSortFilter('newest');
-        setPriceMin('');
-        setPriceMax('');
-        setKeyword('');
+        clearStoredRestoreState();
+        router.replace(EXPLORER_PATH, { scroll: false });
+    };
+
+    const openTenderRoute = (tenderId: string, href: string) => {
+        if (typeof window !== 'undefined') {
+            const restoreState: ExplorerRestoreState = {
+                explorerUrl: normalizedHref,
+                tenderId,
+                scrollY: window.scrollY,
+                page: queryState.page,
+                cursor: (queryState.page - 1) * PAGE_SIZE,
+                createdAt: Date.now(),
+            };
+            window.sessionStorage.setItem(EXPLORER_RESTORE_KEY, JSON.stringify(restoreState));
+        }
+        router.push(href);
+    };
+
+    const loadMore = async () => {
+        const response = await fetchTenders({ offset: tenders.length, append: true });
+        if (response && response.length > 0) {
+            skipNextUrlFetchRef.current = true;
+            replaceQuery({ page: queryState.page + 1 }, false);
+        }
     };
 
     const activeFilterBadges = [
-        ...(sourceFilter !== 'All'
+        ...(queryState.source !== 'All'
             ? [{
                 key: 'source',
-                label: `Source: ${SOURCE_FILTERS.find((item) => item.value === sourceFilter)?.label ?? sourceFilter}`,
-                onRemove: () => setSourceFilter('All'),
+                label: `Source: ${SOURCE_FILTERS.find((item) => item.value === queryState.source)?.label ?? queryState.source}`,
+                onRemove: () => replaceQuery({ source: 'All' }),
             }]
             : []),
-        ...(regionFilter
+        ...(queryState.region
             ? [{
                 key: 'region',
-                label: `Region: ${regionFilter}`,
-                onRemove: () => setRegionFilter(''),
+                label: `Region: ${queryState.region}`,
+                onRemove: () => replaceQuery({ region: '' }),
             }]
             : []),
-        ...countryFilters.map((countryName) => ({
+        ...queryState.countries.map((countryName) => ({
             key: `country-${countryName}`,
             label: countryName,
-            onRemove: () => setCountryFilters((current) => current.filter((item) => item !== countryName)),
+            onRemove: () => replaceQuery({ countries: queryState.countries.filter((item) => item !== countryName) }),
         })),
-        ...serviceFilters.map((serviceName) => ({
+        ...queryState.services.map((serviceName) => ({
             key: `service-${serviceName}`,
             label: labelForService(serviceName, serviceOptions),
-            onRemove: () => setServiceFilters((current) => current.filter((item) => item !== serviceName)),
+            onRemove: () => replaceQuery({ services: queryState.services.filter((item) => item !== serviceName) }),
         })),
-        ...(deadlineFilter !== 'All'
-            ? [{
-                key: 'deadline',
-                label: `Deadline: ${DEADLINE_FILTERS.find((item) => item.value === deadlineFilter)?.label ?? deadlineFilter}`,
-                onRemove: () => setDeadlineFilter('All'),
-            }]
-            : []),
-        ...(documentStatusFilter !== 'All'
-            ? [{
-                key: 'documents',
-                label: `Docs: ${DOCUMENT_STATUS_FILTERS.find((item) => item.value === documentStatusFilter)?.label ?? documentStatusFilter}`,
-                onRemove: () => setDocumentStatusFilter('All'),
-            }]
-            : []),
-        ...(priceMin.trim()
+        ...(queryState.priceMin.trim()
             ? [{
                 key: 'price-min',
-                label: `Min: ${priceMin}`,
-                onRemove: () => setPriceMin(''),
+                label: `Min: ${queryState.priceMin}`,
+                onRemove: () => replaceQuery({ priceMin: '' }),
             }]
             : []),
-        ...(priceMax.trim()
+        ...(queryState.priceMax.trim()
             ? [{
                 key: 'price-max',
-                label: `Max: ${priceMax}`,
-                onRemove: () => setPriceMax(''),
+                label: `Max: ${queryState.priceMax}`,
+                onRemove: () => replaceQuery({ priceMax: '' }),
             }]
             : []),
     ];
@@ -333,7 +452,7 @@ export default function TendersPage() {
                     ? `, ${skipped} skipped`
                     : '';
             showNotification(`${resultSummary}${extraSummary}`);
-            await fetchTenders();
+            await fetchTenders({ limit: PAGE_SIZE * queryState.page });
         } catch (err) {
             const axiosError = err as { response?: { data?: { detail?: string } } };
             const errorMsg = axiosError.response?.data?.detail || 'Failed to refresh feed';
@@ -368,7 +487,7 @@ export default function TendersPage() {
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold text-white">Tender Explorer</h1>
-                        <p className="text-zinc-400 text-sm mt-1">UzEx enterprise, World Bank, ADB, GIZ, and EBRD opportunities in one worklist</p>
+                        <p className="text-zinc-400 text-sm mt-1">UzEx, World Bank, ADB, GIZ, and EBRD opportunities in one worklist</p>
                     </div>
                 </div>
 
@@ -400,29 +519,29 @@ export default function TendersPage() {
                     <label className="relative">
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                         <input
-                            value={keyword}
-                            onChange={(event) => setKeyword(event.target.value)}
+                            value={draftKeyword}
+                            onChange={(event) => setDraftKeyword(event.target.value)}
                             placeholder="Search title, buyer, project, sector, method..."
                             className="w-full rounded-lg border border-zinc-800 bg-gray-950 py-2.5 pl-9 pr-3 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
                         />
                     </label>
                     <input
-                        value={priceMin}
-                        onChange={(event) => setPriceMin(event.target.value)}
+                        value={queryState.priceMin}
+                        onChange={(event) => replaceQuery({ priceMin: event.target.value })}
                         inputMode="decimal"
                         placeholder="Min price"
                         className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
                     />
                     <input
-                        value={priceMax}
-                        onChange={(event) => setPriceMax(event.target.value)}
+                        value={queryState.priceMax}
+                        onChange={(event) => replaceQuery({ priceMax: event.target.value })}
                         inputMode="decimal"
                         placeholder="Max price"
                         className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
                     />
                     <select
-                        value={sortFilter}
-                        onChange={(event) => setSortFilter(event.target.value)}
+                        value={queryState.sort}
+                        onChange={(event) => replaceQuery({ sort: event.target.value })}
                         className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
                     >
                         {SORT_OPTIONS.map((option) => (
@@ -439,8 +558,8 @@ export default function TendersPage() {
                         {SOURCE_FILTERS.map((source) => (
                             <button
                                 key={source.value}
-                                onClick={() => setSourceFilter(source.value)}
-                                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${sourceFilter === source.value
+                                onClick={() => replaceQuery({ source: source.value })}
+                                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${queryState.source === source.value
                                     ? 'border-indigo-500 bg-indigo-600 text-white'
                                     : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
                                     }`}
@@ -452,7 +571,7 @@ export default function TendersPage() {
 
                     <button
                         onClick={toggleCentralAsia}
-                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${regionFilter === CENTRAL_ASIA_REGION
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${queryState.region === CENTRAL_ASIA_REGION
                             ? 'border-emerald-500 bg-emerald-600 text-white'
                             : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
                             }`}
@@ -467,7 +586,7 @@ export default function TendersPage() {
                         <button
                             key={countryName}
                             onClick={() => toggleCountry(countryName)}
-                            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${countryFilters.includes(countryName)
+                            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${queryState.countries.includes(countryName)
                                 ? 'border-emerald-500 bg-emerald-600 text-white'
                                 : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
                                 }`}
@@ -482,7 +601,7 @@ export default function TendersPage() {
                         <button
                             key={option.value}
                             onClick={() => toggleService(option.value)}
-                            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${serviceFilters.includes(option.value)
+                            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${queryState.services.includes(option.value)
                                 ? 'border-sky-500 bg-sky-600 text-white'
                                 : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
                                 }`}
@@ -492,44 +611,14 @@ export default function TendersPage() {
                     ))}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <CalendarClock className="h-4 w-4 text-zinc-500" />
-                        {DEADLINE_FILTERS.map((filter) => (
-                            <button
-                                key={filter.value}
-                                onClick={() => setDeadlineFilter(filter.value)}
-                                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${deadlineFilter === filter.value
-                                    ? 'border-indigo-500 bg-indigo-600 text-white'
-                                    : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                                    }`}
-                            >
-                                {filter.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                        {DOCUMENT_STATUS_FILTERS.map((filter) => (
-                            <button
-                                key={filter.value}
-                                onClick={() => setDocumentStatusFilter(filter.value)}
-                                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${documentStatusFilter === filter.value
-                                    ? 'border-amber-500 bg-amber-600 text-white'
-                                    : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                                    }`}
-                            >
-                                {filter.label}
-                            </button>
-                        ))}
-                        <button
-                            onClick={resetFilters}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500"
-                        >
-                            <X className="h-3.5 w-3.5" />
-                            Reset
-                        </button>
-                    </div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    <button
+                        onClick={resetFilters}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500"
+                    >
+                        <X className="h-3.5 w-3.5" />
+                        Reset
+                    </button>
                 </div>
 
                 {activeFilterBadges.length > 0 && (
@@ -589,6 +678,7 @@ export default function TendersPage() {
                             return (
                                 <motion.div
                                     key={tender.id}
+                                    data-tender-id={tender.id}
                                     initial={{ opacity: 0, y: 8 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: Math.min(index * 0.02, 0.2) }}
@@ -617,7 +707,7 @@ export default function TendersPage() {
                                             </span>
                                         </div>
                                         <button
-                                            onClick={() => router.push(`/dashboard/tenders/${tender.id}`)}
+                                            onClick={() => openTenderRoute(tender.id, `/dashboard/tenders/${tender.id}`)}
                                             className="block text-left text-[15px] font-semibold leading-snug text-gray-100 hover:text-indigo-300"
                                         >
                                             {tender.title}
@@ -663,14 +753,14 @@ export default function TendersPage() {
 
                                     <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                                         <button
-                                            onClick={() => router.push(`/dashboard/tenders/${tender.id}`)}
+                                            onClick={() => openTenderRoute(tender.id, `/dashboard/tenders/${tender.id}`)}
                                             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-indigo-500 hover:text-indigo-200"
                                         >
                                             <FileText className="h-3.5 w-3.5" />
                                             Details
                                         </button>
                                         <button
-                                            onClick={() => router.push(`/dashboard/tenders/${tender.id}/compliance`)}
+                                            onClick={() => openTenderRoute(tender.id, `/dashboard/tenders/${tender.id}/compliance`)}
                                             disabled={disabledCompliance}
                                             title={disabledCompliance ? complianceUnavailableMessage(tender) : 'Open compliance analysis'}
                                             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-emerald-500 hover:text-emerald-200 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-600"
@@ -694,7 +784,7 @@ export default function TendersPage() {
                     {hasMore && (
                         <div className="border-t border-gray-800 p-4 text-center">
                             <button
-                                onClick={() => fetchTenders(tenders.length, true)}
+                                onClick={loadMore}
                                 disabled={isLoadingMore}
                                 className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:opacity-60"
                             >
@@ -706,5 +796,18 @@ export default function TendersPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function TendersPage() {
+    return (
+        <Suspense fallback={(
+            <div className="flex h-64 items-center justify-center">
+                <Loader2 className="h-7 w-7 animate-spin text-indigo-500" />
+            </div>
+        )}
+        >
+            <TendersPageContent />
+        </Suspense>
     );
 }

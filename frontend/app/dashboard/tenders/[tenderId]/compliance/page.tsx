@@ -67,6 +67,9 @@ type UiVerdict = {
     tone: VerdictTone;
 };
 
+const EXPLORER_RESTORE_KEY = 'plasmaos:tender-explorer:return';
+const EXPLORER_FALLBACK_HREF = '/dashboard/tenders';
+
 function safeDecodeURIComponent(value: string): string {
     try {
         return decodeURIComponent(value);
@@ -400,6 +403,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     const { tenderId } = use(params);
 
     // ── State ──
+    const [returnHref, setReturnHref] = useState(EXPLORER_FALLBACK_HREF);
     const [isLoading, setIsLoading] = useState(false);
     const [requirements, setRequirements] = useState<DynamicRequirements | null>(null);
     const [evaluation, setEvaluation] = useState<DynamicEvaluation | null>(null);
@@ -421,6 +425,20 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     const [documentFetchError, setDocumentFetchError] = useState<string | null>(null);
     const [selectedRequirement, setSelectedRequirement] = useState<RequirementMatchDetail | null>(null);
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+    useEffect(() => {
+        const rawState = window.sessionStorage.getItem(EXPLORER_RESTORE_KEY);
+        if (!rawState) return;
+
+        try {
+            const explorerUrl = JSON.parse(rawState)?.explorerUrl;
+            if (typeof explorerUrl === 'string' && explorerUrl.startsWith(EXPLORER_FALLBACK_HREF)) {
+                setReturnHref(explorerUrl);
+            }
+        } catch {
+            window.sessionStorage.removeItem(EXPLORER_RESTORE_KEY);
+        }
+    }, []);
 
     // ── Fetch compiled source text on mount ──
     useEffect(() => {
@@ -652,7 +670,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
             <header className="flex items-center justify-between px-5 py-3 border-b border-gray-800 bg-gray-950/90 backdrop-blur-sm shrink-0">
                 <div className="flex items-center gap-4">
                     <Link
-                        href="/dashboard/tenders"
+                        href={returnHref}
                         className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 transition-colors text-[13px]"
                     >
                         <ArrowLeft className="w-4 h-4" />

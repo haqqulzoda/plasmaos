@@ -89,7 +89,7 @@ export default function AdminPage() {
     );
 
     const corpusRows: CountRow[] = [
-        ['UzEx enterprise visible', corpusHealth?.uzex_visible_count],
+        ['UzEx visible', corpusHealth?.uzex_visible_count],
         ['World Bank visible', corpusHealth?.world_bank_visible_count],
         ['ADB visible', corpusHealth?.adb_visible_count],
         ['Hidden legacy UzEx', corpusHealth?.hidden_legacy_uzex_count],

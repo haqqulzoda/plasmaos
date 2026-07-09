@@ -6882,6 +6882,7 @@ async def get_latest_analysis(
             "coverage_metadata": None,
             "analysis_status": "not_found",
             "extraction_error": None,
+            "created_at": None,
         }
 
     _claim_legacy_analysis_owner(
@@ -6921,6 +6922,7 @@ async def get_latest_analysis(
         ),
         "analysis_status": analysis_status,
         "extraction_error": analysis_data.get("extraction_error"),
+        "created_at": analysis.created_at.isoformat() if analysis.created_at else None,
     }
 
 

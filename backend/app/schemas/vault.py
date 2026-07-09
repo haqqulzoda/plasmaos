@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -255,5 +255,7 @@ class ReadinessDocumentUpdate(BaseModel):
 class ReadinessDocumentResponse(ReadinessDocumentBase):
     id: UUID
     company_profile_id: UUID
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}

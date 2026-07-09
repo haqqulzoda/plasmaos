@@ -46,6 +46,8 @@ import {
 
 type TenderSyncState = 'IDLE' | 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
 type HydrationStage = 'queued' | 'downloading' | 'processing' | 'complete' | 'partial' | 'failed';
+const EXPLORER_RESTORE_KEY = 'plasmaos:tender-explorer:return';
+const EXPLORER_FALLBACK_HREF = '/dashboard/tenders';
 
 interface TenderSyncStatusResponse {
     state: TenderSyncState;
@@ -256,6 +258,7 @@ function hydrationStageLabel(stage: HydrationStage | null) {
 export default function TenderDetailPage({ params }: { params: Promise<{ tenderId: string }> }) {
     const router = useRouter();
     const { tenderId } = use(params);
+    const [returnHref, setReturnHref] = useState(EXPLORER_FALLBACK_HREF);
     const [tender, setTender] = useState<Tender | null>(null);
     const [decisionSnapshot, setDecisionSnapshot] = useState<TenderDecisionSnapshot | null>(null);
     const [documents, setDocuments] = useState<TenderDocument[]>([]);
@@ -273,6 +276,20 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
     const [prepareProgress, setPrepareProgress] = useState(0);
     const [prepareStage, setPrepareStage] = useState<HydrationStage | null>(null);
     const [prepareError, setPrepareError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const rawState = window.sessionStorage.getItem(EXPLORER_RESTORE_KEY);
+        if (!rawState) return;
+
+        try {
+            const explorerUrl = JSON.parse(rawState)?.explorerUrl;
+            if (typeof explorerUrl === 'string' && explorerUrl.startsWith(EXPLORER_FALLBACK_HREF)) {
+                setReturnHref(explorerUrl);
+            }
+        } catch {
+            window.sessionStorage.removeItem(EXPLORER_RESTORE_KEY);
+        }
+    }, []);
 
     const loadTender = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
         if (!silent) {
@@ -538,7 +555,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
     if (error || !tender) {
         return (
             <div className="space-y-4">
-                <Link href="/dashboard/tenders" className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200">
+                <Link href={returnHref} className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200">
                     <ArrowLeft className="h-4 w-4" />
                     Back to tenders
                 </Link>
@@ -552,7 +569,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
     return (
         <div className="space-y-5">
             <div className="flex items-center justify-between gap-4">
-                <Link href="/dashboard/tenders" className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200">
+                <Link href={returnHref} className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200">
                     <ArrowLeft className="h-4 w-4" />
                     Back to tenders
                 </Link>

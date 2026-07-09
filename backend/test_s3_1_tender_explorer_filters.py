@@ -76,8 +76,9 @@ class S31TenderExplorerFilterStaticTests(unittest.TestCase):
         ):
             self.assertIn(expected, read("../frontend/lib/geography.ts"))
 
-        self.assertIn("countryFilters", explorer)
-        self.assertIn("serviceFilters", explorer)
+        self.assertIn("useSearchParams", explorer)
+        self.assertIn("queryState.countries", explorer)
+        self.assertIn("queryState.services", explorer)
         self.assertIn("activeFilterBadges", explorer)
         self.assertIn("resetFilters", explorer)
 
