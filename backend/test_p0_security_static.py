@@ -251,8 +251,9 @@ class P0SecurityStaticTests(unittest.TestCase):
             )
         self.assertRegex(
             tenders,
-            r'@router\.post\("/refresh"[\s\S]+?Depends\(require_operator_or_admin\)',
+            r'@router\.post\("/refresh"[\s\S]+?Depends\(require_approved_user\)',
         )
+        self.assertIn("Force refresh requires operator access", tenders)
         self.assertRegex(
             tenders,
             r'@router\.post\(\s*"/sources/adb/sync"[\s\S]+?Depends\(require_operator_or_admin\)',
@@ -289,9 +290,9 @@ class P0SecurityStaticTests(unittest.TestCase):
         page = read("../frontend/app/dashboard/tenders/page.tsx")
 
         self.assertIn("SOURCE_REFRESH_ACTIONS", page)
-        self.assertIn("'/tenders/refresh'", page)
-        self.assertIn("'/tenders/sources/world-bank/sync'", page)
-        self.assertIn("'/tenders/sources/adb/sync'", page)
+        self.assertIn("'/tenders/sources/uzex/refresh'", page)
+        self.assertIn("'/tenders/sources/world_bank/refresh'", page)
+        self.assertIn("'/tenders/sources/adb/refresh'", page)
         self.assertIn("refreshingSource", page)
 
     def test_tender_document_sync_enqueue_uses_heavy_queue(self) -> None:

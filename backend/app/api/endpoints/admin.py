@@ -509,11 +509,32 @@ async def approve_company(
     db: AsyncSession = Depends(get_db),
 ) -> ApprovalQueueCompany:
     profile = await _get_company_or_404(db, company_profile_id)
+    target_user = profile.user
+    before = {
+        "company_approval_status": profile.approval_status,
+        "user": user_role_snapshot(target_user),
+    }
     profile.approval_status = COMPANY_APPROVAL_APPROVED
     profile.approved_at = _utcnow()
     profile.approved_by_user_id = current_user.id
     profile.rejected_at = None
     profile.rejection_reason = None
+    bump_auth_version(target_user)
+    await record_admin_activity(
+        db,
+        action="company_approved",
+        actor_user=current_user,
+        target_user=target_user,
+        reason="Admin approved company profile.",
+        metadata={
+            "company_profile_id": str(profile.id),
+            "before": before,
+            "after": {
+                "company_approval_status": profile.approval_status,
+                "user": user_role_snapshot(target_user),
+            },
+        },
+    )
     await db.commit()
     await db.refresh(profile)
     payload = _company_payload(profile)
@@ -528,11 +549,31 @@ async def reject_company(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> ApprovalQueueCompany:
-    del current_user
     profile = await _get_company_or_404(db, company_profile_id)
+    target_user = profile.user
+    before = {
+        "company_approval_status": profile.approval_status,
+        "user": user_role_snapshot(target_user),
+    }
     profile.approval_status = COMPANY_APPROVAL_REJECTED
     profile.rejected_at = _utcnow()
     profile.rejection_reason = _clean_reason(payload.reason)
+    bump_auth_version(target_user)
+    await record_admin_activity(
+        db,
+        action="company_rejected",
+        actor_user=current_user,
+        target_user=target_user,
+        reason=_clean_reason(payload.reason) or "Admin rejected company profile.",
+        metadata={
+            "company_profile_id": str(profile.id),
+            "before": before,
+            "after": {
+                "company_approval_status": profile.approval_status,
+                "user": user_role_snapshot(target_user),
+            },
+        },
+    )
     await db.commit()
     await db.refresh(profile)
     company_payload = _company_payload(profile)
@@ -547,10 +588,30 @@ async def disable_company(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> ApprovalQueueCompany:
-    del current_user
     profile = await _get_company_or_404(db, company_profile_id)
+    target_user = profile.user
+    before = {
+        "company_approval_status": profile.approval_status,
+        "user": user_role_snapshot(target_user),
+    }
     profile.approval_status = COMPANY_APPROVAL_DISABLED
     profile.rejection_reason = _clean_reason(payload.reason)
+    bump_auth_version(target_user)
+    await record_admin_activity(
+        db,
+        action="company_disabled",
+        actor_user=current_user,
+        target_user=target_user,
+        reason=_clean_reason(payload.reason) or "Admin disabled company profile.",
+        metadata={
+            "company_profile_id": str(profile.id),
+            "before": before,
+            "after": {
+                "company_approval_status": profile.approval_status,
+                "user": user_role_snapshot(target_user),
+            },
+        },
+    )
     await db.commit()
     await db.refresh(profile)
     company_payload = _company_payload(profile)

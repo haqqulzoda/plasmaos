@@ -124,7 +124,7 @@ export default function AdminApprovalsPage() {
             </div>
 
             <div className="border border-cyan-500/20 bg-cyan-500/10 rounded-lg px-4 py-3 text-sm text-cyan-100">
-                Pilot may need to refresh or sign in again for access status to update.
+                Pilots can use Refresh approval status to enter their workspace without signing out.
             </div>
 
             {!canMutate && (

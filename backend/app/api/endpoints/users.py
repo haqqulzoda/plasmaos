@@ -11,12 +11,19 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_admin, require_approved_pilot_access
+from app.api.deps import (
+    get_current_user,
+    is_operator_user,
+    require_admin,
+    require_approved_pilot_access,
+)
 from app.core.access import (
     COMPANY_APPROVAL_APPROVED,
     COMPANY_APPROVAL_PENDING,
     COMPANY_PILOT_SCOPED,
+    USER_APPROVAL_APPROVED,
 )
+from app.core.security import get_current_user_allow_stale_auth_version
 from app.core.geography import normalize_target_countries, normalize_target_regions
 from app.core.services import normalize_target_services
 from app.db.session import get_db
@@ -45,6 +52,20 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AccessStatusResponse(BaseModel):
+    user_approval_status: str
+    company_approval_status: str | None = None
+    platform_role: str
+    onboarding_completed: bool
+    onboarding_required: bool
+    access_allowed: bool
+    state: str
+    rejection_or_disabled_reason: str | None = None
+    auth_version: int
+    company_name: str | None = None
+    company_profile_id: UUID | None = None
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
@@ -62,6 +83,58 @@ async def get_current_user_info(
         User details including subscription tier and admin status.
     """
     return UserResponse.model_validate(current_user)
+
+
+@router.get("/me/access-status", response_model=AccessStatusResponse)
+async def get_access_status(
+    current_user: User = Depends(get_current_user_allow_stale_auth_version),
+    db: AsyncSession = Depends(get_db),
+) -> AccessStatusResponse:
+    """Return authoritative onboarding and approval state for the live session."""
+    profile = await _get_company_profile(db=db, user_id=current_user.id)
+    user_status = current_user.approval_status
+    company_status = profile.approval_status if profile is not None else None
+    operator_access = is_operator_user(current_user)
+    access_allowed = operator_access or (
+        user_status == USER_APPROVAL_APPROVED
+        and company_status == COMPANY_APPROVAL_APPROVED
+    )
+
+    blocked_statuses = {"rejected", "disabled"}
+    if user_status == "disabled" or company_status == "disabled":
+        state = "disabled"
+    elif user_status == "rejected" or company_status == "rejected":
+        state = "rejected"
+    elif access_allowed:
+        state = "approved"
+    elif profile is None:
+        state = "onboarding_incomplete"
+    elif user_status == USER_APPROVAL_APPROVED:
+        state = "user_approved_company_pending"
+    elif company_status == COMPANY_APPROVAL_APPROVED:
+        state = "company_approved_user_pending"
+    else:
+        state = "pending"
+
+    reason = None
+    if user_status in blocked_statuses:
+        reason = current_user.rejection_reason
+    elif profile is not None and company_status in blocked_statuses:
+        reason = profile.rejection_reason
+
+    return AccessStatusResponse(
+        user_approval_status=user_status,
+        company_approval_status=company_status,
+        platform_role=current_user.platform_role,
+        onboarding_completed=profile is not None,
+        onboarding_required=profile is None,
+        access_allowed=access_allowed,
+        state=state,
+        rejection_or_disabled_reason=reason,
+        auth_version=int(getattr(current_user, "auth_version", 0) or 0),
+        company_name=profile.company_name if profile is not None else current_user.company_name,
+        company_profile_id=profile.id if profile is not None else None,
+    )
 
 
 @router.post("/admin/upgrade-me", response_model=UserResponse)

@@ -22,7 +22,10 @@ from app.core.access import (
     USER_APPROVAL_APPROVED,
     USER_APPROVAL_PENDING,
 )
-from app.core.security import create_access_token, get_current_user
+from app.core.security import (
+    create_access_token,
+    get_current_user_allow_stale_auth_version,
+)
 from app.db.session import get_db
 from app.models.all_models import User
 from app.models.company import CompanyProfile
@@ -204,7 +207,7 @@ async def logout(response: Response) -> dict[str, str]:
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     response: Response,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_allow_stale_auth_version),
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     """

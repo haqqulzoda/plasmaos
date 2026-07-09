@@ -234,6 +234,60 @@ class TenderSyncJob(Base):
     )
 
 
+class SourceRefreshJob(Base):
+    """Persistent, source-wide refresh state used for cooldown and deduplication."""
+
+    __tablename__ = "source_refresh_jobs"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    source_system: Mapped[str] = mapped_column(String(50), nullable=False)
+    requested_by_user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="queued")
+    force: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    requested_by: Mapped["User | None"] = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'completed', 'partial', "
+            "'source_unavailable', 'failed')",
+            name="ck_source_refresh_jobs_status_allowed",
+        ),
+        Index("ix_source_refresh_jobs_source_created", "source_system", "created_at"),
+        Index(
+            "uq_source_refresh_jobs_active_source",
+            "source_system",
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
+    )
+
+
 class TenderDocument(Base):
     """
     Documents attached to tenders.
@@ -390,6 +444,7 @@ __all__ = [
     "User",
     "Tender",
     "TenderSyncJob",
+    "SourceRefreshJob",
     "TenderDocument",
     "Proposal",
     "CompanyProfile",

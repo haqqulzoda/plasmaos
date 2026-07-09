@@ -9,6 +9,7 @@ import hashlib
 import html
 import json
 import logging
+import os
 import re
 import xml.etree.ElementTree as ET
 import zipfile
@@ -32,6 +33,7 @@ from sqlalchemy.orm import load_only, selectinload
 from app.api.deps import (
     is_operator_or_admin,
     require_admin,
+    require_approved_user,
     require_approved_pilot_access,
     require_operator_or_admin,
 )
@@ -90,6 +92,7 @@ from app.models.audit import TenderAnalysis
 from app.models.all_models import (
     Proposal,
     RiskOverrideLog,
+    SourceRefreshJob,
     TaxonomyNode,
     Tender,
     TenderDocument,
@@ -188,6 +191,20 @@ class SourceSyncResponse(BaseModel):
     documents_downloaded: int = 0
     dry_run: bool = False
     errors: list[str] = Field(default_factory=list)
+    message: str
+
+
+class SourceRefreshResponse(BaseModel):
+    """Customer-safe source refresh state."""
+
+    status: str
+    source_system: str
+    job_id: UUID
+    created_count: int = 0
+    updated_count: int = 0
+    failed_count: int = 0
+    last_updated: datetime | None = None
+    reused: bool = False
     message: str
 
 
@@ -4743,8 +4760,7 @@ async def get_tender_compiled_text(
     )
 
 
-@router.post("/refresh", response_model=RefreshResponse, dependencies=[Depends(require_operator_or_admin)])
-async def refresh_tenders(
+async def _sync_uzex_tenders(
     db: AsyncSession = Depends(get_db),
 ) -> RefreshResponse:
     """
@@ -4796,6 +4812,21 @@ async def refresh_tenders(
             updated_count=0,
             message=f"Portal temporarily unavailable. Existing tenders are still shown. ({type(e).__name__})",
         )
+
+
+@router.post("/refresh", response_model=SourceRefreshResponse)
+async def refresh_tenders(
+    force: bool = Query(default=False),
+    current_user: User = Depends(require_approved_user),
+    db: AsyncSession = Depends(get_db),
+) -> SourceRefreshResponse:
+    """Request a customer-safe UzEx refresh."""
+    return await _request_source_refresh(
+        source_system="uzex",
+        force=force,
+        current_user=current_user,
+        db=db,
+    )
 
 
 @router.post(
@@ -6313,6 +6344,300 @@ async def sync_adb_tenders(
             )
         ),
     )
+
+
+SOURCE_REFRESH_DEFAULTS: dict[str, dict[str, Any]] = {
+    "world_bank": {
+        "max_pages": 3,
+        "rows": 100,
+        "active_only": True,
+        "dry_run": False,
+    },
+    "giz": {
+        "max_pages": 6,
+        "dry_run": False,
+        "download_documents": False,
+    },
+    "ebrd": {
+        "max_items": 50,
+        "detail_items": 25,
+        "active_only": True,
+        "dry_run": False,
+    },
+    "adb": {
+        "max_items": 50,
+        "feed_type": "invitation_for_bids",
+        "dry_run": False,
+        "download_documents": False,
+    },
+}
+SOURCE_REFRESH_SYSTEMS = {"uzex", *SOURCE_REFRESH_DEFAULTS}
+
+
+def _source_refresh_seconds(setting: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(setting, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _source_refresh_response(
+    job: SourceRefreshJob,
+    *,
+    status_value: str | None = None,
+    reused: bool = False,
+    message: str | None = None,
+) -> SourceRefreshResponse:
+    return SourceRefreshResponse(
+        status=status_value or job.status,
+        source_system=job.source_system,
+        job_id=job.id,
+        created_count=job.created_count,
+        updated_count=job.updated_count,
+        failed_count=job.failed_count,
+        last_updated=job.completed_at,
+        reused=reused,
+        message=message or job.message or "Refresh requested.",
+    )
+
+
+async def _run_source_refresh(
+    source_system: str,
+    db: AsyncSession,
+) -> RefreshResponse | SourceSyncResponse | AdbSyncResponse:
+    if source_system == "uzex":
+        return await _sync_uzex_tenders(db=db)
+    if source_system == "world_bank":
+        return await sync_world_bank_tenders(
+            **SOURCE_REFRESH_DEFAULTS[source_system],
+            db=db,
+        )
+    if source_system == "giz":
+        return await sync_giz_tenders(
+            **SOURCE_REFRESH_DEFAULTS[source_system],
+            db=db,
+        )
+    if source_system == "ebrd":
+        return await sync_ebrd_tenders(
+            **SOURCE_REFRESH_DEFAULTS[source_system],
+            db=db,
+        )
+    return await sync_adb_tenders(
+        **SOURCE_REFRESH_DEFAULTS[source_system],
+        db=db,
+    )
+
+
+def _normalized_source_result(
+    result: RefreshResponse | SourceSyncResponse | AdbSyncResponse,
+) -> tuple[str, int, int, int, str]:
+    raw_status = str(result.status).casefold()
+    created = int(
+        getattr(result, "new_count", getattr(result, "created_count", getattr(result, "created", 0)))
+        or 0
+    )
+    updated = int(
+        getattr(result, "updated_count", getattr(result, "updated", 0)) or 0
+    )
+    failed = int(
+        getattr(result, "failed_count", getattr(result, "failed", 0)) or 0
+    )
+    fetched = int(
+        getattr(result, "fetched_count", getattr(result, "fetched", 0)) or 0
+    )
+    message = result.message
+
+    if raw_status == "success":
+        return "completed", created, updated, failed, message
+    if raw_status == "partial":
+        if fetched == 0 and created == 0 and updated == 0 and (
+            "unavailable" in message.casefold() or "fetch" in message.casefold()
+        ):
+            return "source_unavailable", created, updated, failed, message
+        return "partial", created, updated, failed, message
+    if fetched == 0 and created == 0 and updated == 0:
+        return "source_unavailable", created, updated, failed, message
+    return "failed", created, updated, failed, message
+
+
+async def _request_source_refresh(
+    *,
+    source_system: str,
+    force: bool,
+    current_user: User,
+    db: AsyncSession,
+) -> SourceRefreshResponse:
+    normalized_source = source_system.strip().casefold().replace("-", "_")
+    if normalized_source not in SOURCE_REFRESH_SYSTEMS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Unsupported tender source",
+        )
+    if force and not is_operator_or_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Force refresh requires operator access",
+        )
+
+    now = datetime.now(timezone.utc)
+    stale_before = now - timedelta(
+        seconds=_source_refresh_seconds("SOURCE_REFRESH_ACTIVE_TIMEOUT_SECONDS", 1800)
+    )
+    active_result = await db.execute(
+        select(SourceRefreshJob)
+        .where(
+            SourceRefreshJob.source_system == normalized_source,
+            SourceRefreshJob.status.in_(("queued", "running")),
+        )
+        .order_by(SourceRefreshJob.created_at.desc())
+    )
+    active_job = active_result.scalars().first()
+    if active_job is not None:
+        active_updated_at = active_job.updated_at
+        if active_updated_at.tzinfo is None:
+            active_updated_at = active_updated_at.replace(tzinfo=timezone.utc)
+        if active_updated_at >= stale_before:
+            return _source_refresh_response(
+                active_job,
+                status_value="running",
+                reused=True,
+                message="Already refreshing.",
+            )
+        active_job.status = "failed"
+        active_job.completed_at = now
+        active_job.message = "Previous refresh timed out."
+        await db.commit()
+
+    if not force:
+        cooldown_after = now - timedelta(
+            seconds=_source_refresh_seconds("SOURCE_REFRESH_COOLDOWN_SECONDS", 300)
+        )
+        recent_result = await db.execute(
+            select(SourceRefreshJob)
+            .where(
+                SourceRefreshJob.source_system == normalized_source,
+                SourceRefreshJob.status == "completed",
+                SourceRefreshJob.completed_at >= cooldown_after,
+            )
+            .order_by(SourceRefreshJob.completed_at.desc())
+        )
+        recent_job = recent_result.scalars().first()
+        if recent_job is not None:
+            return _source_refresh_response(
+                recent_job,
+                status_value="fresh",
+                reused=True,
+                message="Source is already fresh.",
+            )
+
+    job = SourceRefreshJob(
+        source_system=normalized_source,
+        requested_by_user_id=current_user.id,
+        status="queued",
+        force=force,
+        message="Refresh queued.",
+    )
+    db.add(job)
+    try:
+        await db.commit()
+        await db.refresh(job)
+    except IntegrityError:
+        await db.rollback()
+        concurrent_result = await db.execute(
+            select(SourceRefreshJob)
+            .where(
+                SourceRefreshJob.source_system == normalized_source,
+                SourceRefreshJob.status.in_(("queued", "running")),
+            )
+            .order_by(SourceRefreshJob.created_at.desc())
+        )
+        concurrent_job = concurrent_result.scalars().first()
+        if concurrent_job is None:
+            raise
+        return _source_refresh_response(
+            concurrent_job,
+            status_value="running",
+            reused=True,
+            message="Already refreshing.",
+        )
+
+    job_id = job.id
+    job.status = "running"
+    job.started_at = datetime.now(timezone.utc)
+    job.message = "Refreshing."
+    await db.commit()
+
+    try:
+        result = await _run_source_refresh(normalized_source, db)
+        final_status, created, updated, failed, result_message = _normalized_source_result(result)
+    except Exception as exc:
+        logger.exception("source_refresh_failed source_system=%s", normalized_source)
+        await db.rollback()
+        final_status, created, updated, failed = "failed", 0, 0, 1
+        result_message = (
+            "Refresh failed. Existing tenders are still shown. "
+            f"({type(exc).__name__})"
+        )
+
+    refreshed_job = await db.get(SourceRefreshJob, job_id)
+    if refreshed_job is None:
+        raise RuntimeError("Source refresh job disappeared")
+    refreshed_job.status = final_status
+    refreshed_job.created_count = created
+    refreshed_job.updated_count = updated
+    refreshed_job.failed_count = failed
+    refreshed_job.message = result_message
+    refreshed_job.completed_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(refreshed_job)
+    return _source_refresh_response(refreshed_job)
+
+
+@router.post(
+    "/sources/{source_system}/refresh",
+    response_model=SourceRefreshResponse,
+)
+async def request_source_refresh(
+    source_system: str,
+    force: bool = Query(default=False),
+    current_user: User = Depends(require_approved_user),
+    db: AsyncSession = Depends(get_db),
+) -> SourceRefreshResponse:
+    """
+    Request a source refresh without exposing scraper tuning controls.
+
+    Approved users may request the default refresh. Operators and administrators
+    may additionally bypass the cooldown with ``force=true``.
+    """
+    return await _request_source_refresh(
+        source_system=source_system,
+        force=force,
+        current_user=current_user,
+        db=db,
+    )
+
+
+@router.get(
+    "/sources/refresh-status",
+    response_model=list[SourceRefreshResponse],
+)
+async def get_source_refresh_status(
+    _current_user: User = Depends(require_approved_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[SourceRefreshResponse]:
+    """Return the latest refresh state for each source."""
+    responses: list[SourceRefreshResponse] = []
+    for source_system in sorted(SOURCE_REFRESH_SYSTEMS):
+        result = await db.execute(
+            select(SourceRefreshJob)
+            .where(SourceRefreshJob.source_system == source_system)
+            .order_by(SourceRefreshJob.created_at.desc())
+            .limit(1)
+        )
+        job = result.scalars().first()
+        if job is not None:
+            responses.append(_source_refresh_response(job))
+    return responses
 
 
 def _serialize_sync_job(

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { signOut, useSession } from 'next-auth/react';
-import { api } from '@/lib/api';
+import { api, setApiAccessToken } from '@/lib/api';
 
 interface NavItem {
     name: string;
@@ -34,10 +34,18 @@ const baseNavItems: NavItem[] = [
     { name: 'Readiness Vault', href: '/dashboard/readiness-vault', icon: <Archive className="w-5 h-5" /> },
 ];
 
-type CompanyProfileStatus = {
+export type AccessStatus = {
     company_profile_id?: string | null;
+    company_name?: string | null;
     onboarding_required?: boolean;
-    approval_status?: string | null;
+    onboarding_completed: boolean;
+    user_approval_status: string;
+    company_approval_status?: string | null;
+    platform_role: string;
+    access_allowed: boolean;
+    state: string;
+    rejection_or_disabled_reason?: string | null;
+    auth_version: number;
 };
 
 const CONTROL_PATHS = new Set([
@@ -46,13 +54,10 @@ const CONTROL_PATHS = new Set([
     '/dashboard/access-blocked',
 ]);
 
-const isBlockedStatus = (status?: string | null) =>
-    status === 'rejected' || status === 'disabled';
-
 export default function DashboardLayout({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { data: session, status } = useSession();
+    const { data: session, status, update } = useSession();
     const [accessReadyPath, setAccessReadyPath] = useState<string | null>(null);
 
     const handleLogout = async () => {
@@ -74,78 +79,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 return;
             }
 
-            const role = session?.platform_role;
-            const approvalStatus = session?.approval_status;
-            const isOperatorOrAdmin =
-                session?.is_admin === true ||
-                role === 'admin' ||
-                role === 'operator';
-
-            if (isOperatorOrAdmin) {
-                if (CONTROL_PATHS.has(pathname)) {
-                    router.replace('/dashboard');
-                    return;
-                }
-                if (!cancelled) setAccessReadyPath(pathname);
-                return;
-            }
-
-            if (isBlockedStatus(approvalStatus)) {
-                if (pathname !== '/dashboard/access-blocked') {
-                    router.replace('/dashboard/access-blocked');
-                    return;
-                }
-                if (!cancelled) setAccessReadyPath(pathname);
-                return;
-            }
-
-            const sessionCompanyId = session?.company_profile_id;
-            const sessionCompanyStatus = session?.company_approval_status;
-
-            if (!sessionCompanyId && approvalStatus !== 'approved') {
-                if (pathname !== '/dashboard/onboarding') {
-                    router.replace('/dashboard/onboarding');
-                    return;
-                }
-                if (!cancelled) setAccessReadyPath(pathname);
-                return;
-            }
-
-            if (isBlockedStatus(sessionCompanyStatus)) {
-                if (pathname !== '/dashboard/access-blocked') {
-                    router.replace('/dashboard/access-blocked');
-                    return;
-                }
-                if (!cancelled) setAccessReadyPath(pathname);
-                return;
-            }
-
-            if (sessionCompanyId && (approvalStatus !== 'approved' || sessionCompanyStatus !== 'approved')) {
-                if (pathname !== '/dashboard/pending-approval') {
-                    router.replace('/dashboard/pending-approval');
-                    return;
-                }
-                if (!cancelled) setAccessReadyPath(pathname);
-                return;
-            }
-
             try {
-                const response = await api.get<CompanyProfileStatus>('/users/me/company');
-                const company = response.data;
-                const companyStatus = company.approval_status ?? session?.company_approval_status;
-                const onboardingRequired =
-                    company.onboarding_required === true || !company.company_profile_id;
+                const response = await api.get<AccessStatus>('/users/me/access-status');
+                const access = response.data;
 
-                if (onboardingRequired) {
-                    if (pathname !== '/dashboard/onboarding') {
-                        router.replace('/dashboard/onboarding');
-                        return;
-                    }
-                    if (!cancelled) setAccessReadyPath(pathname);
-                    return;
-                }
-
-                if (isBlockedStatus(companyStatus)) {
+                if (access.state === 'rejected' || access.state === 'disabled') {
                     if (pathname !== '/dashboard/access-blocked') {
                         router.replace('/dashboard/access-blocked');
                         return;
@@ -154,11 +92,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     return;
                 }
 
-                const approvedPilot =
-                    approvalStatus === 'approved' && companyStatus === 'approved';
+                if (!access.onboarding_completed || access.onboarding_required) {
+                    if (pathname !== '/dashboard/onboarding') {
+                        router.replace('/dashboard/onboarding');
+                        return;
+                    }
+                    if (!cancelled) setAccessReadyPath(pathname);
+                    return;
+                }
 
-                if (approvedPilot) {
+                if (access.access_allowed) {
                     if (CONTROL_PATHS.has(pathname)) {
+                        const refreshedSession = await update();
+                        setApiAccessToken(refreshedSession?.accessToken ?? null);
                         router.replace('/dashboard');
                         return;
                     }
@@ -172,9 +118,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 }
                 if (!cancelled) setAccessReadyPath(pathname);
             } catch (error) {
-                console.error('Failed to evaluate company access:', error);
-                if (pathname !== '/dashboard/onboarding') {
-                    router.replace('/dashboard/onboarding');
+                console.error('Failed to evaluate workspace access:', error);
+                if (!CONTROL_PATHS.has(pathname)) {
+                    router.replace('/dashboard/pending-approval');
                     return;
                 }
                 if (!cancelled) setAccessReadyPath(pathname);
@@ -189,12 +135,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     }, [
         pathname,
         router,
-        session?.approval_status,
-        session?.company_profile_id,
-        session?.company_approval_status,
-        session?.is_admin,
-        session?.platform_role,
         status,
+        update,
     ]);
 
     if (status === 'loading' || accessReadyPath !== pathname) {

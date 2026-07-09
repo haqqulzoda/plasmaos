@@ -3,7 +3,8 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, Check, Globe2, Loader2, Phone, UserRound } from 'lucide-react';
-import { api } from '@/lib/api';
+import { useSession } from 'next-auth/react';
+import { api, setApiAccessToken } from '@/lib/api';
 import { CENTRAL_ASIA_COUNTRIES, CENTRAL_ASIA_REGION, useGeographyMeta } from '@/lib/geography';
 import { useServiceMeta } from '@/lib/services';
 
@@ -49,11 +50,13 @@ function toggleValue(values: string[], value: string): string[] {
 
 export default function OnboardingPage() {
     const router = useRouter();
+    const { update } = useSession();
     const geography = useGeographyMeta();
     const services = useServiceMeta();
     const [form, setForm] = useState<FormState>(initialForm);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [submitted, setSubmitted] = useState(false);
 
     const countryCount = useMemo(() => form.target_countries.length, [form.target_countries.length]);
     const centralAsiaCountries = geography.central_asia_countries;
@@ -98,6 +101,9 @@ export default function OnboardingPage() {
                 address: form.address || null,
                 notes: form.notes || null,
             });
+            setSubmitted(true);
+            const refreshedSession = await update();
+            setApiAccessToken(refreshedSession?.accessToken ?? null);
             router.replace('/dashboard/pending-approval');
         } catch (err) {
             console.error('Failed to submit onboarding:', err);
@@ -138,6 +144,15 @@ export default function OnboardingPage() {
             {error && (
                 <div className="border border-red-500/30 bg-red-500/10 text-red-300 rounded-lg px-4 py-3 text-sm">
                     {error}
+                </div>
+            )}
+
+            {submitted && (
+                <div className="border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 rounded-lg px-4 py-3">
+                    <p className="font-semibold">Company profile submitted</p>
+                    <p className="mt-1 text-sm text-emerald-100/80">
+                        Your Plasma workspace is pending approval.
+                    </p>
                 </div>
             )}
 

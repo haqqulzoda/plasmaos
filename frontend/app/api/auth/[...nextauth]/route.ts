@@ -66,7 +66,7 @@ const { handlers, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, account, profile, user }) {
+    async jwt({ token, account, profile, user, trigger }) {
       // ── Initial Google sign-in: exchange for a backend JWT ──
       if (account?.provider === 'google') {
         const googleId =
@@ -104,6 +104,31 @@ const { handlers, auth } = NextAuth({
 
         token.accessToken = payload.access_token;
         applyBackendClaims(token as Record<string, unknown>, payload);
+        return token;
+      }
+
+      // Explicit session updates are used after onboarding/approval changes.
+      // The backend refresh endpoint accepts a valid signed token even when its
+      // auth_version is stale, then rotates it to the current authorization state.
+      if (trigger === 'update' && typeof token.accessToken === 'string') {
+        try {
+          const refreshResponse = await fetch(`${backendApiBase}/auth/refresh`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token.accessToken}`,
+            },
+          });
+          if (refreshResponse.ok) {
+            const refreshPayload = (await refreshResponse.json()) as BackendTokenPayload;
+            if (refreshPayload.access_token && refreshPayload.token_type === 'bearer') {
+              token.accessToken = refreshPayload.access_token;
+              applyBackendClaims(token as Record<string, unknown>, refreshPayload);
+            }
+          }
+        } catch {
+          // The caller keeps its current session and can retry status refresh.
+        }
         return token;
       }
 

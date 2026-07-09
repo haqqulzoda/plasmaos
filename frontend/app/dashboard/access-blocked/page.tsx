@@ -1,17 +1,29 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Ban, LogOut } from 'lucide-react';
-import { signOut, useSession } from 'next-auth/react';
+import { signOut } from 'next-auth/react';
 import { api } from '@/lib/api';
 
 export default function AccessBlockedPage() {
-    const { data: session } = useSession();
-    const status = session?.approval_status;
-    const title = status === 'disabled' ? 'Access disabled' : 'Access blocked';
-    const message =
-        status === 'disabled'
-            ? 'Your pilot access is currently disabled.'
-            : 'Your pilot access is not available.';
+    const [state, setState] = useState<'rejected' | 'disabled'>('rejected');
+    const [reason, setReason] = useState<string | null>(null);
+    const title = state === 'disabled' ? 'Access disabled' : 'Access request not approved';
+    const message = state === 'disabled'
+        ? 'Please contact Plasma support.'
+        : 'Contact Plasma support if you believe this is a mistake.';
+
+    useEffect(() => {
+        api.get<{
+            state: string;
+            rejection_or_disabled_reason: string | null;
+        }>('/users/me/access-status')
+            .then(({ data }) => {
+                setState(data.state === 'disabled' ? 'disabled' : 'rejected');
+                setReason(data.rejection_or_disabled_reason);
+            })
+            .catch(() => undefined);
+    }, []);
 
     const handleLogout = async () => {
         await api.post('/auth/logout').catch(() => undefined);
@@ -27,6 +39,7 @@ export default function AccessBlockedPage() {
                 <div className="space-y-2">
                     <h1 className="text-2xl font-semibold text-white">{title}</h1>
                     <p className="text-gray-300 leading-6">{message}</p>
+                    {reason && <p className="text-sm text-gray-500">Reason: {reason}</p>}
                 </div>
                 <button
                     type="button"

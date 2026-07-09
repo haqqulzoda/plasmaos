@@ -49,14 +49,18 @@ const SORT_OPTIONS = [
 ];
 
 const SOURCE_REFRESH_ACTIONS = [
-    { value: 'uzex', label: 'UzEx', endpoint: '/tenders/refresh' },
-    { value: 'world_bank', label: 'World Bank', endpoint: '/tenders/sources/world-bank/sync' },
-    { value: 'adb', label: 'ADB', endpoint: '/tenders/sources/adb/sync' },
-    { value: 'giz', label: 'GIZ', endpoint: '/tenders/sources/giz/sync' },
-    { value: 'ebrd', label: 'EBRD', endpoint: '/tenders/sources/ebrd/sync' },
+    { value: 'uzex', label: 'UzEx', endpoint: '/tenders/sources/uzex/refresh' },
+    { value: 'world_bank', label: 'World Bank', endpoint: '/tenders/sources/world_bank/refresh' },
+    { value: 'adb', label: 'ADB', endpoint: '/tenders/sources/adb/refresh' },
+    { value: 'giz', label: 'GIZ', endpoint: '/tenders/sources/giz/refresh' },
+    { value: 'ebrd', label: 'EBRD', endpoint: '/tenders/sources/ebrd/refresh' },
 ] as const;
 
 type SourceRefreshTarget = (typeof SOURCE_REFRESH_ACTIONS)[number]['value'];
+type SourceRefreshState = {
+    status: string;
+    lastUpdated: string | null;
+};
 
 const PAGE_SIZE = 50;
 const EXPLORER_RESTORE_KEY = 'plasmaos:tender-explorer:return';
@@ -192,6 +196,9 @@ function TendersPageContent() {
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [draftKeyword, setDraftKeyword] = useState('');
+    const [sourceRefreshState, setSourceRefreshState] = useState<
+        Partial<Record<SourceRefreshTarget, SourceRefreshState>>
+    >({});
 
     const searchString = searchParams.toString();
     const queryState = useMemo(
@@ -282,6 +289,30 @@ function TendersPageContent() {
     useEffect(() => {
         setDraftKeyword(queryState.keyword);
     }, [queryState.keyword]);
+
+    useEffect(() => {
+        let active = true;
+        api.get<Array<{
+            source_system: SourceRefreshTarget;
+            status: string;
+            last_updated: string | null;
+        }>>('/tenders/sources/refresh-status')
+            .then(({ data }) => {
+                if (!active) return;
+                setSourceRefreshState(Object.fromEntries(
+                    data.map((item) => [
+                        item.source_system,
+                        { status: item.status, lastUpdated: item.last_updated },
+                    ]),
+                ));
+            })
+            .catch(() => {
+                // Refresh metadata is supplementary; tender loading remains independent.
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
 
     useEffect(() => {
         if (draftKeyword === queryState.keyword) return;
@@ -431,27 +462,35 @@ function TendersPageContent() {
         try {
             const response = await api.post(refreshAction.endpoint);
             const payload = response.data;
-            const status = payload.status ?? 'success';
-            const created = payload.new_count ?? payload.created_count ?? payload.created ?? 0;
-            const updated = payload.updated_count ?? payload.updated ?? 0;
-            const failed = payload.failed_count ?? payload.failed ?? 0;
-            const skipped = payload.skipped_count ?? payload.skipped ?? 0;
-            const message = payload.message;
+            const status = payload.status ?? 'failed';
+            const lastUpdated = payload.last_updated ?? null;
+            setSourceRefreshState((previous) => ({
+                ...previous,
+                [target]: { status, lastUpdated },
+            }));
 
-            if (status === 'failed' || (target === 'uzex' && status !== 'success')) {
-                const errorMsg = message || 'Failed to refresh feed';
+            if (status === 'source_unavailable') {
+                const errorMsg = 'Source unavailable. Existing tenders are still shown.';
                 setError(errorMsg);
                 showNotification(errorMsg);
                 return;
             }
+            if (status === 'failed') {
+                const errorMsg = payload.message || 'Refresh failed. Existing tenders are still shown.';
+                setError(errorMsg);
+                showNotification(errorMsg);
+                return;
+            }
+            if (status === 'queued' || status === 'running') {
+                showNotification(payload.reused ? 'Already refreshing' : 'Refreshing');
+                return;
+            }
+            if (status === 'fresh') {
+                showNotification('Updated successfully');
+                return;
+            }
 
-            const resultSummary = `${refreshAction.label} refreshed: ${created} new, ${updated} updated`;
-            const extraSummary = failed > 0
-                ? `, ${failed} failed`
-                : skipped > 0
-                    ? `, ${skipped} skipped`
-                    : '';
-            showNotification(`${resultSummary}${extraSummary}`);
+            showNotification('Updated successfully');
             await fetchTenders({ limit: PAGE_SIZE * queryState.page });
         } catch (err) {
             const axiosError = err as { response?: { data?: { detail?: string } } };
@@ -487,23 +526,33 @@ function TendersPageContent() {
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold text-white">Tender Explorer</h1>
-                        <p className="text-zinc-400 text-sm mt-1">UzEx, World Bank, ADB, GIZ, and EBRD opportunities in one worklist</p>
+                        <p className="text-zinc-400 text-sm mt-1">UzEx enterprise, World Bank, ADB, GIZ, and EBRD opportunities in one worklist</p>
                     </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    {SOURCE_REFRESH_ACTIONS.map((action) => (
-                        <button
-                            key={action.value}
-                            onClick={() => handleRefresh(action.value)}
-                            disabled={isRefreshing}
-                            title={`Refresh ${action.label}`}
-                            className="inline-flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-900/50 border border-zinc-700 text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                            <RefreshCw className={`w-4 h-4 ${refreshingSource === action.value ? 'animate-spin' : ''}`} />
-                            {refreshingSource === action.value ? 'Refreshing...' : action.label}
-                        </button>
-                    ))}
+                    {SOURCE_REFRESH_ACTIONS.map((action) => {
+                        const refreshState = sourceRefreshState[action.value];
+                        const updatedAt = refreshState?.lastUpdated
+                            ? new Date(refreshState.lastUpdated).toLocaleString()
+                            : 'Not refreshed yet';
+                        return (
+                            <div key={action.value} className="flex flex-col gap-1">
+                                <button
+                                    onClick={() => handleRefresh(action.value)}
+                                    disabled={isRefreshing}
+                                    title={`Refresh ${action.label}`}
+                                    className="inline-flex items-center justify-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-900/50 border border-zinc-700 text-white text-sm font-medium rounded-lg transition-colors"
+                                >
+                                    <RefreshCw className={`w-4 h-4 ${refreshingSource === action.value ? 'animate-spin' : ''}`} />
+                                    {refreshingSource === action.value ? 'Refreshing...' : action.label}
+                                </button>
+                                <span className="text-[10px] text-zinc-500" title={updatedAt}>
+                                    Last updated: {updatedAt}
+                                </span>
+                            </div>
+                        );
+                    })}
                     <div className="px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 text-sm text-zinc-300">
                         {tenders.length} shown
                     </div>

@@ -65,7 +65,7 @@ class AdminApprovalQueueTests(unittest.TestCase):
         self.assertIn("Open approval queue", admin_page)
         self.assertIn('href="/admin/approvals"', admin_page)
         self.assertIn("api.get<QueueResponse>('/admin/approval-queue')", approvals_page)
-        self.assertIn("Pilot may need to refresh or sign in again", approvals_page)
+        self.assertIn("without signing out", approvals_page)
         self.assertIn("Only admins can change approval status", approvals_page)
         self.assertIn("redirect('/admin')", legacy_admin_page)
         self.assertIn("redirect('/admin/approvals')", legacy_approvals_page)
@@ -79,6 +79,10 @@ class AdminApprovalQueueTests(unittest.TestCase):
             "/admin/companies/${company.id}/disable",
         ):
             self.assertIn(endpoint, approvals_page)
+
+        self.assertIn('action="company_approved"', read_backend("app/api/endpoints/admin.py"))
+        self.assertIn('action="company_rejected"', read_backend("app/api/endpoints/admin.py"))
+        self.assertIn('action="company_disabled"', read_backend("app/api/endpoints/admin.py"))
 
 
 if __name__ == "__main__":
