@@ -284,6 +284,36 @@ class GizConnectorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             asyncio.run(run_check())
 
+    def test_country_page_failure_yields_partial_rows_from_healthy_page(self) -> None:
+        class PartialGizSource(GizTenderSource):
+            async def _request(self, client, method, url, **kwargs):  # type: ignore[override]
+                if "failed" in url:
+                    raise TimeoutError("simulated country-page timeout")
+                return SimpleNamespace(content=GIZ_PAGE_FIXTURE.encode(), url=url)
+
+        source = PartialGizSource(
+            source_pages=(
+                "https://www.giz.de/en/regions/africa/failed/tenders",
+                "https://www.giz.de/en/regions/africa/south-africa/tenders",
+            ),
+            include_eproc=False,
+            request_delay_seconds=0,
+        )
+        rows = asyncio.run(source.list_opportunities())
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["external_id"], "7000012992")
+        self.assertEqual(source.last_failure_details[0]["stage"], "country_listing")
+        self.assertTrue(source.last_failure_details[0]["retryable"])
+
+    def test_valid_zero_result_configuration_is_not_a_failure(self) -> None:
+        source = GizTenderSource(source_pages=[], include_eproc=False)
+
+        rows = asyncio.run(source.list_opportunities())
+
+        self.assertEqual(rows, [])
+        self.assertEqual(source.last_failure_details, [])
+
 
 if __name__ == "__main__":
     unittest.main()

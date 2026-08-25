@@ -65,6 +65,20 @@ def parse_email_allowlist(raw_emails: str | None) -> set[str]:
     }
 
 
+def normalized_approval_status(value: object | None) -> str:
+    """Normalize persisted string or enum-like approval states for auth checks."""
+    raw_value = getattr(value, "value", value)
+    return str(raw_value or "").strip().casefold()
+
+
+def is_disabled_account(user: object) -> bool:
+    """Return whether the account is explicitly disabled."""
+    return (
+        normalized_approval_status(getattr(user, "approval_status", None))
+        == USER_APPROVAL_DISABLED
+    )
+
+
 @lru_cache(maxsize=32)
 def _dotenv_value(name: str) -> str | None:
     if not ENV_PATH.exists():

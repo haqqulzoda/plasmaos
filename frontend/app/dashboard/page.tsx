@@ -25,6 +25,7 @@ import { labelForService, useServiceMeta } from '@/lib/services';
 import type { Tender } from '@/types/tender';
 import {
     documentAggregateLabel,
+    isTenderActionable,
     sourceLabel,
 } from '@/types/tender';
 import type {
@@ -135,7 +136,8 @@ function deadlineState(deadline: string | null) {
 }
 
 function isCurrentTender(tender: Tender) {
-    return !tender.deadline || new Date(tender.deadline).getTime() >= Date.now();
+    return isTenderActionable(tender)
+        && (!tender.deadline || new Date(tender.deadline).getTime() >= Date.now());
 }
 
 function serviceFields(tender: Tender) {

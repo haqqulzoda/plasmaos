@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urljoin, urlparse
 
 logger = logging.getLogger(__name__)
@@ -19,15 +19,33 @@ WORLD_BANK_PROC_NOTICES_URL = "https://search.worldbank.org/api/v2/procnotices"
 WORLD_BANK_PROC_DETAIL_URL = (
     "https://projects.worldbank.org/en/projects-operations/procurement-detail/{id}"
 )
+WORLD_BANK_ACTIONABLE_NOTICE_TYPES = (
+    "Invitation for Bids",
+    "Invitation for Prequalification",
+    "Request for Expression of Interest",
+)
 ALLOWED_ATTACHMENT_EXTENSIONS = {"pdf", "doc", "docx", "xls", "xlsx", "zip"}
 EXCLUDED_NOTICE_TYPES = {"contract award"}
 GENERAL_PROCUREMENT_NOTICE_TYPES = {"general procurement notice"}
 
 
+def world_bank_utc_instant(now: datetime | None = None) -> datetime:
+    """Return an aware UTC instant for World Bank source-time decisions."""
+    value = now or datetime.now(timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def world_bank_current_date(now: datetime | None = None) -> date:
+    """Return the UTC calendar date used by the current-opportunities API."""
+    return world_bank_utc_instant(now).date()
+
+
 @dataclass(frozen=True)
 class WorldBankSyncConfig:
     rows: int = 100
-    max_pages: int = 3
+    max_pages: int = 25
     active_only: bool = True
     include_general_procurement_notice: bool = False
     request_delay_seconds: float = 0.25
@@ -198,7 +216,9 @@ def parse_world_bank_deadline(raw: dict[str, Any]) -> datetime | None:
 
     time_text = _clean_whitespace(raw.get("submission_deadline_time"))
     if not time_text:
-        return deadline
+        # The official current-opportunities API treats deadline dates as active
+        # for the whole UTC date. Preserve that semantic when no time is supplied.
+        return datetime.combine(deadline.date(), time.max, tzinfo=timezone.utc)
 
     for fmt in ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I:%M%p"):
         try:
@@ -210,7 +230,7 @@ def parse_world_bank_deadline(raw: dict[str, Any]) -> datetime | None:
             )
         except ValueError:
             pass
-    return deadline
+    return datetime.combine(deadline.date(), time.max, tzinfo=timezone.utc)
 
 
 def parse_world_bank_publication_date(raw: dict[str, Any]) -> datetime | None:
@@ -247,8 +267,38 @@ def is_actionable_notice(
     deadline = parse_world_bank_deadline(raw)
     if deadline is None:
         return False
-    comparison_date = today or datetime.now(timezone.utc).date()
+    comparison_date = today or world_bank_current_date()
     return deadline.date() >= comparison_date
+
+
+def world_bank_skip_reason(
+    raw: dict[str, Any],
+    *,
+    active_only: bool = True,
+    include_general_procurement_notice: bool = False,
+    today: date | None = None,
+) -> str | None:
+    """Return a stable diagnostic reason, or None when a row is actionable."""
+    status = (_clean_whitespace(raw.get("notice_status")) or "").casefold()
+    if status != "published":
+        return "not_published"
+    notice_type = _notice_type(raw).casefold()
+    if notice_type in EXCLUDED_NOTICE_TYPES or notice_type.endswith(" award"):
+        return "contract_award"
+    if (
+        not include_general_procurement_notice
+        and notice_type in GENERAL_PROCUREMENT_NOTICE_TYPES
+    ):
+        return "general_procurement_notice"
+    if not active_only:
+        return None
+    deadline = parse_world_bank_deadline(raw)
+    if deadline is None:
+        return "missing_deadline"
+    comparison_date = today or world_bank_current_date()
+    if deadline.date() < comparison_date:
+        return "expired"
+    return None
 
 
 def _source_url(external_id: str) -> str:
@@ -367,12 +417,13 @@ class WorldBankTenderSource:
         self,
         *,
         rows: int = 100,
-        max_pages: int = 3,
+        max_pages: int = 25,
         active_only: bool = True,
         include_general_procurement_notice: bool = False,
         request_delay_seconds: float = 0.25,
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self.config = WorldBankSyncConfig(
             rows=max(1, min(int(rows or 100), 100)),
@@ -384,6 +435,16 @@ class WorldBankTenderSource:
             max_retries=max(0, int(max_retries)),
         )
         self.last_total: int | None = None
+        self.last_pages_fetched = 0
+        self.last_truncated = False
+        self.last_duplicate_count = 0
+        self.source_newest_published_at: datetime | None = None
+        self.source_oldest_published_at: datetime | None = None
+        self.last_query_date: date | None = None
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
+
+    def _utc_now(self) -> datetime:
+        return world_bank_utc_instant(self._clock())
 
     async def _get_json(self, client: Any, params: dict[str, Any]) -> dict[str, Any]:
         for attempt in range(self.config.max_retries + 1):
@@ -402,6 +463,19 @@ class WorldBankTenderSource:
         import httpx
 
         notices: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        seen_page_fingerprints: set[tuple[str, ...]] = set()
+        self.last_pages_fetched = 0
+        self.last_truncated = False
+        self.last_duplicate_count = 0
+        self.last_query_date = (
+            world_bank_current_date(self._utc_now())
+            if self.config.active_only
+            else None
+        )
+        notice_types = list(WORLD_BANK_ACTIONABLE_NOTICE_TYPES)
+        if self.config.include_general_procurement_notice:
+            notice_types.append("General Procurement Notice")
         async with httpx.AsyncClient(
             timeout=self.config.timeout_seconds,
             headers={"User-Agent": "PlasmaOS WorldBankConnector/1.0"},
@@ -416,11 +490,30 @@ class WorldBankTenderSource:
                         "fl": "*",
                         "rows": self.config.rows,
                         "os": offset,
-                        "srt": "submission_date desc,id asc",
+                        "srt": "submission_deadline_date",
+                        "order": "asc",
+                        "notice_type_exact": "^".join(notice_types),
+                        **(
+                            {"deadline_strdate": self.last_query_date.isoformat()}
+                            if self.last_query_date is not None
+                            else {}
+                        ),
                     },
                 )
                 rows = _response_rows(payload)
                 self.last_total = _response_total(payload)
+                self.last_pages_fetched += 1
+                page_ids = tuple(str(row.get("id") or "").strip() for row in rows)
+                if rows and page_ids in seen_page_fingerprints:
+                    self.last_truncated = True
+                    logger.error(
+                        "world_bank_repeated_page os=%s returned=%s total=%s",
+                        offset,
+                        len(rows),
+                        self.last_total,
+                    )
+                    break
+                seen_page_fingerprints.add(page_ids)
                 logger.info(
                     "world_bank_list_page os=%s rows=%s returned=%s total=%s",
                     offset,
@@ -428,13 +521,34 @@ class WorldBankTenderSource:
                     len(rows),
                     self.last_total,
                 )
-                notices.extend(rows)
+                for row in rows:
+                    external_id = str(row.get("id") or "").strip()
+                    if not external_id:
+                        continue
+                    if external_id in seen_ids:
+                        self.last_duplicate_count += 1
+                        continue
+                    seen_ids.add(external_id)
+                    notices.append(row)
                 if not rows:
                     break
                 if self.last_total is not None and offset + self.config.rows >= self.last_total:
                     break
+                if len(rows) < self.config.rows:
+                    break
                 if page_index + 1 < self.config.max_pages:
                     await asyncio.sleep(self.config.request_delay_seconds)
+            else:
+                if self.last_total is None or len(seen_ids) < self.last_total:
+                    self.last_truncated = True
+
+        publication_dates = [
+            value
+            for value in (parse_world_bank_publication_date(row) for row in notices)
+            if value is not None
+        ]
+        self.source_newest_published_at = max(publication_dates, default=None)
+        self.source_oldest_published_at = min(publication_dates, default=None)
         return notices
 
     async def fetch_detail(self, external_id: str) -> dict[str, Any] | None:
@@ -460,12 +574,16 @@ class WorldBankTenderSource:
         return rows[0] if rows else None
 
     def should_import(self, raw: dict[str, Any]) -> bool:
-        return is_actionable_notice(
+        return self.skip_reason(raw) is None
+
+    def skip_reason(self, raw: dict[str, Any]) -> str | None:
+        return world_bank_skip_reason(
             raw,
             active_only=self.config.active_only,
             include_general_procurement_notice=(
                 self.config.include_general_procurement_notice
             ),
+            today=self.last_query_date or world_bank_current_date(self._utc_now()),
         )
 
     async def discover_attachments(self, normalized_tender: Any) -> list[Any]:
@@ -500,6 +618,12 @@ class WorldBankTenderSource:
         from app.services.tender_sources.base import NormalizedTender
 
         payload = normalize_world_bank_notice_payload(raw)
+        deadline = payload["deadline"]
+        lifecycle_status = (
+            TenderStatus.CLOSED
+            if deadline is not None and deadline < self._utc_now()
+            else TenderStatus.OPEN
+        )
         return NormalizedTender(
             source_system=payload["source_system"],
             external_id=payload["external_id"],
@@ -517,8 +641,8 @@ class WorldBankTenderSource:
             notice_type=payload["notice_type"],
             project_id=payload["project_id"],
             publication_date=payload["publication_date"],
-            deadline=payload["deadline"],
-            status=TenderStatus.OPEN,
+            deadline=deadline,
+            status=lifecycle_status,
             category="World Bank",
             source_metadata_json=payload["source_metadata_json"],
             scrape_status=payload["scrape_status"],

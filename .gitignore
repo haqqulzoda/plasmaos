@@ -1,5 +1,5 @@
 .env
-
+.pgadmin
 
 # Python virtual environments
 .venv/

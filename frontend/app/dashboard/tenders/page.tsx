@@ -22,13 +22,17 @@ import {
 import { api } from '@/lib/api';
 import { CENTRAL_ASIA_REGION, useGeographyMeta } from '@/lib/geography';
 import { labelForService, useServiceMeta } from '@/lib/services';
-import type { Tender } from '@/types/tender';
+import type { Tender, TenderStatus } from '@/types/tender';
 import {
     complianceUnavailableMessage,
     documentAggregateLabel,
     documentStatusClasses,
+    isTenderActionable,
     sourceBadgeClasses,
     sourceLabel,
+    tenderActionabilityMessage,
+    tenderStatusClasses,
+    tenderStatusLabel,
 } from '@/types/tender';
 
 const SOURCE_FILTERS = [
@@ -38,6 +42,14 @@ const SOURCE_FILTERS = [
     { value: 'adb', label: 'ADB' },
     { value: 'giz', label: 'GIZ' },
     { value: 'ebrd', label: 'EBRD' },
+];
+
+const LIFECYCLE_FILTERS: Array<{ value: TenderStatus | 'ALL'; label: string }> = [
+    { value: 'OPEN', label: 'Open' },
+    { value: 'UNKNOWN', label: 'Actionability unknown' },
+    { value: 'CLOSED', label: 'Closed' },
+    { value: 'CANCELLED', label: 'Cancelled' },
+    { value: 'ALL', label: 'All statuses' },
 ];
 
 const SORT_OPTIONS = [
@@ -60,13 +72,34 @@ type SourceRefreshTarget = (typeof SOURCE_REFRESH_ACTIONS)[number]['value'];
 type SourceRefreshState = {
     status: string;
     lastUpdated: string | null;
+    message?: string;
 };
+
+type SourceRefreshStatusPayload = {
+    source_system: SourceRefreshTarget;
+    status: string;
+    last_updated: string | null;
+    message?: string;
+};
+
+const ACTIVE_REFRESH_STATUSES = new Set(['queued', 'running']);
+
+function sourceRefreshStatusLabel(state: SourceRefreshState | undefined, updatedAt: string): string {
+    if (!state) return 'Not refreshed yet';
+    if (state.status === 'queued') return 'Queued';
+    if (state.status === 'running') return 'Refreshing';
+    if (state.status === 'source_unavailable') return `Source unavailable · ${updatedAt}`;
+    if (state.status === 'partial') return `Partial · ${updatedAt}`;
+    if (state.status === 'failed') return `Refresh failed · ${updatedAt}`;
+    return `Last updated: ${updatedAt}`;
+}
 
 const PAGE_SIZE = 50;
 const EXPLORER_RESTORE_KEY = 'plasmaos:tender-explorer:return';
 const EXPLORER_PATH = '/dashboard/tenders';
 
 interface ExplorerQueryState {
+    lifecycleStatus: TenderStatus | 'ALL';
     source: string;
     region: string;
     countries: string[];
@@ -102,7 +135,13 @@ function parseExplorerQuery(searchParams: URLSearchParams): ExplorerQueryState {
     const cursorPage = Math.floor((positiveInteger(searchParams.get('cursor')) ?? 0) / PAGE_SIZE) + 1;
     const page = positiveInteger(searchParams.get('page')) ?? cursorPage;
 
+    const requestedStatus = (searchParams.get('status') || 'OPEN').toUpperCase();
+    const lifecycleStatus = LIFECYCLE_FILTERS.some((item) => item.value === requestedStatus)
+        ? requestedStatus as TenderStatus | 'ALL'
+        : 'OPEN';
+
     return {
+        lifecycleStatus,
         source: searchParams.get('source') || searchParams.get('source_system') || 'All',
         region: searchParams.get('region') || '',
         countries: splitList(searchParams.get('countries')),
@@ -117,6 +156,7 @@ function parseExplorerQuery(searchParams: URLSearchParams): ExplorerQueryState {
 
 function buildExplorerSearch(query: ExplorerQueryState) {
     const params = new URLSearchParams();
+    if (query.lifecycleStatus !== 'OPEN') params.set('status', query.lifecycleStatus.toLowerCase());
     if (query.source !== 'All') params.set('source', query.source);
     if (query.region) params.set('region', query.region);
     if (query.countries.length > 0) params.set('countries', query.countries.join(','));
@@ -251,6 +291,7 @@ function TendersPageContent() {
             const params: Record<string, string | number> = {
                 limit,
                 offset,
+                status: queryState.lifecycleStatus.toLowerCase(),
             };
             if (queryState.source !== 'All') params.source_system = queryState.source;
             if (queryState.region) params.region = queryState.region;
@@ -292,17 +333,17 @@ function TendersPageContent() {
 
     useEffect(() => {
         let active = true;
-        api.get<Array<{
-            source_system: SourceRefreshTarget;
-            status: string;
-            last_updated: string | null;
-        }>>('/tenders/sources/refresh-status')
+        api.get<SourceRefreshStatusPayload[]>('/tenders/sources/refresh-status')
             .then(({ data }) => {
                 if (!active) return;
                 setSourceRefreshState(Object.fromEntries(
                     data.map((item) => [
                         item.source_system,
-                        { status: item.status, lastUpdated: item.last_updated },
+                        {
+                            status: item.status,
+                            lastUpdated: item.last_updated,
+                            message: item.message,
+                        },
                     ]),
                 ));
             })
@@ -313,6 +354,61 @@ function TendersPageContent() {
             active = false;
         };
     }, []);
+
+    const activeRefreshSources = useMemo(
+        () => Object.entries(sourceRefreshState)
+            .filter(([, state]) => state && ACTIVE_REFRESH_STATUSES.has(state.status))
+            .map(([source]) => source as SourceRefreshTarget)
+            .sort()
+            .join(','),
+        [sourceRefreshState],
+    );
+
+    useEffect(() => {
+        if (!activeRefreshSources) return;
+        let active = true;
+        let requestInFlight = false;
+        const pendingSources = new Set(activeRefreshSources.split(','));
+
+        const pollRefreshStatus = async () => {
+            if (requestInFlight) return;
+            requestInFlight = true;
+            try {
+                const { data } = await api.get<SourceRefreshStatusPayload[]>(
+                    '/tenders/sources/refresh-status',
+                );
+                if (!active) return;
+                const completedPendingSource = data.some(
+                    (item) => pendingSources.has(item.source_system)
+                        && !ACTIVE_REFRESH_STATUSES.has(item.status),
+                );
+                setSourceRefreshState(Object.fromEntries(
+                    data.map((item) => [
+                        item.source_system,
+                        {
+                            status: item.status,
+                            lastUpdated: item.last_updated,
+                            message: item.message,
+                        },
+                    ]),
+                ));
+                if (completedPendingSource) {
+                    await fetchTenders({ limit: PAGE_SIZE * queryState.page });
+                }
+            } catch {
+                // Keep the last durable status; polling will retry on the next interval.
+            } finally {
+                requestInFlight = false;
+            }
+        };
+
+        const interval = window.setInterval(pollRefreshStatus, 3000);
+        void pollRefreshStatus();
+        return () => {
+            active = false;
+            window.clearInterval(interval);
+        };
+    }, [activeRefreshSources, fetchTenders, queryState.page]);
 
     useEffect(() => {
         if (draftKeyword === queryState.keyword) return;
@@ -412,6 +508,13 @@ function TendersPageContent() {
     };
 
     const activeFilterBadges = [
+        ...(queryState.lifecycleStatus !== 'OPEN'
+            ? [{
+                key: 'status',
+                label: `Status: ${LIFECYCLE_FILTERS.find((item) => item.value === queryState.lifecycleStatus)?.label}`,
+                onRemove: () => replaceQuery({ lifecycleStatus: 'OPEN' }),
+            }]
+            : []),
         ...(queryState.source !== 'All'
             ? [{
                 key: 'source',
@@ -466,7 +569,7 @@ function TendersPageContent() {
             const lastUpdated = payload.last_updated ?? null;
             setSourceRefreshState((previous) => ({
                 ...previous,
-                [target]: { status, lastUpdated },
+                [target]: { status, lastUpdated, message: payload.message },
             }));
 
             if (status === 'source_unavailable') {
@@ -536,6 +639,7 @@ function TendersPageContent() {
                         const updatedAt = refreshState?.lastUpdated
                             ? new Date(refreshState.lastUpdated).toLocaleString()
                             : 'Not refreshed yet';
+                        const statusLabel = sourceRefreshStatusLabel(refreshState, updatedAt);
                         return (
                             <div key={action.value} className="flex flex-col gap-1">
                                 <button
@@ -547,8 +651,11 @@ function TendersPageContent() {
                                     <RefreshCw className={`w-4 h-4 ${refreshingSource === action.value ? 'animate-spin' : ''}`} />
                                     {refreshingSource === action.value ? 'Refreshing...' : action.label}
                                 </button>
-                                <span className="text-[10px] text-zinc-500" title={updatedAt}>
-                                    Last updated: {updatedAt}
+                                <span
+                                    className="text-[10px] text-zinc-500"
+                                    title={refreshState?.message || updatedAt}
+                                >
+                                    {statusLabel}
                                 </span>
                             </div>
                         );
@@ -603,6 +710,16 @@ function TendersPageContent() {
 
                 <div className="flex flex-wrap items-center gap-2">
                     <Filter className="h-4 w-4 text-zinc-500" />
+                    <select
+                        value={queryState.lifecycleStatus}
+                        onChange={(event) => replaceQuery({ lifecycleStatus: event.target.value as TenderStatus | 'ALL' })}
+                        aria-label="Tender lifecycle status"
+                        className="rounded-lg border border-zinc-800 bg-gray-950 px-3 py-1.5 text-sm font-medium text-zinc-300 outline-none transition focus:border-indigo-500"
+                    >
+                        {LIFECYCLE_FILTERS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
                     <div className="flex flex-wrap items-center gap-2">
                         {SOURCE_FILTERS.map((source) => (
                             <button
@@ -723,7 +840,9 @@ function TendersPageContent() {
                     </div>
                     <div className="divide-y divide-gray-900">
                         {tenders.map((tender, index) => {
-                            const disabledCompliance = !tender.compliance_analysis_available;
+                            const actionable = isTenderActionable(tender);
+                            const disabledCompliance = !actionable || !tender.compliance_analysis_available;
+                            const actionabilityMessage = tenderActionabilityMessage(tender.status);
                             return (
                                 <motion.div
                                     key={tender.id}
@@ -737,6 +856,9 @@ function TendersPageContent() {
                                         <div className="flex flex-wrap items-center gap-2">
                                             <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${sourceBadgeClasses(tender.source_system)}`}>
                                                 {sourceLabel(tender.source_system)}
+                                            </span>
+                                            <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${tenderStatusClasses(tender.status)}`}>
+                                                {tenderStatusLabel(tender.status)}
                                             </span>
                                             {tender.source_url ? (
                                                 <a
@@ -811,7 +933,7 @@ function TendersPageContent() {
                                         <button
                                             onClick={() => openTenderRoute(tender.id, `/dashboard/tenders/${tender.id}/compliance`)}
                                             disabled={disabledCompliance}
-                                            title={disabledCompliance ? complianceUnavailableMessage(tender) : 'Open compliance analysis'}
+                                            title={!actionable ? actionabilityMessage : disabledCompliance ? complianceUnavailableMessage(tender) : 'Open compliance analysis'}
                                             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-emerald-500 hover:text-emerald-200 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-600"
                                         >
                                             <ShieldCheck className="h-3.5 w-3.5" />
@@ -819,7 +941,8 @@ function TendersPageContent() {
                                         </button>
                                         <button
                                             onClick={() => router.push(`/dashboard/bids/${tender.id}`)}
-                                            disabled={isExpired(tender.deadline)}
+                                            disabled={!actionable || isExpired(tender.deadline)}
+                                            title={!actionable ? actionabilityMessage : isExpired(tender.deadline) ? 'Tender deadline has passed' : 'Start bid preparation'}
                                             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
                                         >
                                             Draft

@@ -4,32 +4,44 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 import fitz
 
 logger = logging.getLogger(__name__)
 
+ADB_CURRENT_TENDERS_URL = (
+    "https://www.adb.org/projects/tenders/"
+    "type/advance-notice-1536/type/general-procurement-notice-1526/"
+    "type/individual-consulting-1516/type/invitation-bids-1521/"
+    "type/invitation-prequalification-1611/type/other-notice-1531/"
+    "type/prequalified-applicants-1616/group/goods"
+)
 ADB_FEEDS = {
     "invitation_for_bids": {
-        "url": "http://feeds.feedburner.com/adb-invitation-for-bids",
+        "url": "https://feeds.feedburner.com/adb-invitation-for-bids",
         "notice_type": "Invitation for Bids",
     },
 }
 ADB_USER_AGENT = "PlasmaOS ADBConnector/1.0"
+ADB_ACTIVE_PROJECTS_URL = "https://www.adb.org/status/active"
+ADB_VIEWS_AJAX_URL = "https://www.adb.org/views/ajax?_wrapper_format=drupal_ajax"
 ALLOWED_ADB_HOST_SUFFIXES = ("adb.org",)
 MAX_REDIRECTS = 5
 MAX_PDF_METADATA_BYTES = 2 * 1024
 MAX_CONTACT_PDF_BYTES = 5 * 1024 * 1024
 MAX_CONTACT_PDF_PAGES = 8
 MAX_CONTACT_TEXT_CHARS = 50_000
+ADB_FRESHNESS_MAX_AGE_DAYS = 45
 EMAIL_RE = re.compile(r"[\w.!#$%&'*+/=?^`{|}~-]+@[\w-]+(?:\.[\w-]+)+")
 URL_RE = re.compile(r"https?://[^\s),;]+|www\.[^\s),;]+", re.IGNORECASE)
 PHONE_RE = re.compile(
@@ -42,7 +54,8 @@ PHONE_RE = re.compile(
 @dataclass(frozen=True)
 class AdbSyncConfig:
     feed_type: str = "invitation_for_bids"
-    max_items: int = 50
+    max_items: int = 500
+    max_pages: int = 25
     timeout_seconds: float = 30.0
     request_delay_seconds: float = 0.25
     max_retries: int = 2
@@ -58,6 +71,230 @@ class AdbAttachmentMetadata:
     last_modified: str | None
     final_url_hash: str
     status_code: int | None = None
+
+
+@dataclass(frozen=True)
+class AdbProjectTenderView:
+    """Public Drupal view metadata emitted by an official ADB project surface."""
+
+    project_id: str
+    view_name: str
+    view_display_id: str
+    view_path: str
+    view_dom_id: str
+    pager_element: int = 0
+
+
+@dataclass(frozen=True)
+class AdbStatusIndexPage:
+    """Discovery metadata from one server-rendered official status-index page."""
+
+    tender_views: tuple[AdbProjectTenderView, ...]
+    last_page: int
+    ajax_theme: str
+    ajax_libraries: str
+
+
+class _AdbTenderTableParser(HTMLParser):
+    """Parse the official server-rendered tender table without CSS coupling."""
+
+    def __init__(
+        self,
+        *,
+        project_id: str | None = None,
+        source_kind: str = "official_html",
+        listing_url: str = ADB_CURRENT_TENDERS_URL,
+    ) -> None:
+        super().__init__(convert_charrefs=True)
+        self.project_id = project_id
+        self.source_kind = source_kind
+        self.listing_url = listing_url
+        self.rows: list[dict[str, Any]] = []
+        self.has_next_page = False
+        self._in_row = False
+        self._in_cell = False
+        self._cell_is_header = False
+        self._cell_text: list[str] = []
+        self._cell_links: list[str] = []
+        self._row_cells: list[tuple[bool, str, list[str]]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = {key.casefold(): value or "" for key, value in attrs}
+        normalized = tag.casefold()
+        if normalized == "tr":
+            self._in_row = True
+            self._row_cells = []
+        elif normalized in {"td", "th"} and self._in_row:
+            self._in_cell = True
+            self._cell_is_header = normalized == "th"
+            self._cell_text = []
+            self._cell_links = []
+        elif normalized == "a":
+            href = attrs_dict.get("href", "").strip()
+            if self._in_cell and href:
+                self._cell_links.append(href)
+            rel = attrs_dict.get("rel", "").casefold()
+            label = (
+                attrs_dict.get("aria-label", "")
+                or attrs_dict.get("title", "")
+                or attrs_dict.get("class", "")
+            ).casefold()
+            if "next" in rel.split() or "next" in label:
+                self.has_next_page = True
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized = tag.casefold()
+        if normalized in {"td", "th"} and self._in_cell:
+            text = _clean_whitespace(" ".join(self._cell_text)) or ""
+            self._row_cells.append(
+                (self._cell_is_header, text, list(self._cell_links))
+            )
+            self._in_cell = False
+        elif normalized == "tr" and self._in_row:
+            self._finish_row()
+            self._in_row = False
+
+    def handle_data(self, data: str) -> None:
+        if self._in_cell and data:
+            self._cell_text.append(data)
+
+    def _finish_row(self) -> None:
+        if not self._row_cells or all(cell[0] for cell in self._row_cells):
+            return
+        if len(self._row_cells) < 5:
+            return
+        title, notice_type, status, posting_date, deadline = self._row_cells[:5]
+        links = [link for cell in self._row_cells for link in cell[2]]
+        source_url = next(
+            (urljoin("https://www.adb.org", link) for link in links if "/node/" in link),
+            None,
+        )
+        external_id = _node_id_from_url(source_url or "")
+        if not external_id:
+            logger.warning(
+                "adb_html_item_rejected stage=parse failure_class=MissingCanonicalId "
+                "retryable=false"
+            )
+            return
+        project_match = re.search(r"\b\d{5}-\d{3}\b", title[1])
+        self.rows.append(
+            {
+                "guid": external_id,
+                "title": title[1],
+                "link": source_url,
+                "notice_type": notice_type[1],
+                "source_status": status[1] or None,
+                "posting_date": posting_date[1] or None,
+                "deadline_text": deadline[1] or None,
+                "project_id": (
+                    project_match.group(0) if project_match else self.project_id
+                ),
+                "source_kind": self.source_kind,
+                "listing_url": self.listing_url,
+            }
+        )
+
+
+def parse_adb_tender_html(
+    html: str | bytes,
+    *,
+    project_id: str | None = None,
+    source_kind: str = "official_html",
+    listing_url: str = ADB_CURRENT_TENDERS_URL,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Parse official ADB tender rows and whether an explicit next page exists."""
+    parser = _AdbTenderTableParser(
+        project_id=project_id,
+        source_kind=source_kind,
+        listing_url=listing_url,
+    )
+    parser.feed(html.decode("utf-8", errors="replace") if isinstance(html, bytes) else html)
+    return parser.rows, parser.has_next_page
+
+
+def parse_adb_status_index(html: str | bytes) -> AdbStatusIndexPage:
+    """Extract public project-tender view metadata from an ADB status index."""
+    text = html.decode("utf-8", errors="replace") if isinstance(html, bytes) else html
+    settings_match = re.search(
+        r'<script[^>]+data-drupal-selector=["\']drupal-settings-json["\'][^>]*>'
+        r"(.*?)</script>",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not settings_match:
+        raise ValueError("ADB status index does not expose Drupal view settings")
+    try:
+        settings = json.loads(settings_match.group(1))
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("ADB status index contains malformed Drupal settings") from exc
+
+    ajax_state = settings.get("ajaxPageState") or {}
+    ajax_views = ((settings.get("views") or {}).get("ajaxViews") or {}).values()
+    tender_views: list[AdbProjectTenderView] = []
+    seen_projects: set[str] = set()
+    for view in ajax_views:
+        if not isinstance(view, dict) or view.get("view_display_id") != "tenders":
+            continue
+        project_id = _clean_whitespace(view.get("view_args"))
+        if not project_id or not re.fullmatch(r"\d{5}-\d{3}", project_id):
+            continue
+        if project_id in seen_projects:
+            continue
+        seen_projects.add(project_id)
+        tender_views.append(
+            AdbProjectTenderView(
+                project_id=project_id,
+                view_name=str(view.get("view_name") or "projects"),
+                view_display_id="tenders",
+                view_path=str(view.get("view_path") or "/taxonomy/term/1367"),
+                view_dom_id=str(view.get("view_dom_id") or ""),
+                pager_element=int(view.get("pager_element") or 0),
+            )
+        )
+    page_numbers = [
+        int(value)
+        for value in re.findall(r"(?:[?&]|&amp;)page=(\d+)", text)
+    ]
+    return AdbStatusIndexPage(
+        tender_views=tuple(tender_views),
+        last_page=max(page_numbers, default=0),
+        ajax_theme=str(ajax_state.get("theme") or "adb_2022"),
+        ajax_libraries=str(ajax_state.get("libraries") or ""),
+    )
+
+
+def parse_adb_views_ajax(
+    payload: str | bytes | list[dict[str, Any]],
+    *,
+    project_id: str,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Parse an ordinary ADB Drupal Views AJAX response for one project."""
+    if isinstance(payload, bytes):
+        payload = payload.decode("utf-8", errors="replace")
+    if isinstance(payload, str):
+        try:
+            commands = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError("ADB Views AJAX returned malformed JSON") from exc
+    else:
+        commands = payload
+    if not isinstance(commands, list):
+        raise ValueError("ADB Views AJAX response must be a command list")
+    fragments = [
+        command.get("data")
+        for command in commands
+        if isinstance(command, dict)
+        and command.get("command") == "insert"
+        and isinstance(command.get("data"), str)
+    ]
+    if not fragments:
+        raise ValueError("ADB Views AJAX response contains no tender HTML")
+    return parse_adb_tender_html(
+        "\n".join(fragments),
+        project_id=project_id,
+        source_kind="official_views_ajax",
+        listing_url=ADB_VIEWS_AJAX_URL,
+    )
 
 
 def _clean_whitespace(value: Any) -> str | None:
@@ -121,7 +358,15 @@ def _parse_date(value: str | None) -> datetime | None:
     if not value:
         return None
     text = value.strip()
-    for fmt in ("%Y-%m-%d", "%d-%b-%Y", "%d %B %Y", "%B %d, %Y"):
+    for fmt in (
+        "%Y-%m-%d",
+        "%d-%b-%Y",
+        "%d %b %Y",
+        "%d %B %Y",
+        "%B %d, %Y",
+        "%d %b %Y %H:%M",
+        "%d %B %Y %H:%M",
+    ):
         try:
             return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
         except ValueError:
@@ -133,6 +378,28 @@ def _parse_date(value: str | None) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def adb_source_health(
+    *,
+    fallback_used: bool,
+    truncated: bool,
+    newest_published_at: datetime | None,
+    now: datetime | None = None,
+) -> tuple[str, str, str]:
+    """Return independent execution, freshness, and coverage health."""
+    if fallback_used:
+        return "PASS", "STALE", "PARTIAL"
+    coverage = "PARTIAL" if truncated else "COMPLETE"
+    if newest_published_at is None:
+        return "PASS", "UNKNOWN", coverage
+    comparison_time = now or datetime.now(timezone.utc)
+    newest = newest_published_at
+    if newest.tzinfo is None:
+        newest = newest.replace(tzinfo=timezone.utc)
+    age_days = max(0, (comparison_time.date() - newest.date()).days)
+    freshness = "CURRENT" if age_days <= ADB_FRESHNESS_MAX_AGE_DAYS else "STALE"
+    return "PASS", freshness, coverage
 
 
 def _xml_text(item: ET.Element, tag_name: str) -> str | None:
@@ -177,6 +444,11 @@ def _rss_item_to_payload(
         "feed_url": feed_url,
         "feed_type": feed_type,
         "notice_type": notice_type,
+        "source_kind": "legacy_rss",
+        "source_status": category_fields.get("status"),
+        "posting_date": category_fields.get("date"),
+        "deadline_text": None,
+        "project_id": category_fields.get("project_number"),
     }
 
 
@@ -196,21 +468,59 @@ def parse_adb_rss(
     if max_items is not None:
         items = items[:max_items]
     payloads: list[dict[str, Any]] = []
-    for item in items:
-        payloads.append(
-            _rss_item_to_payload(
-                item,
-                feed_url=feed_url,
-                feed_type=feed_type,
-                notice_type=notice_type,
+    for index, item in enumerate(items):
+        try:
+            payloads.append(
+                _rss_item_to_payload(
+                    item,
+                    feed_url=feed_url,
+                    feed_type=feed_type,
+                    notice_type=notice_type,
+                )
             )
-        )
+        except (TypeError, ValueError) as exc:
+            logger.warning(
+                "adb_rss_item_rejected stage=parse item_index=%s "
+                "failure_class=%s retryable=false",
+                index,
+                type(exc).__name__,
+            )
     return payloads
 
 
 def is_active_adb_notice(raw: dict[str, Any]) -> bool:
-    status = (raw.get("category_fields") or {}).get("status")
+    status = raw.get("source_status") or (raw.get("category_fields") or {}).get("status")
     return (status or "").strip().casefold() == "active"
+
+
+def adb_lifecycle_status(raw: dict[str, Any], *, now: datetime | None = None) -> str:
+    """Return OPEN/CLOSED/CANCELLED/UNKNOWN from authoritative evidence."""
+    status = _clean_whitespace(
+        raw.get("source_status") or (raw.get("category_fields") or {}).get("status")
+    )
+    normalized_status = (status or "").casefold()
+    deadline = _parse_date(_clean_whitespace(raw.get("deadline_text")))
+    comparison_time = now or datetime.now(timezone.utc)
+    if comparison_time.tzinfo is None:
+        comparison_time = comparison_time.replace(tzinfo=timezone.utc)
+    else:
+        comparison_time = comparison_time.astimezone(timezone.utc)
+
+    if normalized_status in {"cancelled", "canceled"}:
+        return "CANCELLED"
+    if normalized_status in {"closed", "expired"}:
+        return "CLOSED"
+    if deadline is not None and deadline < comparison_time:
+        return "CLOSED"
+    if raw.get("source_kind") == "legacy_rss":
+        # The FeedBurner snapshot is stale and therefore cannot establish that
+        # an undated legacy notice is still open, even if its cached status says Active.
+        return "UNKNOWN"
+    if normalized_status in {"active", "open"}:
+        return "OPEN"
+    if deadline is not None and deadline >= comparison_time:
+        return "OPEN"
+    return "UNKNOWN"
 
 
 def _node_id_from_url(url: str) -> str | None:
@@ -649,8 +959,13 @@ def normalize_adb_notice_payload(raw: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("ADB guid is required")
     fields = raw.get("category_fields") or {}
     node_url = _clean_whitespace(raw.get("link")) or f"https://www.adb.org/node/{guid}"
-    project_id = _clean_whitespace(fields.get("project_number"))
-    publication_date = _parse_date(fields.get("date")) or _parse_date(raw.get("pub_date"))
+    project_id = _clean_whitespace(raw.get("project_id") or fields.get("project_number"))
+    publication_date = (
+        _parse_date(_clean_whitespace(raw.get("posting_date")))
+        or _parse_date(fields.get("date"))
+        or _parse_date(raw.get("pub_date"))
+    )
+    deadline = _parse_date(_clean_whitespace(raw.get("deadline_text")))
     title = _clean_whitespace(raw.get("title")) or f"ADB tender notice {guid}"
     country = _clean_whitespace(fields.get("countries"))
     sector = _clean_whitespace(fields.get("sectors"))
@@ -679,16 +994,62 @@ def normalize_adb_notice_payload(raw: dict[str, Any]) -> dict[str, Any]:
         "notice_type": _clean_whitespace(raw.get("notice_type")) or "Invitation for Bids",
         "project_id": project_id,
         "publication_date": publication_date,
-        "deadline": None,
+        "deadline": deadline,
+        "lifecycle_status": adb_lifecycle_status(raw),
         "source_metadata_json": {
+            "source_kind": raw.get("source_kind") or "legacy_rss",
+            "source_status": raw.get("source_status") or fields.get("status"),
+            "deadline_text": raw.get("deadline_text"),
+            "listing_url": raw.get("listing_url"),
             "feed_url": raw.get("feed_url"),
             "feed_type": raw.get("feed_type"),
             "node_url": node_url,
             "rss_categories": raw.get("categories") or [],
             "rss_category_fields": fields,
         },
-        "scrape_status": "success",
+        "scrape_status": (
+            "success"
+            if str(raw.get("source_kind") or "").startswith("official_")
+            else "legacy_fallback"
+        ),
     }
+
+
+async def reconcile_unresolved_adb_legacy_rows(
+    db: Any,
+    *,
+    authoritative_ids: set[str],
+    now: datetime | None = None,
+) -> int:
+    """Mark unmatched, undated RSS rows UNKNOWN without deleting history."""
+    from sqlalchemy import select
+
+    from app.models.all_models import Tender, TenderStatus
+
+    comparison_time = now or datetime.now(timezone.utc)
+    result = await db.execute(
+        select(Tender).where(
+            Tender.source_system == "adb",
+            Tender.status == TenderStatus.OPEN,
+            Tender.deadline.is_(None),
+        )
+    )
+    changed = 0
+    for tender in result.scalars().all():
+        metadata = tender.source_metadata_json or {}
+        is_legacy = bool(metadata.get("feed_url")) or metadata.get("source_kind") == "legacy_rss"
+        if not is_legacy or tender.external_id in authoritative_ids:
+            continue
+        tender.status = TenderStatus.UNKNOWN
+        tender.scrape_status = "legacy_unresolved"
+        tender.last_synced_at = comparison_time
+        changed += 1
+    if changed:
+        logger.info(
+            "adb_legacy_reconciled source_system=adb transitioned_to_unknown=%s",
+            changed,
+        )
+    return changed
 
 
 class AdbTenderSource:
@@ -698,7 +1059,8 @@ class AdbTenderSource:
         self,
         *,
         feed_type: str = "invitation_for_bids",
-        max_items: int = 50,
+        max_items: int = 500,
+        max_pages: int = 25,
         timeout_seconds: float = 30.0,
         request_delay_seconds: float = 0.25,
         max_retries: int = 2,
@@ -708,13 +1070,33 @@ class AdbTenderSource:
             raise ValueError(f"Unsupported ADB feed_type: {feed_type}")
         self.config = AdbSyncConfig(
             feed_type=feed_type,
-            max_items=max(1, min(int(max_items or 50), 100)),
+            max_items=max(1, min(int(max_items or 500), 2000)),
+            max_pages=max(1, min(int(max_pages or 25), 100)),
             timeout_seconds=max(1.0, float(timeout_seconds)),
             request_delay_seconds=max(0.0, float(request_delay_seconds)),
             max_retries=max(0, int(max_retries)),
             max_redirects=max(0, int(max_redirects)),
         )
         self.feed_info = ADB_FEEDS[feed_type]
+        self.fallback_used = False
+        self.primary_failure_class: str | None = None
+        self.primary_failure_retryable: bool | None = None
+        self.last_truncated = False
+        self.last_pages_fetched = 0
+        self.last_duplicate_count = 0
+        self.source_newest_published_at: datetime | None = None
+        self.source_oldest_published_at: datetime | None = None
+        self.execution_health = "NOT_RUN"
+        self.freshness_health = "UNKNOWN"
+        self.coverage_health = "NONE"
+
+    @staticmethod
+    def _listing_page_url(page: int) -> str:
+        parsed = urlparse(ADB_CURRENT_TENDERS_URL)
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        if page:
+            query["page"] = str(page)
+        return urlunparse(parsed._replace(query=urlencode(query)))
 
     async def _request(
         self,
@@ -723,50 +1105,185 @@ class AdbTenderSource:
         url: str,
         *,
         headers: dict[str, str] | None = None,
+        data: dict[str, str] | None = None,
     ) -> Any:
+        from app.services.tender_sources.diagnostics import (
+            connector_failure_details,
+            retry_after_seconds,
+        )
+
         for attempt in range(self.config.max_retries + 1):
             try:
-                return await client.request(
+                response = await client.request(
                     method,
                     url,
                     follow_redirects=True,
                     headers=headers,
+                    data=data,
                 )
-            except Exception:
-                if attempt >= self.config.max_retries:
+                response.raise_for_status()
+                return response
+            except Exception as exc:
+                details = connector_failure_details(exc)
+                if attempt >= self.config.max_retries or not details.retryable:
                     raise
-                await asyncio.sleep(0.5 * (attempt + 1))
+                delay = retry_after_seconds(exc, attempt=attempt)
+                logger.warning(
+                    "adb_request_retry stage=network attempt=%s failure_class=%s "
+                    "http_status=%s retryable=true delay_seconds=%.2f",
+                    attempt + 1,
+                    details.failure_class,
+                    details.http_status,
+                    delay,
+                )
+                await asyncio.sleep(delay)
         raise RuntimeError("ADB request failed")
+
+    async def fetch_project_tender_rows(
+        self,
+        client: Any,
+        *,
+        view: AdbProjectTenderView,
+        ajax_theme: str,
+        ajax_libraries: str,
+        page: int = 0,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Call the same public per-project Drupal view used by ADB's frontend."""
+        form_data = {
+            "view_name": view.view_name,
+            "view_display_id": view.view_display_id,
+            "view_args": view.project_id,
+            "view_path": view.view_path,
+            "view_dom_id": view.view_dom_id,
+            "pager_element": str(view.pager_element),
+            "page": str(max(0, int(page))),
+            "_drupal_ajax": "1",
+            "ajax_page_state[theme]": ajax_theme,
+            "ajax_page_state[theme_token]": "",
+            "ajax_page_state[libraries]": ajax_libraries,
+        }
+        response = await self._request(
+            client,
+            "POST",
+            ADB_VIEWS_AJAX_URL,
+            headers={
+                "Accept": "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+                "Referer": ADB_ACTIVE_PROJECTS_URL,
+            },
+            data=form_data,
+        )
+        return parse_adb_views_ajax(response.content, project_id=view.project_id)
 
     async def list_opportunities(self) -> list[dict[str, Any]]:
         import httpx
 
-        feed_url = self.feed_info["url"]
+        self.fallback_used = False
+        self.primary_failure_class = None
+        self.primary_failure_retryable = None
+        self.last_truncated = False
+        self.last_pages_fetched = 0
+        self.last_duplicate_count = 0
+        self.execution_health = "FAIL"
+        self.freshness_health = "UNKNOWN"
+        self.coverage_health = "NONE"
+        primary_rows: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
         async with httpx.AsyncClient(
             timeout=self.config.timeout_seconds,
             max_redirects=self.config.max_redirects,
             headers={"User-Agent": ADB_USER_AGENT},
         ) as client:
-            response = await self._request(
-                client,
-                "GET",
-                feed_url,
-                headers={"Accept": "application/rss+xml, application/xml, text/xml"},
+            try:
+                for page in range(self.config.max_pages):
+                    response = await self._request(
+                        client,
+                        "GET",
+                        self._listing_page_url(page),
+                        headers={"Accept": "text/html,application/xhtml+xml"},
+                    )
+                    rows, has_next = parse_adb_tender_html(response.content)
+                    self.last_pages_fetched += 1
+                    new_on_page = 0
+                    for row in rows:
+                        if row.get("notice_type", "").casefold() != "invitation for bids":
+                            continue
+                        external_id = str(row.get("guid") or "").strip()
+                        if external_id in seen_ids:
+                            self.last_duplicate_count += 1
+                            continue
+                        seen_ids.add(external_id)
+                        primary_rows.append(row)
+                        new_on_page += 1
+                        if len(primary_rows) >= self.config.max_items:
+                            self.last_truncated = has_next or new_on_page < len(rows)
+                            break
+                    if len(primary_rows) >= self.config.max_items:
+                        break
+                    if not has_next:
+                        break
+                    if page + 1 < self.config.max_pages:
+                        await asyncio.sleep(self.config.request_delay_seconds)
+                else:
+                    self.last_truncated = True
+                if not primary_rows:
+                    raise ValueError("Official ADB tender listing returned no parseable rows")
+            except Exception as exc:
+                from app.services.tender_sources.diagnostics import connector_failure_details
+
+                failure = connector_failure_details(exc)
+                self.primary_failure_class = failure.failure_class
+                self.primary_failure_retryable = failure.retryable
+                self.fallback_used = True
+                logger.warning(
+                    "adb_primary_source_unavailable stage=listing failure_class=%s "
+                    "fallback_used=true",
+                    self.primary_failure_class,
+                )
+                feed_url = self.feed_info["url"]
+                response = await self._request(
+                    client,
+                    "GET",
+                    feed_url,
+                    headers={"Accept": "application/rss+xml, application/xml, text/xml"},
+                )
+                primary_rows = parse_adb_rss(
+                    response.content,
+                    feed_url=feed_url,
+                    feed_type=self.config.feed_type,
+                    notice_type=self.feed_info["notice_type"],
+                    max_items=self.config.max_items,
+                )
+
+        publication_dates = [
+            parsed
+            for parsed in (
+                _parse_date(_clean_whitespace(row.get("posting_date")))
+                or _parse_date((row.get("category_fields") or {}).get("date"))
+                for row in primary_rows
             )
-            response.raise_for_status()
-        payloads = parse_adb_rss(
-            response.content,
-            feed_url=feed_url,
-            feed_type=self.config.feed_type,
-            notice_type=self.feed_info["notice_type"],
-            max_items=self.config.max_items,
+            if parsed is not None
+        ]
+        self.source_newest_published_at = max(publication_dates, default=None)
+        self.source_oldest_published_at = min(publication_dates, default=None)
+        (
+            self.execution_health,
+            self.freshness_health,
+            self.coverage_health,
+        ) = adb_source_health(
+            fallback_used=self.fallback_used,
+            truncated=self.last_truncated,
+            newest_published_at=self.source_newest_published_at,
         )
         logger.info(
-            "adb_rss_fetch feed_type=%s fetched=%s",
+            "adb_listing_fetch feed_type=%s fetched=%s fallback_used=%s "
+            "newest_source_publication_at=%s",
             self.config.feed_type,
-            len(payloads),
+            len(primary_rows),
+            str(self.fallback_used).lower(),
+            self.source_newest_published_at,
         )
-        return payloads
+        return primary_rows
 
     async def fetch_detail(self, external_id: str) -> AdbAttachmentMetadata | None:
         node_url = f"https://www.adb.org/node/{str(external_id).strip()}"
@@ -874,7 +1391,10 @@ class AdbTenderSource:
         }
 
     def should_import(self, raw: dict[str, Any]) -> bool:
-        return is_active_adb_notice(raw)
+        return bool(str(raw.get("guid") or "").strip())
+
+    def skip_reason(self, raw: dict[str, Any]) -> str | None:
+        return None if self.should_import(raw) else "missing_canonical_id"
 
     async def discover_attachments(self, normalized_tender: Any) -> list[Any]:
         metadata = normalized_tender.source_metadata_json or {}
@@ -950,6 +1470,7 @@ class AdbTenderSource:
         from app.services.tender_sources.base import NormalizedTender
 
         payload = normalize_adb_notice_payload(raw)
+        lifecycle_status = TenderStatus(payload["lifecycle_status"])
         return NormalizedTender(
             source_system=payload["source_system"],
             external_id=payload["external_id"],
@@ -968,7 +1489,7 @@ class AdbTenderSource:
             project_id=payload["project_id"],
             publication_date=payload["publication_date"],
             deadline=payload["deadline"],
-            status=TenderStatus.OPEN,
+            status=lifecycle_status,
             category="ADB",
             source_metadata_json=payload["source_metadata_json"],
             scrape_status=payload["scrape_status"],

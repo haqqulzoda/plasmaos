@@ -37,6 +37,10 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_user, require_approved_pilot_access, require_tier
 from app.core.evaluator import DynamicComplianceResult
 from app.core.security import authenticated_dependency
+from app.core.tender_actionability import (
+    TENDER_NOT_ACTIONABLE_DETAIL,
+    is_tender_actionable,
+)
 from app.db.session import get_db
 from app.models.all_models import (
     Proposal,
@@ -45,6 +49,7 @@ from app.models.all_models import (
     SubscriptionTier,
     TaxonomyNode,
     Tender,
+    TenderStatus,
     User,
 )
 from app.models.audit import TenderAnalysis
@@ -178,6 +183,12 @@ async def create_proposal(
     if existing:
         # Return existing proposal
         return _proposal_response(existing)
+
+    if not is_tender_actionable(tender):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=TENDER_NOT_ACTIONABLE_DETAIL,
+        )
     
     # Create new proposal
     proposal = Proposal(
@@ -230,6 +241,7 @@ async def list_proposals(
             tender_deadline=p.tender.deadline if p.tender else None,
             tender_region=p.tender.region if p.tender else None,
             tender_source_system=p.tender.source_system if p.tender else "uzex",
+            tender_status=p.tender.status if p.tender else TenderStatus.UNKNOWN,
         )
         response.append(data)
     
@@ -279,6 +291,7 @@ async def get_proposal(
         tender_deadline=proposal.tender.deadline if proposal.tender else None,
         tender_region=proposal.tender.region if proposal.tender else None,
         tender_source_system=proposal.tender.source_system if proposal.tender else "uzex",
+        tender_status=proposal.tender.status if proposal.tender else TenderStatus.UNKNOWN,
     )
 
 
@@ -430,6 +443,12 @@ async def ai_draft_proposal(
                 for item in current_data.get("line_items", [])
                 if isinstance(item, dict)
             ],
+        )
+
+    if not is_tender_actionable(proposal.tender):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=TENDER_NOT_ACTIONABLE_DETAIL,
         )
 
     tender_text = (proposal.tender.compiled_master_text or "").strip()

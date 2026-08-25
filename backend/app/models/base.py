@@ -27,6 +27,7 @@ class TenderStatus(str, enum.Enum):
     OPEN = "OPEN"
     CLOSED = "CLOSED"
     CANCELLED = "CANCELLED"
+    UNKNOWN = "UNKNOWN"
 
 
 class ProposalStatus(str, enum.Enum):

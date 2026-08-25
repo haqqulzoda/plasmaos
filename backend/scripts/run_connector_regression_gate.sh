@@ -10,6 +10,8 @@ python3 -m pytest -s -q \
   test_tender_document_status.py \
   test_storage_path_resolver.py \
   test_tender_source_foundation.py \
+  test_p0_3b_source_refresh.py \
+  test_source_refresh_worker.py \
   test_world_bank_connector.py \
   test_adb_connector.py \
   test_ebrd_connector.py \
@@ -20,4 +22,5 @@ python3 -m pytest -s -q \
   test_s1_access_foundation.py \
   test_s1_access_hardening.py \
   test_s4_3_decision_snapshot.py \
+  test_s0_5b1_unknown_actionability.py \
   test_compliance_forensic_categories.py

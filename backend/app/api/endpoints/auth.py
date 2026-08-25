@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,7 @@ from app.core.access import (
     PLATFORM_ROLE_PILOT_USER,
     USER_APPROVAL_APPROVED,
     USER_APPROVAL_PENDING,
+    is_disabled_account,
 )
 from app.core.security import (
     create_access_token,
@@ -58,6 +59,11 @@ class TokenResponse(BaseModel):
 
 
 def _apply_email_bootstrap(user: User, *, email: str) -> None:
+    # Allowlist membership may bootstrap eligible users, but it must never
+    # reverse an explicit administrative disable.
+    if is_disabled_account(user):
+        return
+
     now = datetime.now(timezone.utc)
     if user.is_admin or email in admin_email_allowlist():
         user.platform_role = PLATFORM_ROLE_ADMIN
@@ -156,6 +162,11 @@ async def google_auth_bridge(
         )
         db.add(user)
     else:
+        if is_disabled_account(user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account disabled",
+            )
         user.google_id = google_id
         user.email = email
         user.name = name
@@ -217,6 +228,14 @@ async def refresh_token(
     cookie — whichever ``get_current_user`` resolves.  Returns a new
     token with a full 8-hour lifetime and refreshes the cookie.
     """
+    # Defense in depth: the stale-version dependency rejects disabled users,
+    # and refresh itself must remain safe if that dependency changes later.
+    if is_disabled_account(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account disabled",
+        )
+
     profile = await _load_company_profile(db=db, user_id=current_user.id)
     access_token = create_access_token(data=_token_payload(current_user, profile))
 

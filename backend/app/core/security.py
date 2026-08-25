@@ -12,9 +12,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access import is_disabled_account
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.all_models import User
+
+# Compatibility mirror: Python resolves ``app.core.security`` to the sibling
+# package's ``__init__.py`` in current runtime imports.  Keep security-critical
+# account checks synchronized in case a direct-file loader still uses this file.
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8
@@ -87,6 +92,15 @@ async def _resolve_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Disabled is authoritative even when stale auth versions are allowed for
+    # the narrowly scoped access-state/token-rotation dependency.
+    if is_disabled_account(user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account disabled",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if enforce_auth_version:
         token_auth_version = payload.get("auth_version")
         current_auth_version = int(getattr(user, "auth_version", 0) or 0)
@@ -136,8 +150,8 @@ async def get_current_user_allow_stale_auth_version(
     """
     Resolve a valid, unexpired signed token while tolerating an old auth_version.
 
-    This is intentionally limited to access-state inspection and token rotation,
-    so an approval/disable mutation cannot strand a live browser session.
+    This is limited to access-state inspection and token rotation for
+    non-disabled accounts. Disabled status remains authoritative.
     """
     return await _resolve_current_user(
         credentials=credentials,

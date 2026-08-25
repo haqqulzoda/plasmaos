@@ -40,8 +40,12 @@ import {
     deadlineUrgencyLabel,
     documentAggregateLabel,
     documentStatusClasses,
+    isTenderActionable,
     sourceBadgeClasses,
     sourceLabel,
+    tenderActionabilityMessage,
+    tenderStatusClasses,
+    tenderStatusLabel,
 } from '@/types/tender';
 
 type TenderSyncState = 'IDLE' | 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
@@ -496,10 +500,15 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
         }
     }, [isPreparingDocuments, pollGizHydration, tender]);
 
-    const canAnalyze = Boolean(tender?.compliance_analysis_available);
+    const actionable = isTenderActionable(tender);
+    const canAnalyze = actionable && Boolean(tender?.compliance_analysis_available);
     const unavailableMessage = useMemo(
-        () => tender ? complianceUnavailableMessage(tender) : 'Prepare documents for analysis',
-        [tender],
+        () => tender
+            ? actionable
+                ? complianceUnavailableMessage(tender)
+                : tenderActionabilityMessage(tender.status)
+            : 'Prepare documents for analysis',
+        [actionable, tender],
     );
     const isPreparationTerminal = prepareStage === 'complete' || prepareStage === 'partial' || prepareStage === 'failed';
     const showPreparationBanner = Boolean(
@@ -602,6 +611,9 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
                     <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${sourceBadgeClasses(tender.source_system)}`}>
                         {sourceLabel(tender.source_system)}
                     </span>
+                    <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${tenderStatusClasses(tender.status)}`}>
+                        {tenderStatusLabel(tender.status)}
+                    </span>
                     <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${documentStatusClasses(tender.document_status)}`}>
                         {documentAggregateLabel(tender)}
                     </span>
@@ -615,7 +627,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
                 <p className="mt-2 max-w-4xl text-sm leading-6 text-zinc-400">{tender.description || 'No source description provided.'}</p>
             </section>
 
-            <section className="rounded-lg border border-zinc-800 bg-gray-950 p-4 shadow-[0_0_0_1px_rgba(16,185,129,0.06)]">
+            {/* <section className="rounded-lg border border-zinc-800 bg-gray-950 p-4 shadow-[0_0_0_1px_rgba(16,185,129,0.06)]">
                 <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                         <ShieldCheck className="h-4 w-4 text-emerald-300" />
@@ -697,7 +709,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
                         Decision snapshot unavailable.
                     </div>
                 )}
-            </section>
+            </section> */}
 
             <section className="rounded-lg border border-indigo-500/25 bg-gray-950 p-5 shadow-[0_0_0_1px_rgba(99,102,241,0.08)]">
                 <div className="mb-4 flex items-center justify-between gap-3">

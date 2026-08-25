@@ -12,6 +12,7 @@ from app.api.endpoints.tenders import (
     SourceSyncResponse,
     _normalized_source_result,
     _request_source_refresh,
+    _source_refresh_response,
 )
 from app.models.all_models import SourceRefreshJob
 
@@ -68,19 +69,53 @@ class FakeSession:
 
 
 class SourceRefreshTests(IsolatedAsyncioTestCase):
+    def test_refresh_response_exposes_structured_counts_fallback_and_own_timestamp(self):
+        completed = datetime(2026, 8, 24, 1, 2, 3, tzinfo=timezone.utc)
+        newest = datetime(2026, 8, 20, tzinfo=timezone.utc)
+        job = SourceRefreshJob(
+            id=uuid4(),
+            source_system="adb",
+            requested_by_user_id=uuid4(),
+            status="partial",
+            force=False,
+            fetched_count=35,
+            created_count=0,
+            updated_count=35,
+            skipped_count=0,
+            rejected_count=0,
+            failed_count=0,
+            fallback_used=True,
+            skip_reasons={},
+            failure_stage="listing",
+            failure_class="HTTPStatusError",
+            retryable=False,
+            elapsed_ms=321,
+            source_newest_published_at=newest,
+            source_oldest_published_at=datetime(2026, 1, 27, tzinfo=timezone.utc),
+            created_at=completed,
+            updated_at=completed,
+            started_at=completed,
+            completed_at=completed,
+            message="ADB partial fallback.",
+        )
+
+        response = _source_refresh_response(job)
+
+        self.assertEqual(response.fetched_count, 35)
+        self.assertEqual(response.updated_count, 35)
+        self.assertTrue(response.fallback_used)
+        self.assertEqual(response.failure_class, "HTTPStatusError")
+        self.assertEqual(response.completed_at, completed)
+        self.assertEqual(response.last_updated, completed)
+        self.assertEqual(response.source_newest_published_at, newest)
+        self.assertIsNotNone(response.source_age_days)
+
     async def test_approved_user_can_refresh_giz(self):
         db = FakeSession([None, None])
-        result = SourceSyncResponse(
-            status="success",
-            source_system="giz",
-            created_count=2,
-            updated_count=3,
-            message="GIZ sync completed.",
-        )
         with patch(
-            "app.api.endpoints.tenders._run_source_refresh",
-            new=AsyncMock(return_value=result),
-        ):
+            "app.api.endpoints.tenders.refresh_tender_source.apply_async",
+            return_value=SimpleNamespace(id="celery-job-id"),
+        ) as enqueue:
             response = await _request_source_refresh(
                 source_system="giz",
                 force=False,
@@ -89,9 +124,8 @@ class SourceRefreshTests(IsolatedAsyncioTestCase):
             )
 
         self.assertIsInstance(response, SourceRefreshResponse)
-        self.assertEqual(response.status, "completed")
-        self.assertEqual(response.created_count, 2)
-        self.assertEqual(response.updated_count, 3)
+        self.assertEqual(response.status, "queued")
+        enqueue.assert_called_once()
 
     async def test_approved_user_cannot_force_refresh(self):
         with self.assertRaises(HTTPException) as raised:
@@ -111,14 +145,9 @@ class SourceRefreshTests(IsolatedAsyncioTestCase):
 
     async def test_admin_can_force_refresh(self):
         db = FakeSession([None])
-        result = SourceSyncResponse(
-            status="success",
-            source_system="giz",
-            message="GIZ sync completed.",
-        )
         with patch(
-            "app.api.endpoints.tenders._run_source_refresh",
-            new=AsyncMock(return_value=result),
+            "app.api.endpoints.tenders.refresh_tender_source.apply_async",
+            return_value=SimpleNamespace(id="celery-job-id"),
         ):
             response = await _request_source_refresh(
                 source_system="giz",
@@ -126,7 +155,7 @@ class SourceRefreshTests(IsolatedAsyncioTestCase):
                 current_user=user(role="admin"),
                 db=db,
             )
-        self.assertEqual(response.status, "completed")
+        self.assertEqual(response.status, "queued")
         self.assertTrue(db.job.force)
 
     async def test_repeated_click_reuses_active_job(self):
@@ -160,7 +189,7 @@ class SourceRefreshTests(IsolatedAsyncioTestCase):
 
     def test_unavailable_source_is_normalized_without_losing_cached_data(self):
         result = SourceSyncResponse(
-            status="failed",
+            status="source_unavailable",
             source_system="giz",
             failed_count=1,
             message="GIZ sync failed while fetching public tender pages.",
@@ -169,3 +198,32 @@ class SourceRefreshTests(IsolatedAsyncioTestCase):
         self.assertEqual(status_value, "source_unavailable")
         self.assertEqual((created, updated, failed), (0, 0, 1))
 
+    def test_parser_failure_is_not_misreported_as_source_unavailable(self):
+        result = SourceSyncResponse(
+            status="failed",
+            source_system="giz",
+            failed_count=1,
+            failure_stage="listing",
+            failure_class="XMLSyntaxError",
+            retryable=False,
+            message="GIZ connector failed during listing.",
+        )
+        status_value, *_ = _normalized_source_result(result)
+        self.assertEqual(status_value, "failed")
+
+    async def test_enqueue_failure_is_persisted_as_dispatch_failure(self):
+        db = FakeSession([None, None])
+        with patch(
+            "app.api.endpoints.tenders.refresh_tender_source.apply_async",
+            side_effect=ConnectionError("redis unavailable"),
+        ):
+            response = await _request_source_refresh(
+                source_system="giz",
+                force=False,
+                current_user=user(),
+                db=db,
+            )
+
+        self.assertEqual(response.status, "failed")
+        self.assertEqual(response.failed_count, 1)
+        self.assertIn("dispatch: ConnectionError", response.message)

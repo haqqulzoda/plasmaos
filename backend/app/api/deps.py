@@ -16,6 +16,7 @@ from app.core.access import (
     PLATFORM_ROLE_OPERATOR,
     USER_APPROVAL_APPROVED,
     configured_email_allowlist,
+    is_disabled_account,
 )
 from app.core.security import get_current_user as core_get_current_user
 from app.db.session import get_db
@@ -58,13 +59,26 @@ def _normalized_email(user: User) -> str:
     return (user.email or "").strip().lower()
 
 
+def _require_enabled_account(user: User) -> None:
+    """Enforce the disabled-first invariant before any role bypass."""
+    if is_disabled_account(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account disabled",
+        )
+
+
 def is_admin_user(user: User) -> bool:
     """Return whether a user has platform administrator access."""
+    if is_disabled_account(user):
+        return False
     return bool(user.is_admin) or user.platform_role == PLATFORM_ROLE_ADMIN
 
 
 def is_operator_user(user: User) -> bool:
     """Return whether a user has operator-level platform access."""
+    if is_disabled_account(user):
+        return False
     if is_admin_user(user):
         return True
     if user.platform_role == PLATFORM_ROLE_OPERATOR:
@@ -79,6 +93,8 @@ def is_operator_or_admin(current_user: User) -> bool:
 
 def is_approved_user(user: User) -> bool:
     """Return whether a user has passed account approval."""
+    if is_disabled_account(user):
+        return False
     if is_operator_user(user):
         return True
     return user.approval_status == USER_APPROVAL_APPROVED
@@ -91,6 +107,8 @@ def has_approved_pilot_account_access(user: User, company_profile: object | None
     S1.1 does not enforce this on tender APIs yet; S1.2/S1.3 can use this
     helper when onboarding and approval gates become active.
     """
+    if is_disabled_account(user):
+        return False
     if is_operator_user(user):
         return True
     if not is_approved_user(user) or company_profile is None:
@@ -102,6 +120,7 @@ async def require_admin(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """Require an authenticated administrator."""
+    _require_enabled_account(current_user)
     if not is_admin_user(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -115,6 +134,7 @@ async def require_operator(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """Require an authenticated operator or administrator."""
+    _require_enabled_account(current_user)
     if not is_operator_user(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -135,6 +155,7 @@ async def require_approved_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """Require an approved user, operator, or administrator."""
+    _require_enabled_account(current_user)
     if not is_approved_user(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -149,6 +170,7 @@ async def require_approved_pilot_access(
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """Require approved user + approved company, with admin/operator bypass."""
+    _require_enabled_account(current_user)
     if is_operator_user(current_user):
         return current_user
 

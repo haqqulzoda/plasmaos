@@ -12,7 +12,11 @@ import type {
     OverrideResponse,
 } from '@/types/compliance';
 import type { Tender, TenderDocument } from '@/types/tender';
-import { complianceUnavailableMessage } from '@/types/tender';
+import {
+    complianceUnavailableMessage,
+    isTenderActionable,
+    tenderActionabilityMessage,
+} from '@/types/tender';
 import { extractHybridCompliance } from '@/lib/useHybridCompliance';
 import { api } from '@/lib/api';
 import {
@@ -478,9 +482,17 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                 setResolvedTenderId(resolvedId);
                 setTenderTitle(tenderData?.title || `Tender ${resolvedId.slice(0, 8)}`);
 
+                if (tenderData && !isTenderActionable(tenderData)) {
+                    setRawText('');
+                    setComplianceGuardMessage(tenderActionabilityMessage(tenderData.status));
+                    setTextAccessReadyVersion((version) => version + 1);
+                    return;
+                }
+
                 if (tenderData && !tenderData.compliance_analysis_available) {
                     setRawText('');
                     setComplianceGuardMessage(complianceUnavailableMessage(tenderData));
+                    setTextAccessReadyVersion((version) => version + 1);
                     return;
                 }
 

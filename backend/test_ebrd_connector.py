@@ -222,14 +222,30 @@ class EbrdConnectorTests(unittest.TestCase):
             async def _request(self, client, url):  # type: ignore[override]
                 raise TimeoutError("simulated ECEPP timeout")
 
-        source = TimeoutEbrdSource(max_items=2, detail_items=0)
+        # This test covers fallback selection, not wall-clock active filtering.
+        # The snapshot's first notice has since closed, so disable active_only
+        # to keep the fallback contract deterministic without fabricating rows.
+        source = TimeoutEbrdSource(max_items=2, detail_items=0, active_only=False)
         rows = asyncio.run(source.list_opportunities())
 
         self.assertTrue(source.last_used_bootstrap_fallback)
         self.assertEqual(source.last_fetch_error_type, "TimeoutError")
+        self.assertTrue(source.last_fetch_retryable)
         self.assertEqual(len(rows), 2)
         self.assertTrue(rows[0]["source_metadata_json"]["ebrd_bootstrap_fallback"])
         self.assertEqual(rows[1]["region"], "Central Asia")
+
+    def test_active_fallback_does_not_reintroduce_expired_notices(self) -> None:
+        class TimeoutEbrdSource(EbrdTenderSource):
+            async def _request(self, client, url):  # type: ignore[override]
+                raise TimeoutError("simulated ECEPP timeout")
+
+        source = TimeoutEbrdSource(max_items=2, detail_items=0, active_only=True)
+        rows = asyncio.run(source.list_opportunities())
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["notice_type"], "General Procurement Notice")
+        self.assertEqual(source.last_rows_rejected, 1)
 
     def test_live_listing_failure_can_disable_bootstrap_fallback(self) -> None:
         class TimeoutEbrdSource(EbrdTenderSource):

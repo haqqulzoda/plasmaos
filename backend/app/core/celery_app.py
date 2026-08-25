@@ -27,6 +27,7 @@ celery_app = Celery(
     backend=result_backend,
     include=[
         "app.workers.tender_tasks",
+        "app.workers.source_refresh_tasks",
         "app.workers.hunter_tasks",
     ],
 )
@@ -65,6 +66,10 @@ celery_app.conf.task_queues = (
 )
 
 celery_app.conf.task_routes = {
+    "app.workers.source_refresh_tasks.refresh_tender_source": {
+        "queue": "celery",
+        "routing_key": "celery",
+    },
     "app.workers.tender_tasks.hydrate_giz_documents": {
         "queue": "heavy_dl_queue",
         "routing_key": "heavy_dl_queue",

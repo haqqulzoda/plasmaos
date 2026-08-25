@@ -217,10 +217,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                 Admin Console
                             </Link>
                         )}
-                        <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1.5">
-                            <div className="w-2 h-2 rounded-full animate-pulse bg-emerald-500" />
-                            <span className="text-emerald-400 text-xs font-semibold tracking-wide">Agent Active</span>
-                        </div>
+                      
                     </div>
                 </header>
 

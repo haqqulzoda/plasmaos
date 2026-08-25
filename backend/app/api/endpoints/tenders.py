@@ -13,6 +13,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 import zipfile
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from time import monotonic
@@ -84,6 +85,11 @@ from app.core.reproducibility import (
 )
 from app.core.scraper import UzExScraper
 from app.core.storage_paths import normalize_storage_path, storage_file_exists
+from app.core.tender_actionability import (
+    TENDER_NOT_ACTIONABLE_DETAIL,
+    actionable_tender_condition,
+    is_tender_actionable,
+)
 from app.core.services import normalize_target_services, service_label
 from app.crud.crud_profile import get_profile_for_compliance_match
 from app.crud.exceptions import ProfileNotFoundException
@@ -129,8 +135,19 @@ from app.services.compliance_engine import (
 from app.services.giz_document_hydration import (
     hydrate_giz_tender_documents as hydrate_giz_tender_documents_inline,
 )
-from app.services.tender_sources.base import NormalizedTender, assert_source_scope
-from app.services.tender_sources.adb import AdbTenderSource
+from app.services.tender_sources.base import (
+    NormalizedTender,
+    assert_source_scope,
+    reconcile_past_deadline_open_tenders,
+)
+from app.services.tender_sources.adb import (
+    AdbTenderSource,
+    reconcile_unresolved_adb_legacy_rows,
+)
+from app.services.tender_sources.diagnostics import (
+    connector_failure_details,
+    safe_failure_message,
+)
 from app.services.tender_sources.ebrd import EbrdTenderSource
 from app.services.tender_sources.giz import (
     DEFAULT_GIZ_TENDER_PAGES,
@@ -163,6 +180,7 @@ from app.workers.tender_tasks import (
     hydrate_giz_documents,
     process_tender_docs,
 )
+from app.workers.source_refresh_tasks import refresh_tender_source
 
 logger = logging.getLogger(__name__)
 
@@ -186,10 +204,22 @@ class SourceSyncResponse(BaseModel):
     created_count: int = 0
     updated_count: int = 0
     skipped_count: int = 0
+    rejected_count: int = 0
     failed_count: int = 0
     attachment_count: int = 0
     documents_downloaded: int = 0
     dry_run: bool = False
+    failure_stage: str | None = None
+    failure_class: str | None = None
+    retryable: bool | None = None
+    fallback_used: bool = False
+    skip_reasons: dict[str, int] = Field(default_factory=dict)
+    elapsed_ms: int | None = None
+    source_newest_published_at: datetime | None = None
+    source_oldest_published_at: datetime | None = None
+    execution_health: str | None = None
+    freshness_health: str | None = None
+    coverage_health: str | None = None
     errors: list[str] = Field(default_factory=list)
     message: str
 
@@ -202,7 +232,24 @@ class SourceRefreshResponse(BaseModel):
     job_id: UUID
     created_count: int = 0
     updated_count: int = 0
+    fetched_count: int = 0
+    skipped_count: int = 0
+    rejected_count: int = 0
     failed_count: int = 0
+    fallback_used: bool = False
+    skip_reasons: dict[str, int] = Field(default_factory=dict)
+    failure_class: str | None = None
+    failure_stage: str | None = None
+    retryable: bool | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    elapsed_ms: int | None = None
+    source_newest_published_at: datetime | None = None
+    source_oldest_published_at: datetime | None = None
+    source_age_days: int | None = None
+    execution_health: str | None = None
+    freshness_health: str | None = None
+    coverage_health: str | None = None
     last_updated: datetime | None = None
     reused: bool = False
     message: str
@@ -217,10 +264,22 @@ class AdbSyncResponse(BaseModel):
     created: int = 0
     updated: int = 0
     skipped: int = 0
+    rejected_count: int = 0
     failed: int = 0
     attachments_discovered: int = 0
     documents_downloaded: int = 0
     dry_run: bool = False
+    failure_stage: str | None = None
+    failure_class: str | None = None
+    retryable: bool | None = None
+    fallback_used: bool = False
+    skip_reasons: dict[str, int] = Field(default_factory=dict)
+    elapsed_ms: int | None = None
+    source_newest_published_at: datetime | None = None
+    source_oldest_published_at: datetime | None = None
+    execution_health: str | None = None
+    freshness_health: str | None = None
+    coverage_health: str | None = None
     errors: list[str] = Field(default_factory=list)
     message: str
 
@@ -1586,6 +1645,20 @@ def _normalize_tender_source_filter(source_system: str | None) -> str | None:
             detail="Unsupported source_system",
         )
     return normalized_source
+
+
+def _tender_lifecycle_condition(value: str | None):
+    """Resolve Explorer lifecycle filtering; the default is actionable OPEN."""
+    normalized = (value or "open").strip().casefold()
+    if normalized in {"all", "any"}:
+        return None
+    if normalized == "open":
+        return actionable_tender_condition(Tender)
+    try:
+        lifecycle_status = TenderStatus(normalized.upper())
+    except ValueError as exc:
+        raise ValueError("Unsupported tender status") from exc
+    return Tender.status == lifecycle_status
 
 
 def _split_query_values(values: list[str] | str | None) -> list[str]:
@@ -3561,6 +3634,12 @@ async def analyze_tender(
             detail="Tender not found",
         )
 
+    if not is_tender_actionable(tender):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=TENDER_NOT_ACTIONABLE_DETAIL,
+        )
+
     tender_text = (tender.compiled_master_text or "").strip()
     if not tender_text:
         raise HTTPException(
@@ -4264,6 +4343,7 @@ async def list_tenders(
     countries: list[str] | None = Query(default=None),
     service: str | None = Query(default=None),
     services: list[str] | None = Query(default=None),
+    tender_status: str | None = Query(default=None, alias="status"),
     deadline_status: str | None = Query(default=None),
     deadline_from: datetime | None = Query(default=None),
     deadline_to: datetime | None = Query(default=None),
@@ -4306,6 +4386,15 @@ async def list_tenders(
             Tender.created_at,
         )
     ).where(customer_visible_tender_condition(Tender))
+    try:
+        lifecycle_condition = _tender_lifecycle_condition(tender_status)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    if lifecycle_condition is not None:
+        query = query.where(lifecycle_condition)
     normalized_source = _normalize_tender_source_filter(source_system or source)
     if normalized_source:
         query = query.where(Tender.source_system == normalized_source)
@@ -4807,7 +4896,7 @@ async def _sync_uzex_tenders(
         error_tb = traceback.format_exc()
         logger.error(f"Refresh failed: {e}\n{error_tb}")
         return RefreshResponse(
-            status="partial",
+            status="source_unavailable",
             new_count=0,
             updated_count=0,
             message=f"Portal temporarily unavailable. Existing tenders are still shown. ({type(e).__name__})",
@@ -4835,7 +4924,7 @@ async def refresh_tenders(
     dependencies=[Depends(require_operator_or_admin)],
 )
 async def sync_world_bank_tenders(
-    max_pages: int = Query(default=3, ge=1, le=10),
+    max_pages: int = Query(default=25, ge=1, le=100),
     rows: int = Query(default=100, ge=1, le=100),
     active_only: bool = Query(default=True),
     dry_run: bool = Query(default=False),
@@ -4844,6 +4933,7 @@ async def sync_world_bank_tenders(
     """
     Import World Bank procurement notices via the official procnotices API.
     """
+    sync_started = monotonic()
     source = WorldBankTenderSource(
         rows=rows,
         max_pages=max_pages,
@@ -4856,26 +4946,37 @@ async def sync_world_bank_tenders(
     skipped_count = 0
     failed_count = 0
     attachment_count = 0
+    lifecycle_closed_count = 0
+    skip_reasons: Counter[str] = Counter()
 
     try:
         raw_notices = await source.list_opportunities()
     except Exception as exc:
+        failure = connector_failure_details(exc)
         logger.exception("world_bank_sync_fetch_failed")
         return SourceSyncResponse(
-            status="failed",
+            status=failure.status,
             source_system=source.source_system,
             failed_count=1,
             dry_run=dry_run,
+            failure_stage="listing",
+            failure_class=failure.failure_class,
+            retryable=failure.retryable,
+            elapsed_ms=int((monotonic() - sync_started) * 1000),
             errors=[type(exc).__name__],
-            message="World Bank sync failed while fetching notices.",
+            message=safe_failure_message("World Bank", "listing", exc),
         )
 
-    fetched_count = len(raw_notices)
+    fetched_count = len(raw_notices) + source.last_duplicate_count
+    if source.last_duplicate_count:
+        skipped_count += source.last_duplicate_count
+        skip_reasons["duplicate"] += source.last_duplicate_count
     for raw_notice in raw_notices:
         external_id = str(raw_notice.get("id") or "").strip()
         try:
             if not source.should_import(raw_notice):
                 skipped_count += 1
+                skip_reasons[source.skip_reason(raw_notice) or "non_actionable_notice"] += 1
                 continue
 
             normalized = source.normalize(raw_notice)
@@ -4910,6 +5011,17 @@ async def sync_world_bank_tenders(
                     f"{external_id or 'unknown'}: {type(exc).__name__}"
                 )
 
+    try:
+        lifecycle_closed_count = await reconcile_past_deadline_open_tenders(
+            db,
+            source_system="world_bank",
+        )
+        updated_count += lifecycle_closed_count
+    except Exception as exc:
+        failed_count += 1
+        errors.append(f"lifecycle: {type(exc).__name__}")
+        logger.exception("world_bank_lifecycle_reconciliation_failed")
+
     if dry_run:
         await db.rollback()
     else:
@@ -4932,7 +5044,13 @@ async def sync_world_bank_tenders(
                 message="World Bank sync failed while saving notices.",
             )
 
-    status_value = "success" if failed_count == 0 else "partial"
+    status_value = (
+        "success"
+        if failed_count == 0 and not source.last_truncated
+        else "partial"
+    )
+    if source.last_truncated:
+        errors.insert(0, "pagination: safety_cap_or_repeated_page")
     return SourceSyncResponse(
         status=status_value,
         source_system=source.source_system,
@@ -4940,9 +5058,14 @@ async def sync_world_bank_tenders(
         created_count=created_count,
         updated_count=updated_count,
         skipped_count=skipped_count,
+        rejected_count=skipped_count + failed_count,
         failed_count=failed_count,
         attachment_count=attachment_count,
         dry_run=dry_run,
+        skip_reasons=dict(skip_reasons),
+        elapsed_ms=int((monotonic() - sync_started) * 1000),
+        source_newest_published_at=source.source_newest_published_at,
+        source_oldest_published_at=source.source_oldest_published_at,
         errors=errors,
         message=(
             "World Bank sync dry run completed."
@@ -4950,7 +5073,10 @@ async def sync_world_bank_tenders(
             else (
                 "World Bank sync completed: "
                 f"{created_count} created, {updated_count} updated, "
-                f"{skipped_count} skipped, {failed_count} failed."
+                f"{skipped_count} skipped, {failed_count} failed; "
+                f"{lifecycle_closed_count} lifecycle row(s) closed; "
+                f"{source.last_pages_fetched} page(s) fetched"
+                + ("; coverage truncated." if source.last_truncated else ".")
             )
         ),
     )
@@ -5704,6 +5830,7 @@ async def sync_giz_tenders(
     """
     Import GIZ country-office tenders from official public giz.de tender pages.
     """
+    sync_started = monotonic()
     source = GizTenderSource(
         source_pages=DEFAULT_GIZ_TENDER_PAGES[:max_pages],
         eproc_max_pages=max_pages,
@@ -5720,14 +5847,19 @@ async def sync_giz_tenders(
     try:
         raw_notices = await source.list_opportunities()
     except Exception as exc:
+        failure = connector_failure_details(exc)
         logger.exception("giz_sync_fetch_failed")
         return SourceSyncResponse(
-            status="failed",
+            status=failure.status,
             source_system=source.source_system,
             failed_count=1,
             dry_run=dry_run,
+            failure_stage="listing",
+            failure_class=failure.failure_class,
+            retryable=failure.retryable,
+            elapsed_ms=int((monotonic() - sync_started) * 1000),
             errors=[type(exc).__name__],
-            message="GIZ sync failed while fetching public tender pages.",
+            message=safe_failure_message("GIZ", "listing", exc),
         )
 
     fetched_count = len(raw_notices)
@@ -5806,7 +5938,19 @@ async def sync_giz_tenders(
                 message=_giz_commit_error_message(exc),
             )
 
-    status_value = "success" if failed_count == 0 else "partial"
+    status_value = (
+        "success"
+        if failed_count == 0 and not source.last_failure_details
+        else "partial"
+    )
+    if source.last_failure_details:
+        first_failure = source.last_failure_details[0]
+        errors.insert(
+            0,
+            "listing: "
+            f"{first_failure['failure_class']}"
+            f"; retryable={str(first_failure['retryable']).lower()}",
+        )
     return SourceSyncResponse(
         status=status_value,
         source_system=source.source_system,
@@ -5818,6 +5962,22 @@ async def sync_giz_tenders(
         attachment_count=attachment_count,
         documents_downloaded=documents_downloaded,
         dry_run=dry_run,
+        failure_stage=(
+            str(source.last_failure_details[0]["stage"])
+            if source.last_failure_details
+            else None
+        ),
+        failure_class=(
+            str(source.last_failure_details[0]["failure_class"])
+            if source.last_failure_details
+            else None
+        ),
+        retryable=(
+            bool(source.last_failure_details[0]["retryable"])
+            if source.last_failure_details
+            else None
+        ),
+        elapsed_ms=int((monotonic() - sync_started) * 1000),
         errors=errors,
         message=(
             "GIZ sync dry run completed. No tenders were written."
@@ -5828,6 +5988,15 @@ async def sync_giz_tenders(
                 f"{quarantined_count} quarantined, "
                 f"{attachment_count} public document link(s), "
                 f"{documents_downloaded} downloaded, {failed_count} failed."
+                + (
+                    " Partial source coverage: "
+                    f"stage={source.last_failure_details[0]['stage']}, "
+                    f"failure_class={source.last_failure_details[0]['failure_class']}, "
+                    "retryable="
+                    f"{str(source.last_failure_details[0]['retryable']).lower()}."
+                    if source.last_failure_details
+                    else ""
+                )
             )
         ),
     )
@@ -6086,6 +6255,7 @@ async def sync_ebrd_tenders(
     """
     Import EBRD ECEPP public procurement notices as metadata-only records.
     """
+    sync_started = monotonic()
     source = EbrdTenderSource(
         max_items=max_items,
         detail_items=detail_items,
@@ -6102,14 +6272,19 @@ async def sync_ebrd_tenders(
     try:
         raw_notices = await source.list_opportunities()
     except Exception as exc:
+        failure = connector_failure_details(exc)
         logger.exception("ebrd_sync_fetch_failed")
         return SourceSyncResponse(
-            status="failed",
+            status=failure.status,
             source_system=source.source_system,
             failed_count=1,
             dry_run=dry_run,
+            failure_stage="listing",
+            failure_class=failure.failure_class,
+            retryable=failure.retryable,
+            elapsed_ms=int((monotonic() - sync_started) * 1000),
             errors=[type(exc).__name__],
-            message="EBRD sync failed while fetching ECEPP notices.",
+            message=safe_failure_message("EBRD", "listing", exc),
         )
     if source.last_used_bootstrap_fallback and source.last_fetch_error_type:
         errors.append(f"live_fetch: {source.last_fetch_error_type}; used bootstrap fallback")
@@ -6187,6 +6362,15 @@ async def sync_ebrd_tenders(
         failed_count=failed_count,
         attachment_count=attachment_count,
         dry_run=dry_run,
+        failure_stage="listing" if source.last_used_bootstrap_fallback else None,
+        failure_class=source.last_fetch_error_type,
+        retryable=(
+            source.last_fetch_retryable
+            if source.last_used_bootstrap_fallback
+            else None
+        ),
+        fallback_used=source.last_used_bootstrap_fallback,
+        elapsed_ms=int((monotonic() - sync_started) * 1000),
         errors=errors,
         message=(
             "EBRD sync dry run completed. No tenders were written."
@@ -6214,15 +6398,17 @@ async def sync_ebrd_tenders(
     dependencies=[Depends(require_operator_or_admin)],
 )
 async def sync_adb_tenders(
-    max_items: int = Query(default=50, ge=1, le=100),
+    max_items: int = Query(default=500, ge=1, le=2000),
+    max_pages: int = Query(default=25, ge=1, le=100),
     feed_type: str = Query(default="invitation_for_bids"),
     dry_run: bool = Query(default=False),
     download_documents: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
 ) -> AdbSyncResponse:
     """
-    Import ADB tender notices from official RSS feeds.
+    Import ADB tender notices from the official current listing, with degraded RSS fallback.
     """
+    sync_started = monotonic()
     if download_documents:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -6233,7 +6419,11 @@ async def sync_adb_tenders(
         )
 
     try:
-        source = AdbTenderSource(feed_type=feed_type, max_items=max_items)
+        source = AdbTenderSource(
+            feed_type=feed_type,
+            max_items=max_items,
+            max_pages=max_pages,
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -6247,28 +6437,38 @@ async def sync_adb_tenders(
     skipped_count = 0
     failed_count = 0
     attachments_discovered = 0
+    lifecycle_closed_count = 0
+    legacy_unresolved_count = 0
+    skip_reasons: Counter[str] = Counter()
 
     try:
         raw_notices = await source.list_opportunities()
     except Exception as exc:
+        failure = connector_failure_details(exc)
         logger.exception("adb_sync_fetch_failed")
         return AdbSyncResponse(
-            status="failed",
+            status=failure.status,
             fetched=0,
             failed=1,
             dry_run=dry_run,
+            failure_stage="listing",
+            failure_class=failure.failure_class,
+            retryable=failure.retryable,
+            execution_health="FAIL",
+            freshness_health="UNKNOWN",
+            coverage_health="NONE",
+            elapsed_ms=int((monotonic() - sync_started) * 1000),
             errors=[type(exc).__name__],
-            message="ADB sync failed while fetching RSS feed.",
+            message=safe_failure_message("ADB", "listing", exc),
         )
 
     fetched = len(raw_notices)
-    for index, raw_notice in enumerate(raw_notices):
-        if index > 0:
-            await asyncio.sleep(source.config.request_delay_seconds)
+    for raw_notice in raw_notices:
         external_id = str(raw_notice.get("guid") or "").strip()
         try:
             if not source.should_import(raw_notice):
                 skipped_count += 1
+                skip_reasons[source.skip_reason(raw_notice) or "non_actionable_notice"] += 1
                 continue
 
             normalized = source.normalize(raw_notice)
@@ -6301,6 +6501,26 @@ async def sync_adb_tenders(
             if len(errors) < 10:
                 errors.append(f"{external_id or 'unknown'}: {type(exc).__name__}")
 
+    try:
+        lifecycle_closed_count = await reconcile_past_deadline_open_tenders(
+            db,
+            source_system="adb",
+        )
+        authoritative_ids = (
+            {str(row.get("guid") or "").strip() for row in raw_notices}
+            if not source.fallback_used
+            else set()
+        )
+        legacy_unresolved_count = await reconcile_unresolved_adb_legacy_rows(
+            db,
+            authoritative_ids=authoritative_ids,
+        )
+        updated_count += lifecycle_closed_count + legacy_unresolved_count
+    except Exception as exc:
+        failed_count += 1
+        errors.append(f"lifecycle: {type(exc).__name__}")
+        logger.exception("adb_lifecycle_reconciliation_failed")
+
     if dry_run:
         await db.rollback()
     else:
@@ -6318,21 +6538,50 @@ async def sync_adb_tenders(
                 failed=failed_count + 1,
                 attachments_discovered=attachments_discovered,
                 dry_run=dry_run,
+                execution_health="FAIL",
+                freshness_health=source.freshness_health,
+                coverage_health=source.coverage_health,
                 errors=[*errors, f"commit: {type(exc).__name__}"][:10],
                 message="ADB sync failed while saving notices.",
             )
 
-    status_value = "success" if failed_count == 0 else "partial"
+    status_value = (
+        "success"
+        if failed_count == 0
+        and source.execution_health == "PASS"
+        and source.freshness_health == "CURRENT"
+        and source.coverage_health == "COMPLETE"
+        else "partial"
+    )
+    if source.fallback_used:
+        errors.insert(
+            0,
+            f"primary_listing: {source.primary_failure_class}; used legacy RSS fallback",
+        )
+    if source.last_truncated:
+        errors.insert(0, "pagination: safety_cap_reached")
     return AdbSyncResponse(
         status=status_value,
         fetched=fetched,
         created=created_count,
         updated=updated_count,
         skipped=skipped_count,
+        rejected_count=skipped_count + failed_count,
         failed=failed_count,
         attachments_discovered=attachments_discovered,
         documents_downloaded=0,
         dry_run=dry_run,
+        failure_stage="listing" if source.fallback_used else None,
+        failure_class=source.primary_failure_class,
+        retryable=source.primary_failure_retryable,
+        fallback_used=source.fallback_used,
+        skip_reasons=dict(skip_reasons),
+        elapsed_ms=int((monotonic() - sync_started) * 1000),
+        source_newest_published_at=source.source_newest_published_at,
+        source_oldest_published_at=source.source_oldest_published_at,
+        execution_health=source.execution_health,
+        freshness_health=source.freshness_health,
+        coverage_health=source.coverage_health,
         errors=errors,
         message=(
             "ADB sync dry run completed. No tenders were written."
@@ -6340,7 +6589,15 @@ async def sync_adb_tenders(
             else (
                 "ADB sync completed: "
                 f"{created_count} created, {updated_count} updated, "
-                f"{skipped_count} skipped, {failed_count} failed."
+                f"{skipped_count} skipped, {failed_count} failed; "
+                f"{lifecycle_closed_count} deadline row(s) closed; "
+                f"{legacy_unresolved_count} legacy row(s) marked unknown"
+                + (
+                    "; legacy RSS fallback used because the official current "
+                    "listing was unavailable."
+                    if source.fallback_used
+                    else "."
+                )
             )
         ),
     )
@@ -6348,7 +6605,7 @@ async def sync_adb_tenders(
 
 SOURCE_REFRESH_DEFAULTS: dict[str, dict[str, Any]] = {
     "world_bank": {
-        "max_pages": 3,
+        "max_pages": 25,
         "rows": 100,
         "active_only": True,
         "dry_run": False,
@@ -6365,7 +6622,8 @@ SOURCE_REFRESH_DEFAULTS: dict[str, dict[str, Any]] = {
         "dry_run": False,
     },
     "adb": {
-        "max_items": 50,
+        "max_items": 500,
+        "max_pages": 25,
         "feed_type": "invitation_for_bids",
         "dry_run": False,
         "download_documents": False,
@@ -6388,13 +6646,40 @@ def _source_refresh_response(
     reused: bool = False,
     message: str | None = None,
 ) -> SourceRefreshResponse:
+    newest = getattr(job, "source_newest_published_at", None)
+    source_age_days = None
+    if newest is not None:
+        comparable = newest
+        if comparable.tzinfo is None:
+            comparable = comparable.replace(tzinfo=timezone.utc)
+        source_age_days = max(
+            0,
+            (datetime.now(timezone.utc).date() - comparable.date()).days,
+        )
     return SourceRefreshResponse(
         status=status_value or job.status,
         source_system=job.source_system,
         job_id=job.id,
         created_count=job.created_count,
         updated_count=job.updated_count,
+        fetched_count=int(getattr(job, "fetched_count", 0) or 0),
+        skipped_count=int(getattr(job, "skipped_count", 0) or 0),
+        rejected_count=int(getattr(job, "rejected_count", 0) or 0),
         failed_count=job.failed_count,
+        fallback_used=bool(getattr(job, "fallback_used", False)),
+        skip_reasons=getattr(job, "skip_reasons", None) or {},
+        failure_class=getattr(job, "failure_class", None),
+        failure_stage=getattr(job, "failure_stage", None),
+        retryable=getattr(job, "retryable", None),
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        elapsed_ms=getattr(job, "elapsed_ms", None),
+        source_newest_published_at=newest,
+        source_oldest_published_at=getattr(job, "source_oldest_published_at", None),
+        source_age_days=source_age_days,
+        execution_health=getattr(job, "execution_health", None),
+        freshness_health=getattr(job, "freshness_health", None),
+        coverage_health=getattr(job, "coverage_health", None),
         last_updated=job.completed_at,
         reused=reused,
         message=message or job.message or "Refresh requested.",
@@ -6442,21 +6727,14 @@ def _normalized_source_result(
     failed = int(
         getattr(result, "failed_count", getattr(result, "failed", 0)) or 0
     )
-    fetched = int(
-        getattr(result, "fetched_count", getattr(result, "fetched", 0)) or 0
-    )
     message = result.message
 
     if raw_status == "success":
         return "completed", created, updated, failed, message
-    if raw_status == "partial":
-        if fetched == 0 and created == 0 and updated == 0 and (
-            "unavailable" in message.casefold() or "fetch" in message.casefold()
-        ):
-            return "source_unavailable", created, updated, failed, message
-        return "partial", created, updated, failed, message
-    if fetched == 0 and created == 0 and updated == 0:
+    if raw_status == "source_unavailable":
         return "source_unavailable", created, updated, failed, message
+    if raw_status == "partial":
+        return "partial", created, updated, failed, message
     return "failed", created, updated, failed, message
 
 
@@ -6499,9 +6777,13 @@ async def _request_source_refresh(
         if active_updated_at >= stale_before:
             return _source_refresh_response(
                 active_job,
-                status_value="running",
+                status_value=active_job.status,
                 reused=True,
-                message="Already refreshing.",
+                message=(
+                    "Already queued."
+                    if active_job.status == "queued"
+                    else "Already refreshing."
+                ),
             )
         active_job.status = "failed"
         active_job.completed_at = now
@@ -6535,6 +6817,14 @@ async def _request_source_refresh(
         requested_by_user_id=current_user.id,
         status="queued",
         force=force,
+        created_count=0,
+        updated_count=0,
+        fetched_count=0,
+        skipped_count=0,
+        rejected_count=0,
+        failed_count=0,
+        fallback_used=False,
+        skip_reasons={},
         message="Refresh queued.",
     )
     db.add(job)
@@ -6561,36 +6851,47 @@ async def _request_source_refresh(
             message="Already refreshing.",
         )
 
-    job_id = job.id
-    job.status = "running"
-    job.started_at = datetime.now(timezone.utc)
-    job.message = "Refreshing."
-    await db.commit()
-
     try:
-        result = await _run_source_refresh(normalized_source, db)
-        final_status, created, updated, failed, result_message = _normalized_source_result(result)
-    except Exception as exc:
-        logger.exception("source_refresh_failed source_system=%s", normalized_source)
-        await db.rollback()
-        final_status, created, updated, failed = "failed", 0, 0, 1
-        result_message = (
-            "Refresh failed. Existing tenders are still shown. "
-            f"({type(exc).__name__})"
+        task_result = refresh_tender_source.apply_async(
+            args=[normalized_source, str(job.id)],
+            task_id=str(job.id),
+            queue="celery",
+            routing_key="celery",
+            retry=True,
+            retry_policy={
+                "max_retries": 3,
+                "interval_start": 0,
+                "interval_step": 0.2,
+                "interval_max": 1,
+            },
         )
+        logger.info(
+            "source_refresh_enqueued source_system=%s job_id=%s celery_task_id=%s "
+            "queue=celery",
+            normalized_source,
+            job.id,
+            task_result.id,
+        )
+    except Exception as exc:
+        logger.exception(
+            "source_refresh_enqueue_failed source_system=%s job_id=%s "
+            "stage=dispatch failure_class=%s retryable=true",
+            normalized_source,
+            job.id,
+            type(exc).__name__,
+        )
+        job.status = "failed"
+        job.failed_count = 1
+        job.message = (
+            "Refresh could not be queued. Existing tenders remain available. "
+            f"(dispatch: {type(exc).__name__}; retryable=true)"
+        )
+        job.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(job)
+        return _source_refresh_response(job)
 
-    refreshed_job = await db.get(SourceRefreshJob, job_id)
-    if refreshed_job is None:
-        raise RuntimeError("Source refresh job disappeared")
-    refreshed_job.status = final_status
-    refreshed_job.created_count = created
-    refreshed_job.updated_count = updated
-    refreshed_job.failed_count = failed
-    refreshed_job.message = result_message
-    refreshed_job.completed_at = datetime.now(timezone.utc)
-    await db.commit()
-    await db.refresh(refreshed_job)
-    return _source_refresh_response(refreshed_job)
+    return _source_refresh_response(job)
 
 
 @router.post(
@@ -6917,11 +7218,18 @@ async def sync_tender_documents(
         current_user=current_user,
         allow_operator=True,
     )
-    source_result = await db.execute(
-        select(Tender.source_system).where(Tender.id == tender_id)
+    tender_result = await db.execute(
+        select(Tender)
+        .options(load_only(Tender.source_system, Tender.status))
+        .where(Tender.id == tender_id)
     )
-    source_system = source_result.scalar_one_or_none()
-    if source_system != "uzex":
+    tender = tender_result.scalar_one_or_none()
+    if tender is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
+    if tender.source_system != "uzex":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Document sync worker is UzEx-only for this source.",
@@ -6937,6 +7245,12 @@ async def sync_tender_documents(
             existing_job,
             message="Sync already in progress",
             reparse_markerless=reparse_markerless,
+        )
+
+    if not is_tender_actionable(tender):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=TENDER_NOT_ACTIONABLE_DETAIL,
         )
 
     new_job = TenderSyncJob(

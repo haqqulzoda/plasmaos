@@ -19,7 +19,13 @@ import {
 } from 'lucide-react';
 
 import { api } from '@/lib/api';
-import type { TenderDocument } from '@/types/tender';
+import type { TenderDocument, TenderStatus } from '@/types/tender';
+import {
+  isTenderActionable,
+  tenderActionabilityMessage,
+  tenderStatusClasses,
+  tenderStatusLabel,
+} from '@/types/tender';
 
 type TenderSyncState = 'IDLE' | 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
 
@@ -66,6 +72,7 @@ interface Proposal {
   tender_deadline: string | null;
   tender_region: string | null;
   tender_source_system: string;
+  tender_status: TenderStatus;
 }
 
 interface StrategicDraftResponse {
@@ -291,13 +298,20 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     const fetchProposal = async () => {
       try {
-        // The URL param is a tender_id. POST creates or returns existing proposal.
-        const createRes = await api.post<{ id: string }>('/proposals', {
-          tender_id: resolvedParams.id,
-        });
-        const proposalId = createRes.data.id;
-        // Fetch full proposal with tender details
-        const response = await api.get<Proposal>(`/proposals/${proposalId}`);
+        let response;
+        try {
+          // Existing proposal routes remain historical/read-only entry points.
+          response = await api.get<Proposal>(`/proposals/${resolvedParams.id}`);
+        } catch (lookupError: unknown) {
+          const lookupStatus = (lookupError as { response?: { status?: number } }).response?.status;
+          if (lookupStatus !== 404) throw lookupError;
+
+          // Otherwise the URL param is a tender ID and may start a new OPEN workflow.
+          const createRes = await api.post<{ id: string }>('/proposals', {
+            tender_id: resolvedParams.id,
+          });
+          response = await api.get<Proposal>(`/proposals/${createRes.data.id}`);
+        }
         const data = response.data;
         setProposal(data);
 
@@ -315,8 +329,9 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
           unit_price: Number(item.unit_price) || 0,
           total: Number(item.total) || 0,
         })));
-      } catch {
-        setError('Proposal not found');
+      } catch (requestError: unknown) {
+        const detail = (requestError as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+        setError(detail || 'Proposal not found');
       } finally {
         setIsLoading(false);
       }
@@ -359,6 +374,7 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
 
         const isGizTender = proposal.tender_source_system === 'giz';
         const shouldStartSync =
+          isTenderActionable(proposal.tender_status) &&
           !isGizTender &&
           (initialStatus.state === 'IDLE' || initialStatus.state === 'FAILED') &&
           initialStatus.docs_parsed === 0;
@@ -670,6 +686,9 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
     );
   }
 
+  const actionable = isTenderActionable(proposal.tender_status);
+  const actionabilityMessage = tenderActionabilityMessage(proposal.tender_status);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -686,10 +705,14 @@ export default function BidWorkspacePage({ params }: { params: Promise<{ id: str
             Budget {formatCurrency(proposal.tender_budget, proposal.tender_currency)} | Deadline{' '}
             {formatDeadline(proposal.tender_deadline)} | {proposal.tender_region || 'No region'}
           </p>
+          <span className={`mt-2 inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${tenderStatusClasses(proposal.tender_status)}`}>
+            {tenderStatusLabel(proposal.tender_status)}
+          </span>
         </div>
         <button
           onClick={handleGenerateStrategicProposal}
-          disabled={isGenerating}
+          disabled={isGenerating || !actionable}
+          title={!actionable ? actionabilityMessage : 'Generate strategic proposal'}
           className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}

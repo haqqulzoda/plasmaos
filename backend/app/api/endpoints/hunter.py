@@ -16,8 +16,9 @@ from sqlalchemy.orm import joinedload
 
 from app.api.deps import require_approved_pilot_access
 from app.core.security import authenticated_dependency
+from app.core.tender_actionability import actionable_tender_condition
 from app.db.session import get_db
-from app.models.all_models import User
+from app.models.all_models import Tender, User
 from app.models.audit import TenderRecommendation
 from app.models.company import CompanyProfile
 
@@ -83,10 +84,12 @@ async def list_recommendations(
     # Fetch non-dismissed recommendations with eager-loaded tender
     stmt = (
         select(TenderRecommendation)
+        .join(Tender, TenderRecommendation.tender_id == Tender.id)
         .options(joinedload(TenderRecommendation.tender))
         .where(
             TenderRecommendation.company_profile_id == profile_id,
             TenderRecommendation.is_dismissed == False,  # noqa: E712
+            actionable_tender_condition(Tender),
         )
         .order_by(TenderRecommendation.match_score.desc())
     )

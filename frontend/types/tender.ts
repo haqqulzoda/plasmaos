@@ -1,4 +1,5 @@
 export type SourceSystem = 'uzex' | 'world_bank' | 'adb' | 'giz' | 'ebrd';
+export type TenderStatus = 'OPEN' | 'CLOSED' | 'CANCELLED' | 'UNKNOWN';
 
 export type TenderDocumentStatus =
     | 'documents_available'
@@ -47,7 +48,7 @@ export interface Tender {
     price_amount: number | null;
     price_currency: string | null;
     price_display: string | null;
-    status: string;
+    status: TenderStatus;
     category: string;
     has_compiled_text: boolean;
     document_status: TenderDocumentStatus;
@@ -167,6 +168,35 @@ export const sourceBadgeClasses = (source?: string | null) => {
     }
     return 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300';
 };
+
+export const isTenderActionable = (tenderOrStatus?: Tender | TenderStatus | string | null) => {
+    const status = typeof tenderOrStatus === 'object' && tenderOrStatus !== null
+        ? tenderOrStatus.status
+        : tenderOrStatus;
+    return String(status ?? '').trim().toUpperCase() === 'OPEN';
+};
+
+export const tenderStatusLabel = (status?: TenderStatus | string | null) => {
+    const normalized = String(status ?? '').trim().toUpperCase();
+    if (normalized === 'OPEN') return 'Open';
+    if (normalized === 'CLOSED') return 'Closed';
+    if (normalized === 'CANCELLED') return 'Cancelled';
+    return 'Actionability unknown';
+};
+
+export const tenderStatusClasses = (status?: TenderStatus | string | null) => {
+    const normalized = String(status ?? '').trim().toUpperCase();
+    if (normalized === 'OPEN') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+    if (normalized === 'CLOSED') return 'border-zinc-600 bg-zinc-800/60 text-zinc-300';
+    if (normalized === 'CANCELLED') return 'border-red-500/30 bg-red-500/10 text-red-300';
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+};
+
+export const tenderActionabilityMessage = (status?: TenderStatus | string | null) => (
+    isTenderActionable(status)
+        ? ''
+        : `${tenderStatusLabel(status)}. Only OPEN tenders can start a new compliance or bid workflow.`
+);
 
 export const documentStatusLabel = (status?: string | null) => {
     if (status === 'documents_available') return 'Ready for analysis';

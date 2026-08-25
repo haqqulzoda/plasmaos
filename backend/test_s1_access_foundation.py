@@ -80,7 +80,7 @@ class AccessFoundationTests(unittest.TestCase):
         self.assertTrue(has_approved_pilot_account_access(approved_user, approved_company))
         self.assertFalse(has_approved_pilot_account_access(approved_user, pending_company))
         self.assertFalse(has_approved_pilot_account_access(_user(), approved_company))
-        self.assertTrue(
+        self.assertFalse(
             has_approved_pilot_account_access(
                 _user(approval_status=USER_APPROVAL_DISABLED, is_admin=True),
                 None,

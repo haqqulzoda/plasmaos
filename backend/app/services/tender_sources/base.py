@@ -329,3 +329,38 @@ async def upsert_tender(
         "created" if created else "updated",
     )
     return tender, created
+
+
+async def reconcile_past_deadline_open_tenders(
+    db: AsyncSession,
+    *,
+    source_system: str,
+    now: datetime | None = None,
+) -> int:
+    """Close source-scoped OPEN rows whose reliable UTC deadline has passed."""
+    normalized_source = normalize_source_system(source_system)
+    comparison_time = now or datetime.now(timezone.utc)
+    if comparison_time.tzinfo is None:
+        comparison_time = comparison_time.replace(tzinfo=timezone.utc)
+    else:
+        comparison_time = comparison_time.astimezone(timezone.utc)
+
+    result = await db.execute(
+        select(Tender).where(
+            Tender.source_system == normalized_source,
+            Tender.status == TenderStatus.OPEN,
+            Tender.deadline.is_not(None),
+            Tender.deadline < comparison_time,
+        )
+    )
+    tenders = list(result.scalars().all())
+    for tender in tenders:
+        tender.status = TenderStatus.CLOSED
+        tender.last_synced_at = comparison_time
+    if tenders:
+        logger.info(
+            "tender_lifecycle_reconciled source_system=%s transitioned_to_closed=%s",
+            normalized_source,
+            len(tenders),
+        )
+    return len(tenders)

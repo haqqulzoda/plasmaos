@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.models.all_models import ProposalStatus
+from app.models.all_models import ProposalStatus, TenderStatus
 
 
 class ProposalCreate(BaseModel):
@@ -62,3 +62,4 @@ class ProposalWithTenderResponse(ProposalResponse):
     tender_deadline: datetime | None
     tender_region: str | None
     tender_source_system: str = "uzex"
+    tender_status: TenderStatus

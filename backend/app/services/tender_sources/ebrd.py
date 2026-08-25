@@ -503,17 +503,36 @@ class EbrdTenderSource:
         )
         self.last_used_bootstrap_fallback = False
         self.last_fetch_error_type: str | None = None
+        self.last_fetch_http_status: int | None = None
+        self.last_fetch_retryable: bool | None = None
+        self.last_rows_accepted = 0
+        self.last_rows_rejected = 0
 
     async def _request(self, client: Any, url: str) -> Any:
+        from app.services.tender_sources.diagnostics import (
+            connector_failure_details,
+            retry_after_seconds,
+        )
+
         for attempt in range(self.config.max_retries + 1):
             try:
                 response = await client.get(url)
                 response.raise_for_status()
                 return response
-            except Exception:
-                if attempt >= self.config.max_retries:
+            except Exception as exc:
+                details = connector_failure_details(exc)
+                if attempt >= self.config.max_retries or not details.retryable:
                     raise
-                await asyncio.sleep(0.5 * (attempt + 1))
+                delay = retry_after_seconds(exc, attempt=attempt)
+                logger.warning(
+                    "ebrd_request_retry stage=network attempt=%s failure_class=%s "
+                    "http_status=%s retryable=true delay_seconds=%.2f",
+                    attempt + 1,
+                    details.failure_class,
+                    details.http_status,
+                    delay,
+                )
+                await asyncio.sleep(delay)
         raise RuntimeError("EBRD request failed")
 
     async def list_opportunities(self) -> list[dict[str, Any]]:
@@ -521,6 +540,10 @@ class EbrdTenderSource:
 
         self.last_used_bootstrap_fallback = False
         self.last_fetch_error_type = None
+        self.last_fetch_http_status = None
+        self.last_fetch_retryable = None
+        self.last_rows_accepted = 0
+        self.last_rows_rejected = 0
         async with httpx.AsyncClient(
             timeout=self.config.timeout_seconds,
             headers={"User-Agent": EBRD_USER_AGENT},
@@ -529,19 +552,31 @@ class EbrdTenderSource:
             try:
                 response = await self._request(client, EBRD_NOTICE_SEARCH_URL)
             except Exception as exc:
-                self.last_fetch_error_type = type(exc).__name__
+                from app.services.tender_sources.diagnostics import connector_failure_details
+
+                failure = connector_failure_details(exc)
+                self.last_fetch_error_type = failure.failure_class
+                self.last_fetch_http_status = failure.http_status
+                self.last_fetch_retryable = failure.retryable
                 if not self.config.allow_bootstrap_fallback:
                     raise
                 self.last_used_bootstrap_fallback = True
                 logger.warning(
-                    "ebrd_live_listing_unavailable using_bootstrap_fallback error_type=%s",
+                    "ebrd_live_listing_unavailable using_bootstrap_fallback "
+                    "failure_class=%s http_status=%s retryable=%s",
                     self.last_fetch_error_type,
+                    self.last_fetch_http_status,
+                    str(self.last_fetch_retryable).lower(),
                 )
-                return [
+                fallback_candidates = _bootstrap_fallback_rows(self.config.max_items)
+                accepted = [
                     row
-                    for row in _bootstrap_fallback_rows(self.config.max_items)
+                    for row in fallback_candidates
                     if self.should_import(row)
                 ]
+                self.last_rows_accepted = len(accepted)
+                self.last_rows_rejected = len(fallback_candidates) - len(accepted)
+                return accepted
             listing_rows = parse_ebrd_search_page(response.content, page_url=str(response.url))
             candidates = [
                 row for row in listing_rows if self.should_import(row)
@@ -568,6 +603,8 @@ class EbrdTenderSource:
             external_id = str(opportunity.get("external_id") or "").strip()
             if external_id and external_id not in deduped:
                 deduped[external_id] = opportunity
+        self.last_rows_accepted = len(deduped)
+        self.last_rows_rejected = max(0, len(listing_rows) - len(deduped))
         return list(deduped.values())
 
     async def fetch_detail_by_url(self, source_url: str, *, client: Any | None = None) -> dict[str, Any]:

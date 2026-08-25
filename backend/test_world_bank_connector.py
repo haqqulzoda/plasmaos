@@ -2,17 +2,27 @@
 
 from __future__ import annotations
 
+import asyncio
 import unittest
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
+from app.api.endpoints.tenders import sync_world_bank_tenders
+from app.models.all_models import TenderStatus
+from app.services.tender_sources.base import reconcile_past_deadline_open_tenders
 from app.services.tender_sources.keys import canonical_source_key
 from app.services.tender_sources.world_bank import (
+    WORLD_BANK_ACTIONABLE_NOTICE_TYPES,
+    WorldBankTenderSource,
     clean_notice_html,
     extract_world_bank_attachment_links,
     extract_world_bank_contact_info,
     is_actionable_notice,
     normalize_world_bank_notice_payload,
     parse_world_bank_deadline,
+    world_bank_current_date,
+    world_bank_skip_reason,
 )
 
 
@@ -58,6 +68,191 @@ def _notice_fixture(**overrides):
 
 
 class WorldBankConnectorTests(unittest.TestCase):
+    def test_official_current_opportunity_filters_and_exhaustive_pagination(self) -> None:
+        fixed_now = datetime(2026, 8, 24, 20, 30, tzinfo=timezone.utc)
+        late = _notice_fixture(id="OP-LATE")
+        pages = {
+            0: [_notice_fixture(id=f"AWARD-{index}", notice_type="Contract Award") for index in range(100)],
+            100: [_notice_fixture(id=f"AWARD-{index}", notice_type="Contract Award") for index in range(100, 200)],
+            200: [_notice_fixture(id=f"AWARD-{index}", notice_type="Contract Award") for index in range(200, 300)],
+            300: [late],
+        }
+
+        class FixtureSource(WorldBankTenderSource):
+            def __init__(self):
+                super().__init__(
+                    rows=100,
+                    max_pages=10,
+                    request_delay_seconds=0,
+                    clock=lambda: fixed_now,
+                )
+                self.params = []
+
+            async def _get_json(self, _client, params):  # type: ignore[override]
+                self.params.append(params)
+                return {"total": 301, "procnotices": pages.get(params["os"], [])}
+
+        source = FixtureSource()
+        rows = asyncio.run(source.list_opportunities())
+
+        self.assertEqual(len(rows), 301)
+        self.assertEqual(source.last_pages_fetched, 4)
+        self.assertFalse(source.last_truncated)
+        self.assertFalse(any(source.should_import(row) for row in rows[:300]))
+        self.assertTrue(source.should_import(rows[300]))
+        self.assertEqual(
+            source.params[0]["notice_type_exact"],
+            "^".join(WORLD_BANK_ACTIONABLE_NOTICE_TYPES),
+        )
+        self.assertEqual(
+            source.params[0]["deadline_strdate"],
+            world_bank_current_date(fixed_now).isoformat(),
+        )
+
+    def test_current_query_date_uses_utc_calendar_across_offset_boundaries(self) -> None:
+        fixed_utc = datetime(2026, 8, 24, 20, 30, tzinfo=timezone.utc)
+        tashkent = fixed_utc.astimezone(timezone(timedelta(hours=5)))
+        new_york = fixed_utc.astimezone(timezone(timedelta(hours=-4)))
+        western_boundary_utc = datetime(2026, 8, 25, 2, 30, tzinfo=timezone.utc)
+        western_previous_date = western_boundary_utc.astimezone(
+            timezone(timedelta(hours=-4))
+        )
+
+        self.assertEqual(tashkent.date(), date(2026, 8, 25))
+        self.assertEqual(new_york.date(), date(2026, 8, 24))
+        self.assertEqual(world_bank_current_date(fixed_utc), fixed_utc.date())
+        self.assertEqual(world_bank_current_date(tashkent), fixed_utc.date())
+        self.assertEqual(world_bank_current_date(new_york), fixed_utc.date())
+        self.assertEqual(western_previous_date.date(), date(2026, 8, 24))
+        self.assertEqual(
+            world_bank_current_date(western_previous_date),
+            western_boundary_utc.date(),
+        )
+
+    def test_pagination_captures_one_query_date_across_utc_midnight(self) -> None:
+        clock_values = iter(
+            [
+                datetime(2026, 8, 24, 23, 59, tzinfo=timezone.utc),
+                datetime(2026, 8, 25, 0, 1, tzinfo=timezone.utc),
+            ]
+        )
+
+        class MidnightSource(WorldBankTenderSource):
+            def __init__(self):
+                super().__init__(
+                    rows=1,
+                    max_pages=2,
+                    request_delay_seconds=0,
+                    clock=lambda: next(clock_values),
+                )
+                self.params = []
+
+            async def _get_json(self, _client, params):  # type: ignore[override]
+                self.params.append(params)
+                return {
+                    "total": 2,
+                    "procnotices": [_notice_fixture(id=f"OP-{params['os']}")],
+                }
+
+        source = MidnightSource()
+        rows = asyncio.run(source.list_opportunities())
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(source.params), 2)
+        self.assertEqual(
+            {params["deadline_strdate"] for params in source.params},
+            {source.last_query_date.isoformat()},
+        )
+
+    def test_safety_cap_sets_truncation_instead_of_silent_completion(self) -> None:
+        class CappedSource(WorldBankTenderSource):
+            async def _get_json(self, _client, params):  # type: ignore[override]
+                rows = [_notice_fixture(id=f"OP-{params['os'] + i}") for i in range(100)]
+                return {"total": 400, "procnotices": rows}
+
+        source = CappedSource(rows=100, max_pages=3, request_delay_seconds=0)
+        rows = asyncio.run(source.list_opportunities())
+
+        self.assertEqual(len(rows), 300)
+        self.assertTrue(source.last_truncated)
+
+    def test_duplicate_ids_are_isolated_across_pages(self) -> None:
+        class DuplicateSource(WorldBankTenderSource):
+            async def _get_json(self, _client, params):  # type: ignore[override]
+                rows = {
+                    0: [_notice_fixture(id="OP-1"), _notice_fixture(id="OP-X")],
+                    2: [_notice_fixture(id="OP-1"), _notice_fixture(id="OP-2")],
+                }.get(params["os"], [])
+                return {"total": 4, "procnotices": rows}
+
+        source = DuplicateSource(rows=2, max_pages=5, request_delay_seconds=0)
+        rows = asyncio.run(source.list_opportunities())
+        self.assertEqual({row["id"] for row in rows}, {"OP-1", "OP-X", "OP-2"})
+        self.assertEqual(source.last_duplicate_count, 1)
+
+    def test_structured_skip_reasons(self) -> None:
+        self.assertEqual(
+            world_bank_skip_reason(_notice_fixture(notice_type="Contract Award")),
+            "contract_award",
+        )
+        self.assertEqual(
+            world_bank_skip_reason(_notice_fixture(notice_type="General Procurement Notice")),
+            "general_procurement_notice",
+        )
+        self.assertEqual(
+            world_bank_skip_reason(_notice_fixture(submission_deadline_date="2020-01-01")),
+            "expired",
+        )
+
+    def test_past_deadline_open_row_becomes_closed_without_overwriting_cancelled(self) -> None:
+        open_tender = SimpleNamespace(
+            status=TenderStatus.OPEN,
+            last_synced_at=None,
+        )
+        result = SimpleNamespace(
+            scalars=lambda: SimpleNamespace(all=lambda: [open_tender])
+        )
+        db = SimpleNamespace(execute=AsyncMock(return_value=result))
+        changed = asyncio.run(
+            reconcile_past_deadline_open_tenders(
+                db,
+                source_system="world_bank",
+                now=datetime(2026, 8, 24, tzinfo=timezone.utc),
+            )
+        )
+        self.assertEqual(changed, 1)
+        self.assertEqual(open_tender.status, TenderStatus.CLOSED)
+
+    def test_truncated_sync_reports_partial(self) -> None:
+        source = SimpleNamespace(
+            source_system="world_bank",
+            last_duplicate_count=0,
+            last_truncated=True,
+            last_pages_fetched=3,
+            source_newest_published_at=None,
+            source_oldest_published_at=None,
+            list_opportunities=AsyncMock(return_value=[]),
+        )
+        db = SimpleNamespace(rollback=AsyncMock())
+        with (
+            patch("app.api.endpoints.tenders.WorldBankTenderSource", return_value=source),
+            patch(
+                "app.api.endpoints.tenders.reconcile_past_deadline_open_tenders",
+                new=AsyncMock(return_value=0),
+            ),
+        ):
+            response = asyncio.run(
+                sync_world_bank_tenders(
+                    max_pages=3,
+                    rows=100,
+                    active_only=True,
+                    dry_run=True,
+                    db=db,
+                )
+            )
+        self.assertEqual(response.status, "partial")
+        self.assertIn("pagination", response.errors[0])
+
     def test_json_mapping_to_normalized_payload(self) -> None:
         payload = normalize_world_bank_notice_payload(_notice_fixture())
 
@@ -136,6 +331,44 @@ class WorldBankConnectorTests(unittest.TestCase):
 
         self.assertIsNotNone(deadline)
         self.assertEqual(deadline.isoformat(), "2026-10-30T17:30:00+00:00")
+
+    def test_date_only_deadline_remains_open_through_end_of_utc_day(self) -> None:
+        deadline = parse_world_bank_deadline(
+            _notice_fixture(
+                submission_deadline_date="2026-08-24T00:00:00Z",
+                submission_deadline_time=None,
+            )
+        )
+        self.assertIsNotNone(deadline)
+        self.assertEqual(deadline.isoformat(), "2026-08-24T23:59:59.999999+00:00")
+
+        before_end_of_day = WorldBankTenderSource(
+            clock=lambda: datetime(2026, 8, 24, 23, 59, 59, tzinfo=timezone.utc)
+        )
+        after_end_of_day = WorldBankTenderSource(
+            clock=lambda: datetime(2026, 8, 25, 0, 0, tzinfo=timezone.utc)
+        )
+        raw = _notice_fixture(
+            submission_deadline_date="2026-08-24T00:00:00Z",
+            submission_deadline_time=None,
+        )
+        self.assertEqual(before_end_of_day.normalize(raw).status, TenderStatus.OPEN)
+        self.assertEqual(after_end_of_day.normalize(raw).status, TenderStatus.CLOSED)
+
+    def test_timestamp_deadline_uses_aware_utc_instant(self) -> None:
+        raw = _notice_fixture(
+            submission_deadline_date="2026-08-24T00:00:00Z",
+            submission_deadline_time="20:30",
+        )
+        before_deadline = WorldBankTenderSource(
+            clock=lambda: datetime(2026, 8, 24, 20, 29, 59, tzinfo=timezone.utc)
+        )
+        after_deadline = WorldBankTenderSource(
+            clock=lambda: datetime(2026, 8, 24, 20, 30, 1, tzinfo=timezone.utc)
+        )
+
+        self.assertEqual(before_deadline.normalize(raw).status, TenderStatus.OPEN)
+        self.assertEqual(after_deadline.normalize(raw).status, TenderStatus.CLOSED)
 
     def test_html_cleanup_strips_tags_and_unsafe_content(self) -> None:
         cleaned = clean_notice_html(

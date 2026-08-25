@@ -21,6 +21,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -254,7 +255,27 @@ class SourceRefreshJob(Base):
     force: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fetched_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rejected_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fallback_used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    skip_reasons: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    failure_class: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    failure_stage: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    retryable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_newest_published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    source_oldest_published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    execution_health: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    freshness_health: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    coverage_health: Mapped[str | None] = mapped_column(String(30), nullable=True)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -410,6 +431,11 @@ class Proposal(Base):
     
     # Indexes
     __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "tender_id",
+            name="uq_proposals_user_tender",
+        ),
         Index("ix_proposals_user_id", "user_id"),
         Index("ix_proposals_tender_id", "tender_id"),
         Index("ix_proposals_status", "status"),

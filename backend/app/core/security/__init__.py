@@ -12,9 +12,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access import is_disabled_account
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.all_models import User
+
+# Runtime note: ``import app.core.security`` resolves to this package.  The
+# sibling ``app/core/security.py`` is retained as a compatibility mirror and
+# must keep security-critical account checks synchronized with this module.
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8
@@ -87,6 +92,15 @@ async def _resolve_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Disabled is an authoritative account state.  Enforce it even for the
+    # stale-auth-version dependency used by access-state inspection/rotation.
+    if is_disabled_account(user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account disabled",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if enforce_auth_version:
         token_auth_version = payload.get("auth_version")
         current_auth_version = int(getattr(user, "auth_version", 0) or 0)
@@ -133,7 +147,7 @@ async def get_current_user_allow_stale_auth_version(
     db: Annotated[AsyncSession, Depends(get_db)],
     plasma_api_token: Annotated[str | None, Cookie()] = None,
 ) -> User:
-    """Resolve a valid signed token while allowing access-state token rotation."""
+    """Resolve a stale-version token only for a non-disabled account."""
     return await _resolve_current_user(
         credentials=credentials,
         db=db,

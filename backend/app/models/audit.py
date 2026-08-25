@@ -60,6 +60,10 @@ class TenderAnalysis(Base):
     override_seal: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
+        comment=(
+            "SHA-256 seal incorporating override state. "
+            "Null when no overrides have been applied."
+        ),
         doc=(
             "SHA-256 seal incorporating override state. "
             "Computed as SHA-256(content_hash | sorted_override_node_ids | sorted_override_timestamps). "

@@ -10,6 +10,7 @@ from sqlalchemy.orm import configure_mappers, selectinload
 
 # Ensure worker process loads SQLAlchemy mappings before running tasks.
 import app.models  # noqa: F401
+from app.core.tender_actionability import actionable_tender_condition
 from app.models.all_models import Tender
 from app.models.company import CompanyProfile
 from app.models.taxonomy import TaxonomyNode, CompanyCredential
@@ -59,6 +60,7 @@ def _pending_tenders_stmt(profile_id: UUID, window_start: datetime):
     return (
         select(Tender)
         .where(Tender.created_at >= window_start)
+        .where(actionable_tender_condition(Tender))
         .where(~exists(recommendation_exists))
         .order_by(Tender.created_at.desc())
     )

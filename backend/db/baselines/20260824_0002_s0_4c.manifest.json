@@ -1,0 +1,135 @@
+{
+  "baseline_revision": "20260824_0002_s0_4c",
+  "downgrade_floor": "20260824_0002_s0_4c",
+  "enum_types": {
+    "proposal_status": [
+      "DRAFT",
+      "GENERATING",
+      "COMPLETED",
+      "SUBMITTED"
+    ],
+    "subscription_tier": [
+      "SCOUT",
+      "AGENT",
+      "ENTERPRISE"
+    ],
+    "taxonomy_category": [
+      "LICENSE",
+      "CERTIFICATION",
+      "FINANCIAL",
+      "ESG",
+      "TECHNICAL",
+      "PERSONNEL"
+    ],
+    "tender_status": [
+      "OPEN",
+      "CLOSED",
+      "CANCELLED",
+      "UNKNOWN"
+    ],
+    "tender_sync_status": [
+      "PENDING",
+      "IN_PROGRESS",
+      "SUCCESS",
+      "FAILED"
+    ]
+  },
+  "expected_next_revision": "20260825_0001_s0_5b3",
+  "generated_at": "2026-08-25T01:50:34Z",
+  "important_constraints": [
+    "alembic_version_pkc",
+    "ck_company_profiles_approval_status_allowed",
+    "ck_company_profiles_pilot_status_allowed",
+    "ck_readiness_documents_status_allowed",
+    "ck_readiness_documents_type_allowed",
+    "ck_source_refresh_jobs_status_allowed",
+    "ck_taxonomy_nodes_impact_weight_range",
+    "ck_tender_recommendations_match_score_range",
+    "ck_tender_sync_jobs_progress_range",
+    "ck_tenders_source_system_allowed",
+    "ck_users_approval_status_allowed",
+    "ck_users_platform_role_allowed",
+    "tender_recommendations_company_profile_id_fkey",
+    "tender_recommendations_pkey",
+    "tender_recommendations_tender_id_fkey",
+    "uq_company_credentials_profile_taxonomy_node",
+    "uq_financial_history_company_year",
+    "uq_proposals_user_tender",
+    "uq_tender_recommendations_tender_profile",
+    "uq_tender_requirements_tender_taxonomy_node",
+    "users_email_key",
+    "users_google_id_key"
+  ],
+  "important_indexes": [
+    "ix_company_profiles_user_id",
+    "ix_proposals_status",
+    "ix_proposals_tender_id",
+    "ix_proposals_user_id",
+    "ix_source_refresh_jobs_source_created",
+    "ix_tender_recommendations_company_profile_id",
+    "ix_tender_recommendations_created_at",
+    "ix_tender_recommendations_tender_id",
+    "ix_tenders_canonical_source_key",
+    "ix_tenders_deadline",
+    "ix_tenders_source_system",
+    "ix_tenders_source_system_external_id",
+    "ix_users_email",
+    "ix_users_google_id",
+    "uq_source_refresh_jobs_active_source"
+  ],
+  "minimum_known_compatible_postgresql_major": 16,
+  "notes": [
+    "Immutable schema-only physical snapshot at the 0.4c cutoff; it is not generated from current ORM metadata.",
+    "Contains no application records, owners, ACLs, credentials, local paths, or seed data.",
+    "Includes the historically create_all-provided compatible tender_recommendations table; B3 validates it on forward upgrade.",
+    "Includes alembic_version structure with VARCHAR(128), but deliberately contains no revision row.",
+    "Databases created from this artifact cannot Alembic-downgrade below the baseline revision."
+  ],
+  "postgresql_version_used_for_validation": "16.12",
+  "schema_format_version": 1,
+  "snapshot_file": "20260824_0002_s0_4c.sql",
+  "snapshot_sha256": "8d34e4a5a57be2867c326b151ae6ef034cf34ab3dab02ad212996a6257396f7b",
+  "tables": [
+    "admin_activity_events",
+    "alembic_version",
+    "audit_logs",
+    "certifications",
+    "company_credentials",
+    "company_profiles",
+    "financial_history",
+    "licenses",
+    "proposals",
+    "readiness_documents",
+    "risk_override_logs",
+    "source_refresh_jobs",
+    "taxonomy_nodes",
+    "tender_analyses",
+    "tender_documents",
+    "tender_recommendations",
+    "tender_requirements",
+    "tender_sync_jobs",
+    "tenders",
+    "users"
+  ],
+  "views": [
+    "monitor_activity_summary",
+    "monitor_company_tender_audit_trail",
+    "monitor_company_tender_compliance_requirements",
+    "monitor_company_tender_documents",
+    "monitor_company_tender_dossier",
+    "monitor_company_tender_overrides",
+    "monitor_compliance_analyses",
+    "monitor_compliance_met_requirements",
+    "monitor_compliance_missing_requirements",
+    "monitor_compliance_unmapped_requirements",
+    "monitor_proposals",
+    "monitor_tender_documents",
+    "monitor_tender_sync_jobs",
+    "monitor_user_activity_timeline",
+    "monitor_user_uploaded_tz",
+    "monitor_users"
+  ],
+  "validated_postgresql_majors": [
+    16
+  ]
+}

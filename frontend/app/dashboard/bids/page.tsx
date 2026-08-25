@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import { FileText, Loader2, Clock, Banknote, MapPin, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
+import type { TenderStatus } from '@/types/tender';
+import { tenderStatusClasses, tenderStatusLabel } from '@/types/tender';
 
 interface Proposal {
     id: string;
@@ -20,6 +22,7 @@ interface Proposal {
     tender_currency: string;
     tender_deadline: string | null;
     tender_region: string | null;
+    tender_status: TenderStatus;
     created_at: string;
 }
 
@@ -160,6 +163,9 @@ export default function BidsPage() {
                                             </h3>
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(proposal.status)}`}>
                                                 {proposal.status}
+                                            </span>
+                                            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${tenderStatusClasses(proposal.tender_status)}`}>
+                                                {tenderStatusLabel(proposal.tender_status)}
                                             </span>
                                         </div>
 

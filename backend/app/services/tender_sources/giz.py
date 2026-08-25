@@ -847,7 +847,11 @@ class GizTenderSource:
         max_retries: int = 2,
         max_download_bytes: int = MAX_DOWNLOAD_BYTES,
     ) -> None:
-        pages = tuple(source_pages or DEFAULT_GIZ_TENDER_PAGES)
+        pages = (
+            DEFAULT_GIZ_TENDER_PAGES
+            if source_pages is None
+            else tuple(source_pages)
+        )
         self.config = GizSyncConfig(
             source_pages=pages,
             include_eproc=include_eproc,
@@ -857,23 +861,65 @@ class GizTenderSource:
             max_retries=max(0, int(max_retries)),
             max_download_bytes=max(1024, int(max_download_bytes)),
         )
+        self.last_failure_details: list[dict[str, Any]] = []
+        self.last_rows_rejected = 0
+
+    def _record_failure(self, *, stage: str, exc: BaseException) -> None:
+        from app.services.tender_sources.diagnostics import connector_failure_details
+
+        details = connector_failure_details(exc)
+        self.last_failure_details.append(
+            {
+                "stage": stage,
+                "failure_class": details.failure_class,
+                "http_status": details.http_status,
+                "retryable": details.retryable,
+            }
+        )
+        logger.warning(
+            "giz_connector_failure stage=%s failure_class=%s http_status=%s "
+            "retryable=%s",
+            stage,
+            details.failure_class,
+            details.http_status,
+            str(details.retryable).lower(),
+        )
 
     async def _request(self, client: Any, method: str, url: str, **kwargs: Any) -> Any:
+        from app.services.tender_sources.diagnostics import (
+            connector_failure_details,
+            retry_after_seconds,
+        )
+
         for attempt in range(self.config.max_retries + 1):
             try:
                 response = await client.request(method, url, **kwargs)
                 response.raise_for_status()
                 return response
-            except Exception:
-                if attempt >= self.config.max_retries:
+            except Exception as exc:
+                details = connector_failure_details(exc)
+                if attempt >= self.config.max_retries or not details.retryable:
                     raise
-                await asyncio.sleep(0.5 * (attempt + 1))
+                delay = retry_after_seconds(exc, attempt=attempt)
+                logger.warning(
+                    "giz_request_retry stage=network attempt=%s failure_class=%s "
+                    "http_status=%s retryable=true delay_seconds=%.2f",
+                    attempt + 1,
+                    details.failure_class,
+                    details.http_status,
+                    delay,
+                )
+                await asyncio.sleep(delay)
         raise RuntimeError("GIZ request failed")
 
     async def list_opportunities(self) -> list[dict[str, Any]]:
         import httpx
 
+        self.last_failure_details = []
+        self.last_rows_rejected = 0
         opportunities: list[dict[str, Any]] = []
+        successful_listing_surfaces = 0
+        first_listing_failure: BaseException | None = None
         async with httpx.AsyncClient(
             timeout=self.config.timeout_seconds,
             headers={"User-Agent": GIZ_USER_AGENT},
@@ -885,14 +931,31 @@ class GizTenderSource:
                 if not _safe_giz_url(page_url):
                     logger.warning("giz_source_page_skipped unsafe_url=%s", page_url)
                     continue
-                response = await self._request(client, "GET", page_url)
-                parsed = parse_giz_tender_page(response.content, page_url=str(response.url))
+                try:
+                    response = await self._request(client, "GET", page_url)
+                    parsed = parse_giz_tender_page(
+                        response.content,
+                        page_url=str(response.url),
+                    )
+                except Exception as exc:
+                    first_listing_failure = first_listing_failure or exc
+                    self._record_failure(stage="country_listing", exc=exc)
+                    continue
+                successful_listing_surfaces += 1
                 logger.info("giz_source_page_parsed url=%s tenders=%s", page_url, len(parsed))
                 opportunities.extend(parsed)
             if self.config.include_eproc and self.config.eproc_max_pages > 0:
-                eproc = await self._list_eproc_opportunities(client)
-                logger.info("giz_eproc_parsed tenders=%s", len(eproc))
-                opportunities.extend(eproc)
+                try:
+                    eproc = await self._list_eproc_opportunities(client)
+                except Exception as exc:
+                    first_listing_failure = first_listing_failure or exc
+                    self._record_failure(stage="eproc_listing", exc=exc)
+                else:
+                    successful_listing_surfaces += 1
+                    logger.info("giz_eproc_parsed tenders=%s", len(eproc))
+                    opportunities.extend(eproc)
+        if successful_listing_surfaces == 0 and first_listing_failure is not None:
+            raise first_listing_failure
         deduped: dict[str, dict[str, Any]] = {}
         for opportunity in opportunities:
             external_id = str(opportunity.get("external_id") or "").strip()
@@ -944,7 +1007,9 @@ class GizTenderSource:
             await asyncio.sleep(self.config.request_delay_seconds)
             try:
                 enriched.append(await self._enrich_eproc_listing_row(client, row))
-            except Exception:
+            except Exception as exc:
+                self.last_rows_rejected += 1
+                self._record_failure(stage="eproc_detail", exc=exc)
                 logger.exception(
                     "giz_eproc_detail_failed source_url=%s",
                     row.get("source_url"),
