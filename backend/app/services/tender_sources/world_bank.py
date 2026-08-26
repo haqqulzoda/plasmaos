@@ -650,8 +650,24 @@ class WorldBankTenderSource:
 
     async def upsert(self, db: Any, normalized_tender: Any) -> tuple[Any, bool]:
         from app.services.tender_sources.base import upsert_tender
+        from app.services.projects import link_tender_to_project
 
-        return await upsert_tender(db, normalized_tender)
+        tender, created = await upsert_tender(db, normalized_tender)
+        source_metadata = normalized_tender.source_metadata_json or {}
+        raw_project_id = source_metadata.get(
+            "project_id",
+            normalized_tender.project_id,
+        )
+        await link_tender_to_project(
+            db,
+            tender=tender,
+            external_project_id=raw_project_id,
+            source_field="project_id",
+            source_url=normalized_tender.source_url,
+            observed_at=tender.last_synced_at,
+            authoritative_metadata={"country": normalized_tender.country},
+        )
+        return tender, created
 
     async def upsert_attachments(
         self,

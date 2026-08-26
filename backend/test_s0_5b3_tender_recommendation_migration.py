@@ -115,7 +115,10 @@ class TenderRecommendationMigrationContractTests(unittest.TestCase):
         config = Config()
         config.set_main_option("script_location", str(ROOT / "alembic"))
         script = ScriptDirectory.from_config(config)
-        self.assertEqual(script.get_current_head(), "20260825_0001_s0_5b3")
+        self.assertEqual(
+            script.get_current_head(),
+            "20260826_0002_s1_2_wb_project_enrichment",
+        )
         self.assertEqual(self.migration.down_revision, "20260824_0002_s0_4c")
 
     def test_migration_contract_matches_orm_columns(self) -> None:

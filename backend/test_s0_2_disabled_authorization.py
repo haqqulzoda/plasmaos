@@ -103,6 +103,21 @@ async def resolve_user(
 
 
 class DisabledAuthorizationUnitTests(IsolatedAsyncioTestCase):
+    async def test_unauthenticated_and_broken_auth_state_fail_closed(self) -> None:
+        for credentials, expected_detail in (
+            (None, "Not authenticated"),
+            (SimpleNamespace(credentials="not-a-jwt"), "Invalid or expired token"),
+        ):
+            with self.subTest(expected_detail=expected_detail):
+                with self.assertRaises(HTTPException) as raised:
+                    await get_current_user(
+                        credentials=credentials,
+                        db=SimpleNamespace(),
+                        plasma_api_token=None,
+                    )
+                self.assertEqual(raised.exception.status_code, 401)
+                self.assertEqual(raised.exception.detail, expected_detail)
+
     async def test_active_ordinary_admin_and_operator_access_is_preserved(self) -> None:
         ordinary = make_user()
         admin = make_user(role=PLATFORM_ROLE_ADMIN)

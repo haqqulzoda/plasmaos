@@ -161,7 +161,7 @@ class OnboardingFrontendTests(TestCase):
         onboarding = (FRONTEND / "app/dashboard/onboarding/page.tsx").read_text()
         pending = (FRONTEND / "app/dashboard/pending-approval/page.tsx").read_text()
         layout = (FRONTEND / "app/dashboard/layout.tsx").read_text()
-        auth = (FRONTEND / "app/api/auth/[...nextauth]/route.ts").read_text()
+        auth = (FRONTEND / "auth.ts").read_text()
 
         self.assertNotIn("window.location.reload", onboarding)
         self.assertIn("Company profile submitted", onboarding)

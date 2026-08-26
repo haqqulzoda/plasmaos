@@ -39,6 +39,7 @@ class ReleaseAdminRepairTests(unittest.TestCase):
         api = read_frontend("lib/api.ts")
         dockerfile = read_frontend("Dockerfile")
         next_config = read_frontend("next.config.ts")
+        auth_config = read_frontend("auth.ts")
         auth_route = read_frontend("app/api/auth/[...nextauth]/route.ts")
         proxy = read_frontend("lib/documentProxy.ts")
         backend_resolver = read_frontend("lib/backendApiBase.ts")
@@ -47,10 +48,40 @@ class ReleaseAdminRepairTests(unittest.TestCase):
         self.assertIn("const apiBaseUrl = '/api/v1';", api)
         self.assertIn("ARG NEXT_PUBLIC_API_URL=/api/v1", dockerfile)
         self.assertIn("http://backend:8000/api/v1", next_config)
-        self.assertIn("resolveBackendApiBase", auth_route)
+        self.assertIn("resolveBackendApiBase", auth_config)
+        self.assertIn("import { handlers } from '@/auth';", auth_route)
         self.assertIn("resolveBackendApiBase", proxy)
         self.assertIn("PUBLIC_EXACT_PATHS = ['/api/v1/health/version']", middleware)
-        self.assertNotIn("localhost:8000", api + dockerfile + next_config + auth_route + proxy + backend_resolver)
+        self.assertNotIn(
+            "localhost:8000",
+            api + dockerfile + next_config + auth_config + auth_route + proxy + backend_resolver,
+        )
+
+    def test_auth_module_split_and_document_proxy_preserve_security_contract(self) -> None:
+        auth_config = read_frontend("auth.ts")
+        auth_route = read_frontend("app/api/auth/[...nextauth]/route.ts")
+        proxy = read_frontend("lib/documentProxy.ts")
+
+        self.assertIn("export const { handlers, auth } = NextAuth({", auth_config)
+        self.assertIn("secret: process.env.AUTH_SECRET", auth_config)
+        self.assertEqual(
+            auth_route.strip(),
+            "import { handlers } from '@/auth';\n\nexport const { GET, POST } = handlers;",
+        )
+        self.assertIn('import { auth } from "@/auth";', proxy)
+        self.assertIn("const session = await auth();", proxy)
+        self.assertIn("if (!accessToken)", proxy)
+        self.assertNotIn("if (session)", proxy)
+        self.assertNotIn("if (!session)", proxy)
+        self.assertIn('{ detail: "Unauthorized" }, { status: 401 }', proxy)
+        self.assertIn(
+            "`${backendApiBase}/tenders/documents/${id}/download`",
+            proxy,
+        )
+        self.assertNotIn("request.url", proxy)
+        self.assertNotIn("new URL", proxy)
+        self.assertNotIn("console.log", proxy)
+        self.assertNotIn("console.error(accessToken", proxy)
 
     def test_compose_release_builds_have_real_identity_inputs(self) -> None:
         compose = (ROOT.parent / "docker-compose.yml").read_text(encoding="utf-8")

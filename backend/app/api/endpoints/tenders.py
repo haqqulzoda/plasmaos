@@ -96,12 +96,14 @@ from app.crud.exceptions import ProfileNotFoundException
 from app.db.session import get_db
 from app.models.audit import TenderAnalysis
 from app.models.all_models import (
+    Project,
     Proposal,
     RiskOverrideLog,
     SourceRefreshJob,
     TaxonomyNode,
     Tender,
     TenderDocument,
+    TenderProject,
     TenderStatus,
     TenderSyncJob,
     TenderSyncStatus,
@@ -134,6 +136,14 @@ from app.services.compliance_engine import (
 )
 from app.services.giz_document_hydration import (
     hydrate_giz_tender_documents as hydrate_giz_tender_documents_inline,
+)
+from app.schemas.project import (
+    ProjectContextProjectResponse,
+    ProjectContextRoleResponse,
+    TenderProjectContextResponse,
+)
+from app.services.project_enrichment import (
+    enqueue_world_bank_project_enrichment_batch,
 )
 from app.services.tender_sources.base import (
     NormalizedTender,
@@ -4590,6 +4600,60 @@ async def get_tender(
     )
 
 
+@router.get(
+    "/{tender_id}/project",
+    response_model=TenderProjectContextResponse | None,
+)
+async def get_tender_project_context(
+    tender_id: UUID,
+    _current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> TenderProjectContextResponse | None:
+    """Return presentation-safe canonical Project context for one Tender."""
+    result = await db.execute(
+        select(Project)
+        .join(TenderProject, TenderProject.project_id == Project.id)
+        .join(Tender, Tender.id == TenderProject.tender_id)
+        .options(selectinload(Project.role_assignments))
+        .where(
+            Tender.id == tender_id,
+            customer_visible_tender_condition(Tender),
+        )
+    )
+    project = result.scalar_one_or_none()
+    if project is None:
+        return None
+
+    role_sort_key = lambda role: (
+        role.canonical_role,
+        role.native_role,
+        role.display_name,
+        str(role.id),
+    )
+    current_roles = sorted(
+        (role for role in project.role_assignments if role.is_current),
+        key=role_sort_key,
+    )
+    historical_roles = sorted(
+        (role for role in project.role_assignments if not role.is_current),
+        key=lambda role: (
+            -(role.ended_at or role.last_observed_at).timestamp(),
+            *role_sort_key(role),
+        ),
+    )
+
+    return TenderProjectContextResponse(
+        project=ProjectContextProjectResponse.model_validate(project),
+        current_roles=[
+            ProjectContextRoleResponse.model_validate(role) for role in current_roles
+        ],
+        historical_roles=[
+            ProjectContextRoleResponse.model_validate(role)
+            for role in historical_roles
+        ],
+    )
+
+
 async def _build_tender_competitor_intelligence(
     *,
     db: AsyncSession,
@@ -5042,6 +5106,23 @@ async def sync_world_bank_tenders(
                 dry_run=dry_run,
                 errors=[*errors, f"commit: {type(exc).__name__}"][:10],
                 message="World Bank sync failed while saving notices.",
+            )
+
+        # Project enrichment is deliberately asynchronous and failure-isolated.
+        # Tender ingestion is already durable before this bounded queue claim.
+        try:
+            enrichment_dispatch = await enqueue_world_bank_project_enrichment_batch(db)
+            logger.info(
+                "world_bank_project_enrichment_batch claimed=%s enqueued=%s "
+                "dispatch_failed=%s",
+                enrichment_dispatch.claimed,
+                enrichment_dispatch.enqueued,
+                enrichment_dispatch.dispatch_failed,
+            )
+        except Exception:
+            await db.rollback()
+            logger.exception(
+                "world_bank_project_enrichment_batch_failed tender_sync_preserved=true"
             )
 
     status_value = (

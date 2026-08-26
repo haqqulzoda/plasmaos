@@ -5,13 +5,14 @@ Defines all SQLAlchemy ORM models for the Autonomous Tender Officer SaaS platfor
 """
 
 import enum
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Enum,
     Float,
@@ -43,6 +44,110 @@ class TenderSyncStatus(str, enum.Enum):
     IN_PROGRESS = "IN_PROGRESS"
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
+
+
+class Project(Base):
+    """Source-scoped canonical identity for an institution's project."""
+
+    __tablename__ = "projects"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    source_system: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_project_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    region: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    project_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    approval_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    closing_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    borrower: Mapped[str | None] = mapped_column(Text, nullable=True)
+    implementing_agencies: Mapped[list[str] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    raw_provenance: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    enrichment_status: Mapped[str] = mapped_column(
+        String(30),
+        default="never_attempted",
+        server_default=text("'never_attempted'"),
+        nullable=False,
+    )
+    enrichment_last_attempted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_enriched_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    enrichment_failure_class: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    enrichment_source_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    enrichment_fields_obtained: Mapped[list[str] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+    enrichment_fields_missing: Mapped[list[str] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    tender_links: Mapped[list["TenderProject"]] = relationship(
+        "TenderProject",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    role_assignments: Mapped[list["ProjectRoleAssignment"]] = relationship(
+        "ProjectRoleAssignment",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "source_system IN ('uzex', 'world_bank', 'adb', 'giz', 'ebrd')",
+            name="ck_projects_source_system_allowed",
+        ),
+        UniqueConstraint(
+            "source_system",
+            "external_project_id",
+            name="uq_projects_source_external_project_id",
+        ),
+        CheckConstraint(
+            "enrichment_status IN ('never_attempted', 'queued', 'running', "
+            "'successful', 'partial', 'source_unavailable', 'failed', 'stale')",
+            name="ck_projects_enrichment_status_allowed",
+        ),
+        Index(
+            "ix_projects_source_enrichment_status",
+            "source_system",
+            "enrichment_status",
+            "last_enriched_at",
+        ),
+    )
 
 
 class Tender(Base):
@@ -138,6 +243,13 @@ class Tender(Base):
         back_populates="tender",
         cascade="all, delete-orphan",
     )
+    project_link: Mapped["TenderProject | None"] = relationship(
+        "TenderProject",
+        back_populates="tender",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
     
     # Indexes
     __table_args__ = (
@@ -156,6 +268,131 @@ class Tender(Base):
         Index("ix_tenders_source_system", "source_system"),
         Index("ix_tenders_status", "status"),
         Index("ix_tenders_deadline", "deadline"),
+    )
+
+
+class TenderProject(Base):
+    """Auditable deterministic linkage between a tender and a Project."""
+
+    __tablename__ = "tender_projects"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    tender_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("tenders.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    project_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    linkage_method: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_value: Mapped[str] = mapped_column(String(100), nullable=False)
+    provenance: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    tender: Mapped["Tender"] = relationship("Tender", back_populates="project_link")
+    project: Mapped["Project"] = relationship("Project", back_populates="tender_links")
+
+    __table_args__ = (
+        CheckConstraint(
+            "linkage_method IN ('SOURCE_PROJECT_ID', 'SOURCE_NATIVE_LINK')",
+            name="ck_tender_projects_linkage_method_allowed",
+        ),
+        UniqueConstraint("tender_id", name="uq_tender_projects_tender_id"),
+        Index("ix_tender_projects_project_id", "project_id"),
+    )
+
+
+class ProjectRoleAssignment(Base):
+    """Source-evidenced Project leadership assignment with retained history."""
+
+    __tablename__ = "project_role_assignments"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    project_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_system: Mapped[str] = mapped_column(String(50), nullable=False)
+    assignment_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_person_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    display_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    native_role: Mapped[str] = mapped_column(String(150), nullable=False)
+    canonical_role: Mapped[str] = mapped_column(String(50), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    source_document_id: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+    provenance: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    first_observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    last_observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    project: Mapped["Project"] = relationship(
+        "Project",
+        back_populates="role_assignments",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "source_system IN ('uzex', 'world_bank', 'adb', 'giz', 'ebrd')",
+            name="ck_project_role_assignments_source_system_allowed",
+        ),
+        CheckConstraint(
+            "canonical_role IN ('TASK_TEAM_LEADER', 'CO_TASK_TEAM_LEADER', "
+            "'PROJECT_TASK_MANAGER', 'OTHER_PROJECT_ROLE')",
+            name="ck_project_role_assignments_canonical_role_allowed",
+        ),
+        UniqueConstraint(
+            "project_id",
+            "source_system",
+            "assignment_key",
+            name="uq_project_role_assignments_identity",
+        ),
+        Index(
+            "ix_project_role_assignments_project_current",
+            "project_id",
+            "is_current",
+        ),
     )
 
 
@@ -468,7 +705,10 @@ __all__ = [
     "ProposalStatus",
     "TenderSyncStatus",
     "User",
+    "Project",
+    "ProjectRoleAssignment",
     "Tender",
+    "TenderProject",
     "TenderSyncJob",
     "SourceRefreshJob",
     "TenderDocument",

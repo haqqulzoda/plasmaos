@@ -100,6 +100,31 @@ def repository_head() -> str:
     return heads[0]
 
 
+def validate_repository_strategy(
+    *,
+    baseline_revision: str,
+    expected_next_revision: str,
+    head_revision: str,
+) -> None:
+    """Require a single linear head that still extends the approved baseline edge."""
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    script = ScriptDirectory.from_config(config)
+    expected_next = script.get_revision(expected_next_revision)
+    if expected_next is None or expected_next.down_revision != baseline_revision:
+        raise BootstrapError(
+            "repository no longer contains the approved first migration after the baseline"
+        )
+    lineage = {
+        item.revision
+        for item in script.iterate_revisions(head_revision, baseline_revision)
+    }
+    if expected_next_revision not in lineage:
+        raise BootstrapError(
+            "repository head does not descend from the approved post-baseline migration"
+        )
+
+
 def parse_target_url(raw_url: str) -> URL:
     try:
         target = make_url(raw_url)
@@ -223,6 +248,7 @@ async def validate_schema(
     manifest: Mapping[str, Any],
     *,
     expected_revision: str | None,
+    allow_additive_objects: bool = False,
 ) -> None:
     tables = await _names(
         connection,
@@ -232,7 +258,12 @@ async def validate_schema(
         """,
     )
     expected_tables = set(manifest["tables"])
-    if tables != expected_tables:
+    table_inventory_valid = (
+        expected_tables.issubset(tables)
+        if allow_additive_objects
+        else tables == expected_tables
+    )
+    if not table_inventory_valid:
         raise BootstrapError(
             f"baseline table inventory mismatch; missing={sorted(expected_tables - tables)}, "
             f"unexpected={sorted(tables - expected_tables)}"
@@ -243,7 +274,12 @@ async def validate_schema(
         "SELECT table_name FROM information_schema.views WHERE table_schema = 'public'",
     )
     expected_views = set(manifest["views"])
-    if views != expected_views:
+    view_inventory_valid = (
+        expected_views.issubset(views)
+        if allow_additive_objects
+        else views == expected_views
+    )
+    if not view_inventory_valid:
         raise BootstrapError(
             f"baseline view inventory mismatch; missing={sorted(expected_views - views)}, "
             f"unexpected={sorted(views - expected_views)}"
@@ -260,7 +296,13 @@ async def validate_schema(
         """
     )
     enums = {str(row["typname"]): list(row["labels"]) for row in enum_rows}
-    if enums != manifest["enum_types"]:
+    enum_inventory_valid = enums == manifest["enum_types"]
+    if allow_additive_objects:
+        enum_inventory_valid = all(
+            name in enums and enums[name][: len(labels)] == labels
+            for name, labels in manifest["enum_types"].items()
+        )
+    if not enum_inventory_valid:
         raise BootstrapError("baseline enum inventory or label ordering mismatch")
 
     constraints = await _names(
@@ -382,11 +424,11 @@ async def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
     sql_path = snapshot_path(manifest)
     digest = verify_snapshot_hash(sql_path, manifest["snapshot_sha256"])
     head = repository_head()
-    if head != manifest["expected_next_revision"]:
-        raise BootstrapError(
-            f"repository head changed from the approved strategy: expected "
-            f"{manifest['expected_next_revision']}, found {head}"
-        )
+    validate_repository_strategy(
+        baseline_revision=manifest["baseline_revision"],
+        expected_next_revision=manifest["expected_next_revision"],
+        head_revision=head,
+    )
 
     print(f"Target: {sanitized_target(target)}")
     print(f"Baseline SHA-256 verified: {digest}")
@@ -447,7 +489,8 @@ async def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
         await validate_schema(
             connection,
             manifest,
-            expected_revision=manifest["expected_next_revision"],
+            expected_revision=head,
+            allow_additive_objects=True,
         )
         await assert_zero_business_rows(connection, manifest["tables"])
     finally:
@@ -456,7 +499,7 @@ async def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "status": "completed",
         "baseline_revision": manifest["baseline_revision"],
-        "final_revision": manifest["expected_next_revision"],
+        "final_revision": head,
         "snapshot_sha256": digest,
         "downgrade_floor": manifest["downgrade_floor"],
         "target": sanitized_target(target),

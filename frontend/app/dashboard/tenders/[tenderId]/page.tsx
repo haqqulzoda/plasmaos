@@ -27,6 +27,11 @@ import {
 } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { ProjectContextSection } from '@/components/tenders/ProjectContextSection';
+import {
+    classifyProjectContextFailure,
+    type TenderProjectContext,
+} from '@/types/project';
 import type { Tender, TenderCompetitorIntelligence, TenderDecisionSnapshot, TenderDocument } from '@/types/tender';
 import {
     availabilityClasses,
@@ -267,15 +272,18 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
     const [decisionSnapshot, setDecisionSnapshot] = useState<TenderDecisionSnapshot | null>(null);
     const [documents, setDocuments] = useState<TenderDocument[]>([]);
     const [competitorIntel, setCompetitorIntel] = useState<TenderCompetitorIntelligence | null>(null);
+    const [projectContext, setProjectContext] = useState<TenderProjectContext | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(true);
     const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
     const [isLoadingCompetitors, setIsLoadingCompetitors] = useState(true);
+    const [isLoadingProject, setIsLoadingProject] = useState(true);
     const [openingDocId, setOpeningDocId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [snapshotError, setSnapshotError] = useState<string | null>(null);
     const [documentError, setDocumentError] = useState<string | null>(null);
     const [competitorError, setCompetitorError] = useState<string | null>(null);
+    const [projectContextFailed, setProjectContextFailed] = useState(false);
     const [isPreparingDocuments, setIsPreparingDocuments] = useState(false);
     const [prepareProgress, setPrepareProgress] = useState(0);
     const [prepareStage, setPrepareStage] = useState<HydrationStage | null>(null);
@@ -367,6 +375,22 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
         }
     }, [tenderId]);
 
+    const loadProjectContext = useCallback(async () => {
+        setIsLoadingProject(true);
+        setProjectContextFailed(false);
+        try {
+            const { data } = await api.get<TenderProjectContext | null>(`/tenders/${tenderId}/project`);
+            setProjectContext(data ?? null);
+        } catch (error) {
+            const status = (error as { response?: { status?: number } }).response?.status;
+            const failureKind = classifyProjectContextFailure(status);
+            setProjectContext(null);
+            setProjectContextFailed(failureKind === 'endpoint_failure');
+        } finally {
+            setIsLoadingProject(false);
+        }
+    }, [tenderId]);
+
     const fetchTenderSyncStatus = useCallback(async () => {
         const { data } = await api.get<TenderSyncStatusResponse>(`/tenders/${tenderId}/sync-status`);
         return data;
@@ -454,6 +478,18 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
         };
     }, [loadCompetitors]);
 
+    useEffect(() => {
+        let isActive = true;
+
+        loadProjectContext().finally(() => {
+            if (!isActive) return;
+        });
+
+        return () => {
+            isActive = false;
+        };
+    }, [loadProjectContext]);
+
     const handlePrepareGizDocuments = useCallback(async () => {
         if (!tender || tender.source_system !== 'giz' || isPreparingDocuments) return;
 
@@ -519,6 +555,14 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
     const contact = tender?.contact_submission ?? null;
     const contactSourceUrl = contact?.source_url || tender?.source_url || null;
     const competitorGroups = competitorIntel?.groups ?? [];
+    const projectFallbackIdentity = (
+        (isLoadingProject || projectContextFailed) &&
+        tender?.source_system === 'world_bank' &&
+        tender.project_id
+    ) ? {
+            sourceSystem: tender.source_system,
+            externalProjectId: tender.project_id,
+        } : null;
 
     const handleOpenDocument = useCallback(async (doc: TenderDocument) => {
         if (doc.download_status !== 'available' || openingDocId) return;
@@ -851,6 +895,13 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
                     </dl>
                 </div>
             </section>
+
+            <ProjectContextSection
+                context={projectContext}
+                isLoading={isLoadingProject}
+                failed={projectContextFailed}
+                fallbackIdentity={projectFallbackIdentity}
+            />
 
             <section className="rounded-lg border border-gray-800 bg-gray-950 p-5">
                 <div className="mb-4 flex flex-col gap-3">
