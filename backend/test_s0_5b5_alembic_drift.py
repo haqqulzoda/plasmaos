@@ -42,11 +42,15 @@ def test_override_seal_schema_comment_matches_historical_contract() -> None:
     assert "sorted_override_node_ids" in (column.doc or "")
 
 
-def test_repository_graph_extends_b3_with_project_foundation() -> None:
+def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20260826_0002_s1_2_wb_project_enrichment"]
+    assert script.get_heads() == ["20260827_0001_s2_1_compliance_ownership"]
+    assert (
+        script.get_revision("20260827_0001_s2_1_compliance_ownership").down_revision
+        == "20260826_0002_s1_2_wb_project_enrichment"
+    )
     assert (
         script.get_revision("20260826_0002_s1_2_wb_project_enrichment").down_revision
         == "20260826_0001_s1_1_project_foundation"
@@ -56,7 +60,7 @@ def test_repository_graph_extends_b3_with_project_foundation() -> None:
         == "20260825_0001_s0_5b3"
     )
     assert script.get_revision("20260825_0001_s0_5b3").down_revision == "20260824_0002_s0_4c"
-    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 21
+    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 22
 
 
 def test_historical_migrations_are_untouched() -> None:

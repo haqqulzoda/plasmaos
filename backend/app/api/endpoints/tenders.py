@@ -94,7 +94,7 @@ from app.core.services import normalize_target_services, service_label
 from app.crud.crud_profile import get_profile_for_compliance_match
 from app.crud.exceptions import ProfileNotFoundException
 from app.db.session import get_db
-from app.models.audit import TenderAnalysis
+from app.models.audit import ANALYSIS_OWNERSHIP_OWNED, TenderAnalysis
 from app.models.all_models import (
     Project,
     Proposal,
@@ -3066,78 +3066,6 @@ def _build_reproducibility_snapshot(
     }
 
 
-def _analysis_owner_key(
-    *,
-    current_user: User,
-    profile: CompanyProfile | None,
-) -> str:
-    """
-    Build a tenant-safe ownership key for TenderAnalysis rows.
-
-    TenderAnalysis does not currently store a user_id, so we persist and query
-    by this deterministic key to avoid cross-tenant collisions.
-    """
-    profile_token = str(profile.id) if profile is not None else "no-profile"
-    return f"{current_user.id}:{profile_token}"
-
-
-def _legacy_analysis_owner_names(
-    *,
-    current_user: User,
-    profile: CompanyProfile | None,
-) -> list[str]:
-    """
-    Legacy TenderAnalysis rows stored the display company name instead of a
-    tenant-safe owner key. Restrict compatibility to names from the current
-    authenticated user context.
-    """
-    candidates = [
-        profile.company_name if profile is not None else None,
-        current_user.company_name,
-        current_user.name,
-    ]
-    names: list[str] = []
-    for candidate in candidates:
-        name = str(candidate).strip() if candidate else ""
-        if name and name not in names:
-            names.append(name)
-    return names
-
-
-def _analysis_owner_candidates(
-    *,
-    current_user: User,
-    profile: CompanyProfile | None,
-) -> list[str]:
-    owner_key = _analysis_owner_key(current_user=current_user, profile=profile)
-    return [
-        owner_key,
-        *[
-            name
-            for name in _legacy_analysis_owner_names(
-                current_user=current_user,
-                profile=profile,
-            )
-            if name != owner_key
-        ],
-    ]
-
-
-def _claim_legacy_analysis_owner(
-    *,
-    analysis: TenderAnalysis,
-    owner_key: str,
-    legacy_owner_names: list[str],
-) -> None:
-    if analysis.company_name == owner_key or analysis.company_name not in legacy_owner_names:
-        return
-
-    analysis_data = dict(analysis.analysis_json or {})
-    analysis_data.setdefault("tenant_company_name", analysis.company_name)
-    analysis.company_name = owner_key
-    analysis.analysis_json = analysis_data
-
-
 def _extract_remote_file_path(file_url: str) -> str:
     raw_value = (file_url or "").strip()
     if not raw_value:
@@ -3679,15 +3607,6 @@ async def analyze_tender(
         display_company_name = str(
             company_vault.company_name or current_user.name or "Unknown Company"
         )
-        analysis_owner_key = _analysis_owner_key(
-            current_user=current_user,
-            profile=profile,
-        )
-        analysis_owner_names = _analysis_owner_candidates(
-            current_user=current_user,
-            profile=profile,
-        )
-
         taxonomy_query = select(TaxonomyNode)
         taxonomy_is_active = getattr(TaxonomyNode, "is_active", None)
         if taxonomy_is_active is not None:
@@ -3745,7 +3664,9 @@ async def analyze_tender(
                 select(TenderAnalysis)
                 .where(
                     TenderAnalysis.tender_id == tender_id,
-                    TenderAnalysis.company_name.in_(analysis_owner_names),
+                    TenderAnalysis.user_id == current_user.id,
+                    TenderAnalysis.company_profile_id == profile.id,
+                    TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
                 )
                 .order_by(TenderAnalysis.created_at.desc())
                 .limit(1)
@@ -3753,14 +3674,6 @@ async def analyze_tender(
             latest_cached = cached_result.scalar_one_or_none()
 
             if latest_cached is not None and latest_cached.content_hash == current_content_hash:
-                _claim_legacy_analysis_owner(
-                    analysis=latest_cached,
-                    owner_key=analysis_owner_key,
-                    legacy_owner_names=_legacy_analysis_owner_names(
-                        current_user=current_user,
-                        profile=profile,
-                    ),
-                )
                 try:
                     logger.info(
                         "Returning cached analysis %s for tender %s (hash match)",
@@ -4086,7 +3999,10 @@ async def analyze_tender(
         new_analysis = TenderAnalysis(
             tender_id=tender.id,
             tender_file_name=f"tender_{tender.external_id}",
-            company_name=analysis_owner_key,
+            user_id=current_user.id,
+            company_profile_id=profile.id,
+            ownership_state=ANALYSIS_OWNERSHIP_OWNED,
+            company_name=display_company_name,
             raw_extracted_text=tender_text,
             analysis_json={
                 "requirements": legacy_requirements.model_dump(mode="json"),
@@ -7067,36 +6983,23 @@ async def _ensure_tender_access(
             select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
         )
         profile = profile_result.scalar_one_or_none()
-        owner_key = _analysis_owner_key(current_user=current_user, profile=profile)
-        analysis_access_result = await db.execute(
-            select(TenderAnalysis.id)
-            .where(
-                TenderAnalysis.tender_id == tender_id,
-                TenderAnalysis.company_name == owner_key,
+        if profile is not None and profile.user_id == current_user.id:
+            analysis_access_result = await db.execute(
+                select(TenderAnalysis.id)
+                .where(
+                    TenderAnalysis.tender_id == tender_id,
+                    TenderAnalysis.user_id == current_user.id,
+                    TenderAnalysis.company_profile_id == profile.id,
+                    TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
+                )
+                .limit(1)
             )
-            .limit(1)
-        )
-        if analysis_access_result.scalar_one_or_none() is not None:
-            return
+            if analysis_access_result.scalar_one_or_none() is not None:
+                return
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Tender not found",
-    )
-
-
-async def _get_analysis_owner_key_for_user(
-    *,
-    db: AsyncSession,
-    current_user: User,
-) -> str:
-    profile_result = await db.execute(
-        select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
-    )
-    profile = profile_result.scalar_one_or_none()
-    return _analysis_owner_key(
-        current_user=current_user,
-        profile=profile,
     )
 
 
@@ -7107,36 +7010,22 @@ async def _get_owned_analysis(
     tender_id: UUID,
     current_user: User,
 ) -> TenderAnalysis | None:
-    owner_key = await _get_analysis_owner_key_for_user(
-        db=db,
-        current_user=current_user,
-    )
     profile_result = await db.execute(
         select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
     )
     profile = profile_result.scalar_one_or_none()
-    owner_names = _analysis_owner_candidates(
-        current_user=current_user,
-        profile=profile,
-    )
+    if profile is None or profile.user_id != current_user.id:
+        return None
     result = await db.execute(
         select(TenderAnalysis).where(
             TenderAnalysis.id == analysis_id,
             TenderAnalysis.tender_id == tender_id,
-            TenderAnalysis.company_name.in_(owner_names),
+            TenderAnalysis.user_id == current_user.id,
+            TenderAnalysis.company_profile_id == profile.id,
+            TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
         )
     )
-    analysis = result.scalar_one_or_none()
-    if analysis is not None:
-        _claim_legacy_analysis_owner(
-            analysis=analysis,
-            owner_key=owner_key,
-            legacy_owner_names=_legacy_analysis_owner_names(
-                current_user=current_user,
-                profile=profile,
-            ),
-        )
-    return analysis
+    return result.scalar_one_or_none()
 
 
 async def _get_latest_sync_job_for_user_tender(
@@ -7569,20 +7458,29 @@ async def get_latest_analysis(
         select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
     )
     profile = profile_result.scalar_one_or_none()
-    analysis_owner_key = _analysis_owner_key(
-        current_user=current_user,
-        profile=profile,
-    )
-    analysis_owner_names = _analysis_owner_candidates(
-        current_user=current_user,
-        profile=profile,
-    )
+    if profile is None or profile.user_id != current_user.id:
+        return {
+            "analysis_id": None,
+            "requirements": None,
+            "evaluation": None,
+            "hybrid_compliance": None,
+            "content_hash": None,
+            "override_seal": None,
+            "evidence_validation": None,
+            "analysis_warnings": [],
+            "coverage_metadata": None,
+            "analysis_status": "not_found",
+            "extraction_error": None,
+            "created_at": None,
+        }
 
     result = await db.execute(
         select(TenderAnalysis)
         .where(
             TenderAnalysis.tender_id == tender_id,
-            TenderAnalysis.company_name.in_(analysis_owner_names),
+            TenderAnalysis.user_id == current_user.id,
+            TenderAnalysis.company_profile_id == profile.id,
+            TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
         )
         .order_by(TenderAnalysis.created_at.desc())
         .limit(1)
@@ -7604,15 +7502,6 @@ async def get_latest_analysis(
             "extraction_error": None,
             "created_at": None,
         }
-
-    _claim_legacy_analysis_owner(
-        analysis=analysis,
-        owner_key=analysis_owner_key,
-        legacy_owner_names=_legacy_analysis_owner_names(
-            current_user=current_user,
-            profile=profile,
-        ),
-    )
 
     analysis_data = analysis.analysis_json or {}
     analysis_status = str(analysis_data.get("analysis_status") or "completed")
@@ -7690,18 +7579,17 @@ async def export_compliance_pdf(
         select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
     )
     profile = profile_result.scalar_one_or_none()
-    analysis_owner_key = _analysis_owner_key(
-        current_user=current_user,
-        profile=profile,
-    )
-    analysis_owner_names = _analysis_owner_candidates(
-        current_user=current_user,
-        profile=profile,
-    )
+    if profile is None or profile.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance analysis not found for this tender.",
+        )
 
     analysis_query = select(TenderAnalysis).where(
         TenderAnalysis.tender_id == tender_id,
-        TenderAnalysis.company_name.in_(analysis_owner_names),
+        TenderAnalysis.user_id == current_user.id,
+        TenderAnalysis.company_profile_id == profile.id,
+        TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
     )
     if analysis_id is not None:
         analysis_query = analysis_query.where(TenderAnalysis.id == analysis_id)
@@ -7715,15 +7603,6 @@ async def export_compliance_pdf(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Compliance analysis not found for this tender.",
         )
-
-    _claim_legacy_analysis_owner(
-        analysis=analysis,
-        owner_key=analysis_owner_key,
-        legacy_owner_names=_legacy_analysis_owner_names(
-            current_user=current_user,
-            profile=profile,
-        ),
-    )
 
     analysis_data = analysis.analysis_json or {}
     hybrid_compliance = sanitize_internal_requirement_diagnostics(

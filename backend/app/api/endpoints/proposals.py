@@ -52,7 +52,7 @@ from app.models.all_models import (
     TenderStatus,
     User,
 )
-from app.models.audit import TenderAnalysis
+from app.models.audit import ANALYSIS_OWNERSHIP_OWNED, TenderAnalysis
 from app.models.company import CompanyProfile
 from app.schemas.proposal import (
     ProposalCreate,
@@ -127,21 +127,6 @@ def _proposal_response(proposal: Proposal) -> ProposalResponse:
         currency=proposal.currency,
         created_at=proposal.created_at,
     )
-
-
-def _analysis_owner_key(
-    *,
-    current_user: User,
-    profile: CompanyProfile | None,
-) -> str:
-    """
-    Build a tenant-safe analysis ownership key.
-
-    TenderAnalysis currently has no explicit user_id column, so we persist and
-    query by a deterministic key derived from the authenticated user context.
-    """
-    profile_token = str(profile.id) if profile is not None else "no-profile"
-    return f"{current_user.id}:{profile_token}"
 
 
 # =============================================================================
@@ -463,10 +448,6 @@ async def ai_draft_proposal(
             select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
         )
         profile = profile_result.scalar_one_or_none()
-        analysis_owner_key = _analysis_owner_key(
-            current_user=current_user,
-            profile=profile,
-        )
         company_name = str(
             (profile.company_name if profile else None)
             or current_user.company_name
@@ -474,16 +455,20 @@ async def ai_draft_proposal(
             or "Unknown Company"
         )
 
-        analysis_result = await db.execute(
-            select(TenderAnalysis)
-            .where(
-                TenderAnalysis.tender_id == proposal.tender_id,
-                TenderAnalysis.company_name == analysis_owner_key,
+        latest_analysis = None
+        if profile is not None and profile.user_id == current_user.id:
+            analysis_result = await db.execute(
+                select(TenderAnalysis)
+                .where(
+                    TenderAnalysis.tender_id == proposal.tender_id,
+                    TenderAnalysis.user_id == current_user.id,
+                    TenderAnalysis.company_profile_id == profile.id,
+                    TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
+                )
+                .order_by(TenderAnalysis.created_at.desc())
+                .limit(1)
             )
-            .order_by(TenderAnalysis.created_at.desc())
-            .limit(1)
-        )
-        latest_analysis = analysis_result.scalar_one_or_none()
+            latest_analysis = analysis_result.scalar_one_or_none()
         evaluation_payload = (
             (latest_analysis.analysis_json or {}).get("evaluation", {})
             if latest_analysis

@@ -15,22 +15,13 @@ from app.api.deps import require_approved_pilot_access
 from app.core.security.audit_trail import record_audit_action
 from app.db.session import get_db
 from app.models.all_models import User
-from app.models.audit import TenderAnalysis
+from app.models.audit import ANALYSIS_OWNERSHIP_OWNED, TenderAnalysis
 from app.models.company import CompanyProfile
 from app.schemas.audit import RiskAuthorizationRequest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def _analysis_owner_key(
-    *,
-    current_user: User,
-    profile: CompanyProfile | None,
-) -> str:
-    profile_token = str(profile.id) if profile is not None else "no-profile"
-    return f"{current_user.id}:{profile_token}"
 
 
 @router.post("/authorize")
@@ -49,12 +40,18 @@ async def authorize_risk(
             select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
         )
         profile = profile_result.scalar_one_or_none()
-        owner_key = _analysis_owner_key(current_user=current_user, profile=profile)
+        if profile is None or profile.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Analysis not found",
+            )
 
         analysis_result = await session.execute(
             select(TenderAnalysis.id).where(
                 TenderAnalysis.id == request.analysis_id,
-                TenderAnalysis.company_name == owner_key,
+                TenderAnalysis.user_id == current_user.id,
+                TenderAnalysis.company_profile_id == profile.id,
+                TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
             )
         )
         if analysis_result.scalar_one_or_none() is None:

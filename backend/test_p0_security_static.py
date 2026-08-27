@@ -200,17 +200,21 @@ class P0SecurityStaticTests(unittest.TestCase):
         self.assertIn("is_operator_or_admin(current_user)", ensure_access)
         self.assertIn("Proposal.id", ensure_access)
         self.assertIn("TenderAnalysis.id", ensure_access)
-        self.assertIn("TenderAnalysis.company_name == owner_key", ensure_access)
-        self.assertIn("def _claim_legacy_analysis_owner", tenders)
+        self.assertIn("TenderAnalysis.user_id == current_user.id", ensure_access)
+        self.assertIn("TenderAnalysis.company_profile_id == profile.id", ensure_access)
+        self.assertIn("TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED", ensure_access)
+        self.assertNotIn("TenderAnalysis.company_name", ensure_access)
+        self.assertNotIn("def _claim_legacy_analysis_owner", tenders)
 
         self.assertIn("async def _get_owned_analysis", tenders)
         owned_analysis = function_block(tenders, "_get_owned_analysis")
-        self.assertIn("_analysis_owner_candidates", owned_analysis)
         self.assertRegex(
             owned_analysis,
             r"TenderAnalysis\.id == analysis_id,[\s\S]+?"
             r"TenderAnalysis\.tender_id == tender_id,[\s\S]+?"
-            r"TenderAnalysis\.company_name\.in_\(owner_names\)",
+            r"TenderAnalysis\.user_id == current_user\.id,[\s\S]+?"
+            r"TenderAnalysis\.company_profile_id == profile\.id,[\s\S]+?"
+            r"TenderAnalysis\.ownership_state == ANALYSIS_OWNERSHIP_OWNED",
         )
 
     def test_operator_support_access_is_route_calibrated(self) -> None:

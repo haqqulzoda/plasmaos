@@ -479,6 +479,60 @@ class ReadOnlyPreflight:
             "ownership_categories": _json_value(category_rows),
         }
 
+        if self.has_columns(
+            table,
+            "user_id",
+            "company_profile_id",
+            "ownership_state",
+        ) and self.has_table("users") and self.has_table("company_profiles"):
+            canonical_ownership = await self.fetchrow(
+                """
+                SELECT
+                    COUNT(*) AS total_analyses,
+                    COUNT(*) FILTER (
+                        WHERE a.ownership_state = 'OWNED'
+                    ) AS owned,
+                    COUNT(*) FILTER (
+                        WHERE a.ownership_state = 'QUARANTINED_LEGACY'
+                    ) AS quarantined,
+                    COUNT(*) FILTER (
+                        WHERE a.ownership_state = 'OWNED'
+                          AND (u.id IS NULL OR cp.id IS NULL)
+                    ) AS invalid_fk,
+                    COUNT(*) FILTER (
+                        WHERE a.ownership_state = 'OWNED'
+                          AND u.id IS NOT NULL
+                          AND cp.id IS NOT NULL
+                          AND cp.user_id <> u.id
+                    ) AS user_profile_mismatch,
+                    COUNT(*) FILTER (
+                        WHERE NOT (
+                            (a.ownership_state = 'OWNED'
+                             AND a.user_id IS NOT NULL
+                             AND a.company_profile_id IS NOT NULL)
+                            OR
+                            (a.ownership_state = 'QUARANTINED_LEGACY'
+                             AND a.user_id IS NULL
+                             AND a.company_profile_id IS NULL)
+                        )
+                    ) AS invalid_ownership_tuple,
+                    COUNT(*) FILTER (
+                        WHERE a.ownership_state = 'QUARANTINED_LEGACY'
+                          AND a.company_name ~* $1
+                    ) AS quarantined_encoded_remnants,
+                    COUNT(*) FILTER (
+                        WHERE a.ownership_state = 'QUARANTINED_LEGACY'
+                          AND NULLIF(BTRIM(a.company_name), '') IS NOT NULL
+                          AND NOT (a.company_name ~* $1)
+                    ) AS quarantined_legacy_name_or_malformed_remnants
+                FROM tender_analyses a
+                LEFT JOIN users u ON u.id = a.user_id
+                LEFT JOIN company_profiles cp ON cp.id = a.company_profile_id
+                """,
+                ENCODED_OWNER_PATTERN,
+            )
+            data["canonical_ownership"] = _json_value(canonical_ownership)
+
         if self.has_table("users") and self.has_table("company_profiles"):
             encoded_rows = await self.fetch(
                 """
@@ -508,12 +562,12 @@ class ReadOnlyPreflight:
                                ELSE 'valid_user_and_profile'
                            END AS mapping_status
                     FROM encoded e
-                    LEFT JOIN users u ON u.id::text = e.user_token
+                    LEFT JOIN users u ON u.id::text = LOWER(e.user_token)
                     LEFT JOIN company_profiles token_profile
                         ON e.profile_token <> 'no-profile'
-                       AND token_profile.id::text = e.profile_token
+                       AND token_profile.id::text = LOWER(e.profile_token)
                     LEFT JOIN company_profiles current_profile
-                        ON current_profile.user_id::text = e.user_token
+                        ON current_profile.user_id::text = LOWER(e.user_token)
                 )
                 SELECT mapping_status, COUNT(*) AS rows
                 FROM mapped
@@ -576,45 +630,25 @@ class ReadOnlyPreflight:
                 ), valid_encoded AS (
                     SELECT e.id
                     FROM encoded e
-                    JOIN users u ON u.id::text = e.user_token
+                    JOIN users u ON u.id::text = LOWER(e.user_token)
                     JOIN company_profiles cp
                       ON e.profile_token <> 'no-profile'
-                     AND cp.id::text = e.profile_token
+                     AND cp.id::text = LOWER(e.profile_token)
                      AND cp.user_id = u.id
-                ), legacy_profile_counts AS (
-                    SELECT c.company_name AS owner_name,
-                           COUNT(cp.id) AS profiles,
-                           COUNT(u.id) AS valid_users
-                    FROM classified c
-                    LEFT JOIN company_profiles cp
-                      ON BTRIM(cp.company_name) = c.company_name
-                    LEFT JOIN users u ON u.id = cp.user_id
-                    WHERE c.owner_category = 'B_legacy_display_name'
-                    GROUP BY c.company_name
-                ), safe_legacy_names AS (
-                    SELECT owner_name FROM legacy_profile_counts
-                    WHERE profiles = 1 AND valid_users = 1
                 )
                 SELECT
                     COUNT(*) FILTER (
                         WHERE c.owner_category = 'A_encoded_uuid'
                           AND ve.id IS NOT NULL
                     ) AS safe_encoded_rows,
-                    COUNT(*) FILTER (
-                        WHERE c.owner_category = 'B_legacy_display_name'
-                          AND sl.owner_name IS NOT NULL
-                    ) AS safe_legacy_rows,
+                    0::bigint AS safe_legacy_rows,
                     COUNT(*) FILTER (
                         WHERE NOT (
                             (c.owner_category = 'A_encoded_uuid' AND ve.id IS NOT NULL)
-                            OR
-                            (c.owner_category = 'B_legacy_display_name'
-                             AND sl.owner_name IS NOT NULL)
                         )
                     ) AS quarantine_or_manual_review_rows
                 FROM classified c
                 LEFT JOIN valid_encoded ve ON ve.id = c.id
-                LEFT JOIN safe_legacy_names sl ON sl.owner_name = c.company_name
                 """,
                 ENCODED_OWNER_PATTERN,
             )
@@ -628,9 +662,9 @@ class ReadOnlyPreflight:
                            SPLIT_PART(a.company_name, ':', 2) AS profile_token
                     FROM tender_analyses a
                     JOIN users u
-                      ON u.id::text = SPLIT_PART(a.company_name, ':', 1)
+                      ON u.id::text = LOWER(SPLIT_PART(a.company_name, ':', 1))
                     JOIN company_profiles cp
-                      ON cp.id::text = SPLIT_PART(a.company_name, ':', 2)
+                      ON cp.id::text = LOWER(SPLIT_PART(a.company_name, ':', 2))
                      AND cp.user_id = u.id
                     WHERE a.company_name ~* $1
                 ), user_counts AS (

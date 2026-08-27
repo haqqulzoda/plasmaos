@@ -32,6 +32,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.all_models import Base
 
 
+ANALYSIS_OWNERSHIP_OWNED = "OWNED"
+ANALYSIS_OWNERSHIP_QUARANTINED_LEGACY = "QUARANTINED_LEGACY"
+ANALYSIS_OWNERSHIP_STATES = (
+    ANALYSIS_OWNERSHIP_OWNED,
+    ANALYSIS_OWNERSHIP_QUARANTINED_LEGACY,
+)
+
+
 class TenderAnalysis(Base):
     """
     Stores one raw tender analysis transaction.
@@ -53,6 +61,23 @@ class TenderAnalysis(Base):
         nullable=False,
     )
     tender_file_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    company_profile_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("company_profiles.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    ownership_state: Mapped[str] = mapped_column(
+        String(30),
+        default=ANALYSIS_OWNERSHIP_QUARANTINED_LEGACY,
+        server_default=text(f"'{ANALYSIS_OWNERSHIP_QUARANTINED_LEGACY}'"),
+        nullable=False,
+    )
+    # Snapshot/display metadata only. Authorization never depends on this value.
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     raw_extracted_text: Mapped[str] = mapped_column(Text, nullable=False)
     analysis_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
@@ -87,6 +112,18 @@ class TenderAnalysis(Base):
         "AuditLog",
         back_populates="analysis",
         cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "(ownership_state = 'OWNED' AND user_id IS NOT NULL "
+            "AND company_profile_id IS NOT NULL) OR "
+            "(ownership_state = 'QUARANTINED_LEGACY' AND user_id IS NULL "
+            "AND company_profile_id IS NULL)",
+            name="ck_tender_analyses_ownership_tuple",
+        ),
+        Index("ix_tender_analyses_user_id", "user_id"),
+        Index("ix_tender_analyses_company_profile_id", "company_profile_id"),
     )
 
 

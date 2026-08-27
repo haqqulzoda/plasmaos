@@ -117,7 +117,7 @@ class TenderRecommendationMigrationContractTests(unittest.TestCase):
         script = ScriptDirectory.from_config(config)
         self.assertEqual(
             script.get_current_head(),
-            "20260826_0002_s1_2_wb_project_enrichment",
+            "20260827_0001_s2_1_compliance_ownership",
         )
         self.assertEqual(self.migration.down_revision, "20260824_0002_s0_4c")
 
