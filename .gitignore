@@ -1,6 +1,6 @@
 .env
 .pgadmin
-.docs
+.docs/
 
 # Python virtual environments
 .venv/
