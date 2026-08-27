@@ -23,11 +23,12 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    inspect,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.models.all_models import Base
 
@@ -48,6 +49,10 @@ ANALYSIS_VERSION_STATUS_FAILED = "FAILED"
 ANALYSIS_SNAPSHOT_COMPLETE = "COMPLETE"
 ANALYSIS_SNAPSHOT_PARTIAL = "PARTIAL"
 ANALYSIS_SNAPSHOT_LEGACY_BACKFILL = "LEGACY_BACKFILL"
+
+
+class AnalysisVersionMutationError(RuntimeError):
+    """Raised when application code tries to rewrite persisted history."""
 
 
 class TenderAnalysis(Base):
@@ -256,6 +261,28 @@ class AnalysisVersion(Base):
         ),
         Index("ix_analysis_versions_requested_by_user_id", "requested_by_user_id"),
     )
+
+    @validates(
+        "provenance_snapshot",
+        "tender_snapshot",
+        "company_snapshot",
+        "result_snapshot",
+        "evidence_snapshot",
+        "input_hash",
+        "output_hash",
+        "evidence_hash",
+        "document_set_hash",
+        "version_hash",
+    )
+    def _reject_persisted_history_mutation(self, key: str, value: Any) -> Any:
+        state = inspect(self)
+        if state.persistent or state.detached:
+            current = self.__dict__.get(key)
+            if current != value:
+                raise AnalysisVersionMutationError(
+                    f"persisted AnalysisVersion.{key} is immutable"
+                )
+        return value
 
 
 class AnalysisVersionDocumentSnapshot(Base):

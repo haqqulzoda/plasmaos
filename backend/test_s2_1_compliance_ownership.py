@@ -100,25 +100,33 @@ def test_new_write_has_explicit_authenticated_owner_and_display_snapshot() -> No
 
 def test_customer_analysis_paths_use_only_explicit_owner_identity() -> None:
     tenders = source("app/api/endpoints/tenders.py")
-    for name in (
-        "analyze_tender",
-        "_get_owned_analysis",
-        "get_latest_analysis",
-        "export_compliance_pdf",
-    ):
+    aggregates = source("app/services/analysis_aggregates.py")
+    for name in ("_get_owned_analysis",):
         block = function_block(tenders, name)
         assert "TenderAnalysis.user_id" in block, name
         assert "TenderAnalysis.company_profile_id" in block, name
         assert "TenderAnalysis.ownership_state" in block, name
         assert "TenderAnalysis.company_name" not in block, name
+    for name in (
+        "get_owned_analysis_parent_for_tender",
+        "get_owned_analysis_parent_by_id",
+    ):
+        block = function_block(aggregates, name)
+        assert "TenderAnalysis.user_id" in block, name
+        assert "TenderAnalysis.company_profile_id" in block, name
+        assert "TenderAnalysis.ownership_state" in block, name
+        assert "TenderAnalysis.company_name" not in block, name
+    for name in ("analyze_tender", "get_latest_analysis", "export_compliance_pdf"):
+        block = function_block(tenders, name)
+        assert "get_owned_analysis_parent_" in block, name
 
     audit = function_block(source("app/api/routers/audit.py"), "authorize_risk")
     proposal = function_block(source("app/api/endpoints/proposals.py"), "ai_draft_proposal")
-    for block in (audit, proposal):
-        assert "TenderAnalysis.user_id" in block
-        assert "TenderAnalysis.company_profile_id" in block
-        assert "TenderAnalysis.ownership_state" in block
-        assert "TenderAnalysis.company_name" not in block
+    assert "TenderAnalysis.user_id" in audit
+    assert "TenderAnalysis.company_profile_id" in audit
+    assert "TenderAnalysis.ownership_state" in audit
+    assert "get_owned_analysis_parent_for_tender" in proposal
+    assert "TenderAnalysis.company_name" not in audit + proposal
 
 
 def test_override_direct_id_and_export_share_owned_analysis_gate() -> None:
@@ -127,8 +135,7 @@ def test_override_direct_id_and_export_share_owned_analysis_gate() -> None:
         block = function_block(tenders, name)
         assert "_get_owned_analysis" in block
     export = function_block(tenders, "export_compliance_pdf")
-    assert "TenderAnalysis.id == analysis_id" in export
-    assert "TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED" in export
+    assert "get_owned_analysis_parent_by_id" in export
 
 
 def test_runtime_contains_no_legacy_name_claim_or_name_authorization() -> None:

@@ -5,11 +5,13 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from typing import Any, Sequence
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.reproducibility import (
     canonical_marker_text_sha256,
@@ -32,10 +34,26 @@ from app.models.audit import (
 
 
 ANALYSIS_PIPELINE_VERSION = "hybrid_compliance_s2_2_v1"
+logger = logging.getLogger(__name__)
 
 
 class AnalysisVersionOwnershipError(RuntimeError):
     """Raised when a customer-owned runtime version lacks a valid parent owner."""
+
+
+class AnalysisVersionIntegrityError(RuntimeError):
+    """Raised when an owned parent has no authoritative version history."""
+
+
+@dataclass(frozen=True)
+class AnalysisVersionIntegrityResult:
+    overall_status: str
+    output_hash_status: str
+    evidence_hash_status: str
+    document_set_hash_status: str
+    version_hash_status: str
+    snapshot_completeness: str
+    missing_fields: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -431,6 +449,7 @@ async def get_latest_analysis_version(
 ) -> AnalysisVersion | None:
     result = await db.execute(
         select(AnalysisVersion)
+        .options(selectinload(AnalysisVersion.document_snapshots))
         .join(TenderAnalysis, TenderAnalysis.id == AnalysisVersion.analysis_id)
         .where(
             AnalysisVersion.analysis_id == analysis_id,
@@ -444,6 +463,74 @@ async def get_latest_analysis_version(
     return result.scalar_one_or_none()
 
 
+async def get_latest_analysis_version_for_parent(
+    db: AsyncSession,
+    *,
+    analysis_id: UUID,
+) -> AnalysisVersion | None:
+    """Internal/operator read for one parent without customer authorization."""
+    result = await db.execute(
+        select(AnalysisVersion)
+        .options(selectinload(AnalysisVersion.document_snapshots))
+        .where(AnalysisVersion.analysis_id == analysis_id)
+        .order_by(AnalysisVersion.version_number.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def require_latest_analysis_version(
+    db: AsyncSession,
+    *,
+    analysis_id: UUID,
+    user_id: UUID,
+    company_profile_id: UUID,
+) -> AnalysisVersion:
+    """Return highest version number or expose a zero-version integrity gap."""
+    version = await get_latest_analysis_version(
+        db,
+        analysis_id=analysis_id,
+        user_id=user_id,
+        company_profile_id=company_profile_id,
+    )
+    if version is None:
+        logger.error(
+            "analysis_version_zero_version_anomaly analysis_id=%s user_id=%s "
+            "company_profile_id=%s",
+            analysis_id,
+            user_id,
+            company_profile_id,
+        )
+        raise AnalysisVersionIntegrityError(
+            "owned analysis parent has no authoritative AnalysisVersion"
+        )
+    return version
+
+
+async def get_analysis_version(
+    db: AsyncSession,
+    *,
+    analysis_id: UUID,
+    version_number: int,
+    user_id: UUID,
+    company_profile_id: UUID,
+) -> AnalysisVersion | None:
+    """Read one immutable version through its owned parent authorization."""
+    result = await db.execute(
+        select(AnalysisVersion)
+        .options(selectinload(AnalysisVersion.document_snapshots))
+        .join(TenderAnalysis, TenderAnalysis.id == AnalysisVersion.analysis_id)
+        .where(
+            AnalysisVersion.analysis_id == analysis_id,
+            AnalysisVersion.version_number == version_number,
+            TenderAnalysis.user_id == user_id,
+            TenderAnalysis.company_profile_id == company_profile_id,
+            TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def list_analysis_versions(
     db: AsyncSession,
     *,
@@ -453,6 +540,7 @@ async def list_analysis_versions(
 ) -> list[AnalysisVersion]:
     result = await db.execute(
         select(AnalysisVersion)
+        .options(selectinload(AnalysisVersion.document_snapshots))
         .join(TenderAnalysis, TenderAnalysis.id == AnalysisVersion.analysis_id)
         .where(
             AnalysisVersion.analysis_id == analysis_id,
@@ -463,3 +551,141 @@ async def list_analysis_versions(
         .order_by(AnalysisVersion.version_number.asc())
     )
     return list(result.scalars().all())
+
+
+def get_versioned_analysis_payload(version: AnalysisVersion) -> dict[str, Any]:
+    """Return detached immutable snapshot values; never consult live parents."""
+    return {
+        "analysis_id": str(version.analysis_id),
+        "version_number": version.version_number,
+        "origin": version.origin,
+        "status": version.status,
+        "snapshot_completeness": version.snapshot_completeness,
+        "result_snapshot": deepcopy(version.result_snapshot),
+        "evidence_snapshot": deepcopy(version.evidence_snapshot),
+        "tender_snapshot": deepcopy(version.tender_snapshot),
+        "company_snapshot": deepcopy(version.company_snapshot),
+        "provenance_snapshot": deepcopy(version.provenance_snapshot),
+        "input_hash": version.input_hash,
+        "output_hash": version.output_hash,
+        "evidence_hash": version.evidence_hash,
+        "document_set_hash": version.document_set_hash,
+        "version_hash": version.version_hash,
+    }
+
+
+def _document_inputs_from_version(
+    version: AnalysisVersion,
+) -> list[DocumentSnapshotInput]:
+    return [
+        DocumentSnapshotInput(
+            tender_document_id=item.tender_document_id,
+            source_system=item.source_system,
+            source_document_key=item.source_document_key,
+            source_url=item.source_url,
+            filename=item.filename,
+            media_type=item.media_type,
+            content_hash=item.content_hash,
+            storage_reference=item.storage_reference,
+            storage_version=item.storage_version,
+            fetched_at=item.fetched_at,
+            observed_at=item.observed_at,
+            snapshot_metadata=deepcopy(item.snapshot_metadata),
+        )
+        for item in version.document_snapshots
+    ]
+
+
+def _hash_status(stored: str | None, recomputed: str) -> str:
+    if not stored:
+        return "NOT_AVAILABLE"
+    return "VERIFIED" if stored == recomputed else "MISMATCH"
+
+
+def verify_analysis_version_integrity(
+    version: AnalysisVersion,
+) -> AnalysisVersionIntegrityResult:
+    """Verify stored hashes without repairing or rerunning historical work."""
+    result_copy = deepcopy(version.result_snapshot)
+    evidence_copy = deepcopy(version.evidence_snapshot)
+    provenance_copy = deepcopy(version.provenance_snapshot)
+    tender_copy = deepcopy(version.tender_snapshot)
+    company_copy = deepcopy(version.company_snapshot)
+    recomputed_output = stable_json_sha256(result_copy)
+    recomputed_evidence = stable_json_sha256(evidence_copy)
+    recomputed_documents = document_set_hash(_document_inputs_from_version(version))
+    recomputed_version = stable_json_sha256(
+        _version_hash_payload(
+            analysis_id=version.analysis_id,
+            version_number=version.version_number,
+            supersedes_version_id=version.supersedes_version_id,
+            origin=version.origin,
+            status=version.status,
+            analysis_schema_version=version.analysis_schema_version,
+            pipeline_version=version.pipeline_version,
+            model_provider=version.model_provider,
+            model_name=version.model_name,
+            model_version=version.model_version,
+            prompt_template_version=version.prompt_template_version,
+            prompt_template_hash=version.prompt_template_hash,
+            provenance_snapshot=provenance_copy,
+            tender_snapshot=tender_copy,
+            company_snapshot=company_copy,
+            result_snapshot=result_copy,
+            evidence_snapshot=evidence_copy,
+            input_hash=version.input_hash,
+            output_hash=recomputed_output,
+            evidence_hash=recomputed_evidence,
+            document_set_hash_value=recomputed_documents,
+            snapshot_completeness=version.snapshot_completeness,
+            requested_by_user_id=version.requested_by_user_id,
+        )
+    )
+    legacy_backfill = version.snapshot_completeness == "LEGACY_BACKFILL"
+    component_hashes_available = not legacy_backfill and all(
+        (
+            version.output_hash,
+            version.evidence_hash,
+            version.document_set_hash,
+        )
+    )
+    version_hash_status = (
+        _hash_status(version.version_hash, recomputed_version)
+        if component_hashes_available
+        else "NOT_AVAILABLE"
+    )
+    statuses = {
+        "output_hash": _hash_status(version.output_hash, recomputed_output),
+        "evidence_hash": _hash_status(version.evidence_hash, recomputed_evidence),
+        "document_set_hash": (
+            "NOT_AVAILABLE"
+            if legacy_backfill
+            else _hash_status(version.document_set_hash, recomputed_documents)
+        ),
+        "version_hash": version_hash_status,
+    }
+    missing = tuple(
+        name for name, value in statuses.items() if value == "NOT_AVAILABLE"
+    )
+    if "MISMATCH" in statuses.values():
+        overall = "MISMATCH"
+        logger.error(
+            "analysis_version_integrity_mismatch analysis_id=%s version_number=%s "
+            "checks=%s",
+            version.analysis_id,
+            version.version_number,
+            statuses,
+        )
+    elif all(value == "VERIFIED" for value in statuses.values()):
+        overall = "VERIFIED"
+    else:
+        overall = "PARTIAL"
+    return AnalysisVersionIntegrityResult(
+        overall_status=overall,
+        output_hash_status=statuses["output_hash"],
+        evidence_hash_status=statuses["evidence_hash"],
+        document_set_hash_status=statuses["document_set_hash"],
+        version_hash_status=statuses["version_hash"],
+        snapshot_completeness=version.snapshot_completeness,
+        missing_fields=missing,
+    )

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -157,6 +158,23 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_json_value(item) for item in value]
     return value
+
+
+def _decoded_json(value: Any) -> Any:
+    if isinstance(value, str):
+        return json.loads(value)
+    return _json_value(value)
+
+
+def _stable_json_sha256(value: Any) -> str:
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class ReadOnlyPreflight:
@@ -853,6 +871,48 @@ class ReadOnlyPreflight:
             """
         )
 
+        multi_parent_owned_logical_keys: int | None = None
+        if self.has_columns(
+            "tender_analyses",
+            "user_id",
+            "company_profile_id",
+            "tender_id",
+            "ownership_state",
+        ):
+            multi_parent_owned_logical_keys = int(
+                await self.fetchval(
+                    """
+                    SELECT COUNT(*) FROM (
+                        SELECT user_id, company_profile_id, tender_id
+                        FROM tender_analyses
+                        WHERE ownership_state = 'OWNED'
+                        GROUP BY user_id, company_profile_id, tender_id
+                        HAVING COUNT(*) > 1
+                    ) ambiguous_owned_keys
+                    """
+                )
+            )
+
+        hash_verification = await self._analysis_version_hash_verification(
+            document_table_exists=self.has_columns(
+                document_table,
+                "id",
+                "analysis_version_id",
+                "tender_document_id",
+                "source_system",
+                "source_document_key",
+                "source_url",
+                "filename",
+                "media_type",
+                "content_hash",
+                "storage_reference",
+                "storage_version",
+                "fetched_at",
+                "observed_at",
+                "snapshot_metadata",
+            )
+        )
+
         document_hashes: dict[str, Any] | None = None
         if self.has_columns(
             document_table,
@@ -890,8 +950,173 @@ class ReadOnlyPreflight:
                 "version_integrity": _json_value(version_integrity),
                 "duplicate_version_numbers": _json_value(duplicate_versions),
                 "document_hashes": document_hashes,
+                "hash_verification": hash_verification,
+                "multi_parent_owned_logical_keys": (
+                    multi_parent_owned_logical_keys
+                ),
             },
         }
+
+    async def _analysis_version_hash_verification(
+        self,
+        *,
+        document_table_exists: bool,
+    ) -> dict[str, Any]:
+        """Recompute canonical hashes in memory and return counts only."""
+        versions = await self.fetch(
+            """
+            SELECT id, analysis_id, version_number, supersedes_version_id,
+                   origin, status, analysis_schema_version, pipeline_version,
+                   model_provider, model_name, model_version,
+                   prompt_template_version, prompt_template_hash,
+                   provenance_snapshot, tender_snapshot, company_snapshot,
+                   result_snapshot, evidence_snapshot, input_hash, output_hash,
+                   evidence_hash, document_set_hash, version_hash,
+                   snapshot_completeness, requested_by_user_id
+            FROM analysis_versions
+            ORDER BY analysis_id, version_number
+            """
+        )
+        documents_by_version: dict[UUID, list[asyncpg.Record]] = {}
+        if document_table_exists:
+            document_rows = await self.fetch(
+                """
+                SELECT analysis_version_id, tender_document_id, source_system,
+                       source_document_key, source_url, filename, media_type,
+                       content_hash, storage_reference, storage_version,
+                       fetched_at, observed_at, snapshot_metadata
+                FROM analysis_version_document_snapshots
+                ORDER BY analysis_version_id, id
+                """
+            )
+            for document in document_rows:
+                documents_by_version.setdefault(
+                    document["analysis_version_id"], []
+                ).append(document)
+
+        counts: dict[str, int] = {
+            "versions_checked": 0,
+            "output_hash_mismatches": 0,
+            "evidence_hash_mismatches": 0,
+            "document_set_hash_mismatches": 0,
+            "version_hash_mismatches": 0,
+            "hash_mismatches_total": 0,
+            "hash_not_available": 0,
+        }
+        for version in versions:
+            counts["versions_checked"] += 1
+            result_snapshot = _decoded_json(version["result_snapshot"])
+            evidence_snapshot = _decoded_json(version["evidence_snapshot"])
+            output_hash = _stable_json_sha256(result_snapshot)
+            evidence_hash = _stable_json_sha256(evidence_snapshot)
+
+            document_payload: list[dict[str, Any]] = []
+            for document in documents_by_version.get(version["id"], []):
+                document_payload.append(
+                    {
+                        "tender_document_id": (
+                            str(document["tender_document_id"])
+                            if document["tender_document_id"]
+                            else None
+                        ),
+                        "source_system": document["source_system"],
+                        "source_document_key": document["source_document_key"],
+                        "source_url": document["source_url"],
+                        "filename": document["filename"],
+                        "media_type": document["media_type"],
+                        "content_hash": document["content_hash"],
+                        "storage_reference": document["storage_reference"],
+                        "storage_version": document["storage_version"],
+                        "fetched_at": (
+                            document["fetched_at"].isoformat()
+                            if document["fetched_at"]
+                            else None
+                        ),
+                        "observed_at": (
+                            document["observed_at"].isoformat()
+                            if document["observed_at"]
+                            else None
+                        ),
+                        "snapshot_metadata": _decoded_json(
+                            document["snapshot_metadata"]
+                        ),
+                    }
+                )
+            document_payload.sort(key=_stable_json_sha256)
+            document_hash = _stable_json_sha256(document_payload)
+
+            checks = {
+                "output_hash": (version["output_hash"], output_hash),
+                "evidence_hash": (version["evidence_hash"], evidence_hash),
+            }
+            if version["snapshot_completeness"] == "LEGACY_BACKFILL":
+                counts["hash_not_available"] += 1
+            else:
+                checks["document_set_hash"] = (
+                    version["document_set_hash"],
+                    document_hash,
+                )
+            for name, (stored, recomputed) in checks.items():
+                if not stored:
+                    counts["hash_not_available"] += 1
+                elif stored != recomputed:
+                    counts[f"{name}_mismatches"] += 1
+                    counts["hash_mismatches_total"] += 1
+
+            component_hashes_available = (
+                version["snapshot_completeness"] != "LEGACY_BACKFILL"
+                and all(
+                    version[name]
+                    for name in (
+                        "output_hash",
+                        "evidence_hash",
+                        "document_set_hash",
+                    )
+                )
+            )
+            if not version["version_hash"] or not component_hashes_available:
+                counts["hash_not_available"] += 1
+                continue
+            version_payload = {
+                "analysis_id": str(version["analysis_id"]),
+                "version_number": version["version_number"],
+                "supersedes_version_id": (
+                    str(version["supersedes_version_id"])
+                    if version["supersedes_version_id"]
+                    else None
+                ),
+                "origin": version["origin"],
+                "status": version["status"],
+                "analysis_schema_version": version["analysis_schema_version"],
+                "pipeline_version": version["pipeline_version"],
+                "model_provider": version["model_provider"],
+                "model_name": version["model_name"],
+                "model_version": version["model_version"],
+                "prompt_template_version": version["prompt_template_version"],
+                "prompt_template_hash": version["prompt_template_hash"],
+                "provenance_snapshot": _decoded_json(
+                    version["provenance_snapshot"]
+                ),
+                "tender_snapshot": _decoded_json(version["tender_snapshot"]),
+                "company_snapshot": _decoded_json(version["company_snapshot"]),
+                "result_snapshot": result_snapshot,
+                "evidence_snapshot": evidence_snapshot,
+                "input_hash": version["input_hash"],
+                "output_hash": output_hash,
+                "evidence_hash": evidence_hash,
+                "document_set_hash": document_hash,
+                "snapshot_completeness": version["snapshot_completeness"],
+                "requested_by_user_id": (
+                    str(version["requested_by_user_id"])
+                    if version["requested_by_user_id"]
+                    else None
+                ),
+            }
+            recomputed_version_hash = _stable_json_sha256(version_payload)
+            if version["version_hash"] != recomputed_version_hash:
+                counts["version_hash_mismatches"] += 1
+                counts["hash_mismatches_total"] += 1
+        return counts
 
     async def identity_audit(self, privileged_emails: list[str]) -> dict[str, Any]:
         if not self.has_table("users") or not self.has_table("company_profiles"):

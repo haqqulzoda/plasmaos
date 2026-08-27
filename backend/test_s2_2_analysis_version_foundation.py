@@ -189,5 +189,7 @@ def test_preflight_reports_version_invariants_without_snapshot_content() -> None
         "missing_document_hash",
     ):
         assert marker in preflight
-    assert "result_snapshot" not in preflight
-    assert "evidence_snapshot" not in preflight
+    # Sprint 2.3 recomputes hashes from snapshots in-memory but returns counts
+    # only; the read-only report never includes snapshot payload values.
+    assert "hash_mismatches_total" in preflight
+    assert '"hash_verification": hash_verification' in preflight

@@ -28,6 +28,64 @@ class AnalysisAggregateResolution:
     existing_parent_count: int
 
 
+async def get_owned_analysis_parent_for_tender(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    company_profile_id: UUID,
+    tender_id: UUID,
+) -> TenderAnalysis | None:
+    """Apply the documented parent rule before selecting any version."""
+    parents = list(
+        (
+            await db.execute(
+                select(TenderAnalysis)
+                .where(
+                    TenderAnalysis.tender_id == tender_id,
+                    TenderAnalysis.user_id == user_id,
+                    TenderAnalysis.company_profile_id == company_profile_id,
+                    TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
+                )
+                .order_by(
+                    TenderAnalysis.created_at.desc(),
+                    TenderAnalysis.id.desc(),
+                )
+            )
+        ).scalars()
+    )
+    if len(parents) > 1:
+        logger.warning(
+            "analysis_aggregate_historical_ambiguity "
+            "user_id=%s company_profile_id=%s tender_id=%s parents=%s "
+            "runtime_rule=newest_existing read_path=true",
+            user_id,
+            company_profile_id,
+            tender_id,
+            len(parents),
+        )
+    return parents[0] if parents else None
+
+
+async def get_owned_analysis_parent_by_id(
+    db: AsyncSession,
+    *,
+    analysis_id: UUID,
+    user_id: UUID,
+    company_profile_id: UUID,
+    tender_id: UUID | None = None,
+) -> TenderAnalysis | None:
+    """Resolve an explicitly owned parent without display-name fallback."""
+    conditions = [
+        TenderAnalysis.id == analysis_id,
+        TenderAnalysis.user_id == user_id,
+        TenderAnalysis.company_profile_id == company_profile_id,
+        TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
+    ]
+    if tender_id is not None:
+        conditions.append(TenderAnalysis.tender_id == tender_id)
+    return await db.scalar(select(TenderAnalysis).where(*conditions))
+
+
 def analysis_aggregate_identity(
     *,
     user_id: UUID,

@@ -30,12 +30,17 @@ from app.core.reproducibility import requirement_route_records
 from app.core.services import normalize_target_services
 from app.db.session import get_db
 from app.models.all_models import AdminActivityEvent, Proposal, ProposalStatus, Tender, TenderAnalysis, User
+from app.models.audit import AnalysisVersion
 from app.models.company import CompanyProfile, ReadinessDocument
 from app.schemas.vault import ReadinessDocumentResponse
 from app.services.admin_activity import (
     bump_auth_version,
     record_admin_activity,
     user_role_snapshot,
+)
+from app.services.analysis_versions import (
+    get_latest_analysis_version_for_parent,
+    verify_analysis_version_integrity,
 )
 from app.services.tender_sources.uzex_scope import (
     customer_visible_tender_condition,
@@ -647,8 +652,27 @@ def _bucket_fingerprints(hybrid_compliance: dict[str, Any] | None) -> dict[str, 
     }
 
 
-def _analysis_reproducibility_summary(analysis: TenderAnalysis) -> dict[str, Any]:
-    analysis_data = analysis.analysis_json or {}
+def _analysis_reproducibility_summary(
+    analysis: TenderAnalysis,
+    version: AnalysisVersion | None,
+) -> dict[str, Any]:
+    if version is None:
+        return {
+            "analysis_id": str(analysis.id),
+            "created_at": analysis.created_at.isoformat(),
+            "analysis_status": "integrity_anomaly",
+            "version_number": None,
+            "version_integrity": "ZERO_VERSION_PARENT",
+            "content_hash": None,
+            "override_seal": analysis.override_seal,
+            "coverage_metadata": None,
+            "reproducibility_snapshot": None,
+            "extraction_artifacts_metadata": [],
+            "requirement_fingerprints": _bucket_fingerprints({}),
+            "requirement_route_summary": [],
+        }
+
+    analysis_data = version.result_snapshot or {}
     hybrid_compliance = analysis_data.get("hybrid_compliance")
     if not isinstance(hybrid_compliance, dict):
         hybrid_compliance = {}
@@ -658,11 +682,14 @@ def _analysis_reproducibility_summary(analysis: TenderAnalysis) -> dict[str, Any
         raw_routes = snapshot.get("requirement_route_summary") or []
         snapshot_routes = [item for item in raw_routes if isinstance(item, dict)]
 
+    integrity = verify_analysis_version_integrity(version)
     return {
         "analysis_id": str(analysis.id),
-        "created_at": analysis.created_at.isoformat(),
+        "created_at": version.created_at.isoformat(),
         "analysis_status": analysis_data.get("analysis_status", "completed"),
-        "content_hash": analysis.content_hash,
+        "version_number": version.version_number,
+        "version_integrity": integrity.overall_status,
+        "content_hash": version.input_hash,
         "override_seal": analysis.override_seal,
         "coverage_metadata": analysis_data.get("coverage_metadata"),
         "reproducibility_snapshot": snapshot,
@@ -712,12 +739,25 @@ async def get_tender_reproducibility(
     )
     analyses = analyses_result.scalars().all()
 
+    analysis_summaries: list[dict[str, Any]] = []
+    for analysis in analyses:
+        version = await get_latest_analysis_version_for_parent(
+            db,
+            analysis_id=analysis.id,
+        )
+        if version is None:
+            logger.error(
+                "analysis_version_zero_version_anomaly analysis_id=%s "
+                "route=admin_reproducibility",
+                analysis.id,
+            )
+        analysis_summaries.append(
+            _analysis_reproducibility_summary(analysis, version)
+        )
+
     return {
         "tender_id": str(tender.id),
         "source_system": tender.source_system,
         "external_id": tender.external_id,
-        "latest_analyses": [
-            _analysis_reproducibility_summary(analysis)
-            for analysis in analyses
-        ],
+        "latest_analyses": analysis_summaries,
     }

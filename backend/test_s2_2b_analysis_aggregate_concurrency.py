@@ -74,13 +74,15 @@ def test_endpoint_resolves_before_version_append_and_rechecks_cache() -> None:
     concurrent_cache = endpoint[resolve_at:append_at]
     assert "not aggregate.created" in concurrent_cache
     assert "not force" in concurrent_cache
-    assert "analysis.content_hash == current_content_hash" in concurrent_cache
+    assert "concurrent_version.input_hash == current_content_hash" in concurrent_cache
     assert "await session.rollback()" in concurrent_cache
 
 
-def test_proposal_path_only_reads_compliance_parent() -> None:
+def test_proposal_path_only_reads_canonical_compliance_version() -> None:
     proposals = source(PROPOSALS)
-    assert "select(TenderAnalysis)" in proposals
+    assert "get_owned_analysis_parent_for_tender" in proposals
+    assert "require_latest_analysis_version" in proposals
+    assert "latest_analysis_version.result_snapshot" in proposals
     assert "TenderAnalysis(" not in proposals
     assert "resolve_or_create_analysis_aggregate" not in proposals
 

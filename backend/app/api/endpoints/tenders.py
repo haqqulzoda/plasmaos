@@ -97,7 +97,7 @@ from app.core.services import normalize_target_services, service_label
 from app.crud.crud_profile import get_profile_for_compliance_match
 from app.crud.exceptions import ProfileNotFoundException
 from app.db.session import get_db
-from app.models.audit import ANALYSIS_OWNERSHIP_OWNED, TenderAnalysis
+from app.models.audit import ANALYSIS_OWNERSHIP_OWNED, AnalysisVersion, TenderAnalysis
 from app.models.all_models import (
     Project,
     Proposal,
@@ -140,15 +140,31 @@ from app.services.compliance_engine import (
 from app.services.giz_document_hydration import (
     hydrate_giz_tender_documents as hydrate_giz_tender_documents_inline,
 )
-from app.services.analysis_aggregates import resolve_or_create_analysis_aggregate
+from app.schemas.analysis_version import (
+    AnalysisVersionDetailResponse,
+    AnalysisVersionDocumentResponse,
+    AnalysisVersionIntegrityResponse,
+    AnalysisVersionMetadataResponse,
+)
+from app.services.analysis_aggregates import (
+    get_owned_analysis_parent_by_id,
+    get_owned_analysis_parent_for_tender,
+    resolve_or_create_analysis_aggregate,
+)
 from app.services.analysis_versions import (
     ANALYSIS_PIPELINE_VERSION,
+    AnalysisVersionIntegrityError,
     analysis_version_status,
     append_analysis_version,
     build_company_snapshot,
     build_evidence_snapshot,
     build_tender_snapshot,
     document_snapshot_input,
+    get_analysis_version,
+    get_versioned_analysis_payload,
+    list_analysis_versions,
+    require_latest_analysis_version,
+    verify_analysis_version_integrity,
 )
 from app.schemas.project import (
     ProjectContextProjectResponse,
@@ -3465,13 +3481,13 @@ def _manual_review_detail_from_validation(req: Any) -> RequirementMatchDetail:
 
 
 def _serialize_cached_analysis_response(
-    cached: TenderAnalysis,
+    parent: TenderAnalysis,
+    version: AnalysisVersion,
     *,
-    content_hash: str,
     extra_warnings: list[str] | None = None,
     include_debug: bool = False,
 ) -> dict[str, Any]:
-    cached_data = cached.analysis_json or {}
+    cached_data = version.result_snapshot or {}
     analysis_status = str(cached_data.get("analysis_status") or "completed")
     cached_reqs = ExtractedTenderRequirements.model_validate(
         cached_data.get("requirements", {})
@@ -3521,15 +3537,15 @@ def _serialize_cached_analysis_response(
         analysis_warnings.extend(extra_warnings)
 
     return {
-        "analysis_id": str(cached.id),
+        "analysis_id": str(parent.id),
         "requirements": cached_reqs,
         "evaluation": cached_eval,
         "hybrid_compliance": cached_hybrid,
         "strategy_intelligence": cached_strategy,
-        "content_hash": content_hash,
-        "override_seal": cached.override_seal,
+        "content_hash": version.input_hash or "",
+        "override_seal": parent.override_seal,
         "evidence_validation": _public_evidence_validation_payload(
-            cached_data.get("evidence_validation"),
+            (version.evidence_snapshot or {}).get("evidence_validation"),
             include_debug=include_debug,
         ),
         "analysis_warnings": analysis_warnings,
@@ -3671,21 +3687,33 @@ async def analyze_tender(
         )
         current_content_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
 
-        cached_result = await session.execute(
-            select(TenderAnalysis)
-            .where(
-                TenderAnalysis.tender_id == tender_id,
-                TenderAnalysis.user_id == current_user.id,
-                TenderAnalysis.company_profile_id == profile.id,
-                TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
-            )
-            .order_by(TenderAnalysis.created_at.desc(), TenderAnalysis.id.desc())
-            .limit(1)
+        latest_cached = await get_owned_analysis_parent_for_tender(
+            session,
+            user_id=current_user.id,
+            company_profile_id=profile.id,
+            tender_id=tender_id,
         )
-        latest_cached: TenderAnalysis | None = cached_result.scalar_one_or_none()
+        latest_cached_version: AnalysisVersion | None = None
+        if latest_cached is not None:
+            try:
+                latest_cached_version = await require_latest_analysis_version(
+                    session,
+                    analysis_id=latest_cached.id,
+                    user_id=current_user.id,
+                    company_profile_id=profile.id,
+                )
+            except AnalysisVersionIntegrityError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Compliance analysis version history is unavailable.",
+                ) from exc
 
         if not force:
-            if latest_cached is not None and latest_cached.content_hash == current_content_hash:
+            if (
+                latest_cached is not None
+                and latest_cached_version is not None
+                and latest_cached_version.input_hash == current_content_hash
+            ):
                 try:
                     logger.info(
                         "Returning cached analysis %s for tender %s (hash match)",
@@ -3694,7 +3722,7 @@ async def analyze_tender(
                     )
                     return _serialize_cached_analysis_response(
                         latest_cached,
-                        content_hash=current_content_hash,
+                        latest_cached_version,
                         include_debug=current_user.is_admin,
                     )
                 except (ValidationError, KeyError):
@@ -3785,13 +3813,17 @@ async def analyze_tender(
             analysis_warnings=analysis_warnings,
         )
 
-        if extraction_error and latest_cached is not None:
-            cached_data = latest_cached.analysis_json or {}
+        if (
+            extraction_error
+            and latest_cached is not None
+            and latest_cached_version is not None
+        ):
+            cached_data = latest_cached_version.result_snapshot or {}
             if cached_data.get("analysis_status") != "failed":
                 try:
                     return _serialize_cached_analysis_response(
                         latest_cached,
-                        content_hash=latest_cached.content_hash or current_content_hash,
+                        latest_cached_version,
                         include_debug=current_user.is_admin,
                         extra_warnings=[
                             (
@@ -4052,12 +4084,29 @@ async def analyze_tender(
         if (
             not aggregate.created
             and not force
-            and analysis.content_hash == current_content_hash
+        ):
+            try:
+                concurrent_version = await require_latest_analysis_version(
+                    session,
+                    analysis_id=analysis.id,
+                    user_id=current_user.id,
+                    company_profile_id=profile.id,
+                )
+            except AnalysisVersionIntegrityError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Compliance analysis version history is unavailable.",
+                ) from exc
+        else:
+            concurrent_version = None
+        if (
+            concurrent_version is not None
+            and concurrent_version.input_hash == current_content_hash
         ):
             try:
                 cached_response = _serialize_cached_analysis_response(
                     analysis,
-                    content_hash=current_content_hash,
+                    concurrent_version,
                     include_debug=current_user.is_admin,
                 )
                 await session.rollback()
@@ -4126,8 +4175,8 @@ async def analyze_tender(
             ],
         )
 
-        # Sprint 2.2 compatibility mirrors. Immutable history lives in the
-        # AnalysisVersion inserted above; Sprint 2.3 will cut reads over.
+        # Compatibility-only mirrors for older integrations. Customer reads
+        # are authoritative from the immutable AnalysisVersion inserted above.
         analysis.tender_file_name = f"tender_{tender.external_id}"
         analysis.company_name = display_company_name
         analysis.raw_extracted_text = tender_text
@@ -7582,18 +7631,12 @@ async def get_latest_analysis(
             "created_at": None,
         }
 
-    result = await db.execute(
-        select(TenderAnalysis)
-        .where(
-            TenderAnalysis.tender_id == tender_id,
-            TenderAnalysis.user_id == current_user.id,
-            TenderAnalysis.company_profile_id == profile.id,
-            TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
-        )
-        .order_by(TenderAnalysis.created_at.desc())
-        .limit(1)
+    analysis = await get_owned_analysis_parent_for_tender(
+        db,
+        user_id=current_user.id,
+        company_profile_id=profile.id,
+        tender_id=tender_id,
     )
-    analysis = result.scalar_one_or_none()
 
     if analysis is None:
         return {
@@ -7611,7 +7654,20 @@ async def get_latest_analysis(
             "created_at": None,
         }
 
-    analysis_data = analysis.analysis_json or {}
+    try:
+        version = await require_latest_analysis_version(
+            db,
+            analysis_id=analysis.id,
+            user_id=current_user.id,
+            company_profile_id=profile.id,
+        )
+    except AnalysisVersionIntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Compliance analysis version history is unavailable.",
+        ) from exc
+
+    analysis_data = version.result_snapshot or {}
     analysis_status = str(analysis_data.get("analysis_status") or "completed")
     evaluation_payload = analysis_data.get("evaluation")
     hybrid_payload = sanitize_internal_requirement_diagnostics(
@@ -7626,10 +7682,10 @@ async def get_latest_analysis(
         "requirements": analysis_data.get("requirements"),
         "evaluation": evaluation_payload,
         "hybrid_compliance": hybrid_payload,
-        "content_hash": analysis.content_hash,
+        "content_hash": version.input_hash,
         "override_seal": analysis.override_seal,
         "evidence_validation": _public_evidence_validation_payload(
-            analysis_data.get("evidence_validation"),
+            (version.evidence_snapshot or {}).get("evidence_validation"),
             include_debug=current_user.is_admin,
         ),
         "analysis_warnings": analysis_data.get("analysis_warnings") or [],
@@ -7639,14 +7695,279 @@ async def get_latest_analysis(
         ),
         "analysis_status": analysis_status,
         "extraction_error": analysis_data.get("extraction_error"),
-        "created_at": analysis.created_at.isoformat() if analysis.created_at else None,
+        "created_at": version.created_at.isoformat() if version.created_at else None,
     }
+
+
+def _analysis_version_metadata(
+    version: AnalysisVersion,
+) -> AnalysisVersionMetadataResponse:
+    return AnalysisVersionMetadataResponse.model_validate(version)
+
+
+def _safe_version_result_snapshot(
+    version: AnalysisVersion,
+    *,
+    include_debug: bool,
+) -> dict[str, Any]:
+    source = get_versioned_analysis_payload(version)["result_snapshot"]
+    result: dict[str, Any] = {}
+    for key in (
+        "requirements",
+        "evaluation",
+        "strategy_intelligence",
+        "analysis_warnings",
+        "analysis_status",
+        "extraction_error",
+    ):
+        if key in source:
+            result[key] = source[key]
+    if "hybrid_compliance" in source:
+        result["hybrid_compliance"] = sanitize_internal_requirement_diagnostics(
+            source.get("hybrid_compliance")
+        )
+    if "coverage_metadata" in source:
+        result["coverage_metadata"] = _public_coverage_metadata_payload(
+            source.get("coverage_metadata"),
+            include_debug=include_debug,
+        )
+    return result
+
+
+def _safe_version_evidence_snapshot(
+    version: AnalysisVersion,
+    *,
+    include_debug: bool,
+) -> dict[str, Any]:
+    source = get_versioned_analysis_payload(version)["evidence_snapshot"]
+    return {
+        "evidence_validation": _public_evidence_validation_payload(
+            source.get("evidence_validation"),
+            include_debug=include_debug,
+        ),
+        "hybrid_compliance": sanitize_internal_requirement_diagnostics(
+            source.get("hybrid_compliance")
+        ),
+    }
+
+
+def _safe_version_provenance(version: AnalysisVersion) -> dict[str, Any]:
+    """Expose identifiers and hashes, never prompt bodies or raw diagnostics."""
+    return {
+        "model_provider": version.model_provider,
+        "model_name": version.model_name,
+        "model_version": version.model_version,
+        "analysis_schema_version": version.analysis_schema_version,
+        "pipeline_version": version.pipeline_version,
+        "prompt_template_version": version.prompt_template_version,
+        "prompt_template_hash": version.prompt_template_hash,
+        "snapshot_completeness": version.snapshot_completeness,
+        "created_at": version.created_at.isoformat(),
+        "completed_at": (
+            version.completed_at.isoformat() if version.completed_at else None
+        ),
+    }
+
+
+def _safe_document_source_url(value: str | None) -> str | None:
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme.casefold() not in {"http", "https"}:
+        return None
+    return parsed._replace(query="", fragment="").geturl()
+
+
+def _analysis_version_document(
+    snapshot: Any,
+) -> AnalysisVersionDocumentResponse:
+    if snapshot.content_hash:
+        availability = "HASHED"
+    elif any(
+        (
+            snapshot.source_document_key,
+            snapshot.source_url,
+            snapshot.filename,
+            snapshot.observed_at,
+        )
+    ):
+        availability = "METADATA_ONLY"
+    else:
+        availability = "UNKNOWN"
+    return AnalysisVersionDocumentResponse(
+        source_system=snapshot.source_system,
+        source_document_key=snapshot.source_document_key,
+        source_url=_safe_document_source_url(snapshot.source_url),
+        filename=snapshot.filename,
+        media_type=snapshot.media_type,
+        content_hash=snapshot.content_hash,
+        fetched_at=snapshot.fetched_at,
+        observed_at=snapshot.observed_at,
+        snapshot_availability=availability,
+    )
+
+
+def _analysis_version_detail(
+    version: AnalysisVersion,
+    *,
+    include_debug: bool,
+) -> AnalysisVersionDetailResponse:
+    payload = get_versioned_analysis_payload(version)
+    company_snapshot = payload["company_snapshot"]
+    company_snapshot.pop("company_profile_id", None)
+    tender_snapshot = payload["tender_snapshot"]
+    if "source_url" in tender_snapshot:
+        tender_snapshot["source_url"] = _safe_document_source_url(
+            tender_snapshot.get("source_url")
+        )
+    integrity = verify_analysis_version_integrity(version)
+    return AnalysisVersionDetailResponse(
+        metadata=_analysis_version_metadata(version),
+        result_snapshot=_safe_version_result_snapshot(
+            version,
+            include_debug=include_debug,
+        ),
+        evidence_snapshot=_safe_version_evidence_snapshot(
+            version,
+            include_debug=include_debug,
+        ),
+        tender_snapshot=tender_snapshot,
+        company_snapshot=company_snapshot,
+        provenance=_safe_version_provenance(version),
+        documents=[
+            _analysis_version_document(snapshot)
+            for snapshot in version.document_snapshots
+        ],
+        integrity=AnalysisVersionIntegrityResponse(
+            overall_status=integrity.overall_status,
+            output_hash_status=integrity.output_hash_status,
+            evidence_hash_status=integrity.evidence_hash_status,
+            document_set_hash_status=integrity.document_set_hash_status,
+            version_hash_status=integrity.version_hash_status,
+            snapshot_completeness=integrity.snapshot_completeness,
+            missing_fields=list(integrity.missing_fields),
+        ),
+    )
+
+
+async def _owned_analysis_parent_for_version_route(
+    *,
+    db: AsyncSession,
+    tender_id: UUID,
+    analysis_id: UUID,
+    current_user: User,
+) -> tuple[TenderAnalysis, CompanyProfile]:
+    await _ensure_tender_access(
+        db=db,
+        tender_id=tender_id,
+        user_id=current_user.id,
+        current_user=current_user,
+        allow_operator=True,
+    )
+    profile = await db.scalar(
+        select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
+    )
+    if profile is None or profile.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance analysis not found for this tender.",
+        )
+    parent = await get_owned_analysis_parent_by_id(
+        db,
+        analysis_id=analysis_id,
+        user_id=current_user.id,
+        company_profile_id=profile.id,
+        tender_id=tender_id,
+    )
+    if parent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance analysis not found for this tender.",
+        )
+    return parent, profile
+
+
+@router.get(
+    "/{tender_id}/analyses/{analysis_id}/versions",
+    response_model=list[AnalysisVersionMetadataResponse],
+)
+async def get_analysis_versions(
+    tender_id: UUID,
+    analysis_id: UUID,
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> list[AnalysisVersionMetadataResponse]:
+    """List immutable versions for exactly one explicitly owned parent."""
+    _parent, profile = await _owned_analysis_parent_for_version_route(
+        db=db,
+        tender_id=tender_id,
+        analysis_id=analysis_id,
+        current_user=current_user,
+    )
+    versions = await list_analysis_versions(
+        db,
+        analysis_id=analysis_id,
+        user_id=current_user.id,
+        company_profile_id=profile.id,
+    )
+    if not versions:
+        logger.error(
+            "analysis_version_zero_version_anomaly analysis_id=%s route=list",
+            analysis_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Compliance analysis version history is unavailable.",
+        )
+    return [_analysis_version_metadata(version) for version in versions]
+
+
+@router.get(
+    "/{tender_id}/analyses/{analysis_id}/versions/{version_number}",
+    response_model=AnalysisVersionDetailResponse,
+)
+async def get_analysis_version_detail(
+    tender_id: UUID,
+    analysis_id: UUID,
+    version_number: int,
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> AnalysisVersionDetailResponse:
+    """Return one historical version without consulting mutable parent mirrors."""
+    if version_number < 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="version_number must be at least 1.",
+        )
+    _parent, profile = await _owned_analysis_parent_for_version_route(
+        db=db,
+        tender_id=tender_id,
+        analysis_id=analysis_id,
+        current_user=current_user,
+    )
+    version = await get_analysis_version(
+        db,
+        analysis_id=analysis_id,
+        version_number=version_number,
+        user_id=current_user.id,
+        company_profile_id=profile.id,
+    )
+    if version is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance analysis version not found.",
+        )
+    return _analysis_version_detail(
+        version,
+        include_debug=current_user.is_admin,
+    )
 
 
 @router.get("/{tender_id}/compliance/export/pdf")
 async def export_compliance_pdf(
     tender_id: UUID,
     analysis_id: UUID | None = Query(default=None),
+    version_number: int | None = Query(default=None, ge=1),
     current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
@@ -7693,26 +8014,55 @@ async def export_compliance_pdf(
             detail="Compliance analysis not found for this tender.",
         )
 
-    analysis_query = select(TenderAnalysis).where(
-        TenderAnalysis.tender_id == tender_id,
-        TenderAnalysis.user_id == current_user.id,
-        TenderAnalysis.company_profile_id == profile.id,
-        TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
-    )
-    if analysis_id is not None:
-        analysis_query = analysis_query.where(TenderAnalysis.id == analysis_id)
+    if analysis_id is None:
+        analysis = await get_owned_analysis_parent_for_tender(
+            db,
+            user_id=current_user.id,
+            company_profile_id=profile.id,
+            tender_id=tender_id,
+        )
     else:
-        analysis_query = analysis_query.order_by(TenderAnalysis.created_at.desc()).limit(1)
-
-    analysis_result = await db.execute(analysis_query)
-    analysis = analysis_result.scalar_one_or_none()
+        analysis = await get_owned_analysis_parent_by_id(
+            db,
+            analysis_id=analysis_id,
+            user_id=current_user.id,
+            company_profile_id=profile.id,
+            tender_id=tender_id,
+        )
     if analysis is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Compliance analysis not found for this tender.",
         )
 
-    analysis_data = analysis.analysis_json or {}
+    if version_number is None:
+        try:
+            version = await require_latest_analysis_version(
+                db,
+                analysis_id=analysis.id,
+                user_id=current_user.id,
+                company_profile_id=profile.id,
+            )
+        except AnalysisVersionIntegrityError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Compliance analysis version history is unavailable.",
+            ) from exc
+    else:
+        version = await get_analysis_version(
+            db,
+            analysis_id=analysis.id,
+            version_number=version_number,
+            user_id=current_user.id,
+            company_profile_id=profile.id,
+        )
+        if version is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Compliance analysis version not found.",
+            )
+
+    analysis_data = version.result_snapshot or {}
     hybrid_compliance = sanitize_internal_requirement_diagnostics(
         analysis_data.get("hybrid_compliance")
     )
@@ -7723,14 +8073,22 @@ async def export_compliance_pdf(
         )
 
     generated_at = datetime.now(timezone.utc)
-    company_name = (
-        analysis_data.get("tenant_company_name")
-        or (profile.company_name if profile is not None else None)
-        or current_user.company_name
-        or current_user.name
+    tender_snapshot = version.tender_snapshot or {}
+    company_snapshot = version.company_snapshot or {}
+    historical_tender_title = str(
+        tender_snapshot.get("title") or "Tender title unavailable in snapshot"
+    )
+    historical_external_id = str(
+        tender_snapshot.get("external_id") or "historical-analysis"
+    )
+    company_name = str(
+        company_snapshot.get("company_name")
+        or "Company name unavailable in snapshot"
     )
 
-    evidence_validation = analysis_data.get("evidence_validation")
+    evidence_validation = (version.evidence_snapshot or {}).get(
+        "evidence_validation"
+    )
     if not isinstance(evidence_validation, dict):
         evidence_validation = None
     else:
@@ -7740,19 +8098,30 @@ async def export_compliance_pdf(
         )
     raw_warnings = analysis_data.get("analysis_warnings")
     analysis_warnings = raw_warnings if isinstance(raw_warnings, list) else []
+    if version.snapshot_completeness != "COMPLETE":
+        analysis_warnings = [
+            *analysis_warnings,
+            (
+                "Historical reproducibility is "
+                f"{version.snapshot_completeness}; exact historical document "
+                "bytes or provenance may be unavailable."
+            ),
+        ]
 
     try:
         pdf_bytes = build_compliance_report_pdf(
-            tender_title=tender.title,
-            tender_external_id=tender.external_id,
+            tender_title=historical_tender_title,
+            tender_external_id=historical_external_id,
             company_name=company_name,
             generated_at=generated_at,
             analysis_id=str(analysis.id),
-            content_hash=analysis.content_hash,
+            content_hash=version.input_hash,
             override_seal=analysis.override_seal,
             hybrid_compliance=hybrid_compliance,
             evidence_validation=evidence_validation,
             analysis_warnings=[str(warning) for warning in analysis_warnings],
+            analysis_version=version.version_number,
+            snapshot_completeness=version.snapshot_completeness,
         )
     except Exception as exc:
         logger.exception("Compliance PDF export failed for tender %s", tender_id)
@@ -7762,7 +8131,7 @@ async def export_compliance_pdf(
         ) from exc
 
     filename = compliance_report_filename(
-        external_id=tender.external_id,
+        external_id=historical_external_id,
         generated_at=generated_at,
     )
     return Response(
@@ -7829,6 +8198,26 @@ async def override_risk(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Analysis not found for this tender",
         )
+    profile = await db.scalar(
+        select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
+    )
+    if profile is None or profile.id != analysis.company_profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis not found for this tender",
+        )
+    try:
+        base_version = await require_latest_analysis_version(
+            db,
+            analysis_id=analysis.id,
+            user_id=current_user.id,
+            company_profile_id=profile.id,
+        )
+    except AnalysisVersionIntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Compliance analysis version history is unavailable.",
+        ) from exc
 
     log_entry = RiskOverrideLog(
         user_id=current_user.id,
@@ -7861,7 +8250,7 @@ async def override_risk(
 
         # Build deterministic seal payload:
         # SHA-256(content_hash | node_id_1:ts_1 | node_id_2:ts_2 | ...)
-        content_hash = analysis.content_hash or "NONE"
+        content_hash = base_version.input_hash or "NONE"
         override_entries = "|".join(
             f"{row[0]}:{row[1].isoformat()}"
             for row in all_overrides

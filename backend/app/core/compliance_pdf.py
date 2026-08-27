@@ -413,6 +413,8 @@ def build_compliance_report_pdf(
     hybrid_compliance: dict[str, Any],
     evidence_validation: dict[str, Any] | None,
     analysis_warnings: list[str],
+    analysis_version: object | None = None,
+    snapshot_completeness: object | None = None,
 ) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -448,6 +450,11 @@ def build_compliance_report_pdf(
                 ("Company", _text(company_name, "-")),
                 ("Generated", generated_at.strftime("%Y-%m-%d %H:%M UTC")),
                 ("Analysis ID", _text(analysis_id, "-")),
+                ("Analysis version", _text(analysis_version, "-")),
+                (
+                    "Snapshot completeness",
+                    _text(snapshot_completeness, "Unknown"),
+                ),
             ],
             styles,
         )
@@ -520,6 +527,11 @@ def build_compliance_report_pdf(
         _meta_table(
             [
                 ("Analysis ID", _text(analysis_id, "-")),
+                ("Analysis version", _text(analysis_version, "-")),
+                (
+                    "Snapshot completeness",
+                    _text(snapshot_completeness, "Unknown"),
+                ),
                 ("Content hash", _text(content_hash, "-")),
                 ("Override seal", _text(override_seal, "No override seal recorded")),
                 ("Generated timestamp", generated_at.isoformat()),

@@ -52,13 +52,17 @@ from app.models.all_models import (
     TenderStatus,
     User,
 )
-from app.models.audit import ANALYSIS_OWNERSHIP_OWNED, TenderAnalysis
 from app.models.company import CompanyProfile
 from app.schemas.proposal import (
     ProposalCreate,
     ProposalResponse,
     ProposalUpdate,
     ProposalWithTenderResponse,
+)
+from app.services.analysis_aggregates import get_owned_analysis_parent_for_tender
+from app.services.analysis_versions import (
+    AnalysisVersionIntegrityError,
+    require_latest_analysis_version,
 )
 
 router = APIRouter(
@@ -455,23 +459,30 @@ async def ai_draft_proposal(
             or "Unknown Company"
         )
 
-        latest_analysis = None
+        latest_analysis_version = None
         if profile is not None and profile.user_id == current_user.id:
-            analysis_result = await db.execute(
-                select(TenderAnalysis)
-                .where(
-                    TenderAnalysis.tender_id == proposal.tender_id,
-                    TenderAnalysis.user_id == current_user.id,
-                    TenderAnalysis.company_profile_id == profile.id,
-                    TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
-                )
-                .order_by(TenderAnalysis.created_at.desc())
-                .limit(1)
+            analysis_parent = await get_owned_analysis_parent_for_tender(
+                db,
+                user_id=current_user.id,
+                company_profile_id=profile.id,
+                tender_id=proposal.tender_id,
             )
-            latest_analysis = analysis_result.scalar_one_or_none()
+            if analysis_parent is not None:
+                try:
+                    latest_analysis_version = await require_latest_analysis_version(
+                        db,
+                        analysis_id=analysis_parent.id,
+                        user_id=current_user.id,
+                        company_profile_id=profile.id,
+                    )
+                except AnalysisVersionIntegrityError as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Compliance analysis version history is unavailable.",
+                    ) from exc
         evaluation_payload = (
-            (latest_analysis.analysis_json or {}).get("evaluation", {})
-            if latest_analysis
+            (latest_analysis_version.result_snapshot or {}).get("evaluation", {})
+            if latest_analysis_version
             else {}
         )
         try:
