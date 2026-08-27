@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, case, exists, not_, or_, select
+from sqlalchemy import and_, case, exists, func, not_, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,12 +23,28 @@ logger = logging.getLogger(__name__)
 WORLD_BANK_PROJECT_FRESHNESS = timedelta(days=7)
 PROJECT_ENRICHMENT_ACTIVE_LEASE = timedelta(minutes=30)
 WORLD_BANK_ENRICHMENT_BATCH_SIZE = 50
+WORLD_BANK_AUTODRAIN_BATCH_SIZE = max(
+    1,
+    min(
+        int(os.getenv("WORLD_BANK_AUTODRAIN_BATCH_SIZE", "25")),
+        30,
+        WORLD_BANK_ENRICHMENT_BATCH_SIZE,
+    ),
+)
+WORLD_BANK_ENRICHMENT_RETRY_BACKOFF = timedelta(
+    seconds=max(
+        60,
+        int(os.getenv("WORLD_BANK_ENRICHMENT_RETRY_BACKOFF_SECONDS", "900")),
+    )
+)
 WORLD_BANK_ENRICHMENT_STATUS_PRIORITY = {
     "never_attempted": 0,
     "stale": 1,
     "partial": 2,
     "source_unavailable": 3,
-    "failed": 4,
+    "queued": 4,
+    "running": 4,
+    "failed": 5,
 }
 
 
@@ -44,6 +62,25 @@ class ProjectEnrichmentDispatchResult:
     claimed: int
     enqueued: int
     dispatch_failed: int
+    eligible_found: int = 0
+    skipped_active_lease: int = 0
+    duration_ms: int = 0
+
+
+@dataclass(frozen=True)
+class WorldBankProjectBacklogSnapshot:
+    total_world_bank_projects: int
+    fresh_success: int
+    partial: int
+    never_attempted: int
+    eligible_now: int
+    queued: int
+    running: int
+    retry_wait: int
+    failed_terminal: int
+    stale: int
+    expired_lease: int
+    active_lease: int
 
 
 def effective_project_enrichment_status(
@@ -288,6 +325,125 @@ async def mark_project_enrichment_failure(
     project.enrichment_failure_class = failure_class[:100]
 
 
+def _world_bank_enrichment_predicates(
+    observed_at: datetime,
+) -> dict[str, Any]:
+    """Return the single SQL eligibility contract shared by claims and metrics."""
+    stale_before = observed_at - WORLD_BANK_PROJECT_FRESHNESS
+    active_after = observed_at - PROJECT_ENRICHMENT_ACTIVE_LEASE
+    retry_after = observed_at - WORLD_BANK_ENRICHMENT_RETRY_BACKOFF
+    linked = exists(
+        select(TenderProject.id).where(TenderProject.project_id == Project.id)
+    )
+    never_attempted = Project.enrichment_status == "never_attempted"
+    stale_due = or_(
+        Project.enrichment_status == "stale",
+        and_(
+            Project.enrichment_status.in_(("successful", "partial")),
+            or_(
+                Project.last_enriched_at.is_(None),
+                Project.last_enriched_at < stale_before,
+            ),
+        ),
+    )
+    retryable_failure = or_(
+        Project.enrichment_status == "source_unavailable",
+        and_(
+            Project.enrichment_status == "failed",
+            Project.enrichment_failure_class == "dispatch_failure",
+        ),
+    )
+    retry_due = and_(
+        retryable_failure,
+        or_(
+            Project.enrichment_last_attempted_at.is_(None),
+            Project.enrichment_last_attempted_at < retry_after,
+        ),
+    )
+    retry_wait = and_(
+        retryable_failure,
+        Project.enrichment_last_attempted_at.is_not(None),
+        Project.enrichment_last_attempted_at >= retry_after,
+    )
+    active_lease = and_(
+        Project.enrichment_status.in_(("queued", "running")),
+        Project.enrichment_last_attempted_at.is_not(None),
+        Project.enrichment_last_attempted_at >= active_after,
+    )
+    expired_lease = and_(
+        Project.enrichment_status.in_(("queued", "running")),
+        or_(
+            Project.enrichment_last_attempted_at.is_(None),
+            Project.enrichment_last_attempted_at < active_after,
+        ),
+    )
+    eligible = and_(
+        linked,
+        or_(never_attempted, stale_due, retry_due, expired_lease),
+        not_(active_lease),
+    )
+    return {
+        "linked": linked,
+        "never_attempted": never_attempted,
+        "stale_due": stale_due,
+        "retryable_failure": retryable_failure,
+        "retry_due": retry_due,
+        "retry_wait": retry_wait,
+        "active_lease": active_lease,
+        "expired_lease": expired_lease,
+        "eligible": eligible,
+        "fresh_success": and_(
+            Project.enrichment_status == "successful",
+            Project.last_enriched_at.is_not(None),
+            Project.last_enriched_at >= stale_before,
+        ),
+        "failed_terminal": and_(
+            Project.enrichment_status == "failed",
+            or_(
+                Project.enrichment_failure_class.is_(None),
+                Project.enrichment_failure_class != "dispatch_failure",
+            ),
+        ),
+    }
+
+
+async def world_bank_project_backlog_snapshot(
+    db: AsyncSession,
+    *,
+    now: datetime | None = None,
+) -> WorldBankProjectBacklogSnapshot:
+    """Return read-only aggregate backlog diagnostics without Project data."""
+    observed_at = now or datetime.now(timezone.utc)
+    predicates = _world_bank_enrichment_predicates(observed_at)
+    count = func.count(Project.id)
+    row = (
+        await db.execute(
+            select(
+                count.label("total_world_bank_projects"),
+                count.filter(predicates["fresh_success"]).label("fresh_success"),
+                count.filter(Project.enrichment_status == "partial").label("partial"),
+                count.filter(predicates["never_attempted"]).label("never_attempted"),
+                count.filter(predicates["eligible"]).label("eligible_now"),
+                count.filter(Project.enrichment_status == "queued").label("queued"),
+                count.filter(Project.enrichment_status == "running").label("running"),
+                count.filter(predicates["retry_wait"]).label("retry_wait"),
+                count.filter(predicates["failed_terminal"]).label("failed_terminal"),
+                count.filter(predicates["stale_due"]).label("stale"),
+                count.filter(predicates["expired_lease"]).label("expired_lease"),
+                count.filter(
+                    and_(predicates["linked"], predicates["active_lease"])
+                ).label("active_lease"),
+            ).where(Project.source_system == "world_bank")
+        )
+    ).one()
+    return WorldBankProjectBacklogSnapshot(
+        **{
+            field: int(getattr(row, field) or 0)
+            for field in WorldBankProjectBacklogSnapshot.__dataclass_fields__
+        }
+    )
+
+
 async def claim_world_bank_projects_for_enrichment(
     db: AsyncSession,
     *,
@@ -296,45 +452,24 @@ async def claim_world_bank_projects_for_enrichment(
 ) -> list[UUID]:
     """Atomically coalesce linked new/stale Projects into one bounded batch."""
     observed_at = now or datetime.now(timezone.utc)
-    stale_before = observed_at - WORLD_BANK_PROJECT_FRESHNESS
-    active_after = observed_at - PROJECT_ENRICHMENT_ACTIVE_LEASE
-    linked_project_exists = exists(
-        select(TenderProject.id).where(TenderProject.project_id == Project.id)
-    )
+    predicates = _world_bank_enrichment_predicates(observed_at)
     result = await db.execute(
         select(Project)
         .where(
             Project.source_system == "world_bank",
-            linked_project_exists,
-            or_(
-                Project.last_enriched_at.is_(None),
-                Project.last_enriched_at < stale_before,
-                Project.enrichment_status.in_(
-                    (
-                        "never_attempted",
-                        "partial",
-                        "source_unavailable",
-                        "failed",
-                        "stale",
-                    )
-                ),
-            ),
-            not_(
-                and_(
-                    Project.enrichment_status.in_(("queued", "running")),
-                    Project.enrichment_last_attempted_at.is_not(None),
-                    Project.enrichment_last_attempted_at >= active_after,
-                )
-            ),
+            predicates["eligible"],
         )
         .order_by(
             case(
-                WORLD_BANK_ENRICHMENT_STATUS_PRIORITY,
-                value=Project.enrichment_status,
-                else_=len(WORLD_BANK_ENRICHMENT_STATUS_PRIORITY),
+                (predicates["never_attempted"], 0),
+                (predicates["stale_due"], 1),
+                (predicates["retry_due"], 2),
+                (predicates["expired_lease"], 3),
+                else_=4,
             ),
             Project.last_enriched_at.asc().nullsfirst(),
             Project.created_at,
+            Project.id,
         )
         .limit(max(1, min(int(limit), WORLD_BANK_ENRICHMENT_BATCH_SIZE)))
         .with_for_update(skip_locked=True)
@@ -351,11 +486,19 @@ async def enqueue_world_bank_project_enrichment_batch(
     db: AsyncSession,
     *,
     limit: int = WORLD_BANK_ENRICHMENT_BATCH_SIZE,
+    now: datetime | None = None,
 ) -> ProjectEnrichmentDispatchResult:
     """Claim, commit, then publish a bounded batch without blocking on HTTP."""
     from app.workers.project_enrichment_tasks import enrich_world_bank_project_task
 
-    project_ids = await claim_world_bank_projects_for_enrichment(db, limit=limit)
+    observed_at = now or datetime.now(timezone.utc)
+    started_at = time.monotonic()
+    before = await world_bank_project_backlog_snapshot(db, now=observed_at)
+    project_ids = await claim_world_bank_projects_for_enrichment(
+        db,
+        limit=limit,
+        now=observed_at,
+    )
     await db.commit()
     enqueued = 0
     failed_ids: list[UUID] = []
@@ -389,8 +532,23 @@ async def enqueue_world_bank_project_enrichment_batch(
         )
     if failed_ids:
         await db.commit()
-    return ProjectEnrichmentDispatchResult(
+    result = ProjectEnrichmentDispatchResult(
         claimed=len(project_ids),
         enqueued=enqueued,
         dispatch_failed=len(failed_ids),
+        eligible_found=before.eligible_now,
+        skipped_active_lease=before.active_lease,
+        duration_ms=max(0, round((time.monotonic() - started_at) * 1000)),
     )
+    logger.info(
+        "world_bank_project_enrichment_dispatch "
+        "eligible_found=%s claimed=%s dispatched=%s skipped_active_lease=%s "
+        "dispatch_failures=%s duration_ms=%s",
+        result.eligible_found,
+        result.claimed,
+        result.enqueued,
+        result.skipped_active_lease,
+        result.dispatch_failed,
+        result.duration_ms,
+    )
+    return result

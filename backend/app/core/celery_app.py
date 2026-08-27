@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import timedelta
 
 from celery import Celery
 from celery.schedules import crontab
@@ -20,6 +21,10 @@ logger = logging.getLogger(__name__)
 default_redis_url = "redis://127.0.0.1:6379/0"
 broker_url = os.getenv("CELERY_BROKER_URL") or default_redis_url
 result_backend = os.getenv("CELERY_RESULT_BACKEND") or default_redis_url
+world_bank_autodrain_interval_seconds = max(
+    60,
+    int(os.getenv("WORLD_BANK_AUTODRAIN_INTERVAL_SECONDS", "60")),
+)
 
 celery_app = Celery(
     "plasmaos",
@@ -57,6 +62,18 @@ celery_app.conf.update(
             "task": "app.workers.hunter_tasks.run_hunter_sweep",
             "schedule": crontab(minute="*/30"),
         },
+        "dispatch-world-bank-project-enrichment-backlog": {
+            "task": (
+                "app.workers.project_enrichment_tasks."
+                "dispatch_world_bank_project_enrichment_backlog"
+            ),
+            "schedule": timedelta(seconds=world_bank_autodrain_interval_seconds),
+            "options": {
+                "queue": "celery",
+                "routing_key": "celery",
+                "expires": world_bank_autodrain_interval_seconds,
+            },
+        },
     },
 )
 
@@ -72,6 +89,13 @@ celery_app.conf.task_routes = {
         "routing_key": "celery",
     },
     "app.workers.project_enrichment_tasks.enrich_world_bank_project": {
+        "queue": "celery",
+        "routing_key": "celery",
+    },
+    (
+        "app.workers.project_enrichment_tasks."
+        "dispatch_world_bank_project_enrichment_backlog"
+    ): {
         "queue": "celery",
         "routing_key": "celery",
     },

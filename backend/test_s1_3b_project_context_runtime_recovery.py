@@ -24,7 +24,7 @@ from scripts import enqueue_world_bank_project_enrichment as reconciliation
 
 
 ROOT = Path(__file__).resolve().parent
-EXPECTED_HEAD = "20260827_0001_s2_1_compliance_ownership"
+EXPECTED_HEAD = "20260827_0002_s2_2_analysis_version_foundation"
 
 
 class _Session:
@@ -140,7 +140,7 @@ def test_reconciliation_prioritizes_untouched_projects_over_known_failures() -> 
         encoding="utf-8"
     )
     assert "case(" in service
-    assert "value=Project.enrichment_status" in service
+    assert 'predicates["never_attempted"]' in service
 
 
 def test_linked_not_enriched_project_identity_is_pending_not_unavailable() -> None:

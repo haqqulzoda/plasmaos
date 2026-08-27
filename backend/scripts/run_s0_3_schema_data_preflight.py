@@ -36,6 +36,8 @@ TABLES = (
     "tenders",
     "tender_documents",
     "tender_analyses",
+    "analysis_versions",
+    "analysis_version_document_snapshots",
     "proposals",
     "tender_recommendations",
     "risk_override_logs",
@@ -749,6 +751,148 @@ class ReadOnlyPreflight:
             )
         return {"table_exists": True, "schema": snapshot, "data": data}
 
+    async def analysis_version_audit(self) -> dict[str, Any]:
+        """Report version-history invariants without exposing snapshot content."""
+        version_table = "analysis_versions"
+        document_table = "analysis_version_document_snapshots"
+        if not self.has_table(version_table):
+            return {
+                "table_exists": False,
+                "document_snapshot_table_exists": self.has_table(document_table),
+                "data": None,
+            }
+
+        required = {
+            "analysis_id",
+            "version_number",
+            "supersedes_version_id",
+            "snapshot_completeness",
+            "input_hash",
+            "output_hash",
+            "evidence_hash",
+            "document_set_hash",
+            "version_hash",
+        }
+        if not required.issubset(self.columns.get(version_table, set())):
+            return {
+                "table_exists": True,
+                "document_snapshot_table_exists": self.has_table(document_table),
+                "data": {"audit_available": False},
+            }
+
+        parent_distribution = await self.fetchrow(
+            """
+            WITH version_counts AS (
+                SELECT a.id, COUNT(v.id)::bigint AS version_count
+                FROM tender_analyses a
+                LEFT JOIN analysis_versions v ON v.analysis_id = a.id
+                GROUP BY a.id
+            )
+            SELECT
+                COUNT(*) AS total_tender_analyses,
+                COUNT(*) FILTER (WHERE version_count = 0) AS analyses_with_zero_versions,
+                COUNT(*) FILTER (WHERE version_count = 1) AS analyses_with_one_version,
+                COUNT(*) FILTER (WHERE version_count > 1) AS analyses_with_multiple_versions
+            FROM version_counts
+            """
+        )
+        version_integrity = await self.fetchrow(
+            """
+            SELECT
+                COUNT(*) AS total_analysis_versions,
+                COUNT(*) FILTER (WHERE parent.id IS NULL) AS version_parent_orphans,
+                COUNT(*) FILTER (
+                    WHERE (
+                        v.version_number = 1
+                        AND v.supersedes_version_id IS NOT NULL
+                    ) OR (
+                        v.version_number > 1
+                        AND (
+                            v.supersedes_version_id IS NULL
+                            OR predecessor.id IS NULL
+                            OR predecessor.analysis_id <> v.analysis_id
+                            OR predecessor.version_number <> v.version_number - 1
+                        )
+                    )
+                ) AS broken_supersedes_references,
+                COUNT(DISTINCT v.analysis_id) FILTER (
+                    WHERE parent.ownership_state = 'QUARANTINED_LEGACY'
+                ) AS quarantined_analyses_with_versions,
+                COUNT(*) FILTER (WHERE v.snapshot_completeness = 'COMPLETE')
+                    AS snapshot_complete,
+                COUNT(*) FILTER (WHERE v.snapshot_completeness = 'PARTIAL')
+                    AS snapshot_partial,
+                COUNT(*) FILTER (WHERE v.snapshot_completeness = 'LEGACY_BACKFILL')
+                    AS snapshot_legacy_backfill,
+                COUNT(*) FILTER (WHERE NULLIF(v.input_hash, '') IS NULL)
+                    AS missing_input_hash,
+                COUNT(*) FILTER (WHERE NULLIF(v.output_hash, '') IS NULL)
+                    AS missing_output_hash,
+                COUNT(*) FILTER (WHERE NULLIF(v.evidence_hash, '') IS NULL)
+                    AS missing_evidence_hash,
+                COUNT(*) FILTER (WHERE NULLIF(v.document_set_hash, '') IS NULL)
+                    AS missing_document_set_hash,
+                COUNT(*) FILTER (WHERE NULLIF(v.version_hash, '') IS NULL)
+                    AS missing_version_hash
+            FROM analysis_versions v
+            LEFT JOIN tender_analyses parent ON parent.id = v.analysis_id
+            LEFT JOIN analysis_versions predecessor
+              ON predecessor.id = v.supersedes_version_id
+            """
+        )
+        duplicate_versions = await self.fetchrow(
+            """
+            SELECT COUNT(*) AS duplicate_version_number_groups,
+                   COALESCE(SUM(rows - 1), 0)::bigint AS duplicate_version_number_rows
+            FROM (
+                SELECT analysis_id, version_number, COUNT(*)::bigint AS rows
+                FROM analysis_versions
+                GROUP BY analysis_id, version_number
+                HAVING COUNT(*) > 1
+            ) duplicates
+            """
+        )
+
+        document_hashes: dict[str, Any] | None = None
+        if self.has_columns(
+            document_table,
+            "analysis_version_id",
+            "content_hash",
+            "snapshot_metadata",
+        ):
+            document_hashes = _json_value(
+                await self.fetchrow(
+                    """
+                    SELECT
+                        COUNT(*) AS total_document_snapshots,
+                        COUNT(*) FILTER (WHERE version.id IS NULL)
+                            AS document_snapshot_version_orphans,
+                        COUNT(*) FILTER (WHERE NULLIF(d.content_hash, '') IS NULL)
+                            AS missing_document_hash,
+                        COUNT(*) FILTER (
+                            WHERE NULLIF(d.content_hash, '') IS NULL
+                              AND NULLIF(
+                                  d.snapshot_metadata->>'parsed_text_sha256', ''
+                              ) IS NULL
+                        ) AS missing_all_known_document_hashes
+                    FROM analysis_version_document_snapshots d
+                    LEFT JOIN analysis_versions version
+                      ON version.id = d.analysis_version_id
+                    """
+                )
+            )
+
+        return {
+            "table_exists": True,
+            "document_snapshot_table_exists": self.has_table(document_table),
+            "data": {
+                "parent_distribution": _json_value(parent_distribution),
+                "version_integrity": _json_value(version_integrity),
+                "duplicate_version_numbers": _json_value(duplicate_versions),
+                "document_hashes": document_hashes,
+            },
+        }
+
     async def identity_audit(self, privileged_emails: list[str]) -> dict[str, Any]:
         if not self.has_table("users") or not self.has_table("company_profiles"):
             return {"available": False}
@@ -1026,6 +1170,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             "tender_recommendations": await runner.recommendation_audit(),
             "proposals": await runner.proposal_audit(),
             "tender_analyses": await runner.analysis_audit(),
+            "analysis_versions": await runner.analysis_version_audit(),
             "identity": await runner.identity_audit(
                 _allowlisted_privileged_emails(env_path)
             ),

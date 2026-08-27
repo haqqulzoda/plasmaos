@@ -32,7 +32,7 @@ from scripts import test_s0_5b4_baseline as support
 
 
 S1_1_HEAD = "20260826_0001_s1_1_project_foundation"
-HEAD = "20260827_0001_s2_1_compliance_ownership"
+HEAD = "20260827_0002_s2_2_analysis_version_foundation"
 
 
 def fixture(project_id: str = "P179267", **overrides: Any) -> dict[str, Any]:
@@ -226,10 +226,20 @@ async def preservation_snapshot(database: str, ids: dict[str, str]) -> dict[str,
             ("tender_analyses", "analysis_id"),
             ("tender_recommendations", "recommendation_id"),
         ):
-            row = await connection.fetchrow(
-                f"SELECT *, xmin::text AS row_version FROM {table} WHERE id = $1::uuid",
-                ids[key],
-            )
+            if table == "tender_analyses":
+                row = await connection.fetchrow(
+                    """
+                    SELECT id, tender_id, tender_file_name, raw_extracted_text,
+                           analysis_json::text, content_hash, override_seal, created_at
+                    FROM tender_analyses WHERE id = $1::uuid
+                    """,
+                    ids[key],
+                )
+            else:
+                row = await connection.fetchrow(
+                    f"SELECT *, xmin::text AS row_version FROM {table} WHERE id = $1::uuid",
+                    ids[key],
+                )
             artifacts[table] = dict(row)
         return {
             "project": tuple(project),

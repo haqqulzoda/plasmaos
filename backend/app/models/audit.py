@@ -39,6 +39,16 @@ ANALYSIS_OWNERSHIP_STATES = (
     ANALYSIS_OWNERSHIP_QUARANTINED_LEGACY,
 )
 
+ANALYSIS_VERSION_ORIGIN_LEGACY_BACKFILL = "LEGACY_BACKFILL"
+ANALYSIS_VERSION_ORIGIN_RUNTIME_ANALYSIS = "RUNTIME_ANALYSIS"
+ANALYSIS_VERSION_ORIGIN_RUNTIME_REANALYSIS = "RUNTIME_REANALYSIS"
+ANALYSIS_VERSION_STATUS_COMPLETED = "COMPLETED"
+ANALYSIS_VERSION_STATUS_NEEDS_REVIEW = "NEEDS_REVIEW"
+ANALYSIS_VERSION_STATUS_FAILED = "FAILED"
+ANALYSIS_SNAPSHOT_COMPLETE = "COMPLETE"
+ANALYSIS_SNAPSHOT_PARTIAL = "PARTIAL"
+ANALYSIS_SNAPSHOT_LEGACY_BACKFILL = "LEGACY_BACKFILL"
+
 
 class TenderAnalysis(Base):
     """
@@ -113,6 +123,12 @@ class TenderAnalysis(Base):
         back_populates="analysis",
         cascade="all, delete-orphan",
     )
+    versions: Mapped[list["AnalysisVersion"]] = relationship(
+        "AnalysisVersion",
+        back_populates="analysis",
+        cascade="all, delete-orphan",
+        order_by="AnalysisVersion.version_number",
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -124,6 +140,182 @@ class TenderAnalysis(Base):
         ),
         Index("ix_tender_analyses_user_id", "user_id"),
         Index("ix_tender_analyses_company_profile_id", "company_profile_id"),
+    )
+
+
+class AnalysisVersion(Base):
+    """Immutable completed analysis execution beneath a logical analysis."""
+
+    __tablename__ = "analysis_versions"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    analysis_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("tender_analyses.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    supersedes_version_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("analysis_versions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    origin: Mapped[str] = mapped_column(String(30), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    analysis_schema_version: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )
+    pipeline_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    model_provider: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    model_version: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    prompt_template_version: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )
+    prompt_template_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    provenance_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    tender_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    company_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    result_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    evidence_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    input_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    output_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    evidence_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    document_set_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    version_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    snapshot_completeness: Mapped[str] = mapped_column(String(30), nullable=False)
+    requested_by_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    analysis: Mapped["TenderAnalysis"] = relationship(
+        "TenderAnalysis", back_populates="versions"
+    )
+    supersedes: Mapped["AnalysisVersion | None"] = relationship(
+        "AnalysisVersion", remote_side=[id], uselist=False
+    )
+    document_snapshots: Mapped[list["AnalysisVersionDocumentSnapshot"]] = relationship(
+        "AnalysisVersionDocumentSnapshot",
+        back_populates="analysis_version",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "analysis_id",
+            "version_number",
+            name="uq_analysis_versions_analysis_version_number",
+        ),
+        UniqueConstraint(
+            "supersedes_version_id",
+            name="uq_analysis_versions_supersedes_version_id",
+        ),
+        CheckConstraint(
+            "version_number >= 1",
+            name="ck_analysis_versions_version_number_positive",
+        ),
+        CheckConstraint(
+            "supersedes_version_id IS NULL OR supersedes_version_id <> id",
+            name="ck_analysis_versions_not_self_superseding",
+        ),
+        CheckConstraint(
+            "origin IN ('LEGACY_BACKFILL', 'RUNTIME_ANALYSIS', "
+            "'RUNTIME_REANALYSIS')",
+            name="ck_analysis_versions_origin_allowed",
+        ),
+        CheckConstraint(
+            "status IN ('COMPLETED', 'NEEDS_REVIEW', 'FAILED')",
+            name="ck_analysis_versions_status_allowed",
+        ),
+        CheckConstraint(
+            "snapshot_completeness IN ('COMPLETE', 'PARTIAL', 'LEGACY_BACKFILL')",
+            name="ck_analysis_versions_snapshot_completeness_allowed",
+        ),
+        Index(
+            "ix_analysis_versions_analysis_created",
+            "analysis_id",
+            "created_at",
+        ),
+        Index("ix_analysis_versions_requested_by_user_id", "requested_by_user_id"),
+    )
+
+
+class AnalysisVersionDocumentSnapshot(Base):
+    """Document identity and hashes as observed by one analysis version."""
+
+    __tablename__ = "analysis_version_document_snapshots"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    analysis_version_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("analysis_versions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tender_document_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("tender_documents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    source_system: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_document_key: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
+    source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    filename: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    media_type: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    storage_reference: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True
+    )
+    storage_version: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    fetched_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    observed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    snapshot_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    analysis_version: Mapped["AnalysisVersion"] = relationship(
+        "AnalysisVersion", back_populates="document_snapshots"
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_analysis_version_documents_version",
+            "analysis_version_id",
+        ),
+        Index(
+            "ix_analysis_version_documents_tender_document",
+            "tender_document_id",
+        ),
     )
 
 

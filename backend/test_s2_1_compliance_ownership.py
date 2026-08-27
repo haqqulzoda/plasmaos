@@ -71,7 +71,7 @@ def test_migration_is_single_additive_head_and_never_guesses_names() -> None:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20260827_0001_s2_1_compliance_ownership"]
+    assert script.get_heads() == ["20260827_0002_s2_2_analysis_version_foundation"]
     migration = source(
         "alembic/versions/20260827_0001_s2_1_compliance_ownership.py"
     )
@@ -87,7 +87,7 @@ def test_migration_is_single_additive_head_and_never_guesses_names() -> None:
 def test_new_write_has_explicit_authenticated_owner_and_display_snapshot() -> None:
     tenders = source("app/api/endpoints/tenders.py")
     analyze = function_block(tenders, "analyze_tender")
-    creation = analyze.split("new_analysis = TenderAnalysis(", 1)[1]
+    creation = analyze.split("analysis = TenderAnalysis(", 1)[1]
     assert "user_id=current_user.id" in creation
     assert "company_profile_id=profile.id" in creation
     assert "ownership_state=ANALYSIS_OWNERSHIP_OWNED" in creation

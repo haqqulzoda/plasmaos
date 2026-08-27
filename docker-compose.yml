@@ -119,6 +119,8 @@ services:
       POSTGRES_PORT: 5432
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      WORLD_BANK_AUTODRAIN_BATCH_SIZE: ${WORLD_BANK_AUTODRAIN_BATCH_SIZE:-25}
+      WORLD_BANK_ENRICHMENT_RETRY_BACKOFF_SECONDS: ${WORLD_BANK_ENRICHMENT_RETRY_BACKOFF_SECONDS:-900}
       PLASMA_SERVICE_NAME: celery_worker
     command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "celery,ai_fast_queue" ]
 
@@ -166,6 +168,7 @@ services:
       POSTGRES_PORT: 5432
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      WORLD_BANK_AUTODRAIN_INTERVAL_SECONDS: ${WORLD_BANK_AUTODRAIN_INTERVAL_SECONDS:-60}
       PLASMA_SERVICE_NAME: celery_beat
     command: [ "celery", "-A", "app.core.celery_app", "beat", "--loglevel=info" ]
 

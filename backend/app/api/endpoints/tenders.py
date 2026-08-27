@@ -43,6 +43,7 @@ from app.core.agents.requirement_extractor import (
     EXTRACTOR_SCHEMA_VERSION,
     MAX_PAYLOAD_CHARS,
     MODEL_NAME as REQUIREMENT_MODEL_NAME,
+    SYSTEM_PROMPT as REQUIREMENT_SYSTEM_PROMPT,
     ScopeReviewStatus,
     build_failed_extraction_artifacts_metadata,
     build_failed_extraction_coverage,
@@ -52,6 +53,8 @@ from app.core.agents.requirement_extractor import (
     validate_requirements_evidence,
 )
 from app.core.agents.strategy_extractor import (
+    MODEL_NAME as STRATEGY_MODEL_NAME,
+    SYSTEM_PROMPT as STRATEGY_SYSTEM_PROMPT,
     TenderStrategyIntelligence,
     extract_strategy_intelligence,
 )
@@ -136,6 +139,15 @@ from app.services.compliance_engine import (
 )
 from app.services.giz_document_hydration import (
     hydrate_giz_tender_documents as hydrate_giz_tender_documents_inline,
+)
+from app.services.analysis_versions import (
+    ANALYSIS_PIPELINE_VERSION,
+    analysis_version_status,
+    append_analysis_version,
+    build_company_snapshot,
+    build_evidence_snapshot,
+    build_tender_snapshot,
+    document_snapshot_input,
 )
 from app.schemas.project import (
     ProjectContextProjectResponse,
@@ -3658,21 +3670,20 @@ async def analyze_tender(
         )
         current_content_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
 
-        latest_cached: TenderAnalysis | None = None
-        if not force:
-            cached_result = await session.execute(
-                select(TenderAnalysis)
-                .where(
-                    TenderAnalysis.tender_id == tender_id,
-                    TenderAnalysis.user_id == current_user.id,
-                    TenderAnalysis.company_profile_id == profile.id,
-                    TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
-                )
-                .order_by(TenderAnalysis.created_at.desc())
-                .limit(1)
+        cached_result = await session.execute(
+            select(TenderAnalysis)
+            .where(
+                TenderAnalysis.tender_id == tender_id,
+                TenderAnalysis.user_id == current_user.id,
+                TenderAnalysis.company_profile_id == profile.id,
+                TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
             )
-            latest_cached = cached_result.scalar_one_or_none()
+            .order_by(TenderAnalysis.created_at.desc(), TenderAnalysis.id.desc())
+            .limit(1)
+        )
+        latest_cached: TenderAnalysis | None = cached_result.scalar_one_or_none()
 
+        if not force:
             if latest_cached is not None and latest_cached.content_hash == current_content_hash:
                 try:
                     logger.info(
@@ -3996,37 +4007,107 @@ async def analyze_tender(
             status_message=hybrid_result.status_message,
         )
 
-        new_analysis = TenderAnalysis(
-            tender_id=tender.id,
-            tender_file_name=f"tender_{tender.external_id}",
-            user_id=current_user.id,
-            company_profile_id=profile.id,
-            ownership_state=ANALYSIS_OWNERSHIP_OWNED,
-            company_name=display_company_name,
-            raw_extracted_text=tender_text,
-            analysis_json={
-                "requirements": legacy_requirements.model_dump(mode="json"),
-                "evaluation": legacy_evaluation.model_dump(mode="json"),
-                "hybrid_compliance": persisted_hybrid_compliance,
-                "evidence_validation": persisted_evidence_validation,
-                "reproducibility_snapshot": reproducibility_snapshot,
-                "extraction_artifacts_metadata": extraction_artifacts_metadata,
-                "analysis_warnings": analysis_warnings,
-                "coverage_metadata": coverage_metadata,
-                "analysis_status": analysis_status,
-                "extraction_error": extraction_error,
-                "strategy_intelligence": (
-                    strategy_result.model_dump(mode="json")
-                    if strategy_result is not None
-                    else None
-                ),
-                "tenant_company_name": display_company_name,
+        analysis_payload = {
+            "requirements": legacy_requirements.model_dump(mode="json"),
+            "evaluation": legacy_evaluation.model_dump(mode="json"),
+            "hybrid_compliance": persisted_hybrid_compliance,
+            "evidence_validation": persisted_evidence_validation,
+            "reproducibility_snapshot": reproducibility_snapshot,
+            "extraction_artifacts_metadata": extraction_artifacts_metadata,
+            "analysis_warnings": analysis_warnings,
+            "coverage_metadata": coverage_metadata,
+            "analysis_status": analysis_status,
+            "extraction_error": extraction_error,
+            "strategy_intelligence": (
+                strategy_result.model_dump(mode="json")
+                if strategy_result is not None
+                else None
+            ),
+            "tenant_company_name": display_company_name,
+        }
+        if latest_cached is None:
+            analysis = TenderAnalysis(
+                tender_id=tender.id,
+                tender_file_name=f"tender_{tender.external_id}",
+                user_id=current_user.id,
+                company_profile_id=profile.id,
+                ownership_state=ANALYSIS_OWNERSHIP_OWNED,
+                company_name=display_company_name,
+                raw_extracted_text=tender_text,
+                analysis_json=analysis_payload,
+                content_hash=current_content_hash,
+            )
+            session.add(analysis)
+            await session.flush()
+        else:
+            analysis = latest_cached
+
+        requirement_prompt_hash = sha256_text(REQUIREMENT_SYSTEM_PROMPT)
+        provenance_snapshot = {
+            "analysis_pipeline": {
+                "pipeline_version": ANALYSIS_PIPELINE_VERSION,
+                "engine_metadata": reproducibility_snapshot.get("engine_metadata"),
             },
-            content_hash=current_content_hash,
+            "analysis_inputs": {
+                "taxonomy_nodes": _taxonomy_fingerprint_payload(taxonomy_nodes),
+                "source_coverage": _giz_document_coverage_payload(tender),
+            },
+            "requirement_extractor": {
+                "model_provider": "google",
+                "model_name": REQUIREMENT_MODEL_NAME,
+                "model_version": None,
+                "prompt_template_version": EXTRACTOR_SCHEMA_VERSION,
+                "prompt_template_hash": requirement_prompt_hash,
+                "temperature": 0.0,
+            },
+            "strategy_extractor": {
+                "model_provider": "google",
+                "model_name": STRATEGY_MODEL_NAME,
+                "model_version": None,
+                "prompt_template_version": None,
+                "prompt_template_hash": sha256_text(STRATEGY_SYSTEM_PROMPT),
+                "temperature": 0.0,
+                "result_available": strategy_result is not None,
+            },
+        }
+        await append_analysis_version(
+            session,
+            analysis_id=analysis.id,
+            requested_by_user_id=current_user.id,
+            company_profile_id=profile.id,
+            status=analysis_version_status(analysis_status),
+            analysis_schema_version=EXTRACTOR_SCHEMA_VERSION,
+            model_provider="google",
+            model_name=REQUIREMENT_MODEL_NAME,
+            model_version=None,
+            prompt_template_version=EXTRACTOR_SCHEMA_VERSION,
+            prompt_template_hash=requirement_prompt_hash,
+            provenance_snapshot=provenance_snapshot,
+            tender_snapshot=build_tender_snapshot(tender),
+            company_snapshot=build_company_snapshot(
+                company_profile_id=profile.id,
+                company_name=display_company_name,
+                vault_payload=_vault_cache_payload(profile),
+                credential_taxonomy_node_ids=sorted(credential_uuids),
+            ),
+            result_snapshot=analysis_payload,
+            evidence_snapshot=build_evidence_snapshot(analysis_payload),
+            input_hash=current_content_hash,
+            documents=[
+                document_snapshot_input(document, source_system=tender.source_system)
+                for document in tender_documents
+            ],
         )
-        session.add(new_analysis)
+
+        # Sprint 2.2 compatibility mirrors. Immutable history lives in the
+        # AnalysisVersion inserted above; Sprint 2.3 will cut reads over.
+        analysis.tender_file_name = f"tender_{tender.external_id}"
+        analysis.company_name = display_company_name
+        analysis.raw_extracted_text = tender_text
+        analysis.analysis_json = analysis_payload
+        analysis.content_hash = current_content_hash
         await session.commit()
-        await session.refresh(new_analysis)
+        await session.refresh(analysis)
     except HTTPException:
         raise
     except SQLAlchemyError as exc:
@@ -4045,13 +4126,13 @@ async def analyze_tender(
         ) from exc
 
     return {
-        "analysis_id": str(new_analysis.id),
+        "analysis_id": str(analysis.id),
         "requirements": legacy_requirements,
         "evaluation": legacy_evaluation,
         "hybrid_compliance": hybrid_result,
         "strategy_intelligence": strategy_result,
         "content_hash": current_content_hash,
-        "override_seal": None,
+        "override_seal": analysis.override_seal,
         "evidence_validation": _public_evidence_validation_payload(
             evidence_validation,
             include_debug=current_user.is_admin,

@@ -14,8 +14,10 @@ from app.db.session import AsyncSessionLocal, engine
 from app.models.all_models import Project
 from app.services.project_enrichment import (
     PROJECT_ENRICHMENT_ACTIVE_LEASE,
+    WORLD_BANK_AUTODRAIN_BATCH_SIZE,
     WORLD_BANK_PROJECT_FRESHNESS,
     apply_world_bank_project_snapshot,
+    enqueue_world_bank_project_enrichment_batch,
     mark_project_enrichment_failure,
 )
 from app.services.world_bank_projects import (
@@ -160,3 +162,35 @@ def enrich_world_bank_project_task(self: Any, project_id: str) -> dict[str, Any]
             countdown=countdown,
         )
     return result
+
+
+@celery_app.task(
+    name=(
+        "app.workers.project_enrichment_tasks."
+        "dispatch_world_bank_project_enrichment_backlog"
+    ),
+    soft_time_limit=30,
+    time_limit=45,
+)
+def dispatch_world_bank_project_enrichment_backlog_task() -> dict[str, int]:
+    """Claim and publish one rate-safe batch; Beat invokes this until empty."""
+
+    async def run_and_dispose() -> dict[str, int]:
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await enqueue_world_bank_project_enrichment_batch(
+                    db,
+                    limit=WORLD_BANK_AUTODRAIN_BATCH_SIZE,
+                )
+                return {
+                    "eligible_found": result.eligible_found,
+                    "claimed": result.claimed,
+                    "dispatched": result.enqueued,
+                    "skipped_active_lease": result.skipped_active_lease,
+                    "dispatch_failures": result.dispatch_failed,
+                    "duration_ms": result.duration_ms,
+                }
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(run_and_dispose())
