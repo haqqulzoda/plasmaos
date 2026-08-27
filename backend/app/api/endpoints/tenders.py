@@ -140,6 +140,7 @@ from app.services.compliance_engine import (
 from app.services.giz_document_hydration import (
     hydrate_giz_tender_documents as hydrate_giz_tender_documents_inline,
 )
+from app.services.analysis_aggregates import resolve_or_create_analysis_aggregate
 from app.services.analysis_versions import (
     ANALYSIS_PIPELINE_VERSION,
     analysis_version_status,
@@ -4025,22 +4026,48 @@ async def analyze_tender(
             ),
             "tenant_company_name": display_company_name,
         }
-        if latest_cached is None:
-            analysis = TenderAnalysis(
-                tender_id=tender.id,
-                tender_file_name=f"tender_{tender.external_id}",
-                user_id=current_user.id,
-                company_profile_id=profile.id,
-                ownership_state=ANALYSIS_OWNERSHIP_OWNED,
-                company_name=display_company_name,
-                raw_extracted_text=tender_text,
-                analysis_json=analysis_payload,
-                content_hash=current_content_hash,
-            )
-            session.add(analysis)
-            await session.flush()
-        else:
-            analysis = latest_cached
+        candidate_parent = TenderAnalysis(
+            tender_id=tender.id,
+            tender_file_name=f"tender_{tender.external_id}",
+            user_id=current_user.id,
+            company_profile_id=profile.id,
+            ownership_state=ANALYSIS_OWNERSHIP_OWNED,
+            company_name=display_company_name,
+            raw_extracted_text=tender_text,
+            analysis_json=analysis_payload,
+            content_hash=current_content_hash,
+        )
+        aggregate = await resolve_or_create_analysis_aggregate(
+            session,
+            user_id=current_user.id,
+            company_profile_id=profile.id,
+            tender_id=tender.id,
+            new_parent=candidate_parent,
+        )
+        analysis = aggregate.analysis
+
+        # A concurrent equivalent first request may have committed while this
+        # request was extracting. Recheck under the aggregate lock so a normal
+        # cacheable request does not append a redundant version.
+        if (
+            not aggregate.created
+            and not force
+            and analysis.content_hash == current_content_hash
+        ):
+            try:
+                cached_response = _serialize_cached_analysis_response(
+                    analysis,
+                    content_hash=current_content_hash,
+                    include_debug=current_user.is_admin,
+                )
+                await session.rollback()
+                return cached_response
+            except (ValidationError, KeyError):
+                logger.warning(
+                    "Concurrent canonical analysis %s has legacy schema; "
+                    "appending a fresh version",
+                    analysis.id,
+                )
 
         requirement_prompt_hash = sha256_text(REQUIREMENT_SYSTEM_PROMPT)
         provenance_snapshot = {

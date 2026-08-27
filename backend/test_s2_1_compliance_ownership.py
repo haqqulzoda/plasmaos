@@ -87,12 +87,13 @@ def test_migration_is_single_additive_head_and_never_guesses_names() -> None:
 def test_new_write_has_explicit_authenticated_owner_and_display_snapshot() -> None:
     tenders = source("app/api/endpoints/tenders.py")
     analyze = function_block(tenders, "analyze_tender")
-    creation = analyze.split("analysis = TenderAnalysis(", 1)[1]
+    creation = analyze.split("candidate_parent = TenderAnalysis(", 1)[1]
     assert "user_id=current_user.id" in creation
     assert "company_profile_id=profile.id" in creation
     assert "ownership_state=ANALYSIS_OWNERSHIP_OWNED" in creation
     assert "company_name=display_company_name" in creation
     assert "company_name=analysis_owner" not in creation
+    assert "resolve_or_create_analysis_aggregate" in analyze
     assert "get_profile_for_compliance_match" in analyze
     assert "user_id=current_user.id" in analyze
 
