@@ -54,13 +54,23 @@ class AccessFoundationTests(unittest.TestCase):
         )
 
     def test_guard_helpers_classify_canonical_roles(self) -> None:
-        admin = _user(platform_role=PLATFORM_ROLE_ADMIN)
-        operator = _user(platform_role=PLATFORM_ROLE_OPERATOR)
+        admin = _user(
+            platform_role=PLATFORM_ROLE_ADMIN,
+            approval_status=USER_APPROVAL_APPROVED,
+        )
+        operator = _user(
+            platform_role=PLATFORM_ROLE_OPERATOR,
+            approval_status=USER_APPROVAL_APPROVED,
+        )
         approved = _user(approval_status=USER_APPROVAL_APPROVED)
         pending = _user()
 
         self.assertTrue(is_admin_user(admin))
-        self.assertTrue(is_admin_user(_user(is_admin=True)))
+        self.assertTrue(
+            is_admin_user(
+                _user(is_admin=True, approval_status=USER_APPROVAL_APPROVED)
+            )
+        )
         self.assertTrue(is_operator_user(admin))
         self.assertTrue(is_operator_user(operator))
         self.assertTrue(is_approved_user(admin))
@@ -70,7 +80,15 @@ class AccessFoundationTests(unittest.TestCase):
 
     def test_operator_email_allowlist_still_grants_operator_access(self) -> None:
         with patch.dict(os.environ, {"PLASMA_OPERATOR_EMAILS": " OPS@Example.com "}, clear=False):
-            self.assertTrue(is_operator_user(_user(email="ops@example.com")))
+            self.assertFalse(is_operator_user(_user(email="ops@example.com")))
+            self.assertTrue(
+                is_operator_user(
+                    _user(
+                        email="ops@example.com",
+                        approval_status=USER_APPROVAL_APPROVED,
+                    )
+                )
+            )
 
     def test_approved_pilot_account_requires_user_and_company_approval(self) -> None:
         approved_user = _user(approval_status=USER_APPROVAL_APPROVED)

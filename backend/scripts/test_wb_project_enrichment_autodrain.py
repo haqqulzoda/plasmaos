@@ -32,7 +32,7 @@ from app.workers import project_enrichment_tasks
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20260827_0002_s2_2_analysis_version_foundation"
+HEAD = "20260828_0002_s3_4_admin_audit_hardening"
 BATCH_SIZE = 25
 
 

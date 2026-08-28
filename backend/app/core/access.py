@@ -17,6 +17,11 @@ USER_APPROVAL_STATUSES = (
     USER_APPROVAL_REJECTED,
     USER_APPROVAL_DISABLED,
 )
+USER_RESTORABLE_APPROVAL_STATUSES = (
+    USER_APPROVAL_PENDING,
+    USER_APPROVAL_APPROVED,
+    USER_APPROVAL_REJECTED,
+)
 
 PLATFORM_ROLE_ADMIN = "admin"
 PLATFORM_ROLE_OPERATOR = "operator"
@@ -76,6 +81,26 @@ def is_disabled_account(user: object) -> bool:
     return (
         normalized_approval_status(getattr(user, "approval_status", None))
         == USER_APPROVAL_DISABLED
+    )
+
+
+def is_rejected_account(user: object) -> bool:
+    """Return whether the account is explicitly rejected."""
+    return (
+        normalized_approval_status(getattr(user, "approval_status", None))
+        == USER_APPROVAL_REJECTED
+    )
+
+
+def is_effective_admin(user: object) -> bool:
+    """Return whether the current canonical row has usable admin authority."""
+    return (
+        normalized_approval_status(getattr(user, "approval_status", None))
+        == USER_APPROVAL_APPROVED
+        and (
+            bool(getattr(user, "is_admin", False))
+            or getattr(user, "platform_role", None) == PLATFORM_ROLE_ADMIN
+        )
     )
 
 

@@ -23,6 +23,7 @@ from app.api.endpoints.admin import (
     ApprovalActionRequest,
     approve_user,
     disable_user,
+    restore_user,
 )
 from app.api.endpoints.auth import (
     GoogleAuthRequest,
@@ -43,8 +44,9 @@ from app.core.access import (
 from app.core.security import (
     create_access_token,
     get_current_user,
-    get_current_user_allow_stale_auth_version,
 )
+from app.services.account_lifecycle import transition_user_account
+from app.services.admin_activity import user_role_snapshot
 
 
 ROOT = Path(__file__).resolve().parent
@@ -75,6 +77,7 @@ def make_user(
         rejected_at=None,
         rejection_reason=None,
         disabled_at=None,
+        pre_disabled_approval_status=None,
         created_at=None,
     )
 
@@ -84,18 +87,33 @@ def fake_user_db(user: SimpleNamespace) -> SimpleNamespace:
     return SimpleNamespace(execute=AsyncMock(return_value=result))
 
 
+def locked_apply(target: SimpleNamespace, actor: SimpleNamespace):
+    async def apply(_db=None, **kwargs):
+        before = user_role_snapshot(target)
+        transition = transition_user_account(
+            target,
+            action=kwargs["action"],
+            actor_user=actor,
+            reason=kwargs.get("reason"),
+        )
+        return SimpleNamespace(
+            actor=actor,
+            target=target,
+            before=before,
+            transition=transition,
+        )
+
+    return apply
+
+
 async def resolve_user(
     user: SimpleNamespace,
     *,
     token_auth_version: int | None = None,
-    allow_stale: bool = False,
 ) -> SimpleNamespace:
     version = user.auth_version if token_auth_version is None else token_auth_version
     token = create_access_token({"sub": str(user.id), "auth_version": version})
-    dependency = (
-        get_current_user_allow_stale_auth_version if allow_stale else get_current_user
-    )
-    return await dependency(
+    return await get_current_user(
         credentials=SimpleNamespace(credentials=token),
         db=fake_user_db(user),
         plasma_api_token=None,
@@ -168,7 +186,7 @@ class DisabledAuthorizationUnitTests(IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException):
             await require_approved_user(disabled_admin)
 
-    async def test_disabled_roles_cannot_use_stale_version_refresh_dependency(self) -> None:
+    async def test_disabled_roles_cannot_use_stale_credentials(self) -> None:
         users = (
             make_user(status=USER_APPROVAL_DISABLED),
             make_user(status=USER_APPROVAL_DISABLED, role=PLATFORM_ROLE_ADMIN),
@@ -181,7 +199,6 @@ class DisabledAuthorizationUnitTests(IsolatedAsyncioTestCase):
                     await resolve_user(
                         user,
                         token_auth_version=user.auth_version - 1,
-                        allow_stale=True,
                     )
                 self.assertEqual(raised.exception.status_code, 401)
                 self.assertEqual(raised.exception.detail, "Account disabled")
@@ -237,7 +254,7 @@ class DisabledAuthorizationUnitTests(IsolatedAsyncioTestCase):
                     db.commit.assert_not_awaited()
 
                     with self.assertRaises(HTTPException):
-                        await resolve_user(user, allow_stale=True)
+                        await resolve_user(user)
 
     async def test_disable_bumps_version_and_old_token_remains_invalid_after_restore(self) -> None:
         target = make_user(auth_version=7)
@@ -247,11 +264,11 @@ class DisabledAuthorizationUnitTests(IsolatedAsyncioTestCase):
 
         with (
             patch(
-                "app.api.endpoints.admin._get_user_or_404",
-                new=AsyncMock(return_value=target),
+                "app.api.endpoints.admin.apply_locked_user_lifecycle_mutation",
+                new=locked_apply(target, admin),
             ),
             patch(
-                "app.api.endpoints.admin.record_admin_activity",
+                "app.api.endpoints.admin.record_admin_audit_event",
                 new=AsyncMock(),
             ),
         ):
@@ -278,28 +295,46 @@ class DisabledAuthorizationUnitTests(IsolatedAsyncioTestCase):
         self.assertEqual(stale_denial.exception.status_code, 401)
         self.assertEqual(stale_denial.exception.detail, "Fresh authentication required")
 
-    async def test_existing_approve_transition_restores_access_with_new_version(self) -> None:
+    async def test_disabled_account_requires_restore_and_recovers_preserved_state(self) -> None:
         target = make_user(
             status=USER_APPROVAL_DISABLED,
             role=PLATFORM_ROLE_ADMIN,
             auth_version=9,
         )
         target.disabled_at = SimpleNamespace()
+        target.pre_disabled_approval_status = USER_APPROVAL_APPROVED
         admin = make_user(role=PLATFORM_ROLE_ADMIN)
-        db = SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock())
+        db = SimpleNamespace(
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+            rollback=AsyncMock(),
+        )
 
         with (
             patch(
-                "app.api.endpoints.admin._get_user_or_404",
-                new=AsyncMock(return_value=target),
+                "app.api.endpoints.admin.apply_locked_user_lifecycle_mutation",
+                new=locked_apply(target, admin),
             ),
             patch(
-                "app.api.endpoints.admin.record_admin_activity",
+                "app.api.endpoints.admin.record_admin_audit_event",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.api.endpoints.admin.record_independent_user_audit_event",
                 new=AsyncMock(),
             ),
         ):
-            await approve_user(
+            with self.assertRaises(HTTPException) as invalid_approve:
+                await approve_user(
+                    user_id=target.id,
+                    current_user=admin,
+                    db=db,
+                )
+
+            self.assertEqual(invalid_approve.exception.status_code, 409)
+            await restore_user(
                 user_id=target.id,
+                payload=ApprovalActionRequest(reason="Access restored"),
                 current_user=admin,
                 db=db,
             )
@@ -307,6 +342,7 @@ class DisabledAuthorizationUnitTests(IsolatedAsyncioTestCase):
         self.assertEqual(target.approval_status, USER_APPROVAL_APPROVED)
         self.assertEqual(target.auth_version, 10)
         self.assertIsNone(target.disabled_at)
+        self.assertIsNone(target.pre_disabled_approval_status)
         self.assertIs(await resolve_user(target), target)
         self.assertIs(await require_admin(target), target)
 

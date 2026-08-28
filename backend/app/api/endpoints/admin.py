@@ -7,9 +7,9 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, not_, or_, select
+from sqlalchemy import and_, case, func, not_, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -20,10 +20,16 @@ from app.core.access import (
     COMPANY_APPROVAL_DISABLED,
     COMPANY_APPROVAL_PENDING,
     COMPANY_APPROVAL_REJECTED,
+    PLATFORM_ROLE_ADMIN,
+    PLATFORM_ROLE_OPERATOR,
     USER_APPROVAL_APPROVED,
     USER_APPROVAL_DISABLED,
     USER_APPROVAL_PENDING,
     USER_APPROVAL_REJECTED,
+    USER_APPROVAL_STATUSES,
+    USER_RESTORABLE_APPROVAL_STATUSES,
+    is_effective_admin,
+    normalized_approval_status,
 )
 from app.core.geography import normalize_target_countries, normalize_target_regions
 from app.core.reproducibility import requirement_route_records
@@ -34,9 +40,34 @@ from app.models.audit import AnalysisVersion
 from app.models.company import CompanyProfile, ReadinessDocument
 from app.schemas.vault import ReadinessDocumentResponse
 from app.services.admin_activity import (
+    ACTION_COMPANY_APPROVED,
+    ACTION_COMPANY_DISABLED,
+    ACTION_COMPANY_REJECTED,
+    ACTION_USER_APPROVED,
+    ACTION_USER_DISABLED,
+    ACTION_USER_REJECTED,
+    ACTION_USER_RESTORED,
+    OUTCOME_DENIED,
+    OUTCOME_FAILED,
+    OUTCOME_SUCCESS,
+    REASON_INVALID_LIFECYCLE_TRANSITION,
+    REASON_TRANSACTION_FAILED,
+    SOURCE_ADMIN_API,
     bump_auth_version,
-    record_admin_activity,
+    company_role_snapshot,
+    record_admin_audit_event,
+    record_independent_user_audit_event,
     user_role_snapshot,
+)
+from app.services.account_lifecycle import (
+    ALLOWED_USER_LIFECYCLE_TRANSITIONS,
+    InvalidAccountLifecycleTransition,
+    LifecycleAction,
+)
+from app.services.admin_survivability import (
+    AdminActorAuthorityLost,
+    AdminSurvivabilityViolation,
+    apply_locked_user_lifecycle_mutation,
 )
 from app.services.analysis_versions import (
     get_latest_analysis_version_for_parent,
@@ -73,6 +104,7 @@ class ApprovalQueueUser(BaseModel):
     name: str
     email: str
     approval_status: str
+    pre_disabled_approval_status: str | None = None
     platform_role: str
     is_admin: bool
     rejection_reason: str | None = None
@@ -86,6 +118,26 @@ class ApprovalQueueItem(BaseModel):
 
 class ApprovalQueueResponse(BaseModel):
     items: list[ApprovalQueueItem]
+
+
+class AdminAccountItem(BaseModel):
+    id: UUID
+    name: str
+    email: str
+    approval_status: str
+    role: str
+    is_current_actor: bool
+    restore_target_status: str | None = None
+    allowed_actions: list[LifecycleAction] = Field(default_factory=list)
+    company: ApprovalQueueCompany | None = None
+    created_at: str | None = None
+
+
+class AdminAccountsPage(BaseModel):
+    items: list[AdminAccountItem]
+    total: int
+    limit: int
+    offset: int
 
 
 class AdminCompanyResponse(BaseModel):
@@ -126,6 +178,36 @@ class AdminActivityResponse(BaseModel):
     reports_count: int
     vault_records_count: int
     recent_events: list[AdminActivityEventResponse] = Field(default_factory=list)
+
+
+class AdminAuditEventResponse(BaseModel):
+    id: UUID
+    occurred_at: str
+    action: str
+    outcome: str | None = None
+    actor_user_id: UUID | None = None
+    actor_type: str | None = None
+    actor_email_snapshot: str | None = None
+    actor_role_snapshot: str | None = None
+    actor_label: str | None = None
+    target_user_id: UUID | None = None
+    target_email_snapshot: str
+    target_resource_type: str | None = None
+    target_resource_id: str | None = None
+    previous_state: dict[str, Any] | None = None
+    new_state: dict[str, Any] | None = None
+    reason_code: str | None = None
+    reason: str | None = None
+    request_id: str | None = None
+    source: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class AdminAuditEventsPage(BaseModel):
+    items: list[AdminAuditEventResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class AdminCorpusHealthResponse(BaseModel):
@@ -171,6 +253,11 @@ def _user_payload(user: User) -> ApprovalQueueUser:
         name=user.name,
         email=user.email,
         approval_status=user.approval_status,
+        pre_disabled_approval_status=getattr(
+            user,
+            "pre_disabled_approval_status",
+            None,
+        ),
         platform_role=user.platform_role,
         is_admin=user.is_admin,
         rejection_reason=user.rejection_reason,
@@ -226,9 +313,9 @@ async def _latest_admin_activity_events(db: AsyncSession) -> list[AdminActivityE
 @router.get(
     "/activity",
     response_model=AdminActivityResponse,
-    dependencies=[Depends(require_operator_or_admin)],
 )
 async def get_admin_activity(
+    current_user: User = Depends(require_operator_or_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminActivityResponse:
     """Return simple read-only operational counts for the Admin overview."""
@@ -262,7 +349,89 @@ async def get_admin_activity(
             Proposal.status == ProposalStatus.COMPLETED,
         ),
         vault_records_count=await _count_optional_model_rows(db, ReadinessDocument),
-        recent_events=await _latest_admin_activity_events(db),
+        recent_events=(
+            await _latest_admin_activity_events(db)
+            if is_effective_admin(current_user)
+            else []
+        ),
+    )
+
+
+def _admin_audit_event_payload(event: AdminActivityEvent) -> AdminAuditEventResponse:
+    return AdminAuditEventResponse(
+        id=event.id,
+        occurred_at=event.created_at.isoformat(),
+        action=event.action,
+        outcome=event.outcome,
+        actor_user_id=event.actor_user_id,
+        actor_type=event.actor_type,
+        actor_email_snapshot=event.actor_email_snapshot,
+        actor_role_snapshot=event.actor_role_snapshot,
+        actor_label=event.actor_label,
+        target_user_id=event.target_user_id,
+        target_email_snapshot=event.target_email,
+        target_resource_type=event.target_resource_type,
+        target_resource_id=event.target_resource_id,
+        previous_state=event.previous_state,
+        new_state=event.new_state,
+        reason_code=event.reason_code,
+        reason=event.reason,
+        request_id=event.request_id,
+        source=event.source,
+        # Legacy rows predate payload validation and may contain obsolete
+        # implementation details such as auth-version values. Keep them stored
+        # unchanged, but do not expose their free-form metadata through the
+        # canonical API.
+        metadata=event.metadata_json if event.outcome is not None else None,
+    )
+
+
+@router.get("/audit-events", response_model=AdminAuditEventsPage)
+async def get_admin_audit_events(
+    actor_user_id: UUID | None = None,
+    target_user_id: UUID | None = None,
+    action: str | None = None,
+    outcome: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminAuditEventsPage:
+    """Return effective-admin-only, deterministic canonical audit history."""
+    del current_user
+    conditions: list[Any] = []
+    if actor_user_id is not None:
+        conditions.append(AdminActivityEvent.actor_user_id == actor_user_id)
+    if target_user_id is not None:
+        conditions.append(AdminActivityEvent.target_user_id == target_user_id)
+    if action is not None:
+        normalized_action = action.strip().upper()
+        if not normalized_action:
+            raise HTTPException(status_code=422, detail="action cannot be empty")
+        conditions.append(AdminActivityEvent.action == normalized_action)
+    if outcome is not None:
+        normalized_outcome = outcome.strip().upper()
+        if normalized_outcome not in {OUTCOME_SUCCESS, OUTCOME_DENIED, OUTCOME_FAILED}:
+            raise HTTPException(status_code=422, detail="invalid audit outcome")
+        conditions.append(AdminActivityEvent.outcome == normalized_outcome)
+
+    count_query = select(func.count()).select_from(AdminActivityEvent)
+    events_query = select(AdminActivityEvent)
+    if conditions:
+        count_query = count_query.where(*conditions)
+        events_query = events_query.where(*conditions)
+    total = int((await db.execute(count_query)).scalar_one() or 0)
+    result = await db.execute(
+        events_query
+        .order_by(AdminActivityEvent.created_at.desc(), AdminActivityEvent.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return AdminAuditEventsPage(
+        items=[_admin_audit_event_payload(event) for event in result.scalars().all()],
+        total=total,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -339,6 +508,139 @@ async def _get_company_or_404(db: AsyncSession, company_profile_id: UUID) -> Com
             detail="Company profile not found",
         )
     return profile
+
+
+def _display_role(user: User) -> str:
+    if user.is_admin or user.platform_role == PLATFORM_ROLE_ADMIN:
+        return "admin"
+    if user.platform_role == PLATFORM_ROLE_OPERATOR:
+        return "operator"
+    return "user"
+
+
+def _restore_target_status(user: User) -> str | None:
+    if normalized_approval_status(user.approval_status) != USER_APPROVAL_DISABLED:
+        return None
+    previous = normalized_approval_status(
+        getattr(user, "pre_disabled_approval_status", None)
+    )
+    return (
+        previous
+        if previous in USER_RESTORABLE_APPROVAL_STATUSES
+        else USER_APPROVAL_PENDING
+    )
+
+
+def _allowed_account_actions(
+    user: User,
+    *,
+    current_user: User,
+) -> list[LifecycleAction]:
+    if not is_effective_admin(current_user):
+        return []
+    state = normalized_approval_status(user.approval_status)
+    if state == USER_APPROVAL_DISABLED:
+        return ["restore"]
+    actions: list[LifecycleAction] = [
+        action
+        for action, transitions in ALLOWED_USER_LIFECYCLE_TRANSITIONS.items()
+        if state in transitions
+    ]
+    if user.id == current_user.id:
+        actions = [action for action in actions if action not in {"reject", "disable"}]
+    return actions
+
+
+def _admin_account_payload(user: User, *, current_user: User) -> AdminAccountItem:
+    return AdminAccountItem(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        approval_status=user.approval_status,
+        role=_display_role(user),
+        is_current_actor=user.id == current_user.id,
+        restore_target_status=_restore_target_status(user),
+        allowed_actions=_allowed_account_actions(user, current_user=current_user),
+        company=_company_payload(user.company_profile),
+        created_at=user.created_at.isoformat() if user.created_at else None,
+    )
+
+
+@router.get("/accounts", response_model=AdminAccountsPage)
+async def get_admin_accounts(
+    approval_status: str | None = None,
+    role: str | None = None,
+    query: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(require_operator_or_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminAccountsPage:
+    """Return a bounded account view with backend-derived UI capabilities."""
+    conditions: list[Any] = []
+    if approval_status is not None:
+        normalized_status = normalized_approval_status(approval_status)
+        if normalized_status not in USER_APPROVAL_STATUSES:
+            raise HTTPException(status_code=422, detail="invalid account status")
+        conditions.append(User.approval_status == normalized_status)
+    if role is not None:
+        normalized_role = role.strip().casefold()
+        if normalized_role == "admin":
+            conditions.append(
+                or_(User.is_admin.is_(True), User.platform_role == PLATFORM_ROLE_ADMIN)
+            )
+        elif normalized_role == "operator":
+            conditions.append(
+                and_(
+                    User.is_admin.is_(False),
+                    User.platform_role == PLATFORM_ROLE_OPERATOR,
+                )
+            )
+        elif normalized_role == "user":
+            conditions.append(
+                and_(
+                    User.is_admin.is_(False),
+                    User.platform_role.notin_((PLATFORM_ROLE_ADMIN, PLATFORM_ROLE_OPERATOR)),
+                )
+            )
+        else:
+            raise HTTPException(status_code=422, detail="invalid account role")
+    if query is not None and (normalized_query := query.strip().casefold()):
+        conditions.append(
+            or_(
+                func.lower(User.email).contains(normalized_query),
+                func.lower(User.name).contains(normalized_query),
+            )
+        )
+
+    count_query = select(func.count()).select_from(User)
+    accounts_query = select(User).options(selectinload(User.company_profile))
+    if conditions:
+        count_query = count_query.where(*conditions)
+        accounts_query = accounts_query.where(*conditions)
+    total = int((await db.execute(count_query)).scalar_one() or 0)
+    status_order = case(
+        (User.approval_status == USER_APPROVAL_PENDING, 0),
+        (User.approval_status == USER_APPROVAL_APPROVED, 1),
+        (User.approval_status == USER_APPROVAL_REJECTED, 2),
+        (User.approval_status == USER_APPROVAL_DISABLED, 3),
+        else_=4,
+    )
+    result = await db.execute(
+        accounts_query
+        .order_by(status_order, User.created_at.desc(), User.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return AdminAccountsPage(
+        items=[
+            _admin_account_payload(user, current_user=current_user)
+            for user in result.scalars().unique().all()
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(
@@ -433,26 +735,13 @@ async def approve_user(
     current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> ApprovalQueueUser:
-    user = await _get_user_or_404(db, user_id)
-    before = user_role_snapshot(user)
-    user.approval_status = USER_APPROVAL_APPROVED
-    user.approved_at = _utcnow()
-    user.approved_by_user_id = current_user.id
-    user.rejected_at = None
-    user.rejection_reason = None
-    user.disabled_at = None
-    bump_auth_version(user)
-    await record_admin_activity(
-        db,
-        action="user_approved",
-        actor_user=current_user,
-        target_user=user,
-        reason="Admin approved user account.",
-        metadata={"before": before, "after": user_role_snapshot(user)},
+    return await _apply_user_lifecycle_action(
+        db=db,
+        current_user=current_user,
+        user_id=user_id,
+        action="approve",
+        audit_reason="Admin approved user account.",
     )
-    await db.commit()
-    await db.refresh(user)
-    return _user_payload(user)
 
 
 @router.post("/users/{user_id}/reject", response_model=ApprovalQueueUser)
@@ -462,23 +751,14 @@ async def reject_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> ApprovalQueueUser:
-    user = await _get_user_or_404(db, user_id)
-    before = user_role_snapshot(user)
-    user.approval_status = USER_APPROVAL_REJECTED
-    user.rejected_at = _utcnow()
-    user.rejection_reason = _clean_reason(payload.reason)
-    bump_auth_version(user)
-    await record_admin_activity(
-        db,
-        action="user_rejected",
-        actor_user=current_user,
-        target_user=user,
-        reason=_clean_reason(payload.reason) or "Admin rejected user account.",
-        metadata={"before": before, "after": user_role_snapshot(user)},
+    return await _apply_user_lifecycle_action(
+        db=db,
+        current_user=current_user,
+        user_id=user_id,
+        action="reject",
+        audit_reason=_clean_reason(payload.reason) or "Admin rejected user account.",
+        state_reason=_clean_reason(payload.reason),
     )
-    await db.commit()
-    await db.refresh(user)
-    return _user_payload(user)
 
 
 @router.post("/users/{user_id}/disable", response_model=ApprovalQueueUser)
@@ -488,23 +768,180 @@ async def disable_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> ApprovalQueueUser:
-    user = await _get_user_or_404(db, user_id)
-    before = user_role_snapshot(user)
-    user.approval_status = USER_APPROVAL_DISABLED
-    user.disabled_at = _utcnow()
-    user.rejection_reason = _clean_reason(payload.reason)
-    bump_auth_version(user)
-    await record_admin_activity(
-        db,
-        action="user_disabled",
-        actor_user=current_user,
-        target_user=user,
-        reason=_clean_reason(payload.reason) or "Admin disabled user account.",
-        metadata={"before": before, "after": user_role_snapshot(user)},
+    return await _apply_user_lifecycle_action(
+        db=db,
+        current_user=current_user,
+        user_id=user_id,
+        action="disable",
+        audit_reason=_clean_reason(payload.reason) or "Admin disabled user account.",
     )
-    await db.commit()
-    await db.refresh(user)
+
+
+@router.post("/users/{user_id}/restore", response_model=ApprovalQueueUser)
+async def restore_user(
+    user_id: UUID,
+    payload: ApprovalActionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> ApprovalQueueUser:
+    return await _apply_user_lifecycle_action(
+        db=db,
+        current_user=current_user,
+        user_id=user_id,
+        action="restore",
+        audit_reason=_clean_reason(payload.reason) or "Admin restored user account.",
+    )
+
+
+async def _apply_user_lifecycle_action(
+    *,
+    db: AsyncSession,
+    current_user: User,
+    user_id: UUID,
+    action: LifecycleAction,
+    audit_reason: str,
+    state_reason: str | None = None,
+) -> ApprovalQueueUser:
+    actor_user_id = current_user.id
+    audit_action = {
+        "approve": ACTION_USER_APPROVED,
+        "reject": ACTION_USER_REJECTED,
+        "disable": ACTION_USER_DISABLED,
+        "restore": ACTION_USER_RESTORED,
+    }[action]
+    try:
+        mutation = await apply_locked_user_lifecycle_mutation(
+            db,
+            actor_user_id=actor_user_id,
+            target_user_id=user_id,
+            action=action,
+            reason=state_reason,
+        )
+    except AdminActorAuthorityLost as exc:
+        await db.rollback()
+        await record_independent_user_audit_event(
+            actor_user_id=actor_user_id,
+            target_user_id=user_id,
+            action=audit_action,
+            outcome=OUTCOME_DENIED,
+            source=SOURCE_ADMIN_API,
+            reason_code=exc.reason_code,
+            reason="Actor no longer had effective administrator authority.",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        ) from exc
+    except LookupError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        ) from exc
+    except AdminSurvivabilityViolation as exc:
+        await db.rollback()
+        await record_independent_user_audit_event(
+            actor_user_id=actor_user_id,
+            target_user_id=user_id,
+            action=audit_action,
+            outcome=OUTCOME_DENIED,
+            source=SOURCE_ADMIN_API,
+            reason_code=exc.reason_code,
+            reason=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except InvalidAccountLifecycleTransition as exc:
+        await db.rollback()
+        await record_independent_user_audit_event(
+            actor_user_id=actor_user_id,
+            target_user_id=user_id,
+            action=audit_action,
+            outcome=OUTCOME_DENIED,
+            source=SOURCE_ADMIN_API,
+            reason_code=REASON_INVALID_LIFECYCLE_TRANSITION,
+            reason=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    user = mutation.target
+    actor = mutation.actor
+    try:
+        await record_admin_audit_event(
+            db,
+            action=audit_action,
+            outcome=OUTCOME_SUCCESS,
+            source=SOURCE_ADMIN_API,
+            actor_user=actor,
+            target_user=user,
+            reason=audit_reason,
+            previous_state=mutation.before,
+            new_state=user_role_snapshot(user, credentials_invalidated=True),
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        await record_independent_user_audit_event(
+            actor_user_id=actor_user_id,
+            target_user_id=user_id,
+            action=audit_action,
+            outcome=OUTCOME_FAILED,
+            source=SOURCE_ADMIN_API,
+            reason_code=REASON_TRANSACTION_FAILED,
+            reason="Administrative lifecycle transaction failed and was rolled back.",
+        )
+        raise
     return _user_payload(user)
+
+
+async def _commit_company_audit(
+    *,
+    db: AsyncSession,
+    actor: User,
+    target: User,
+    profile: CompanyProfile,
+    action: str,
+    reason: str,
+    previous_state: dict[str, Any],
+) -> None:
+    actor_user_id = actor.id
+    target_user_id = target.id
+    try:
+        await record_admin_audit_event(
+            db,
+            action=action,
+            outcome=OUTCOME_SUCCESS,
+            source=SOURCE_ADMIN_API,
+            actor_user=actor,
+            target_user=target,
+            target_resource_type="COMPANY_PROFILE",
+            target_resource_id=str(profile.id),
+            reason=reason,
+            previous_state=previous_state,
+            new_state=company_role_snapshot(
+                company_approval_status=profile.approval_status,
+                user=target,
+                credentials_invalidated=True,
+            ),
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        await record_independent_user_audit_event(
+            actor_user_id=actor_user_id,
+            target_user_id=target_user_id,
+            action=action,
+            outcome=OUTCOME_FAILED,
+            source=SOURCE_ADMIN_API,
+            reason_code=REASON_TRANSACTION_FAILED,
+            reason="Administrative company transaction failed and was rolled back.",
+            previous_state=previous_state,
+        )
+        raise
 
 
 @router.post("/companies/{company_profile_id}/approve", response_model=ApprovalQueueCompany)
@@ -515,32 +952,25 @@ async def approve_company(
 ) -> ApprovalQueueCompany:
     profile = await _get_company_or_404(db, company_profile_id)
     target_user = profile.user
-    before = {
-        "company_approval_status": profile.approval_status,
-        "user": user_role_snapshot(target_user),
-    }
+    before = company_role_snapshot(
+        company_approval_status=profile.approval_status,
+        user=target_user,
+    )
     profile.approval_status = COMPANY_APPROVAL_APPROVED
     profile.approved_at = _utcnow()
     profile.approved_by_user_id = current_user.id
     profile.rejected_at = None
     profile.rejection_reason = None
     bump_auth_version(target_user)
-    await record_admin_activity(
-        db,
-        action="company_approved",
-        actor_user=current_user,
-        target_user=target_user,
+    await _commit_company_audit(
+        db=db,
+        actor=current_user,
+        target=target_user,
+        profile=profile,
+        action=ACTION_COMPANY_APPROVED,
         reason="Admin approved company profile.",
-        metadata={
-            "company_profile_id": str(profile.id),
-            "before": before,
-            "after": {
-                "company_approval_status": profile.approval_status,
-                "user": user_role_snapshot(target_user),
-            },
-        },
+        previous_state=before,
     )
-    await db.commit()
     await db.refresh(profile)
     payload = _company_payload(profile)
     assert payload is not None
@@ -556,30 +986,23 @@ async def reject_company(
 ) -> ApprovalQueueCompany:
     profile = await _get_company_or_404(db, company_profile_id)
     target_user = profile.user
-    before = {
-        "company_approval_status": profile.approval_status,
-        "user": user_role_snapshot(target_user),
-    }
+    before = company_role_snapshot(
+        company_approval_status=profile.approval_status,
+        user=target_user,
+    )
     profile.approval_status = COMPANY_APPROVAL_REJECTED
     profile.rejected_at = _utcnow()
     profile.rejection_reason = _clean_reason(payload.reason)
     bump_auth_version(target_user)
-    await record_admin_activity(
-        db,
-        action="company_rejected",
-        actor_user=current_user,
-        target_user=target_user,
+    await _commit_company_audit(
+        db=db,
+        actor=current_user,
+        target=target_user,
+        profile=profile,
+        action=ACTION_COMPANY_REJECTED,
         reason=_clean_reason(payload.reason) or "Admin rejected company profile.",
-        metadata={
-            "company_profile_id": str(profile.id),
-            "before": before,
-            "after": {
-                "company_approval_status": profile.approval_status,
-                "user": user_role_snapshot(target_user),
-            },
-        },
+        previous_state=before,
     )
-    await db.commit()
     await db.refresh(profile)
     company_payload = _company_payload(profile)
     assert company_payload is not None
@@ -595,29 +1018,22 @@ async def disable_company(
 ) -> ApprovalQueueCompany:
     profile = await _get_company_or_404(db, company_profile_id)
     target_user = profile.user
-    before = {
-        "company_approval_status": profile.approval_status,
-        "user": user_role_snapshot(target_user),
-    }
+    before = company_role_snapshot(
+        company_approval_status=profile.approval_status,
+        user=target_user,
+    )
     profile.approval_status = COMPANY_APPROVAL_DISABLED
     profile.rejection_reason = _clean_reason(payload.reason)
     bump_auth_version(target_user)
-    await record_admin_activity(
-        db,
-        action="company_disabled",
-        actor_user=current_user,
-        target_user=target_user,
+    await _commit_company_audit(
+        db=db,
+        actor=current_user,
+        target=target_user,
+        profile=profile,
+        action=ACTION_COMPANY_DISABLED,
         reason=_clean_reason(payload.reason) or "Admin disabled company profile.",
-        metadata={
-            "company_profile_id": str(profile.id),
-            "before": before,
-            "after": {
-                "company_approval_status": profile.approval_status,
-                "user": user_role_snapshot(target_user),
-            },
-        },
+        previous_state=before,
     )
-    await db.commit()
     await db.refresh(profile)
     company_payload = _company_payload(profile)
     assert company_payload is not None

@@ -126,6 +126,7 @@ export default function PendingApprovalPage() {
 
                         <div className="text-sm text-gray-400 space-y-1">
                             <p>What happens next: Plasma reviews your user and company profile.</p>
+                            <p>If your access changes, sign in again so your browser receives current authority.</p>
                             <p>Need help? Contact Plasma support through your pilot coordinator.</p>
                         </div>
 

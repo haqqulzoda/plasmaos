@@ -3,7 +3,7 @@
 import { ReactNode, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { CheckCircle2, LayoutDashboard, Loader2, LogOut, ShieldCheck, Sparkles } from 'lucide-react';
+import { ClipboardList, LayoutDashboard, Loader2, LogOut, ShieldCheck, Sparkles } from 'lucide-react';
 import { clsx } from 'clsx';
 import { signOut, useSession } from 'next-auth/react';
 import { api } from '@/lib/api';
@@ -12,11 +12,13 @@ interface AdminNavItem {
     name: string;
     href: string;
     icon: ReactNode;
+    adminOnly?: boolean;
 }
 
 const adminNavItems: AdminNavItem[] = [
     { name: 'Overview', href: '/admin', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { name: 'Approvals', href: '/admin/approvals', icon: <CheckCircle2 className="w-5 h-5" /> },
+    { name: 'Accounts', href: '/admin/approvals', icon: <ShieldCheck className="w-5 h-5" /> },
+    { name: 'Audit activity', href: '/admin/audit', icon: <ClipboardList className="w-5 h-5" />, adminOnly: true },
 ];
 
 const isAdminActive = (pathname: string, href: string) =>
@@ -38,6 +40,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         status === 'authenticated' &&
         isOperatorOrAdmin &&
         session?.approval_status === 'approved';
+    const isEffectiveAdmin =
+        canAccessAdmin &&
+        (session?.is_admin === true || role === 'admin');
 
     const handleLogout = async () => {
         await api.post('/auth/logout').catch(() => undefined);
@@ -102,7 +107,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 </div>
 
                 <nav className="flex-1 p-4 space-y-1">
-                    {adminNavItems.map((item) => {
+                    {adminNavItems.filter((item) => !item.adminOnly || isEffectiveAdmin).map((item) => {
                         const isActive = isAdminActive(pathname, item.href);
                         return (
                             <Link
@@ -144,7 +149,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 <header className="h-16 border-b border-gray-800 bg-gray-950/50 backdrop-blur-sm flex items-center justify-between px-8 shrink-0">
                     <div>
                         <h2 className="text-sm font-medium text-gray-400 tracking-wide uppercase">Admin Console</h2>
-                        <p className="text-xs text-gray-600">Operator workspace</p>
+                        <p className="text-xs text-gray-600">Administrative operations</p>
                     </div>
                     <Link
                         href="/dashboard"

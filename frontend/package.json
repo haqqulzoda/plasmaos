@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:project-context": "node --no-warnings --experimental-strip-types --test tests/project-context.test.mjs"
+    "test:project-context": "node --no-warnings --experimental-strip-types --test tests/project-context.test.mjs",
+    "test:admin": "node --no-warnings --experimental-strip-types --test tests/admin-operational-ux.test.mjs"
   },
   "dependencies": {
     "axios": "^1.13.4",

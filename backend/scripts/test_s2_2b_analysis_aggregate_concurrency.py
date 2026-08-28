@@ -29,7 +29,7 @@ from scripts import test_s2_2_analysis_version_foundation as s22
 
 
 S2_1_HEAD = "20260827_0001_s2_1_compliance_ownership"
-HEAD = "20260827_0002_s2_2_analysis_version_foundation"
+HEAD = "20260828_0002_s3_4_admin_audit_hardening"
 
 
 async def revision(database: str) -> str:

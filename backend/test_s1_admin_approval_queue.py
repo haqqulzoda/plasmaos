@@ -27,6 +27,7 @@ class AdminApprovalQueueTests(unittest.TestCase):
             '"/users/{user_id}/approve"',
             '"/users/{user_id}/reject"',
             '"/users/{user_id}/disable"',
+            '"/users/{user_id}/restore"',
             '"/companies/{company_profile_id}/approve"',
             '"/companies/{company_profile_id}/reject"',
             '"/companies/{company_profile_id}/disable"',
@@ -40,7 +41,7 @@ class AdminApprovalQueueTests(unittest.TestCase):
         self.assertIn("COMPANY_APPROVAL_APPROVED", source)
         self.assertIn("COMPANY_APPROVAL_REJECTED", source)
         self.assertIn("COMPANY_APPROVAL_DISABLED", source)
-        self.assertIn("approved_by_user_id = current_user.id", source)
+        self.assertIn("apply_locked_user_lifecycle_mutation(", source)
         self.assertIn("rejection_reason = _clean_reason(payload.reason)", source)
 
     def test_admin_pages_and_pilot_route_block_exist(self) -> None:
@@ -65,7 +66,7 @@ class AdminApprovalQueueTests(unittest.TestCase):
         self.assertIn("Open approval queue", admin_page)
         self.assertIn('href="/admin/approvals"', admin_page)
         self.assertIn("api.get<QueueResponse>('/admin/approval-queue')", approvals_page)
-        self.assertIn("without signing out", approvals_page)
+        self.assertIn("require pilots to sign in again", approvals_page)
         self.assertIn("Only admins can change approval status", approvals_page)
         self.assertIn("redirect('/admin')", legacy_admin_page)
         self.assertIn("redirect('/admin/approvals')", legacy_approvals_page)
@@ -74,15 +75,16 @@ class AdminApprovalQueueTests(unittest.TestCase):
             "/admin/users/${item.user.id}/approve",
             "/admin/users/${item.user.id}/reject",
             "/admin/users/${item.user.id}/disable",
+            "/admin/users/${item.user.id}/restore",
             "/admin/companies/${company.id}/approve",
             "/admin/companies/${company.id}/reject",
             "/admin/companies/${company.id}/disable",
         ):
             self.assertIn(endpoint, approvals_page)
 
-        self.assertIn('action="company_approved"', read_backend("app/api/endpoints/admin.py"))
-        self.assertIn('action="company_rejected"', read_backend("app/api/endpoints/admin.py"))
-        self.assertIn('action="company_disabled"', read_backend("app/api/endpoints/admin.py"))
+        self.assertIn("action=ACTION_COMPANY_APPROVED", read_backend("app/api/endpoints/admin.py"))
+        self.assertIn("action=ACTION_COMPANY_REJECTED", read_backend("app/api/endpoints/admin.py"))
+        self.assertIn("action=ACTION_COMPANY_DISABLED", read_backend("app/api/endpoints/admin.py"))
 
 
 if __name__ == "__main__":

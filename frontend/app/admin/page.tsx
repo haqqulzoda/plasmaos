@@ -103,7 +103,7 @@ export default function AdminPage() {
                     <ShieldCheck className="w-6 h-6 text-cyan-300" />
                     <div>
                         <h1 className="text-2xl font-semibold text-white">Admin Console</h1>
-                        <p className="text-sm text-gray-400">Pilot approvals and corpus visibility</p>
+                        <p className="text-sm text-gray-400">Account operations and corpus visibility</p>
                     </div>
                 </div>
                 <button
@@ -187,7 +187,7 @@ export default function AdminPage() {
                             href="/admin/approvals"
                             className="inline-flex items-center rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors"
                         >
-                            Open approval queue
+                            Open accounts
                         </Link>
                     </div>
                 </>

@@ -17,6 +17,7 @@ from app.core.access import (
     USER_APPROVAL_APPROVED,
     configured_email_allowlist,
     is_disabled_account,
+    is_effective_admin,
 )
 from app.core.security import get_current_user as core_get_current_user
 from app.db.session import get_db
@@ -70,14 +71,12 @@ def _require_enabled_account(user: User) -> None:
 
 def is_admin_user(user: User) -> bool:
     """Return whether a user has platform administrator access."""
-    if is_disabled_account(user):
-        return False
-    return bool(user.is_admin) or user.platform_role == PLATFORM_ROLE_ADMIN
+    return is_effective_admin(user)
 
 
 def is_operator_user(user: User) -> bool:
     """Return whether a user has operator-level platform access."""
-    if is_disabled_account(user):
+    if user.approval_status != USER_APPROVAL_APPROVED:
         return False
     if is_admin_user(user):
         return True

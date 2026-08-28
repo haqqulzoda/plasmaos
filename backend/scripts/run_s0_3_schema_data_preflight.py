@@ -43,6 +43,7 @@ TABLES = (
     "tender_recommendations",
     "risk_override_logs",
     "readiness_documents",
+    "admin_activity_events",
 )
 UUID_PATTERN = (
     r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
@@ -1182,6 +1183,105 @@ class ReadOnlyPreflight:
                     """
                 )
             )
+            lifecycle_selects = [
+                "COUNT(*) AS total_users",
+                "COUNT(*) FILTER (WHERE approval_status = 'pending') AS pending",
+                "COUNT(*) FILTER (WHERE approval_status = 'approved') AS approved",
+                "COUNT(*) FILTER (WHERE approval_status = 'rejected') AS rejected",
+                "COUNT(*) FILTER (WHERE approval_status = 'disabled') AS disabled",
+            ]
+            if self.has_columns("users", "pre_disabled_approval_status"):
+                lifecycle_selects.extend(
+                    (
+                        "COUNT(*) FILTER (WHERE approval_status = 'disabled' "
+                        "AND pre_disabled_approval_status IN "
+                        "('pending', 'approved', 'rejected')) "
+                        "AS disabled_with_known_prior_state",
+                        "COUNT(*) FILTER (WHERE approval_status = 'disabled' "
+                        "AND pre_disabled_approval_status IS NULL) "
+                        "AS disabled_with_unknown_prior_state",
+                        "COUNT(*) FILTER (WHERE approval_status NOT IN "
+                        "('pending', 'approved', 'rejected', 'disabled') OR "
+                        "(pre_disabled_approval_status IS NOT NULL AND "
+                        "(approval_status <> 'disabled' OR "
+                        "pre_disabled_approval_status NOT IN "
+                        "('pending', 'approved', 'rejected')))) "
+                        "AS invalid_state_combinations",
+                    )
+                )
+            else:
+                lifecycle_selects.extend(
+                    (
+                        "NULL::bigint AS disabled_with_known_prior_state",
+                        "NULL::bigint AS disabled_with_unknown_prior_state",
+                        "COUNT(*) FILTER (WHERE approval_status NOT IN "
+                        "('pending', 'approved', 'rejected', 'disabled')) "
+                        "AS invalid_state_combinations",
+                    )
+                )
+            data["account_lifecycle"] = _json_value(
+                await self.fetchrow(
+                    "SELECT " + ", ".join(lifecycle_selects) + " FROM users"
+                )
+            )
+        if self.has_columns("users", "auth_version"):
+            data["credential_revocation"] = _json_value(
+                await self.fetchrow(
+                    """
+                    SELECT
+                        COUNT(*) AS total_users,
+                        COUNT(*) FILTER (WHERE auth_version IS NULL) AS null_auth_versions,
+                        COUNT(*) FILTER (WHERE auth_version < 0) AS negative_auth_versions,
+                        MIN(auth_version) AS minimum_auth_version,
+                        MAX(auth_version) AS maximum_auth_version
+                    FROM users
+                    """
+                )
+            )
+        else:
+            data["credential_revocation"] = {"available": False}
+        if self.has_columns(
+            "users",
+            "approval_status",
+            "platform_role",
+            "is_admin",
+        ):
+            data["admin_survivability"] = _json_value(
+                await self.fetchrow(
+                    """
+                    SELECT
+                        COUNT(*) AS total_users,
+                        COUNT(*) FILTER (
+                            WHERE approval_status = 'approved'
+                              AND (is_admin IS TRUE OR platform_role = 'admin')
+                        ) AS effective_admins,
+                        COUNT(*) FILTER (
+                            WHERE approval_status = 'approved'
+                              AND (is_admin IS TRUE OR platform_role = 'admin')
+                        ) AS approved_admin_role_users,
+                        COUNT(*) FILTER (
+                            WHERE approval_status = 'disabled'
+                              AND (is_admin IS TRUE OR platform_role = 'admin')
+                        ) AS disabled_admin_role_users,
+                        COUNT(*) FILTER (
+                            WHERE approval_status = 'rejected'
+                              AND (is_admin IS TRUE OR platform_role = 'admin')
+                        ) AS rejected_admin_role_users,
+                        COUNT(*) FILTER (
+                            WHERE approval_status = 'pending'
+                              AND (is_admin IS TRUE OR platform_role = 'admin')
+                        ) AS pending_admin_role_users,
+                        NOT EXISTS (
+                            SELECT 1 FROM users
+                            WHERE approval_status = 'approved'
+                              AND (is_admin IS TRUE OR platform_role = 'admin')
+                        ) AS zero_effective_admins
+                    FROM users
+                    """
+                )
+            )
+        else:
+            data["admin_survivability"] = {"available": False}
         if self.has_columns("company_profiles", "approval_status"):
             data["company_approval_statuses"] = _json_value(
                 await self.fetch(
@@ -1288,6 +1388,77 @@ class ReadOnlyPreflight:
             )
         )
         return output
+
+    async def admin_audit(self) -> dict[str, Any]:
+        """Return aggregate-only canonical admin-audit health metrics."""
+        table = "admin_activity_events"
+        if not self.has_table(table):
+            return {"available": False, "table_exists": False}
+        required = {
+            "id",
+            "action",
+            "actor_user_id",
+            "target_user_id",
+            "outcome",
+            "source",
+            "previous_state",
+            "new_state",
+        }
+        if not required.issubset(self.columns.get(table, set())):
+            return {
+                "available": False,
+                "table_exists": True,
+                "legacy_rows": int(
+                    await self.fetchval("SELECT COUNT(*) FROM admin_activity_events")
+                ),
+            }
+        return {
+            "available": True,
+            "counts": _json_value(
+                await self.fetchrow(
+                    """
+                    SELECT
+                        COUNT(*) AS total_events,
+                        COUNT(*) FILTER (WHERE outcome = 'SUCCESS') AS success_events,
+                        COUNT(*) FILTER (WHERE outcome = 'DENIED') AS denied_events,
+                        COUNT(*) FILTER (WHERE outcome = 'FAILED') AS failed_events,
+                        COUNT(*) FILTER (WHERE action IS NULL OR BTRIM(action) = '')
+                            AS malformed_actions,
+                        COUNT(*) FILTER (
+                            WHERE outcome IS NOT NULL
+                              AND outcome NOT IN ('SUCCESS', 'DENIED', 'FAILED')
+                        ) AS invalid_outcomes,
+                        COUNT(*) FILTER (WHERE outcome IS NULL OR source IS NULL)
+                            AS legacy_partial_events,
+                        COUNT(*) FILTER (
+                            WHERE outcome IS NOT NULL
+                              AND (source IS NULL OR BTRIM(source) = '')
+                        ) AS canonical_events_without_source
+                    FROM admin_activity_events
+                    """
+                )
+            ),
+            "broken_actor_references": int(
+                await self.fetchval(
+                    """
+                    SELECT COUNT(*)
+                    FROM admin_activity_events e
+                    LEFT JOIN users u ON u.id = e.actor_user_id
+                    WHERE e.actor_user_id IS NOT NULL AND u.id IS NULL
+                    """
+                )
+            ),
+            "broken_target_references": int(
+                await self.fetchval(
+                    """
+                    SELECT COUNT(*)
+                    FROM admin_activity_events e
+                    LEFT JOIN users u ON u.id = e.target_user_id
+                    WHERE e.target_user_id IS NOT NULL AND u.id IS NULL
+                    """
+                )
+            ),
+        }
 
     async def referential_integrity(self) -> dict[str, int | None]:
         relationships = (
@@ -1399,6 +1570,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             "identity": await runner.identity_audit(
                 _allowlisted_privileged_emails(env_path)
             ),
+            "admin_audit": await runner.admin_audit(),
             "project_ids": await runner.project_id_audit(),
             "referential_integrity": await runner.referential_integrity(),
         }

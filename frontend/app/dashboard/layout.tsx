@@ -45,7 +45,6 @@ export type AccessStatus = {
     access_allowed: boolean;
     state: string;
     rejection_or_disabled_reason?: string | null;
-    auth_version: number;
 };
 
 const CONTROL_PATHS = new Set([

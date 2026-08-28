@@ -21,7 +21,7 @@ from scripts import test_s0_5b4_baseline as support
 
 
 BASELINE = "20260824_0002_s0_4c"
-HEAD = "20260827_0001_s2_1_compliance_ownership"
+HEAD = "20260828_0002_s3_4_admin_audit_hardening"
 CANONICAL_COMMENT = (
     "SHA-256 seal incorporating override state. "
     "Null when no overrides have been applied."

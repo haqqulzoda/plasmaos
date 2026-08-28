@@ -11,6 +11,7 @@ from app.core.access import (
     PLATFORM_ROLE_PILOT_USER,
     PLATFORM_ROLES,
     USER_APPROVAL_PENDING,
+    USER_RESTORABLE_APPROVAL_STATUSES,
     USER_APPROVAL_STATUSES,
     sql_string_values,
 )
@@ -90,6 +91,10 @@ class User(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    pre_disabled_approval_status: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -116,6 +121,12 @@ class User(Base):
         CheckConstraint(
             f"approval_status IN ({sql_string_values(USER_APPROVAL_STATUSES)})",
             name="ck_users_approval_status_allowed",
+        ),
+        CheckConstraint(
+            "pre_disabled_approval_status IS NULL OR "
+            "(approval_status = 'disabled' AND "
+            f"pre_disabled_approval_status IN ({sql_string_values(USER_RESTORABLE_APPROVAL_STATUSES)}))",
+            name="ck_users_pre_disabled_approval_status_allowed",
         ),
         CheckConstraint(
             f"platform_role IN ({sql_string_values(PLATFORM_ROLES)})",

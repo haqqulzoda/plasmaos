@@ -110,12 +110,13 @@ class ReleaseAdminRepairTests(unittest.TestCase):
         security = read_backend("app/core/security.py")
         admin = read_backend("app/api/endpoints/admin.py")
 
-        self.assertIn("record_admin_activity", auth)
-        self.assertIn("auth_allowlist_reconciled", auth)
+        self.assertIn("record_admin_audit_event", auth)
+        self.assertIn("ACTION_ADMIN_GRANTED", auth)
+        self.assertIn("SOURCE_GOOGLE_ALLOWLIST", auth)
         self.assertIn("bump_auth_version(user)", auth)
         self.assertIn('"auth_version"', auth)
         self.assertIn("Fresh authentication required", security)
-        self.assertIn("bump_auth_version(user)", admin)
+        self.assertIn("apply_locked_user_lifecycle_mutation(", admin)
         self.assertIn("recent_events", admin)
 
     def test_admin_management_command_requires_allowlist_and_google_identity(self) -> None:
@@ -127,7 +128,8 @@ class ReleaseAdminRepairTests(unittest.TestCase):
         self.assertIn("google_id_mismatch", command)
         self.assertIn("email_not_in_PLASMA_ADMIN_EMAILS", command)
         self.assertIn("schema_not_migrated", command)
-        self.assertIn("admin_promoted", command)
+        self.assertIn("ACTION_ADMIN_REPAIR_PROMOTION", command)
+        self.assertIn("ACTOR_SERVER_COMMAND", command)
         self.assertNotIn("haqqulzoda@gmail.com", command)
 
 

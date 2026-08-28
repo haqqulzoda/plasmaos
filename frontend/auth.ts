@@ -7,11 +7,6 @@ import { resolveBackendApiBase } from '@/lib/backendApiBase';
 // the backend via Docker's internal network.  Falls back to the public URL.
 const backendApiBase = resolveBackendApiBase();
 
-// Backend JWT lifetime is 8 hours.  We attempt a silent refresh when the
-// token is within 1 hour of expiring, keeping the session alive as long
-// as the user is active.
-const REFRESH_WINDOW_SECONDS = 60 * 60; // 1 hour before expiry
-
 type BackendClaims = {
   platform_role?: string;
   approval_status?: string;
@@ -34,6 +29,50 @@ function decodeBackendClaims(accessToken: string): BackendClaims {
     return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8')) as BackendClaims;
   } catch {
     return {};
+  }
+}
+
+function clearBackendAuthority(token: Record<string, unknown>) {
+  delete token.accessToken;
+  delete token.platform_role;
+  delete token.approval_status;
+  delete token.is_admin;
+  delete token.onboarding_required;
+  delete token.company_profile_id;
+  delete token.company_approval_status;
+  delete token.company_pilot_status;
+  token.backendSessionError = 'BackendSessionRevoked';
+}
+
+async function validateAndRotateBackendSession(token: Record<string, unknown>) {
+  if (typeof token.accessToken !== 'string') return;
+
+  try {
+    const refreshResponse = await fetch(`${backendApiBase}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token.accessToken}`,
+      },
+      cache: 'no-store',
+    });
+    if (!refreshResponse.ok) {
+      clearBackendAuthority(token);
+      return;
+    }
+
+    const refreshPayload = (await refreshResponse.json()) as BackendTokenPayload;
+    if (!refreshPayload.access_token || refreshPayload.token_type !== 'bearer') {
+      clearBackendAuthority(token);
+      return;
+    }
+
+    token.accessToken = refreshPayload.access_token;
+    delete token.backendSessionError;
+    applyBackendClaims(token, refreshPayload);
+  } catch {
+    // Current authority cannot be proven, so the browser session fails closed.
+    clearBackendAuthority(token);
   }
 }
 
@@ -66,7 +105,7 @@ export const { handlers, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, account, profile, user, trigger }) {
+    async jwt({ token, account, profile, user }) {
       // ── Initial Google sign-in: exchange for a backend JWT ──
       if (account?.provider === 'google') {
         const googleId =
@@ -103,80 +142,24 @@ export const { handlers, auth } = NextAuth({
         }
 
         token.accessToken = payload.access_token;
+        delete token.backendSessionError;
         applyBackendClaims(token as Record<string, unknown>, payload);
         return token;
       }
 
-      // Explicit session updates are used after onboarding/approval changes.
-      // The backend refresh endpoint accepts a valid signed token even when its
-      // auth_version is stale, then rotates it to the current authorization state.
-      if (trigger === 'update' && typeof token.accessToken === 'string') {
-        try {
-          const refreshResponse = await fetch(`${backendApiBase}/auth/refresh`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token.accessToken}`,
-            },
-          });
-          if (refreshResponse.ok) {
-            const refreshPayload = (await refreshResponse.json()) as BackendTokenPayload;
-            if (refreshPayload.access_token && refreshPayload.token_type === 'bearer') {
-              token.accessToken = refreshPayload.access_token;
-              applyBackendClaims(token as Record<string, unknown>, refreshPayload);
-            }
-          }
-        } catch {
-          // The caller keeps its current session and can retry status refresh.
-        }
-        return token;
-      }
-
-      // ── Subsequent requests: silent refresh when nearing expiry ──
-      if (typeof token.accessToken === 'string') {
-        try {
-          // Decode the JWT payload to read `exp` (seconds since epoch)
-          const parts = token.accessToken.split('.');
-          if (parts.length === 3) {
-            const payload = JSON.parse(
-              Buffer.from(parts[1], 'base64url').toString('utf-8'),
-            ) as { exp?: number };
-
-            const nowSeconds = Math.floor(Date.now() / 1000);
-            const expiresAt = payload.exp ?? 0;
-
-            if (expiresAt - nowSeconds < REFRESH_WINDOW_SECONDS) {
-              // Token is within the refresh window — request a fresh one
-              const refreshResponse = await fetch(`${backendApiBase}/auth/refresh`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token.accessToken}`,
-                },
-              });
-
-              if (refreshResponse.ok) {
-                const refreshPayload = (await refreshResponse.json()) as BackendTokenPayload;
-
-                if (refreshPayload.access_token && refreshPayload.token_type === 'bearer') {
-                  token.accessToken = refreshPayload.access_token;
-                  applyBackendClaims(token as Record<string, unknown>, refreshPayload);
-                }
-              }
-              // If refresh fails the existing (still valid) token is kept;
-              // once it fully expires the 401 interceptor handles logout.
-            }
-          }
-        } catch {
-          // Decode/refresh failure is non-fatal — keep existing token
-        }
-      }
+      // Every Auth.js callback proves current backend authority. Approval,
+      // rejection, disable, restore, and role changes all require sign-in again.
+      await validateAndRotateBackendSession(token as Record<string, unknown>);
 
       return token;
     },
     async session({ session, token }) {
       (session as { accessToken?: string }).accessToken =
         typeof token.accessToken === 'string' ? token.accessToken : undefined;
+      session.backendSessionError =
+        token.backendSessionError === 'BackendSessionRevoked'
+          ? 'BackendSessionRevoked'
+          : undefined;
       session.platform_role = typeof token.platform_role === 'string' ? token.platform_role : undefined;
       session.approval_status = typeof token.approval_status === 'string' ? token.approval_status : undefined;
       session.is_admin = typeof token.is_admin === 'boolean' ? token.is_admin : undefined;

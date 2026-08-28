@@ -389,7 +389,7 @@ class AuditLog(Base):
 
 
 class AdminActivityEvent(Base):
-    """Administrative account-management event log."""
+    """Canonical append-only administrative security audit event."""
 
     __tablename__ = "admin_activity_events"
 
@@ -405,13 +405,34 @@ class AdminActivityEvent(Base):
         nullable=True,
     )
     actor_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    actor_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    actor_email_snapshot: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    actor_role_snapshot: Mapped[str | None] = mapped_column(
+        String(30), nullable=True
+    )
     target_user_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
     target_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_resource_type: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+    target_resource_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    previous_state: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    new_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    reason_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(80), nullable=True)
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -420,10 +441,21 @@ class AdminActivityEvent(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "outcome IS NULL OR outcome IN ('SUCCESS', 'DENIED', 'FAILED')",
+            name="ck_admin_activity_events_outcome_allowed",
+        ),
+        CheckConstraint(
+            "actor_type IS NULL OR actor_type IN ('USER', 'SYSTEM', 'SERVER_COMMAND')",
+            name="ck_admin_activity_events_actor_type_allowed",
+        ),
         Index("ix_admin_activity_events_action", "action"),
+        Index("ix_admin_activity_events_actor_user_id", "actor_user_id"),
         Index("ix_admin_activity_events_target_user_id", "target_user_id"),
         Index("ix_admin_activity_events_target_email", "target_email"),
+        Index("ix_admin_activity_events_outcome", "outcome"),
         Index("ix_admin_activity_events_created_at", "created_at"),
+        Index("ix_admin_activity_events_created_id", "created_at", "id"),
     )
 
 

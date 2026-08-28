@@ -13,7 +13,6 @@ from app.api.endpoints.users import get_access_status
 from app.core.security import (
     create_access_token,
     get_current_user,
-    get_current_user_allow_stale_auth_version,
 )
 
 
@@ -89,7 +88,7 @@ class AccessStatusTests(IsolatedAsyncioTestCase):
         self.assertTrue(access.access_allowed)
         self.assertEqual(access.state, "approved")
 
-    async def test_stale_auth_version_can_only_use_rotation_dependency(self):
+    async def test_stale_auth_version_has_no_rotation_bypass(self):
         user = make_user("approved")
         token = create_access_token({"sub": str(user.id), "auth_version": 3})
         credentials = SimpleNamespace(credentials=token)
@@ -104,12 +103,10 @@ class AccessStatusTests(IsolatedAsyncioTestCase):
             )
         self.assertEqual(raised.exception.status_code, 401)
 
-        resolved = await get_current_user_allow_stale_auth_version(
-            credentials=credentials,
-            db=db,
-            plasma_api_token=None,
-        )
-        self.assertIs(resolved, user)
+        auth_source = (ROOT / "app/api/endpoints/auth.py").read_text()
+        users_source = (ROOT / "app/api/endpoints/users.py").read_text()
+        self.assertNotIn("get_current_user_allow_stale_auth_version", auth_source)
+        self.assertNotIn("get_current_user_allow_stale_auth_version", users_source)
 
 
 class AdminCompanyApprovalTests(IsolatedAsyncioTestCase):
@@ -142,7 +139,7 @@ class AdminCompanyApprovalTests(IsolatedAsyncioTestCase):
                 "app.api.endpoints.admin._get_company_or_404",
                 new=AsyncMock(return_value=profile),
             ),
-            patch("app.api.endpoints.admin.record_admin_activity", new=activity),
+            patch("app.api.endpoints.admin.record_admin_audit_event", new=activity),
         ):
             response = await approve_company(
                 company_profile_id=profile.id,
@@ -153,7 +150,7 @@ class AdminCompanyApprovalTests(IsolatedAsyncioTestCase):
         self.assertEqual(response.approval_status, "approved")
         self.assertEqual(target_user.auth_version, 5)
         activity.assert_awaited_once()
-        self.assertEqual(activity.await_args.kwargs["action"], "company_approved")
+        self.assertEqual(activity.await_args.kwargs["action"], "COMPANY_APPROVED")
 
 
 class OnboardingFrontendTests(TestCase):
@@ -170,5 +167,5 @@ class OnboardingFrontendTests(TestCase):
         self.assertIn("Access approved", pending)
         self.assertIn("You do not need to submit the form again", pending)
         self.assertIn("'/users/me/access-status'", layout)
-        self.assertIn("trigger === 'update'", auth)
+        self.assertIn("await validateAndRotateBackendSession", auth)
         self.assertIn("await update()", onboarding)

@@ -13,7 +13,9 @@ from sqlalchemy import func, select, text
 from app.core.access import (
     PLATFORM_ROLE_ADMIN,
     USER_APPROVAL_APPROVED,
+    USER_APPROVAL_DISABLED,
     configured_email_allowlist,
+    normalized_approval_status,
 )
 
 
@@ -108,6 +110,11 @@ async def _admin_repair_schema_status(db) -> dict[str, bool]:
             column_name="auth_version",
         ),
         "admin_activity_events": await _has_table(db, "admin_activity_events"),
+        "canonical_admin_audit": await _has_column(
+            db,
+            table_name="admin_activity_events",
+            column_name="outcome",
+        ),
     }
 
 
@@ -172,8 +179,12 @@ async def inspect_admin(args: argparse.Namespace) -> int:
 async def promote_admin(args: argparse.Namespace) -> int:
     from app.db.session import AsyncSessionLocal
     from app.services.admin_activity import (
+        ACTION_ADMIN_REPAIR_PROMOTION,
+        ACTOR_SERVER_COMMAND,
+        OUTCOME_SUCCESS,
+        SOURCE_ADMIN_REPAIR_COMMAND,
         bump_auth_version,
-        record_admin_activity,
+        record_admin_audit_event,
         user_role_snapshot,
     )
 
@@ -230,10 +241,19 @@ async def promote_admin(args: argparse.Namespace) -> int:
             )
             return 4
 
-        actor_user = None
+        if normalized_approval_status(user.approval_status) == USER_APPROVAL_DISABLED:
+            _print_payload(
+                {
+                    "mode": "promote",
+                    "status": "blocked",
+                    "reason": "account_restore_required",
+                    "email": email,
+                }
+            )
+            return 6
+
         actor_label = args.actor_label
         if args.actor_email:
-            actor_user = await _load_user(db, _normalize_email(args.actor_email))
             actor_label = actor_label or f"admin-management-command:{_normalize_email(args.actor_email)}"
         actor_label = actor_label or "admin-management-command"
 
@@ -254,17 +274,18 @@ async def promote_admin(args: argparse.Namespace) -> int:
 
         if changed:
             bump_auth_version(user)
-            await record_admin_activity(
+            await record_admin_audit_event(
                 db,
-                action="admin_promoted",
-                actor_user=actor_user,
+                action=ACTION_ADMIN_REPAIR_PROMOTION,
+                outcome=OUTCOME_SUCCESS,
+                source=SOURCE_ADMIN_REPAIR_COMMAND,
+                actor_type=ACTOR_SERVER_COMMAND,
                 actor_label=actor_label,
                 target_user=user,
                 reason=args.reason,
+                previous_state=before,
+                new_state=user_role_snapshot(user, credentials_invalidated=True),
                 metadata={
-                    "before": before,
-                    "after": user_role_snapshot(user),
-                    "verified_google_id": expected_google_id,
                     "admin_allowlist_match": True,
                     "fresh_auth_required": True,
                 },

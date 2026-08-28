@@ -21,18 +21,26 @@ from app.core.access import (
     PLATFORM_ROLE_PILOT_USER,
     USER_APPROVAL_APPROVED,
     USER_APPROVAL_PENDING,
+    USER_APPROVAL_REJECTED,
     is_disabled_account,
+    is_rejected_account,
 )
 from app.core.security import (
     create_access_token,
-    get_current_user_allow_stale_auth_version,
+    get_current_user,
 )
 from app.db.session import get_db
 from app.models.all_models import User
 from app.models.company import CompanyProfile
 from app.services.admin_activity import (
+    ACTION_ADMIN_GRANTED,
+    ACTION_ALLOWLIST_PRIVILEGE_RECONCILED,
+    ACTION_OPERATOR_GRANTED,
+    ACTOR_SYSTEM,
+    OUTCOME_SUCCESS,
+    SOURCE_GOOGLE_ALLOWLIST,
     bump_auth_version,
-    record_admin_activity,
+    record_admin_audit_event,
     user_role_snapshot,
 )
 
@@ -61,7 +69,7 @@ class TokenResponse(BaseModel):
 def _apply_email_bootstrap(user: User, *, email: str) -> None:
     # Allowlist membership may bootstrap eligible users, but it must never
     # reverse an explicit administrative disable.
-    if is_disabled_account(user):
+    if is_disabled_account(user) or user.approval_status == USER_APPROVAL_REJECTED:
         return
 
     now = datetime.now(timezone.utc)
@@ -167,6 +175,11 @@ async def google_auth_bridge(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account disabled",
             )
+        if is_rejected_account(user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account rejected",
+            )
         user.google_id = google_id
         user.email = email
         user.name = name
@@ -176,15 +189,23 @@ async def google_auth_bridge(
     if _role_state_changed(before_role_state, user):
         bump_auth_version(user)
         await db.flush()
-        await record_admin_activity(
+        audit_action = ACTION_ALLOWLIST_PRIVILEGE_RECONCILED
+        if user.platform_role == PLATFORM_ROLE_ADMIN:
+            audit_action = ACTION_ADMIN_GRANTED
+        elif user.platform_role == PLATFORM_ROLE_OPERATOR:
+            audit_action = ACTION_OPERATOR_GRANTED
+        await record_admin_audit_event(
             db,
-            action="auth_allowlist_reconciled",
+            action=audit_action,
+            outcome=OUTCOME_SUCCESS,
+            source=SOURCE_GOOGLE_ALLOWLIST,
             target_user=user,
+            actor_type=ACTOR_SYSTEM,
             actor_label="auth/google",
             reason="Successful Google authentication matched configured role allowlist.",
+            previous_state=before_role_state,
+            new_state=user_role_snapshot(user, credentials_invalidated=True),
             metadata={
-                "before": before_role_state,
-                "after": user_role_snapshot(user),
                 "admin_allowlist_match": email in admin_email_allowlist(),
                 "operator_allowlist_match": email in operator_email_allowlist(),
             },
@@ -218,7 +239,7 @@ async def logout(response: Response) -> dict[str, str]:
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     response: Response,
-    current_user: User = Depends(get_current_user_allow_stale_auth_version),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     """
@@ -228,12 +249,11 @@ async def refresh_token(
     cookie — whichever ``get_current_user`` resolves.  Returns a new
     token with a full 8-hour lifetime and refreshes the cookie.
     """
-    # Defense in depth: the stale-version dependency rejects disabled users,
-    # and refresh itself must remain safe if that dependency changes later.
-    if is_disabled_account(current_user):
+    # Defense in depth: token issuance must never revive a blocked account.
+    if is_disabled_account(current_user) or is_rejected_account(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account disabled",
+            detail="Account unavailable",
         )
 
     profile = await _load_company_profile(db=db, user_id=current_user.id)

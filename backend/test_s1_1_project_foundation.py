@@ -26,7 +26,7 @@ MIGRATION_PATH = (
     BACKEND_DIR
     / "alembic/versions/20260826_0001_s1_1_project_foundation.py"
 )
-HEAD = "20260827_0002_s2_2_analysis_version_foundation"
+HEAD = "20260828_0002_s3_4_admin_audit_hardening"
 
 
 def _load_migration():
@@ -150,7 +150,7 @@ def test_migration_is_the_single_head_after_sprint_zero_b3() -> None:
     script = ScriptDirectory.from_config(config)
     assert script.get_heads() == [HEAD]
     assert script.get_revision(HEAD).down_revision == (
-        "20260827_0001_s2_1_compliance_ownership"
+        "20260828_0001_s3_1_admin_account_lifecycle"
     )
     assert script.get_revision(
         "20260827_0001_s2_1_compliance_ownership"

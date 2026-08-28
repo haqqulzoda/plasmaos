@@ -23,7 +23,6 @@ from app.core.access import (
     COMPANY_PILOT_SCOPED,
     USER_APPROVAL_APPROVED,
 )
-from app.core.security import get_current_user_allow_stale_auth_version
 from app.core.geography import normalize_target_countries, normalize_target_regions
 from app.core.services import normalize_target_services
 from app.db.session import get_db
@@ -61,7 +60,6 @@ class AccessStatusResponse(BaseModel):
     access_allowed: bool
     state: str
     rejection_or_disabled_reason: str | None = None
-    auth_version: int
     company_name: str | None = None
     company_profile_id: UUID | None = None
 
@@ -87,7 +85,7 @@ async def get_current_user_info(
 
 @router.get("/me/access-status", response_model=AccessStatusResponse)
 async def get_access_status(
-    current_user: User = Depends(get_current_user_allow_stale_auth_version),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AccessStatusResponse:
     """Return authoritative onboarding and approval state for the live session."""
@@ -131,7 +129,6 @@ async def get_access_status(
         access_allowed=access_allowed,
         state=state,
         rejection_or_disabled_reason=reason,
-        auth_version=int(getattr(current_user, "auth_version", 0) or 0),
         company_name=profile.company_name if profile is not None else current_user.company_name,
         company_profile_id=profile.id if profile is not None else None,
     )

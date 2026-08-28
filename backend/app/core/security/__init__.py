@@ -12,7 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.access import is_disabled_account
+from app.core.access import is_disabled_account, is_rejected_account
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.all_models import User
@@ -48,7 +48,6 @@ async def _resolve_current_user(
     credentials: HTTPAuthorizationCredentials | None,
     db: AsyncSession,
     plasma_api_token: str | None,
-    enforce_auth_version: bool,
 ) -> User:
     token = credentials.credentials if credentials else plasma_api_token
     if not token:
@@ -92,8 +91,6 @@ async def _resolve_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Disabled is an authoritative account state.  Enforce it even for the
-    # stale-auth-version dependency used by access-state inspection/rotation.
     if is_disabled_account(user):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -101,31 +98,39 @@ async def _resolve_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if enforce_auth_version:
-        token_auth_version = payload.get("auth_version")
-        current_auth_version = int(getattr(user, "auth_version", 0) or 0)
-        if token_auth_version is None:
-            if current_auth_version != 0:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Fresh authentication required",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
-        else:
-            try:
-                normalized_token_auth_version = int(token_auth_version)
-            except (TypeError, ValueError):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid token payload",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
-            if normalized_token_auth_version != current_auth_version:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Fresh authentication required",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+    if is_rejected_account(user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account rejected",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_auth_version = payload.get("auth_version")
+    current_auth_version = int(getattr(user, "auth_version", 0) or 0)
+    if current_auth_version < 0:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid account security state",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if token_auth_version is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Fresh authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if isinstance(token_auth_version, bool) or not isinstance(token_auth_version, int):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if token_auth_version != current_auth_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Fresh authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 
@@ -138,21 +143,6 @@ async def get_current_user(
         credentials=credentials,
         db=db,
         plasma_api_token=plasma_api_token,
-        enforce_auth_version=True,
-    )
-
-
-async def get_current_user_allow_stale_auth_version(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    plasma_api_token: Annotated[str | None, Cookie()] = None,
-) -> User:
-    """Resolve a stale-version token only for a non-disabled account."""
-    return await _resolve_current_user(
-        credentials=credentials,
-        db=db,
-        plasma_api_token=plasma_api_token,
-        enforce_auth_version=False,
     )
 
 

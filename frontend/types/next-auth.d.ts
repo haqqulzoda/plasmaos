@@ -3,6 +3,7 @@ import { DefaultSession } from 'next-auth';
 declare module 'next-auth' {
   interface Session {
     accessToken?: string;
+    backendSessionError?: 'BackendSessionRevoked';
     platform_role?: string;
     approval_status?: string;
     is_admin?: boolean;
@@ -23,6 +24,7 @@ declare module 'next-auth' {
 
   interface User {
     accessToken?: string;
+    backendSessionError?: 'BackendSessionRevoked';
   }
 }
 
