@@ -12,7 +12,9 @@
     "test:admin": "node --no-warnings --experimental-strip-types --test tests/admin-operational-ux.test.mjs",
     "test:my-tenders": "node --no-warnings --experimental-strip-types --test tests/my-tenders.test.mjs",
     "test:bid-preparation": "node --no-warnings --experimental-strip-types --test tests/bid-preparation.test.mjs",
-    "test:engagement-workflow": "node --no-warnings --experimental-strip-types --test tests/engagement-workflow.test.mjs"
+    "test:engagement-workflow": "node --no-warnings --experimental-strip-types --test tests/engagement-workflow.test.mjs",
+    "test:tender-details": "node --no-warnings --experimental-strip-types --test tests/tender-details.test.mjs",
+    "test:tender-cleanup": "node --no-warnings --experimental-strip-types --test tests/tender-cleanup.test.mjs"
   },
   "dependencies": {
     "axios": "^1.13.4",

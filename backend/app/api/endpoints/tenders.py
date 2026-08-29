@@ -123,6 +123,10 @@ from app.schemas.tender import (
     TenderDocumentResponse,
     TenderResponse,
 )
+from app.schemas.tender_details import (
+    ProcurementContactsSummary,
+    TenderDetailsResponse,
+)
 from app.schemas.vault import (
     CertificationItem,
     CompanyVaultResponse,
@@ -174,6 +178,7 @@ from app.schemas.project import (
 from app.services.project_enrichment import (
     enqueue_world_bank_project_enrichment_batch,
 )
+from app.services.tender_details import compose_tender_details
 from app.services.tender_sources.base import (
     NormalizedTender,
     assert_source_scope,
@@ -2625,28 +2630,31 @@ async def _uzex_trade_list_date_map(
     return date_map
 
 
-async def _apply_live_uzex_dates(tenders: list[Tender]) -> None:
+async def _apply_live_uzex_dates(
+    tenders: list[Tender],
+) -> dict[UUID, tuple[datetime | None, datetime | None]]:
+    """Return response-only UzEx date overrides without dirtying ORM rows."""
     external_ids = {
         tender.external_id
         for tender in tenders
         if tender.source_system == "uzex" and tender.external_id
     }
     if not external_ids:
-        return
+        return {}
     try:
         date_map = await _uzex_trade_list_date_map(external_ids)
     except Exception:
         logger.exception("Failed to enrich UzEx publication/deadline dates")
-        return
+        return {}
 
+    live_dates: dict[UUID, tuple[datetime | None, datetime | None]] = {}
     for tender in tenders:
         if tender.source_system != "uzex":
             continue
         publication_date, deadline = date_map.get(tender.external_id, (None, None))
-        if publication_date is not None:
-            tender.publication_date = publication_date
-        if deadline is not None:
-            tender.deadline = deadline
+        if publication_date is not None or deadline is not None:
+            live_dates[tender.id] = (publication_date, deadline)
+    return live_dates
 
 
 def _serialize_tender(
@@ -2655,8 +2663,15 @@ def _serialize_tender(
     summary: DocumentSummary | None = None,
     include_contact_metadata: bool = False,
     contact_metadata_override: dict[str, Any] | None = None,
+    live_dates: tuple[datetime | None, datetime | None] | None = None,
 ) -> TenderResponse:
     payload = TenderResponse.model_validate(tender)
+    if live_dates is not None:
+        live_publication_date, live_deadline = live_dates
+        if live_publication_date is not None:
+            payload.publication_date = live_publication_date
+        if live_deadline is not None:
+            payload.deadline = live_deadline
     payload.source_url = _safe_source_notice_url(payload.source_url)
     payload.contact_submission = _contact_submission_response(
         tender,
@@ -2664,6 +2679,8 @@ def _serialize_tender(
         include_metadata=include_contact_metadata,
         metadata_override=contact_metadata_override,
     )
+    if live_dates is not None and live_dates[1] is not None:
+        payload.contact_submission.submission_deadline = live_dates[1]
     (
         payload.price_amount,
         payload.price_currency,
@@ -4592,10 +4609,14 @@ async def list_tenders(
         db=db,
         tender_ids=[tender.id for tender in tenders],
     )
-    await _apply_live_uzex_dates(tenders)
+    live_dates = await _apply_live_uzex_dates(tenders)
 
     serialized_tenders = [
-        _serialize_tender(t, summary=summaries.get(t.id))
+        _serialize_tender(
+            t,
+            summary=summaries.get(t.id),
+            live_dates=live_dates.get(t.id),
+        )
         for t in tenders
     ]
     if normalized_document_status:
@@ -4605,6 +4626,73 @@ async def list_tenders(
             if tender.document_status == normalized_document_status
         ]
     return serialized_tenders
+
+
+@router.get("/{tender_id}/details", response_model=TenderDetailsResponse)
+async def get_tender_details(
+    tender_id: UUID,
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> TenderDetailsResponse:
+    """Compose a bounded, tenant-scoped summary from local canonical state."""
+    tender = await db.scalar(
+        select(Tender)
+        .options(
+            load_only(
+                Tender.id,
+                Tender.source_system,
+                Tender.source_url,
+                Tender.buyer,
+                Tender.deadline,
+                Tender.source_metadata_json,
+            )
+        )
+        .where(
+            Tender.id == tender_id,
+            customer_visible_tender_condition(Tender),
+        )
+    )
+    if tender is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        )
+
+    contact = _contact_submission_response(
+        tender,
+        source_url=tender.source_url,
+        include_metadata=True,
+    )
+    contact_values = contact.model_dump()
+    has_contact_summary = any(
+        value is not None
+        for key, value in contact_values.items()
+        if key != "source_url"
+    )
+    procurement_contacts = (
+        ProcurementContactsSummary(
+            buyer_agency=contact.buyer_agency,
+            contact_person=contact.contact_person,
+            email=contact.email,
+            phone=contact.phone,
+            address=contact.address,
+            submission_method=contact.submission_method,
+            submission_deadline=contact.submission_deadline,
+            question_deadline=contact.question_deadline,
+            procedure_type=contact.procedure_type,
+            participation_instructions=contact.participation_instructions,
+            official_source_url=contact.source_url,
+            document_access_notes=contact.document_access_notes,
+        )
+        if has_contact_summary
+        else None
+    )
+    return await compose_tender_details(
+        db,
+        tender=tender,
+        user_id=current_user.id,
+        procurement_contacts=procurement_contacts,
+    )
 
 
 @router.get("/{tender_id}", response_model=TenderResponse)
@@ -4658,7 +4746,7 @@ async def get_tender(
         )
     
     summary = await _single_tender_summary(db=db, tender_id=tender.id)
-    await _apply_live_uzex_dates([tender])
+    live_dates = await _apply_live_uzex_dates([tender])
     contact_metadata_override = (
         await _world_bank_contact_metadata_override(tender)
         or await _adb_contact_metadata_override(tender)
@@ -4670,6 +4758,7 @@ async def get_tender(
         summary=summary,
         include_contact_metadata=True,
         contact_metadata_override=contact_metadata_override,
+        live_dates=live_dates.get(tender.id),
     )
 
 
@@ -4876,7 +4965,7 @@ async def get_tender_decision_snapshot(
         )
 
     summary = await _single_tender_summary(db=db, tender_id=tender.id)
-    await _apply_live_uzex_dates([tender])
+    live_dates = await _apply_live_uzex_dates([tender])
     contact_metadata_override = (
         await _world_bank_contact_metadata_override(tender)
         or await _adb_contact_metadata_override(tender)
@@ -4888,6 +4977,7 @@ async def get_tender_decision_snapshot(
         summary=summary,
         include_contact_metadata=True,
         contact_metadata_override=contact_metadata_override,
+        live_dates=live_dates.get(tender.id),
     )
     competitor_intelligence = await _build_tender_competitor_intelligence(
         db=db,

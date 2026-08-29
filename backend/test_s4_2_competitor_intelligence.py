@@ -121,18 +121,13 @@ class S42CompetitorIntelligenceStaticTests(unittest.TestCase):
         self.assertNotIn("source_metadata_json", competitor_schema)
         self.assertNotIn("raw_metadata", competitor_schema)
 
-    def test_frontend_section_uses_safe_wording(self) -> None:
+    def test_consolidated_frontend_does_not_reintroduce_unsafe_wording(self) -> None:
         page = read_frontend("app/dashboard/tenders/[tenderId]/page.tsx")
 
-        self.assertIn("Likely Competitors", page)
-        self.assertIn(
-            "No historical competitor intelligence available yet.",
-            page,
-        )
-        self.assertIn(
-            "This does not confirm participation in the current tender.",
-            page,
-        )
+        # Sprint 5.3 intentionally removes the redundant per-section competitor
+        # request from Tender Details. The Sprint 4 API contract remains intact,
+        # while the consolidated page must not imply current participation.
+        self.assertNotIn("/competitors", page)
 
         forbidden_phrases = (
             "Participants" + " in this tender",

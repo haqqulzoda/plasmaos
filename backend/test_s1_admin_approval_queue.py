@@ -63,24 +63,16 @@ class AdminApprovalQueueTests(unittest.TestCase):
         self.assertNotIn("name: 'Admin'", dashboard_layout)
         self.assertIn("'/admin/:path*'", middleware)
 
-        self.assertIn("Open approval queue", admin_page)
+        self.assertIn("Open accounts", admin_page)
         self.assertIn('href="/admin/approvals"', admin_page)
-        self.assertIn("api.get<QueueResponse>('/admin/approval-queue')", approvals_page)
-        self.assertIn("require pilots to sign in again", approvals_page)
-        self.assertIn("Only admins can change approval status", approvals_page)
+        self.assertIn("api.get<AdminAccountsPage>('/admin/accounts'", approvals_page)
+        self.assertIn("requires fresh authentication", approvals_page)
+        self.assertIn("Current effective-admin authority is required for actions", approvals_page)
         self.assertIn("redirect('/admin')", legacy_admin_page)
         self.assertIn("redirect('/admin/approvals')", legacy_approvals_page)
 
-        for endpoint in (
-            "/admin/users/${item.user.id}/approve",
-            "/admin/users/${item.user.id}/reject",
-            "/admin/users/${item.user.id}/disable",
-            "/admin/users/${item.user.id}/restore",
-            "/admin/companies/${company.id}/approve",
-            "/admin/companies/${company.id}/reject",
-            "/admin/companies/${company.id}/disable",
-        ):
-            self.assertIn(endpoint, approvals_page)
+        self.assertIn("`/admin/users/${pendingAction.resourceId}/${pendingAction.action}`", approvals_page)
+        self.assertIn("`/admin/companies/${pendingAction.resourceId}/${pendingAction.action}`", approvals_page)
 
         self.assertIn("action=ACTION_COMPANY_APPROVED", read_backend("app/api/endpoints/admin.py"))
         self.assertIn("action=ACTION_COMPANY_REJECTED", read_backend("app/api/endpoints/admin.py"))

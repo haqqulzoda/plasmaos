@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import type {
     EngagementAction,
     SaveToMyTendersResponse,
+    TenderEngagementActionContext,
     TenderEngagementActionResponse,
     TenderEngagementSummary,
 } from '@/types/engagement';
@@ -102,7 +103,7 @@ export function EngagementWorkflowActions({
     onChanged,
     onRefresh,
 }: {
-    engagement: TenderEngagementSummary;
+    engagement: TenderEngagementActionContext;
     tenderId: string;
     proposalId?: string | null;
     onChanged?: (engagement: TenderEngagementSummary) => void;

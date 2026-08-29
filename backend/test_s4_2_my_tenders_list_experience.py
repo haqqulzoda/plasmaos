@@ -140,14 +140,14 @@ def test_frontend_navigation_separates_bid_preparation_and_my_tenders() -> None:
 
 
 def test_passive_tender_detail_only_reads_and_click_handler_is_the_only_post() -> None:
-    component = source("frontend/components/tenders/SaveToMyTendersButton.tsx")
-    effect = component.split("useEffect(() =>", 1)[1].split("const save =", 1)[0]
+    component = source("frontend/components/tenders/TenderEngagementPanel.tsx")
+    effect = component.split("const save =", 1)[0]
     save = component.split("const save =", 1)[1]
     assert "api.get<TenderScopedEngagementResponse>" in effect
     assert "api.post" not in effect
     assert "api.post<SaveToMyTendersResponse>" in save
     assert "onClick={save}" in save
-    assert "Save to My Tenders again" in component
+    assert "Save to My Tenders" in component
 
 
 def test_source_status_is_separate_in_schema_and_frontend() -> None:

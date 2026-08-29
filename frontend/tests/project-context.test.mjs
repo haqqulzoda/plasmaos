@@ -10,10 +10,6 @@ import {
 } from '../types/project.ts';
 
 
-const componentSource = readFileSync(
-    new URL('../components/tenders/ProjectContextSection.tsx', import.meta.url),
-    'utf8',
-);
 const pageSource = readFileSync(
     new URL('../app/dashboard/tenders/[tenderId]/page.tsx', import.meta.url),
     'utf8',
@@ -44,13 +40,18 @@ const role = (canonicalRole, nativeRole = canonicalRole) => ({
     source_system: 'world_bank',
 });
 
-test('no Project omits the section', () => {
-    assert.match(componentSource, /if \(!context && !fallbackIdentity\) return null/);
+const projectSectionSource = pageSource
+    .split('<SectionShell id="project-context"', 2)[1]
+    .split('<SectionShell id="requirements-documents"', 1)[0];
+
+test('no Project has an explicit consolidated empty state', () => {
+    assert.match(projectSectionSource, /No canonical Project is linked to this Tender/);
 });
 
 test('linked not-enriched identity remains visible while details prepare', () => {
     assert.equal(projectFreshnessMessage('pending'), 'Project details are being prepared.');
-    assert.match(componentSource, /externalProjectId/);
+    assert.match(projectSectionSource, /project\.external_project_id/);
+    assert.match(projectSectionSource, /Project details are being prepared/);
 });
 
 test('enriched metadata renders only meaningful rows', () => {
@@ -75,19 +76,19 @@ test('missing metadata is omitted instead of rendered as placeholders', () => {
         borrower: null,
         implementing_agencies: null,
     })), []);
-    assert.doesNotMatch(componentSource, /['"]N\/A['"]|['"]undefined['"]|['"]null['"]/);
+    assert.doesNotMatch(projectSectionSource, /['"]N\/A['"]|['"]undefined['"]|['"]null['"]/);
 });
 
 test('current leadership is visible under the locked section label', () => {
-    assert.match(componentSource, />Project Leadership</);
-    assert.match(componentSource, /currentRoles\.map/);
+    assert.match(projectSectionSource, />Project Leadership</);
+    assert.match(projectSectionSource, /currentRoles\.map/);
 });
 
 test('historical leadership is separate and keyboard-accessible', () => {
-    assert.match(componentSource, /<details/);
-    assert.match(componentSource, /<summary/);
-    assert.match(componentSource, /Previous project leadership/);
-    assert.match(componentSource, /historicalRoles\.map/);
+    assert.match(projectSectionSource, /<details/);
+    assert.match(projectSectionSource, /<summary/);
+    assert.match(projectSectionSource, /Previous project leadership/);
+    assert.match(projectSectionSource, /historicalRoles\.map/);
 });
 
 test('Task Team Leader canonical label is exact', () => {
@@ -109,13 +110,13 @@ test('teamleadname never renders as TTL', () => {
 });
 
 test('no leadership email is inferred or replaced with a placeholder', () => {
-    assert.match(componentSource, /role\.email \?/);
-    assert.doesNotMatch(componentSource, /mailto:|email format|Not provided/);
+    assert.doesNotMatch(projectSectionSource, /role\.email|mailto:|email format/);
 });
 
 test('procurement contact remains an explicitly separate Tender section', () => {
-    assert.match(pageSource, /Contact &amp; Submission/);
-    assert.match(componentSource, /may differ from the tender&apos;s procurement contact/);
+    assert.match(pageSource, /title="Procurement Contacts"/);
+    assert.match(pageSource, /not Project Leadership/);
+    assert.match(projectSectionSource, /not the Tender&apos;s procurement contact/);
 });
 
 test('Project dates have explicit non-deadline labels', () => {
@@ -126,7 +127,7 @@ test('Project dates have explicit non-deadline labels', () => {
 });
 
 test('Project status presentation does not use Tender actionability helpers', () => {
-    assert.doesNotMatch(componentSource, /isTenderActionable|tenderStatusLabel|TenderStatus/);
+    assert.doesNotMatch(projectSectionSource, /isTenderActionable|tenderStatusLabel|TenderStatus/);
 });
 
 test('stale and partial states use restrained truthful messages', () => {
@@ -141,10 +142,12 @@ test('stale and partial states use restrained truthful messages', () => {
 });
 
 test('Project API failure is isolated from the Tender load', () => {
-    assert.match(pageSource, /classifyProjectContextFailure\(status\)/);
-    assert.match(pageSource, /setProjectContextFailed\(failureKind === 'endpoint_failure'\)/);
-    assert.match(pageSource, /loadProjectContext\(\)\.finally/);
-    assert.doesNotMatch(pageSource, /await loadProjectContext\(\)[\s\S]{0,80}loadTender/);
+    assert.match(pageSource, /const loadTender = useCallback/);
+    assert.match(pageSource, /const loadDetails = useCallback/);
+    assert.match(pageSource, /useEffect\(\(\) => \{ void loadTender\(\); \}, \[loadTender\]\)/);
+    assert.match(pageSource, /useEffect\(\(\) => \{ void loadDetails\(\); \}, \[loadDetails\]\)/);
+    assert.match(pageSource, /detailsError \?/);
+    assert.match(pageSource, /The source opportunity above remains available/);
 });
 
 test('Project HTTP outcomes remain semantically distinct', () => {
@@ -156,9 +159,9 @@ test('Project HTTP outcomes remain semantically distinct', () => {
 });
 
 test('source and status semantics are accessible and responsive', () => {
-    assert.match(componentSource, /aria-labelledby="project-context-heading"/);
-    assert.match(componentSource, /aria-label={`Open official/);
-    assert.match(componentSource, /role="status"/);
-    assert.match(componentSource, /sm:grid-cols-2/);
-    assert.match(componentSource, /lg:grid-cols-3/);
+    assert.match(pageSource, /<SectionShell id="project-context"/);
+    assert.match(pageSource, /aria-labelledby=\{`\$\{id\}-heading`\}/);
+    assert.match(projectSectionSource, /role="status"/);
+    assert.match(projectSectionSource, /sm:grid-cols-2/);
+    assert.match(projectSectionSource, /lg:grid-cols-4/);
 });

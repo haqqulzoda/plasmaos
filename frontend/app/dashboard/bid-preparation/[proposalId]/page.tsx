@@ -33,25 +33,6 @@ import {
   tenderStatusLabel,
 } from '@/types/tender';
 
-type TenderSyncState = 'IDLE' | 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
-
-interface TenderDocsSyncResponse {
-  message: string;
-  job_id: string;
-  tender_id: string;
-  user_id: string;
-  status: TenderSyncState;
-  progress: number;
-  error_message: string | null;
-}
-
-interface TenderSyncStatusResponse {
-  state: TenderSyncState;
-  progress: number;
-  docs_parsed: number;
-  error: string | null;
-}
-
 interface StrategicLineItem {
   name: string;
   quantity: number;
@@ -100,7 +81,6 @@ const getDeliveryDaysInt = (value: string): number => {
 const formatCurrency = (amount: number, currency: string) =>
   `${new Intl.NumberFormat('en-US').format(amount)} ${currency}`;
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const PREVIEW_LOADING_HTML = `<!doctype html>
 <html lang="en">
   <head>
@@ -250,9 +230,7 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
   const [isGeneratingDocx, setIsGeneratingDocx] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
-  const [isSyncingDocs, setIsSyncingDocs] = useState(false);
-  const [docsSyncError, setDocsSyncError] = useState<string | null>(null);
-  const [docsSyncProgress, setDocsSyncProgress] = useState(0);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [previewingDocId, setPreviewingDocId] = useState<string | null>(null);
 
@@ -266,41 +244,6 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
     const response = await api.get<TenderDocument[]>(`/tenders/${tenderId}/documents`);
     setDocuments(response.data);
   }, []);
-
-  const fetchTenderSyncStatus = useCallback(async (tenderId: string) => {
-    const response = await api.get<TenderSyncStatusResponse>(`/tenders/${tenderId}/sync-status`);
-    return response.data;
-  }, []);
-
-  const pollTenderDocumentSync = useCallback(async (tenderId: string) => {
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      const status = await fetchTenderSyncStatus(tenderId);
-      setDocsSyncProgress(status.progress);
-
-      if (status.state === 'SUCCESS') {
-        return;
-      }
-
-      if (status.state === 'FAILED') {
-        throw new Error(status.error || 'Document preparation failed.');
-      }
-
-      if (attempt > 0 && status.docs_parsed > 0) {
-        try {
-          const docsResponse = await api.get<TenderDocument[]>(`/tenders/${tenderId}/documents`);
-          if (docsResponse.data.length > 0) {
-            setDocuments(docsResponse.data);
-          }
-        } catch {
-          // Ignore intermediate fetch failures while document preparation is still running.
-        }
-      }
-
-      await wait(5000);
-    }
-
-    throw new Error('Document preparation is taking longer than expected. Please reload the page in a minute.');
-  }, [fetchTenderSyncStatus]);
 
   useEffect(() => {
     const fetchProposal = async () => {
@@ -348,94 +291,25 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
     fetchVault();
   }, []);
 
+  const proposalTenderId = proposal?.tender_id;
+
   useEffect(() => {
-    if (!proposal) return;
-
+    if (!proposalTenderId) return;
     let isActive = true;
-
-    const syncTenderDocuments = async () => {
-      setIsLoadingDocs(true);
-      setDocsSyncError(null);
-      setDocsSyncProgress(0);
-
-      try {
-        const initialStatus = await fetchTenderSyncStatus(proposal.tender_id);
-        if (!isActive) {
-          return;
-        }
-
-        setDocsSyncProgress(initialStatus.progress);
-
-        const isGizTender = proposal.tender_source_system === 'giz';
-        const shouldStartSync =
-          isTenderActionable(proposal.tender_status) &&
-          !isGizTender &&
-          (initialStatus.state === 'IDLE' || initialStatus.state === 'FAILED') &&
-          initialStatus.docs_parsed === 0;
-        const shouldPollExisting =
-          initialStatus.state === 'PENDING' || initialStatus.state === 'IN_PROGRESS';
-
-        if (initialStatus.state === 'FAILED' && !shouldStartSync) {
-          setDocsSyncError(initialStatus.error || 'Document preparation failed.');
-        }
-
-        if (shouldStartSync) {
-          setIsSyncingDocs(true);
-          const enqueueResponse = await api.post<TenderDocsSyncResponse>(
-            `/tenders/${proposal.tender_id}/sync-docs`,
-          );
-          if (!isActive) {
-            return;
-          }
-          setDocsSyncProgress(enqueueResponse.data.progress);
-        }
-
-        if (shouldStartSync || shouldPollExisting) {
-          setIsSyncingDocs(true);
-          await pollTenderDocumentSync(proposal.tender_id);
-        }
-
-        if (!isActive) {
-          return;
-        }
-
-        try {
-          await fetchTenderDocuments(proposal.tender_id);
-        } catch {
-          setDocuments([]);
-        }
-      } catch (err) {
-        if (!isActive) {
-          return;
-        }
-
-        try {
-          await fetchTenderDocuments(proposal.tender_id);
-        } catch {
-          setDocuments([]);
-        }
-
-        const axiosError = err as { response?: { data?: { detail?: string } } };
-        const thrownError = err instanceof Error ? err.message : null;
-        setDocsSyncError(
-          axiosError.response?.data?.detail ||
-          thrownError ||
-          'Tender documents are still preparing or could not be fetched right now.',
-        );
-      } finally {
-        if (isActive) {
-          setIsLoadingDocs(false);
-          setIsSyncingDocs(false);
-        }
-      }
-    };
-
-    syncTenderDocuments();
-
-    return () => {
-      isActive = false;
-    };
-  }, [fetchTenderDocuments, fetchTenderSyncStatus, pollTenderDocumentSync, proposal]);
+    setIsLoadingDocs(true);
+    setDocumentsError(null);
+    fetchTenderDocuments(proposalTenderId)
+      .catch((requestError: unknown) => {
+        if (!isActive) return;
+        setDocuments([]);
+        const detail = (requestError as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+        setDocumentsError(detail || 'Persisted Tender documents could not be loaded.');
+      })
+      .finally(() => {
+        if (isActive) setIsLoadingDocs(false);
+      });
+    return () => { isActive = false; };
+  }, [fetchTenderDocuments, proposalTenderId]);
 
   const handleGenerateStrategicProposal = async () => {
     if (!proposal) return;
@@ -671,7 +545,7 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
           className="inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Feed
+          Back to Tender Explorer
         </Link>
         <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
           {error || 'Bid Preparation not found'}
@@ -688,11 +562,11 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <Link
-            href="/dashboard/tenders"
+            href={`/dashboard/tenders/${proposal.tender_id}`}
             className="mb-2 inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Feed
+            Back to Tender Details
           </Link>
           <h1 className="text-2xl font-bold text-white">{proposal.tender_title}</h1>
           <p className="mt-1 text-sm text-zinc-400">
@@ -915,18 +789,18 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
 
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
             <h2 className="mb-4 text-lg font-semibold text-white">Tender Documents</h2>
-            {(isLoadingDocs || isSyncingDocs) && (
+            {isLoadingDocs && (
               <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Preparing tender documents ({docsSyncProgress}%).
+                Loading persisted Tender documents…
               </div>
             )}
-            {docsSyncError && (
+            {documentsError && (
               <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                {docsSyncError}
+                {documentsError}
               </div>
             )}
-            {!isLoadingDocs && !isSyncingDocs && !docsSyncError && documents.length === 0 && (
+            {!isLoadingDocs && !documentsError && documents.length === 0 && (
               <p className="text-sm text-zinc-500">No prepared documents found for this tender.</p>
             )}
             <div className="space-y-2">

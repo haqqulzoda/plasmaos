@@ -2,1124 +2,408 @@
 
 import { use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
     AlertCircle,
     ArrowLeft,
     Building2,
     Calendar,
-    CheckCircle2,
     CircleDollarSign,
     Download,
     ExternalLink,
-    FileSearch,
+    FileCheck2,
     FileText,
     Globe2,
-    Info,
+    Landmark,
     Loader2,
     Mail,
     MapPin,
     Phone,
-    Send,
+    RefreshCw,
     ShieldCheck,
+    Sparkles,
     UserRound,
     UsersRound,
 } from 'lucide-react';
 
-import { api } from '@/lib/api';
-import { ProjectContextSection } from '@/components/tenders/ProjectContextSection';
 import { TenderEngagementPanel } from '@/components/tenders/TenderEngagementPanel';
+import { api } from '@/lib/api';
+import type {
+    DetailsSectionState,
+    TenderDetailsCompliance,
+    TenderDetailsDocumentItem,
+    TenderDetailsProjectLeadershipItem,
+    TenderDetailsResponse,
+} from '@/types/tender-details';
+import type { Tender } from '@/types/tender';
 import {
-    classifyProjectContextFailure,
-    type TenderProjectContext,
-} from '@/types/project';
-import type { Tender, TenderCompetitorIntelligence, TenderDecisionSnapshot, TenderDocument } from '@/types/tender';
-import {
-    availabilityClasses,
-    competitorStatusLabel,
-    competitorConfidenceClasses,
-    competitorConfidenceLabel,
-    competitorParticipationLabel,
-    complianceUnavailableMessage,
-    contactAvailabilityLabel,
-    deadlineUrgencyClasses,
-    deadlineUrgencyLabel,
-    documentAggregateLabel,
-    documentStatusClasses,
     isTenderActionable,
     sourceBadgeClasses,
     sourceLabel,
-    tenderActionabilityMessage,
     tenderStatusClasses,
     tenderStatusLabel,
 } from '@/types/tender';
 
-type TenderSyncState = 'IDLE' | 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
-type HydrationStage = 'queued' | 'downloading' | 'processing' | 'complete' | 'partial' | 'failed';
 const EXPLORER_RESTORE_KEY = 'plasmaos:tender-explorer:return';
 const EXPLORER_FALLBACK_HREF = '/dashboard/tenders';
 
-interface TenderSyncStatusResponse {
-    state: TenderSyncState;
-    progress: number;
-    docs_parsed: number;
-    error: string | null;
-    source_system?: string | null;
-    coverage_status?: string | null;
-}
+const SECTION_LINKS = [
+    { href: '#pursuit', label: 'Pursuit' },
+    { href: '#project-context', label: 'Project' },
+    { href: '#requirements-documents', label: 'Requirements & Documents' },
+    { href: '#compliance-readiness', label: 'Compliance & Readiness' },
+    { href: '#contacts', label: 'Procurement Contacts' },
+    { href: '#bid-preparation', label: 'Bid Preparation' },
+] as const;
 
-interface GizHydrateJobResponse {
-    external_id: string;
-    tender_id: string;
-    job_id: string;
-    status: TenderSyncState;
-    progress: number;
-    queued: boolean;
-    message: string;
-}
-
-interface GizHydrateAcceptedResponse {
-    jobs: GizHydrateJobResponse[];
-}
-
-const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-
-function formatDate(value: string | null) {
-    if (!value) return 'Unknown';
-    return new Date(value).toLocaleDateString('en-US', {
-        month: 'long',
+function formatDate(value: string | null | undefined, includeTime = false) {
+    if (!value) return 'Not available';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not available';
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
         day: 'numeric',
         year: 'numeric',
-    });
+        ...(includeTime ? { hour: 'numeric', minute: '2-digit' } : {}),
+    }).format(date);
 }
 
-function timeRemaining(deadline: string | null) {
-    if (!deadline) return 'Unknown deadline';
-    const daysLeft = Math.ceil((new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (daysLeft < 0) return 'Expired';
-    if (daysLeft === 0) return 'Due today';
-    if (daysLeft === 1) return '1 day remaining';
-    return `${daysLeft} days remaining`;
+function formatFileSize(value: number | null) {
+    if (value === null || value < 0) return 'Size not reported';
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function safeField(value: string | null | undefined) {
-    return value && value.trim() ? value : 'Not specified';
-}
-
-function contactField(value: string | null | undefined) {
-    return value && value.trim() ? value : 'Not provided in source metadata';
-}
-
-function accessNotes(value: string | null | undefined) {
-    return value && value.trim() ? value : 'Open source notice for full details';
-}
-
-function contactDate(value: string | null | undefined) {
-    return value ? formatDate(value) : 'Not provided in source metadata';
-}
-
-function sourceHost(value: string | null | undefined) {
-    if (!value) return 'Open source notice for full details';
-    try {
-        return new URL(value).hostname.replace(/^www\./, '');
-    } catch {
-        return 'Source notice';
-    }
-}
-
-function priceDisplay(tender: Tender) {
+function formatMoney(tender: Tender) {
     if (tender.price_display) return tender.price_display;
-    if (typeof tender.budget === 'number' && tender.budget > 0) {
-        const amount = tender.budget.toLocaleString('en-US', {
-            maximumFractionDigits: 2,
-        });
-        return `${amount}${tender.currency ? ` ${tender.currency}` : ''}`;
-    }
-    return 'Price not specified';
+    if (tender.budget <= 0) return 'Not specified';
+    return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(tender.budget)} ${tender.currency}`;
 }
 
-function snapshotPriceDisplay(snapshot: TenderDecisionSnapshot) {
-    if (snapshot.price_display) return snapshot.price_display;
-    if (typeof snapshot.price_amount === 'number' && snapshot.price_amount > 0) {
-        const amount = snapshot.price_amount.toLocaleString('en-US', {
-            maximumFractionDigits: 2,
-        });
-        return `${amount}${snapshot.price_currency ? ` ${snapshot.price_currency}` : ''}`;
-    }
-    return 'Price not specified';
+function safeText(value: string | null | undefined, fallback = 'Not specified') {
+    return value?.trim() || fallback;
 }
 
-function snapshotCountryRegion(snapshot: TenderDecisionSnapshot) {
-    const country = safeField(snapshot.country);
-    const region = safeField(snapshot.region);
-    if (country === 'Not specified' && region === 'Not specified') return 'Not specified';
-    if (country === 'Not specified') return region;
-    if (region === 'Not specified') return country;
-    return `${country} / ${region}`;
+function apiErrorMessage(error: unknown, fallback: string) {
+    const detail = (error as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+    return typeof detail === 'string' && detail.trim() ? detail : fallback;
 }
 
-function snapshotDocumentLabel(snapshot: TenderDecisionSnapshot) {
-    return documentAggregateLabel(snapshot);
+function sectionStateClasses(state: DetailsSectionState) {
+    if (state === 'AVAILABLE') return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200';
+    if (state === 'UNAVAILABLE') return 'border-amber-500/25 bg-amber-500/10 text-amber-200';
+    return 'border-zinc-700 bg-zinc-800/60 text-zinc-400';
 }
 
-function snapshotComplianceLabel(snapshot: TenderDecisionSnapshot) {
-    if (snapshot.compliance_availability === 'available') return 'Ready for analysis';
-    if (snapshot.document_status === 'metadata_only') return 'Metadata only';
-    if (snapshot.document_status === 'access_required') return 'Access required';
-    return 'Documents required';
+function SectionStateBadge({ state }: { state: DetailsSectionState }) {
+    return (
+        <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${sectionStateClasses(state)}`}>
+            {state === 'AVAILABLE' ? 'Available' : state === 'UNAVAILABLE' ? 'Unavailable' : 'Not available'}
+        </span>
+    );
 }
 
-function SnapshotChip({
+function SectionShell({
+    id,
+    title,
+    description,
     icon,
-    label,
-    value,
-    badge,
-    badgeClasses,
+    state,
+    children,
 }: {
+    id: string;
+    title: string;
+    description: string;
     icon: ReactNode;
-    label: string;
-    value: string;
-    badge?: string;
-    badgeClasses?: string;
+    state?: DetailsSectionState;
+    children: ReactNode;
 }) {
     return (
-        <div className="inline-flex min-h-[68px] min-w-0 items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/70 px-3 py-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-zinc-700 bg-gray-950 text-zinc-300">
-                {icon}
+        <section id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-28 rounded-xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+            <div className="flex flex-col gap-3 border-b border-zinc-800 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 text-indigo-300">
+                        {icon}
+                    </div>
+                    <div>
+                        <h2 id={`${id}-heading`} className="text-base font-semibold text-white sm:text-lg">{title}</h2>
+                        <p className="mt-1 text-sm leading-5 text-zinc-500">{description}</p>
+                    </div>
+                </div>
+                {state ? <SectionStateBadge state={state} /> : null}
             </div>
-            <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold uppercase text-zinc-500">{label}</p>
-                <p className="mt-1 truncate text-sm font-medium text-zinc-100">{value}</p>
-                {badge ? (
-                    <span className={`mt-1 inline-flex max-w-full rounded-md border px-2 py-0.5 text-[11px] font-semibold ${badgeClasses ?? 'border-zinc-700 bg-zinc-800/60 text-zinc-400'}`}>
-                        <span className="truncate">{badge}</span>
-                    </span>
-                ) : null}
+            <div className="pt-4">{children}</div>
+        </section>
+    );
+}
+
+function CompactState({ state, empty, unavailable }: { state: DetailsSectionState; empty: string; unavailable: string }) {
+    const isUnavailable = state === 'UNAVAILABLE';
+    return (
+        <div role={isUnavailable ? 'status' : undefined} className={`flex items-start gap-2 rounded-lg border px-3 py-3 text-sm ${isUnavailable ? 'border-amber-500/20 bg-amber-500/5 text-amber-200' : 'border-zinc-800 bg-zinc-900/50 text-zinc-400'}`}>
+            {isUnavailable ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> : <FileText className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" aria-hidden="true" />}
+            <span>{isUnavailable ? unavailable : empty}</span>
+        </div>
+    );
+}
+
+function DetailsLoading() {
+    return (
+        <div role="status" aria-live="polite" className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+            <div className="flex items-center gap-3 text-sm text-zinc-300">
+                <Loader2 className="h-4 w-4 animate-spin text-indigo-300" aria-hidden="true" />
+                Loading additional Tender details…
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {[0, 1, 2].map((item) => <div key={item} className="h-20 animate-pulse rounded-lg bg-zinc-900" />)}
             </div>
         </div>
     );
 }
 
-function filenameForDocument(doc: TenderDocument) {
-    return doc.display_name || doc.original_filename || (doc.file_type ? `document.${doc.file_type}` : 'document');
+function leadershipRoleLabel(role: TenderDetailsProjectLeadershipItem) {
+    if (role.native_role.trim().toLowerCase() === 'teamleadname') return `${sourceLabel(role.source_system)} project team`;
+    if (role.canonical_role === 'TASK_TEAM_LEADER') return 'Task Team Leader';
+    if (role.canonical_role === 'CO_TASK_TEAM_LEADER') return 'Co-Task Team Leader';
+    if (role.canonical_role === 'PROJECT_TASK_MANAGER') return 'Project Task Manager';
+    return role.native_role || 'Project role';
 }
 
-function documentExtension(doc: TenderDocument) {
-    const filename = filenameForDocument(doc).split('?')[0].split('#')[0];
-    const extension = filename.includes('.') ? filename.split('.').pop() : doc.file_type;
-    return (extension || '').trim().toLowerCase();
+function compliancePresentation(compliance: TenderDetailsCompliance, state: DetailsSectionState) {
+    const failed = compliance.execution_state === 'FAILED' || state === 'UNAVAILABLE';
+    const partial = compliance.compliance_completeness === 'PARTIAL';
+    const legacy = compliance.version_origin === 'LEGACY_BACKFILL';
+    if (failed) return { label: 'Analysis failed', classes: 'border-red-500/30 bg-red-500/10 text-red-200', detail: 'The latest analysis is unavailable and must not be treated as compliant.' };
+    if (partial) return { label: 'Partial analysis', classes: 'border-amber-500/30 bg-amber-500/10 text-amber-200', detail: 'Coverage is partial. Review the Compliance workbench before making a decision.' };
+    if (legacy) return { label: 'Legacy analysis', classes: 'border-zinc-600 bg-zinc-800/70 text-zinc-200', detail: 'This historical result has limited modern provenance.' };
+    return { label: compliance.decision_label || compliance.execution_state, classes: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200', detail: 'Summary from the latest immutable Compliance version.' };
 }
 
-function isUnsupportedDocument(doc: TenderDocument) {
-    return ['doc', 'xls', 'xlsx', 'rtf', 'rar', '7z', 'tar', 'gz'].includes(documentExtension(doc));
-}
-
-function downloadStatusText(doc: TenderDocument) {
-    if (doc.analysis_text_available) return 'Ready for analysis';
-    if (doc.download_status === 'processing') return 'Processing';
-    if (doc.download_status === 'metadata_only' || doc.download_status === 'access_required') return 'Document discovered';
-    if (doc.download_status === 'missing_file') return 'Preparation failed';
-    if (doc.download_status === 'failed' && isUnsupportedDocument(doc)) return 'Unsupported format';
-    if (doc.download_status === 'failed') return 'Preparation failed';
-    if (doc.download_status === 'available') return 'Document discovered';
-    return 'Document discovered';
-}
-
-function downloadStatusClasses(doc: TenderDocument) {
-    if (doc.analysis_text_available) return 'text-emerald-300';
-    if (doc.download_status === 'processing') return 'text-indigo-300';
-    if (doc.download_status === 'failed' && isUnsupportedDocument(doc)) return 'text-amber-300';
-    if (doc.download_status === 'failed' || doc.download_status === 'missing_file') return 'text-red-300';
-    return 'text-amber-300';
-}
-
-function documentAggregateSummary(tender: Tender) {
-    const parts = [`${tender.document_count} captured records`];
-    parts.push(`${tender.downloadable_document_count ?? tender.available_document_count} downloadable`);
-    if (tender.missing_file_document_count > 0) {
-        parts.push(`${tender.missing_file_document_count} need preparation`);
-    }
-    if (tender.parsed_document_count > 0 || tender.has_compiled_text) {
-        parts.push('analysis text available');
-    }
-    return `${parts.join(', ')}.`;
-}
-
-function hydrationStageFromStatus(status: TenderSyncStatusResponse): HydrationStage {
-    const coverage = (status.coverage_status || '').toLowerCase();
-    if (status.state === 'PENDING') return 'queued';
-    if (status.state === 'IN_PROGRESS') return status.progress < 60 ? 'downloading' : 'processing';
-    if (status.state === 'SUCCESS') return coverage === 'partial' ? 'partial' : 'complete';
-    if (status.state === 'FAILED') return 'failed';
-    if (status.docs_parsed > 0) return coverage === 'partial' ? 'partial' : 'complete';
-    return 'queued';
-}
-
-function hydrationStageLabel(stage: HydrationStage | null) {
-    if (stage === 'queued') return 'queued';
-    if (stage === 'downloading') return 'downloading';
-    if (stage === 'processing') return 'processing';
-    if (stage === 'complete') return 'complete';
-    if (stage === 'partial') return 'partial coverage';
-    if (stage === 'failed') return 'failed';
-    return 'queued';
+function documentAvailability(item: TenderDetailsDocumentItem) {
+    if (item.availability === 'AVAILABLE') return { label: 'Available', classes: 'text-emerald-300' };
+    if (item.availability === 'UNAVAILABLE') return { label: 'Unavailable', classes: 'text-red-300' };
+    return { label: 'Metadata only', classes: 'text-amber-300' };
 }
 
 export default function TenderDetailPage({ params }: { params: Promise<{ tenderId: string }> }) {
-    const router = useRouter();
     const { tenderId } = use(params);
     const [returnHref, setReturnHref] = useState(EXPLORER_FALLBACK_HREF);
     const [tender, setTender] = useState<Tender | null>(null);
-    const [decisionSnapshot, setDecisionSnapshot] = useState<TenderDecisionSnapshot | null>(null);
-    const [documents, setDocuments] = useState<TenderDocument[]>([]);
-    const [competitorIntel, setCompetitorIntel] = useState<TenderCompetitorIntelligence | null>(null);
-    const [projectContext, setProjectContext] = useState<TenderProjectContext | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(true);
-    const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
-    const [isLoadingCompetitors, setIsLoadingCompetitors] = useState(true);
-    const [isLoadingProject, setIsLoadingProject] = useState(true);
-    const [openingDocId, setOpeningDocId] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [snapshotError, setSnapshotError] = useState<string | null>(null);
-    const [documentError, setDocumentError] = useState<string | null>(null);
-    const [competitorError, setCompetitorError] = useState<string | null>(null);
-    const [projectContextFailed, setProjectContextFailed] = useState(false);
-    const [isPreparingDocuments, setIsPreparingDocuments] = useState(false);
-    const [prepareProgress, setPrepareProgress] = useState(0);
-    const [prepareStage, setPrepareStage] = useState<HydrationStage | null>(null);
-    const [prepareError, setPrepareError] = useState<string | null>(null);
+    const [details, setDetails] = useState<TenderDetailsResponse | null>(null);
+    const [isLoadingTender, setIsLoadingTender] = useState(true);
+    const [isLoadingDetails, setIsLoadingDetails] = useState(true);
+    const [tenderError, setTenderError] = useState<string | null>(null);
+    const [detailsError, setDetailsError] = useState<string | null>(null);
+    const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
+    const [documentActionError, setDocumentActionError] = useState<string | null>(null);
 
     useEffect(() => {
         const rawState = window.sessionStorage.getItem(EXPLORER_RESTORE_KEY);
         if (!rawState) return;
-
         try {
             const explorerUrl = JSON.parse(rawState)?.explorerUrl;
-            if (typeof explorerUrl === 'string' && explorerUrl.startsWith(EXPLORER_FALLBACK_HREF)) {
-                setReturnHref(explorerUrl);
-            }
+            if (typeof explorerUrl === 'string' && explorerUrl.startsWith(EXPLORER_FALLBACK_HREF)) setReturnHref(explorerUrl);
         } catch {
             window.sessionStorage.removeItem(EXPLORER_RESTORE_KEY);
         }
     }, []);
 
-    const loadTender = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-        if (!silent) {
-            setIsLoading(true);
-            setError(null);
-        }
+    const loadTender = useCallback(async () => {
+        setIsLoadingTender(true);
+        setTenderError(null);
         try {
-            const { data } = await api.get<Tender>(`/tenders/${tenderId}`);
-            setTender(data);
-            return data;
-        } catch (err) {
-            const axiosErr = err as { response?: { data?: { detail?: string } } };
-            setError(axiosErr.response?.data?.detail || 'Tender could not be loaded.');
-            throw err;
+            const response = await api.get<Tender>(`/tenders/${tenderId}`);
+            setTender(response.data);
+        } catch (error: unknown) {
+            setTender(null);
+            setTenderError(apiErrorMessage(error, 'Tender could not be loaded.'));
         } finally {
-            if (!silent) setIsLoading(false);
+            setIsLoadingTender(false);
         }
     }, [tenderId]);
 
-    const loadDecisionSnapshot = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-        if (!silent) {
-            setIsLoadingSnapshot(true);
-            setSnapshotError(null);
-        }
+    const loadDetails = useCallback(async () => {
+        setIsLoadingDetails(true);
+        setDetailsError(null);
         try {
-            const { data } = await api.get<TenderDecisionSnapshot>(`/tenders/${tenderId}/decision-snapshot`);
-            setDecisionSnapshot(data);
-            return data;
-        } catch (err) {
-            const axiosErr = err as { response?: { data?: { detail?: string } } };
-            setDecisionSnapshot(null);
-            setSnapshotError(axiosErr.response?.data?.detail || 'Decision snapshot could not be loaded.');
-            throw err;
+            const response = await api.get<TenderDetailsResponse>(`/tenders/${tenderId}/details`);
+            setDetails(response.data);
+        } catch (error: unknown) {
+            setDetails(null);
+            setDetailsError(apiErrorMessage(error, 'Additional Tender details could not be loaded.'));
         } finally {
-            if (!silent) setIsLoadingSnapshot(false);
+            setIsLoadingDetails(false);
         }
     }, [tenderId]);
 
-    const loadDocuments = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-        if (!silent) {
-            setIsLoadingDocuments(true);
-            setDocumentError(null);
-        }
-        try {
-            const { data } = await api.get<TenderDocument[]>(`/tenders/${tenderId}/documents`);
-            const nextDocuments = Array.isArray(data) ? data : [];
-            setDocuments(nextDocuments);
-            return nextDocuments;
-        } catch (err) {
-            const axiosErr = err as { response?: { data?: { detail?: string } } };
-            setDocuments([]);
-            setDocumentError(axiosErr.response?.data?.detail || 'Document metadata could not be loaded.');
-            throw err;
-        } finally {
-            if (!silent) setIsLoadingDocuments(false);
-        }
-    }, [tenderId]);
-
-    const loadCompetitors = useCallback(async () => {
-        setIsLoadingCompetitors(true);
-        setCompetitorError(null);
-        try {
-            const { data } = await api.get<TenderCompetitorIntelligence>(`/tenders/${tenderId}/competitors`);
-            setCompetitorIntel(data);
-        } catch (err) {
-            const axiosErr = err as { response?: { data?: { detail?: string } } };
-            setCompetitorIntel(null);
-            setCompetitorError(axiosErr.response?.data?.detail || 'Competitor intelligence could not be loaded.');
-        } finally {
-            setIsLoadingCompetitors(false);
-        }
-    }, [tenderId]);
-
-    const loadProjectContext = useCallback(async () => {
-        setIsLoadingProject(true);
-        setProjectContextFailed(false);
-        try {
-            const { data } = await api.get<TenderProjectContext | null>(`/tenders/${tenderId}/project`);
-            setProjectContext(data ?? null);
-        } catch (error) {
-            const status = (error as { response?: { status?: number } }).response?.status;
-            const failureKind = classifyProjectContextFailure(status);
-            setProjectContext(null);
-            setProjectContextFailed(failureKind === 'endpoint_failure');
-        } finally {
-            setIsLoadingProject(false);
-        }
-    }, [tenderId]);
-
-    const fetchTenderSyncStatus = useCallback(async () => {
-        const { data } = await api.get<TenderSyncStatusResponse>(`/tenders/${tenderId}/sync-status`);
-        return data;
-    }, [tenderId]);
-
-    const refreshTenderAnalysisState = useCallback(async () => {
-        await Promise.allSettled([
-            loadTender({ silent: true }),
-            loadDecisionSnapshot({ silent: true }),
-            loadDocuments({ silent: true }),
-        ]);
-    }, [loadDecisionSnapshot, loadDocuments, loadTender]);
-
-    const pollGizHydration = useCallback(async () => {
-        for (let attempt = 0; attempt < 80; attempt += 1) {
-            const status = await fetchTenderSyncStatus();
-            const stage = hydrationStageFromStatus(status);
-            setPrepareStage(stage);
-            setPrepareProgress(status.progress);
-
-            if (status.state === 'SUCCESS') {
-                await refreshTenderAnalysisState();
-                return;
-            }
-
-            if (status.state === 'FAILED') {
-                throw new Error(status.error || 'Document preparation failed.');
-            }
-
-            if (attempt > 0 && status.progress >= 60) {
-                await loadDocuments({ silent: true }).catch(() => undefined);
-            }
-
-            await wait(3000);
-        }
-
-        throw new Error('Document preparation is taking longer than expected. Reload this page in a minute.');
-    }, [fetchTenderSyncStatus, loadDocuments, refreshTenderAnalysisState]);
+    useEffect(() => { void loadTender(); }, [loadTender]);
+    useEffect(() => { void loadDetails(); }, [loadDetails]);
 
     useEffect(() => {
-        let isActive = true;
+        if (isLoadingDetails || !window.location.hash) return;
+        const target = document.querySelector(window.location.hash);
+        if (!target) return;
+        window.requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
+    }, [isLoadingDetails]);
 
-        loadTender().catch(() => undefined).finally(() => {
-            if (!isActive) return;
-        });
-
-        return () => {
-            isActive = false;
-        };
-    }, [loadTender]);
-
-    useEffect(() => {
-        let isActive = true;
-
-        loadDecisionSnapshot().catch(() => undefined).finally(() => {
-            if (!isActive) return;
-        });
-
-        return () => {
-            isActive = false;
-        };
-    }, [loadDecisionSnapshot]);
-
-    useEffect(() => {
-        let isActive = true;
-
-        loadDocuments().catch(() => undefined).finally(() => {
-            if (!isActive) return;
-        });
-
-        return () => {
-            isActive = false;
-        };
-    }, [loadDocuments]);
-
-    useEffect(() => {
-        let isActive = true;
-
-        loadCompetitors().finally(() => {
-            if (!isActive) return;
-        });
-
-        return () => {
-            isActive = false;
-        };
-    }, [loadCompetitors]);
-
-    useEffect(() => {
-        let isActive = true;
-
-        loadProjectContext().finally(() => {
-            if (!isActive) return;
-        });
-
-        return () => {
-            isActive = false;
-        };
-    }, [loadProjectContext]);
-
-    const handlePrepareGizDocuments = useCallback(async () => {
-        if (!tender || tender.source_system !== 'giz' || isPreparingDocuments) return;
-
-        setIsPreparingDocuments(true);
-        setPrepareError(null);
-        setDocumentError(null);
-        setPrepareStage('queued');
-        setPrepareProgress(0);
-
+    const openDocument = useCallback(async (item: TenderDetailsDocumentItem) => {
+        if (item.availability !== 'AVAILABLE' || openingDocumentId) return;
+        setOpeningDocumentId(item.document_id);
+        setDocumentActionError(null);
         try {
-            const response = await api.post<GizHydrateAcceptedResponse>('/tenders/sources/giz/hydrate', {
-                external_ids: [tender.external_id],
-                force: false,
-            });
-            const job = response.data.jobs.find((item) => item.external_id === tender.external_id) ?? response.data.jobs[0];
-            if (job) {
-                setPrepareProgress(job.progress);
-                setPrepareStage(
-                    job.status === 'PENDING'
-                        ? 'queued'
-                        : job.status === 'IN_PROGRESS'
-                            ? 'downloading'
-                            : job.status === 'FAILED'
-                                ? 'failed'
-                                : 'complete',
-                );
-                if (job.status === 'FAILED') {
-                    throw new Error(job.message || 'Document preparation failed.');
-                }
-            }
-            await pollGizHydration();
-        } catch (err) {
-            const axiosErr = err as { response?: { data?: { detail?: string | { message?: string } } } };
-            const detail = axiosErr.response?.data?.detail;
-            const detailMessage = typeof detail === 'string' ? detail : detail?.message;
-            setPrepareStage('failed');
-            setPrepareError(
-                detailMessage ||
-                (err instanceof Error ? err.message : null) ||
-                'Document preparation failed.',
-            );
-        } finally {
-            setIsPreparingDocuments(false);
-        }
-    }, [isPreparingDocuments, pollGizHydration, tender]);
-
-    const actionable = isTenderActionable(tender);
-    const canAnalyze = actionable && Boolean(tender?.compliance_analysis_available);
-    const unavailableMessage = useMemo(
-        () => tender
-            ? actionable
-                ? complianceUnavailableMessage(tender)
-                : tenderActionabilityMessage(tender.status)
-            : 'Prepare documents for analysis',
-        [actionable, tender],
-    );
-    const isPreparationTerminal = prepareStage === 'complete' || prepareStage === 'partial' || prepareStage === 'failed';
-    const showPreparationBanner = Boolean(
-        tender?.document_status === 'processing' ||
-        isPreparingDocuments ||
-        prepareStage,
-    );
-    const contact = tender?.contact_submission ?? null;
-    const contactSourceUrl = contact?.source_url || tender?.source_url || null;
-    const competitorGroups = competitorIntel?.groups ?? [];
-    const projectFallbackIdentity = (
-        (isLoadingProject || projectContextFailed) &&
-        tender?.source_system === 'world_bank' &&
-        tender.project_id
-    ) ? {
-            sourceSystem: tender.source_system,
-            externalProjectId: tender.project_id,
-        } : null;
-
-    const handleOpenDocument = useCallback(async (doc: TenderDocument) => {
-        if (doc.download_status !== 'available' || openingDocId) return;
-        setOpeningDocId(doc.id);
-        setDocumentError(null);
-
-        try {
-            const response = await api.get(`/tenders/documents/${doc.id}/download`, {
-                responseType: 'blob',
-            });
-            const contentType = response.headers['content-type'] || 'application/octet-stream';
-            const blob = new Blob([response.data], { type: contentType });
-            const url = URL.createObjectURL(blob);
-
+            const response = await api.get(`/tenders/documents/${item.document_id}/download`, { responseType: 'blob' });
+            const contentType = response.headers['content-type'] || item.content_type || 'application/octet-stream';
+            const url = URL.createObjectURL(new Blob([response.data], { type: contentType }));
             const link = document.createElement('a');
             link.href = url;
             if (contentType.includes('pdf')) {
                 link.target = '_blank';
                 link.rel = 'noreferrer';
             } else {
-                link.download = filenameForDocument(doc);
+                link.download = item.display_name;
             }
             document.body.appendChild(link);
             link.click();
             link.remove();
             window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-        } catch (err) {
-            const axiosErr = err as { response?: { data?: { detail?: string } } };
-            setDocumentError(axiosErr.response?.data?.detail || 'Document could not be opened from Plasma storage.');
+        } catch (error: unknown) {
+            setDocumentActionError(apiErrorMessage(error, 'This document could not be opened with your current access.'));
         } finally {
-            setOpeningDocId(null);
+            setOpeningDocumentId(null);
         }
-    }, [openingDocId]);
+    }, [openingDocumentId]);
 
-    if (isLoading) {
-        return (
-            <div className="flex h-64 items-center justify-center">
-                <Loader2 className="h-7 w-7 animate-spin text-indigo-400" />
-            </div>
-        );
+    const actionable = isTenderActionable(tender);
+    const project = details?.project_context.data ?? null;
+    const leadership = details?.project_leadership.data ?? null;
+    const contacts = details?.procurement_contacts.data ?? null;
+    const requirements = details?.requirements.data ?? null;
+    const documents = details?.documents.data ?? null;
+    const compliance = details?.compliance.data ?? null;
+    const readiness = details?.company_readiness.data ?? null;
+    const pursuit = details?.pursuit.data ?? null;
+    const bidPreparation = details?.bid_preparation.data ?? null;
+    const currentRoles = useMemo(() => leadership?.items.filter((role) => role.is_current) ?? [], [leadership]);
+    const historicalRoles = useMemo(() => leadership?.items.filter((role) => !role.is_current) ?? [], [leadership]);
+
+    if (isLoadingTender) {
+        return <div role="status" aria-live="polite" className="space-y-4"><div className="h-5 w-32 animate-pulse rounded bg-zinc-800" /><div className="h-56 animate-pulse rounded-xl border border-zinc-800 bg-zinc-950" /><span className="sr-only">Loading Tender…</span></div>;
     }
 
-    if (error || !tender) {
+    if (tenderError || !tender) {
         return (
             <div className="space-y-4">
-                <Link href={returnHref} className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to tenders
-                </Link>
-                <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
-                    {error || 'Tender not found.'}
-                </div>
+                <Link href={returnHref} className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to tenders</Link>
+                <div role="alert" className="rounded-xl border border-red-500/25 bg-red-500/10 p-5 text-sm text-red-200">{tenderError || 'Tender not found.'}</div>
             </div>
         );
     }
 
     return (
-        <div className="space-y-5">
-            <div className="flex items-center justify-between gap-4">
-                <Link href={returnHref} className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to tenders
-                </Link>
-                <div className="flex items-center gap-2">
-                    {tender.source_url && (
-                        <a
-                            href={tender.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-indigo-500 hover:text-indigo-200"
-                        >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            Open source notice
-                        </a>
-                    )}
-                    <button
-                        onClick={() => router.push(`/dashboard/tenders/${tender.id}/compliance`)}
-                        disabled={!canAnalyze}
-                        title={!canAnalyze ? unavailableMessage : 'Open compliance analysis'}
-                        className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
-                    >
-                        <ShieldCheck className="h-3.5 w-3.5" />
-                        Compliance
-                    </button>
+        <main className="space-y-5 pb-10">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <Link href={returnHref} className="inline-flex w-fit items-center gap-2 text-sm text-zinc-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to tenders</Link>
+                <div className="flex flex-wrap gap-2">
+                    {tender.source_url ? <a href={tender.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 hover:border-indigo-500 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />Open source notice</a> : null}
+                    <Link href={`/dashboard/tenders/${tender.id}/compliance`} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />Open Compliance</Link>
                 </div>
             </div>
 
-            <TenderEngagementPanel tenderId={tender.id} />
-
-            <section className="rounded-lg border border-gray-800 bg-gray-950 p-5">
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                    <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${sourceBadgeClasses(tender.source_system)}`}>
-                        {sourceLabel(tender.source_system)}
-                    </span>
-                    <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${tenderStatusClasses(tender.status)}`}>
-                        {tenderStatusLabel(tender.status)}
-                    </span>
-                    <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${documentStatusClasses(tender.document_status)}`}>
-                        {documentAggregateLabel(tender)}
-                    </span>
-                    {!canAnalyze && (
-                        <span className="inline-flex rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-300">
-                            {unavailableMessage}
-                        </span>
-                    )}
+            <header className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+                <div className="border-b border-zinc-800 bg-gradient-to-r from-indigo-500/10 via-transparent to-sky-500/5 p-5 sm:p-6">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${sourceBadgeClasses(tender.source_system)}`}>Source: {sourceLabel(tender.source_system)}</span>
+                        <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${tenderStatusClasses(tender.status)}`}>Tender status: {tenderStatusLabel(tender.status)}</span>
+                        <span className="inline-flex rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs font-medium text-zinc-400">Reference: {tender.external_id}</span>
+                    </div>
+                    <h1 className="mt-4 max-w-5xl text-2xl font-bold leading-tight text-white sm:text-3xl">{tender.title}</h1>
+                    <p className="mt-3 max-w-5xl text-sm leading-6 text-zinc-400">{tender.description || 'No source description was provided.'}</p>
                 </div>
-                <h1 className="text-2xl font-bold leading-snug text-white">{tender.title}</h1>
-                <p className="mt-2 max-w-4xl text-sm leading-6 text-zinc-400">{tender.description || 'No source description provided.'}</p>
-            </section>
-
-            {/* <section className="rounded-lg border border-zinc-800 bg-gray-950 p-4 shadow-[0_0_0_1px_rgba(16,185,129,0.06)]">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-emerald-300" />
-                        <h2 className="text-lg font-semibold text-white">Decision Snapshot</h2>
-                    </div>
-                    {isLoadingSnapshot ? (
-                        <span className="inline-flex items-center gap-2 text-xs text-zinc-500">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            Loading
-                        </span>
-                    ) : null}
-                </div>
-
-                {snapshotError ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                        <AlertCircle className="h-4 w-4" />
-                        {snapshotError}
-                    </div>
-                ) : isLoadingSnapshot ? (
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                        {Array.from({ length: 9 }).map((_, index) => (
-                            <div key={index} className="h-[68px] rounded-md border border-zinc-800 bg-zinc-900/50" />
-                        ))}
-                    </div>
-                ) : decisionSnapshot ? (
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                        <SnapshotChip
-                            icon={<Globe2 className="h-4 w-4" />}
-                            label="Source"
-                            value={sourceLabel(decisionSnapshot.source)}
-                            badge={decisionSnapshot.source_notice_available ? 'Source notice available' : 'Source notice missing'}
-                            badgeClasses={availabilityClasses(decisionSnapshot.source_notice_available ? 'available' : 'unavailable')}
-                        />
-                        <SnapshotChip
-                            icon={<MapPin className="h-4 w-4" />}
-                            label="Country / Region"
-                            value={snapshotCountryRegion(decisionSnapshot)}
-                        />
-                        <SnapshotChip
-                            icon={<Building2 className="h-4 w-4" />}
-                            label="Service"
-                            value={safeField(decisionSnapshot.service_category)}
-                        />
-                        <SnapshotChip
-                            icon={<Calendar className="h-4 w-4" />}
-                            label="Deadline"
-                            value={formatDate(decisionSnapshot.deadline)}
-                            badge={deadlineUrgencyLabel(decisionSnapshot.deadline_urgency)}
-                            badgeClasses={deadlineUrgencyClasses(decisionSnapshot.deadline_urgency)}
-                        />
-                        <SnapshotChip
-                            icon={<CircleDollarSign className="h-4 w-4" />}
-                            label="Budget"
-                            value={snapshotPriceDisplay(decisionSnapshot)}
-                        />
-                        <SnapshotChip
-                            icon={<FileText className="h-4 w-4" />}
-                            label="Documents"
-                            value={snapshotDocumentLabel(decisionSnapshot)}
-                        />
-                        <SnapshotChip
-                            icon={<UserRound className="h-4 w-4" />}
-                            label="Contact"
-                            value={contactAvailabilityLabel(decisionSnapshot.contact_availability)}
-                        />
-                        <SnapshotChip
-                            icon={<UsersRound className="h-4 w-4" />}
-                            label="Competitors"
-                            value={competitorStatusLabel(decisionSnapshot.competitor_intelligence_status)}
-                        />
-                        <SnapshotChip
-                            icon={<ShieldCheck className="h-4 w-4" />}
-                            label="Compliance"
-                            value={snapshotComplianceLabel(decisionSnapshot)}
-                        />
-                    </div>
-                ) : (
-                    <div className="rounded-lg border border-zinc-800 bg-gray-900 px-4 py-5 text-sm text-zinc-400">
-                        Decision snapshot unavailable.
-                    </div>
-                )}
-            </section> */}
-
-            <section className="rounded-lg border border-indigo-500/25 bg-gray-950 p-5 shadow-[0_0_0_1px_rgba(99,102,241,0.08)]">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                        <Send className="h-4 w-4 text-indigo-300" />
-                        <h2 className="text-lg font-semibold text-white">Contact &amp; Submission</h2>
-                    </div>
-                    <span className={`hidden rounded-md border px-2 py-1 text-xs font-semibold sm:inline-flex ${sourceBadgeClasses(tender.source_system)}`}>
-                        {sourceLabel(tender.source_system)}
-                    </span>
-                </div>
-
-                <dl className="grid grid-cols-1 gap-x-6 gap-y-4 text-sm md:grid-cols-2 xl:grid-cols-4">
-                    <div>
-                        <dt className="text-xs uppercase text-zinc-500">Buyer / agency</dt>
-                        <dd className="mt-1 text-zinc-100">{contactField(contact?.buyer_agency || tender.buyer)}</dd>
-                    </div>
-                    <div>
-                        <dt className="text-xs uppercase text-zinc-500">Contact person</dt>
-                        <dd className="mt-1 flex items-center gap-2 text-zinc-200">
-                            <UserRound className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                            <span>{contactField(contact?.contact_person)}</span>
-                        </dd>
-                    </div>
-                    <div>
-                        <dt className="text-xs uppercase text-zinc-500">Email</dt>
-                        <dd className="mt-1 flex min-w-0 items-center gap-2 text-zinc-200">
-                            <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                            {contact?.email ? (
-                                <a href={`mailto:${contact.email}`} className="truncate text-indigo-200 hover:text-indigo-100">
-                                    {contact.email}
-                                </a>
-                            ) : (
-                                <span>Not provided in source metadata</span>
-                            )}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt className="text-xs uppercase text-zinc-500">Phone</dt>
-                        <dd className="mt-1 flex items-center gap-2 text-zinc-200">
-                            <Phone className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                            {contact?.phone ? (
-                                <a href={`tel:${contact.phone}`} className="text-indigo-200 hover:text-indigo-100">
-                                    {contact.phone}
-                                </a>
-                            ) : (
-                                <span>Not provided in source metadata</span>
-                            )}
-                        </dd>
-                    </div>
-                    <div className="xl:col-span-2">
-                        <dt className="text-xs uppercase text-zinc-500">Address</dt>
-                        <dd className="mt-1 flex items-start gap-2 text-zinc-200">
-                            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                            <span>{contactField(contact?.address)}</span>
-                        </dd>
-                    </div>
-                    <div>
-                        <dt className="text-xs uppercase text-zinc-500">Submission deadline</dt>
-                        <dd className="mt-1 font-medium text-zinc-100">{contactDate(contact?.submission_deadline || tender.deadline)}</dd>
-                    </div>
-                    <div>
-                        <dt className="text-xs uppercase text-zinc-500">Question deadline</dt>
-                        <dd className="mt-1 text-zinc-200">{contactDate(contact?.question_deadline)}</dd>
-                    </div>
-                    <div>
-                        <dt className="text-xs uppercase text-zinc-500">Procedure type</dt>
-                        <dd className="mt-1 text-zinc-200">{contactField(contact?.procedure_type || tender.procurement_method)}</dd>
-                    </div>
-                    <div className="xl:col-span-2">
-                        <dt className="text-xs uppercase text-zinc-500">Submission method</dt>
-                        <dd className="mt-1 text-zinc-200">{contactField(contact?.submission_method)}</dd>
-                    </div>
-                    <div className="xl:col-span-2">
-                        <dt className="text-xs uppercase text-zinc-500">Participation / access</dt>
-                        <dd className="mt-1 text-zinc-200">{accessNotes(contact?.participation_instructions)}</dd>
-                    </div>
-                    <div className="xl:col-span-2">
-                        <dt className="text-xs uppercase text-zinc-500">Document access notes</dt>
-                        <dd className="mt-1 text-zinc-200">{accessNotes(contact?.document_access_notes)}</dd>
-                    </div>
+                <dl className="grid grid-cols-1 divide-y divide-zinc-800 sm:grid-cols-2 xl:grid-cols-4 xl:divide-x xl:divide-y-0">
+                    {[
+                        { label: 'Procuring entity', value: safeText(tender.buyer), icon: <Building2 className="h-4 w-4" /> },
+                        { label: 'Tender deadline', value: formatDate(tender.deadline), icon: <Calendar className="h-4 w-4" /> },
+                        { label: 'Estimated value', value: formatMoney(tender), icon: <CircleDollarSign className="h-4 w-4" /> },
+                        { label: 'Location', value: [tender.country, tender.region].filter(Boolean).join(' / ') || 'Not specified', icon: <MapPin className="h-4 w-4" /> },
+                    ].map((item) => <div key={item.label} className="min-w-0 p-4"><dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{item.icon}{item.label}</dt><dd className="mt-2 break-words text-sm font-medium text-zinc-100">{item.value}</dd></div>)}
                 </dl>
+            </header>
 
-                <dl className="mt-5 border-t border-zinc-800 pt-4">
-                    <dt className="text-xs uppercase text-zinc-500">Source notice link</dt>
-                    <dd className="mt-2">
-                        {contactSourceUrl ? (
-                            <a
-                                href={contactSourceUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:border-indigo-500 hover:text-indigo-200"
-                            >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                {sourceHost(contactSourceUrl)}
-                            </a>
-                        ) : (
-                            <span className="text-sm text-zinc-400">Open source notice for full details</span>
-                        )}
-                    </dd>
-                </dl>
-            </section>
+            <nav aria-label="Tender detail sections" className="sticky top-16 z-20 -mx-1 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/95 px-2 py-2 shadow-xl backdrop-blur">
+                <div className="flex min-w-max gap-1">{SECTION_LINKS.map((item) => <a key={item.href} href={item.href} className="rounded-lg px-3 py-2 text-xs font-semibold text-zinc-400 hover:bg-zinc-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">{item.label}</a>)}</div>
+            </nav>
 
-            <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                <div className="rounded-lg border border-gray-800 bg-gray-950 p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
-                        <FileSearch className="h-4 w-4 text-indigo-300" />
-                        Source Identity
+            {isLoadingDetails ? <DetailsLoading /> : null}
+            {detailsError ? <div role="alert" className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><div><p className="font-semibold">Additional Tender details could not be loaded.</p><p className="mt-1 text-amber-200/80">{detailsError} The source opportunity above remains available.</p></div></div><button type="button" onClick={() => void loadDetails()} className="inline-flex w-fit items-center gap-2 rounded-lg border border-amber-400/30 px-3 py-2 text-xs font-semibold hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />Retry details</button></div> : null}
+
+            {details ? (
+                <>
+                    <div id="pursuit" className="scroll-mt-28">
+                        <TenderEngagementPanel tenderId={tender.id} proposalContext engagementData={pursuit} proposalIdData={bidPreparation?.proposal_id ?? null} loadingData={false} canStartNew={actionable} onRefresh={loadDetails} />
+                        {pursuit ? <p className="mt-2 px-1 text-xs text-zinc-500">Pursuit status changed {formatDate(pursuit.status_changed_at, true)}. Tender status remains a separate source fact.</p> : null}
                     </div>
-                    <dl className="space-y-3 text-sm">
-                        <div><dt className="text-xs uppercase text-zinc-500">External ID</dt><dd className="mt-1 text-zinc-200">{tender.external_id}</dd></div>
-                        <div><dt className="text-xs uppercase text-zinc-500">Project ID</dt><dd className="mt-1 text-zinc-200">{safeField(tender.project_id)}</dd></div>
-                        <div><dt className="text-xs uppercase text-zinc-500">Notice Type</dt><dd className="mt-1 text-zinc-200">{safeField(tender.notice_type)}</dd></div>
-                    </dl>
-                </div>
 
-                <div className="rounded-lg border border-gray-800 bg-gray-950 p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
-                        <Building2 className="h-4 w-4 text-emerald-300" />
-                        Buyer And Market
-                    </div>
-                    <dl className="space-y-3 text-sm">
-                        <div><dt className="text-xs uppercase text-zinc-500">Buyer</dt><dd className="mt-1 text-zinc-200">{safeField(tender.buyer)}</dd></div>
-                        <div><dt className="text-xs uppercase text-zinc-500">Country / Region</dt><dd className="mt-1 text-zinc-200">{safeField(tender.country)} / {safeField(tender.region)}</dd></div>
-                        <div><dt className="text-xs uppercase text-zinc-500">Sector</dt><dd className="mt-1 text-zinc-200">{safeField(tender.sector || tender.category)}</dd></div>
-                    </dl>
-                </div>
-
-                <div className="rounded-lg border border-gray-800 bg-gray-950 p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
-                        <Calendar className="h-4 w-4 text-amber-300" />
-                        Procurement Timing
-                    </div>
-                    <dl className="space-y-3 text-sm">
-                        <div><dt className="text-xs uppercase text-zinc-500">Publication Date</dt><dd className="mt-1 text-zinc-200">{formatDate(tender.publication_date)}</dd></div>
-                        <div><dt className="text-xs uppercase text-zinc-500">Deadline</dt><dd className="mt-1 text-zinc-200">{formatDate(tender.deadline)}</dd></div>
-                        <div><dt className="text-xs uppercase text-zinc-500">Time Remaining</dt><dd className="mt-1 text-zinc-200">{timeRemaining(tender.deadline)}</dd></div>
-                        <div><dt className="text-xs uppercase text-zinc-500">Price</dt><dd className={(tender.price_display || tender.budget > 0) ? 'mt-1 font-semibold text-emerald-300' : 'mt-1 text-zinc-500'}>{priceDisplay(tender)}</dd></div>
-                    </dl>
-                </div>
-            </section>
-
-            <ProjectContextSection
-                context={projectContext}
-                isLoading={isLoadingProject}
-                failed={projectContextFailed}
-                fallbackIdentity={projectFallbackIdentity}
-            />
-
-            <section className="rounded-lg border border-gray-800 bg-gray-950 p-5">
-                <div className="mb-4 flex flex-col gap-3">
-                    <div className="flex items-center gap-2">
-                        <UsersRound className="h-4 w-4 text-cyan-300" />
-                        <h2 className="text-lg font-semibold text-white">Likely Competitors</h2>
-                    </div>
-                    <p className="flex items-start gap-2 text-sm leading-6 text-zinc-500">
-                        <Info className="mt-0.5 h-4 w-4 shrink-0 text-zinc-600" />
-                        <span>
-                            Based on public historical procurement data and similar tender activity. This does not confirm participation in the current tender.
-                        </span>
-                    </p>
-                </div>
-
-                {competitorError && (
-                    <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                        <AlertCircle className="h-4 w-4" />
-                        {competitorError}
-                    </div>
-                )}
-
-                {isLoadingCompetitors ? (
-                    <div className="flex items-center gap-2 text-sm text-zinc-400">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading competitor intelligence...
-                    </div>
-                ) : competitorGroups.length === 0 ? (
-                    <div className="rounded-lg border border-zinc-800 bg-gray-900 px-4 py-5 text-sm text-zinc-400">
-                        No historical competitor intelligence available yet.
-                    </div>
-                ) : (
-                    <div className="space-y-5">
-                        {competitorGroups.map((group) => (
-                            <div key={group.service_category} className="border-t border-zinc-800 pt-4 first:border-t-0 first:pt-0">
-                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-zinc-100">{group.industry}</h3>
-                                        <p className="mt-1 text-xs text-zinc-500">{group.service_category}</p>
-                                    </div>
-                                    <span className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs font-semibold text-zinc-300">
-                                        {group.competitors.length} known market {group.competitors.length === 1 ? 'actor' : 'actors'}
-                                    </span>
-                                </div>
-
-                                <div className="overflow-hidden rounded-lg border border-zinc-800">
-                                    <div className="hidden grid-cols-[minmax(0,1fr)_150px_190px_190px] gap-3 border-b border-zinc-800 bg-gray-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 md:grid">
-                                        <span>Company</span>
-                                        <span>Confidence</span>
-                                        <span>Type</span>
-                                        <span>Evidence</span>
-                                    </div>
-                                    <div className="divide-y divide-zinc-900">
-                                        {group.competitors.map((competitor) => (
-                                            <div key={`${group.service_category}-${competitor.company_name}-${competitor.related_tender_id || competitor.source}`} className="grid grid-cols-1 gap-3 px-3 py-3 text-sm md:grid-cols-[minmax(0,1fr)_150px_190px_190px]">
-                                                <div className="min-w-0">
-                                                    <p className="font-medium text-zinc-100">{competitor.company_name}</p>
-                                                    <p className="mt-1 text-xs text-zinc-500">{competitor.industry}</p>
-                                                    <p className="mt-2 text-sm leading-6 text-zinc-400">{competitor.reason}</p>
-                                                </div>
-                                                <div>
-                                                    <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${competitorConfidenceClasses(competitor.confidence)}`}>
-                                                        {competitorConfidenceLabel(competitor.confidence)}
-                                                    </span>
-                                                </div>
-                                                <div className="text-zinc-300">
-                                                    {competitorParticipationLabel(competitor.participation_type)}
-                                                </div>
-                                                <div className="space-y-1 text-xs text-zinc-400">
-                                                    <p>{sourceLabel(competitor.source)}</p>
-                                                    {competitor.evidence_source ? (
-                                                        <a
-                                                            href={competitor.evidence_source}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex max-w-full items-center gap-1 text-indigo-200 hover:text-indigo-100"
-                                                        >
-                                                            <ExternalLink className="h-3 w-3 shrink-0" />
-                                                            <span className="truncate">{sourceHost(competitor.evidence_source)}</span>
-                                                        </a>
-                                                    ) : (
-                                                        <p>Evidence source not linked</p>
-                                                    )}
-                                                    <p>{safeField(competitor.country)}</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                    <SectionShell id="project-context" title="Project Context" description="The canonical source Project and its separately classified leadership." icon={<Globe2 className="h-4 w-4" />} state={details.project_context.state}>
+                        {project ? (
+                            <div className="space-y-5">
+                                {details.project_context.state === 'UNAVAILABLE' ? <div role="status" className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />Project details are not currently available. Existing source identity is shown below.</div> : ['queued', 'running', 'never_attempted'].includes(project.enrichment_state) ? <div role="status" className="flex items-start gap-2 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-sm text-sky-200"><Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />Project details are being prepared. This page does not trigger enrichment.</div> : null}
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="font-semibold text-zinc-100">{project.name || `${sourceLabel(project.source_system)} Project`}</h3><p className="mt-1 text-sm text-zinc-500">{sourceLabel(project.source_system)} · {project.external_project_id}</p></div><span className="w-fit rounded-md border border-sky-500/25 bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">Project status: {safeText(project.project_status, 'Not reported')}</span></div>
+                                <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Country / Region</dt><dd className="mt-1 text-zinc-200">{[project.country, project.region].filter(Boolean).join(' / ') || 'Not reported'}</dd></div><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Project approval</dt><dd className="mt-1 text-zinc-200">{formatDate(project.approval_date)}</dd></div><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Project closing</dt><dd className="mt-1 text-zinc-200">{formatDate(project.closing_date)}</dd></div><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Project enrichment</dt><dd className="mt-1 capitalize text-zinc-200">{project.enrichment_state.replaceAll('_', ' ')}</dd></div></dl>
+                                <div aria-labelledby="project-leadership-heading" className="border-t border-zinc-800 pt-5">
+                                    <div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-cyan-300" /><h3 id="project-leadership-heading" className="text-sm font-semibold uppercase tracking-wide text-zinc-200">Project Leadership</h3></div>
+                                    <p className="mt-2 text-xs leading-5 text-zinc-500">Project leadership is source Project context and is not the Tender&apos;s procurement contact.</p>
+                                    {currentRoles.length ? <div className="mt-3 grid gap-2 md:grid-cols-2">{currentRoles.map((role) => <div key={role.role_id} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3"><p className="font-medium text-zinc-100">{role.display_name}</p><p className="mt-1 text-xs text-zinc-400">{leadershipRoleLabel(role)}</p><p className="mt-2 text-xs text-zinc-500">Source: {sourceLabel(role.source_system)}</p></div>)}</div> : <p className="mt-3 text-sm text-zinc-500">No current Project Leadership is available.</p>}
+                                    {historicalRoles.length ? <details className="mt-3"><summary className="cursor-pointer text-sm font-medium text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">Previous project leadership ({historicalRoles.length})</summary><div className="mt-2 grid gap-2 md:grid-cols-2">{historicalRoles.map((role) => <div key={role.role_id} className="rounded-lg border border-zinc-800 p-3 text-sm text-zinc-300"><p>{role.display_name}</p><p className="mt-1 text-xs text-zinc-500">{leadershipRoleLabel(role)} · observed until {formatDate(role.ended_at)}</p></div>)}</div></details> : null}
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                )}
-            </section>
+                        ) : <CompactState state={details.project_context.state} empty="No canonical Project is linked to this Tender." unavailable="Project details are not currently available." />}
+                    </SectionShell>
 
-            <section className="rounded-lg border border-gray-800 bg-gray-950 p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                        <h2 className="text-lg font-semibold text-white">Documents</h2>
-                        <p className="mt-1 text-sm text-zinc-500">
-                            {documentAggregateSummary(tender)}
-                        </p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                        {tender.source_system === 'giz' && (
-                            <button
-                                onClick={handlePrepareGizDocuments}
-                                disabled={isPreparingDocuments}
-                                className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-400 hover:text-cyan-100 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-500"
-                            >
-                                {isPreparingDocuments ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                    <FileSearch className="h-3.5 w-3.5" />
-                                )}
-                                Prepare documents for analysis
-                            </button>
-                        )}
-                        <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${documentStatusClasses(tender.document_status)}`}>
-                            {documentAggregateLabel(tender)}
-                        </span>
-                    </div>
-                </div>
-
-                {showPreparationBanner && (
-                    <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
-                        {isPreparingDocuments || !isPreparationTerminal ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <CheckCircle2 className="h-4 w-4" />
-                        )}
-                        Document preparation is {hydrationStageLabel(prepareStage ?? (tender.document_status === 'processing' ? 'processing' : 'queued'))}
-                        {isPreparingDocuments ? ` (${prepareProgress}%).` : '.'}
-                    </div>
-                )}
-
-                {prepareError && (
-                    <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                        <AlertCircle className="h-4 w-4" />
-                        {prepareError}
-                    </div>
-                )}
-
-                {documentError && (
-                    <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                        <AlertCircle className="h-4 w-4" />
-                        {documentError}
-                    </div>
-                )}
-
-                {isLoadingDocuments ? (
-                    <div className="flex items-center gap-2 text-sm text-zinc-400">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading document metadata...
-                    </div>
-                ) : documents.length === 0 ? (
-                    <div className="rounded-lg border border-zinc-800 bg-gray-900 px-4 py-5 text-sm text-zinc-400">
-                        No documents found for this tender.
-                    </div>
-                ) : (
-                    <div className="overflow-hidden rounded-lg border border-zinc-800">
-                        <div className="hidden grid-cols-[minmax(0,1fr)_180px_180px] gap-3 border-b border-zinc-800 bg-gray-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 md:grid">
-                            <span>Document</span>
-                            <span>Status</span>
-                            <span>Action</span>
+                    <SectionShell id="requirements-documents" title="Requirements & Documents" description="Bounded source-document metadata and clearly labeled analysis-derived requirements." icon={<FileCheck2 className="h-4 w-4" />} state={details.documents.state === 'UNAVAILABLE' || details.requirements.state === 'UNAVAILABLE' ? 'UNAVAILABLE' : documents || requirements ? 'AVAILABLE' : 'EMPTY'}>
+                        <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+                            <div>
+                                <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-zinc-100">Important requirements</h3><SectionStateBadge state={details.requirements.state} /></div>
+                                {requirements?.items.length ? <ul className="mt-3 space-y-2">{requirements.items.map((item, index) => <li key={`${item.label}-${index}`} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3"><div className="flex items-start gap-2"><Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" /><div><p className="text-sm text-zinc-100">{item.label}</p><p className="mt-1 text-xs font-medium text-violet-300">AI-extracted requirement</p>{item.document_name || item.page || item.section ? <p className="mt-1 text-xs text-zinc-500">{[item.document_name, item.section, item.page ? `page ${item.page}` : null].filter(Boolean).join(' · ')}</p> : null}</div></div></li>)}</ul> : <div className="mt-3"><CompactState state={details.requirements.state} empty="No structured requirements are available." unavailable="The requirement summary is currently unavailable." /></div>}
+                                {requirements?.truncated ? <p className="mt-2 text-xs text-zinc-500">Showing {requirements.returned_count} of {requirements.total_count} analysis-derived requirements. Open Compliance for the full workbench.</p> : null}
+                            </div>
+                            <div>
+                                <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-zinc-100">Tender documents</h3><SectionStateBadge state={details.documents.state} /></div>
+                                {documentActionError ? <p role="alert" className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{documentActionError}</p> : null}
+                                {documents?.items.length ? <div className="mt-3 overflow-hidden rounded-lg border border-zinc-800"><div className="divide-y divide-zinc-800">{documents.items.map((item) => { const availability = documentAvailability(item); const canOpen = item.availability === 'AVAILABLE'; return <div key={item.document_id} className="grid gap-3 p-3 text-sm sm:grid-cols-[minmax(0,1fr)_130px_auto] sm:items-center"><div className="min-w-0"><p className="truncate font-medium text-zinc-100">{item.display_name}</p><p className="mt-1 text-xs text-zinc-500">{item.document_type} · {sourceLabel(item.source_system)} · {formatFileSize(item.file_size)}</p></div><p className={`text-xs font-semibold ${availability.classes}`}>{availability.label}</p><button type="button" onClick={() => void openDocument(item)} disabled={!canOpen || openingDocumentId !== null} className="inline-flex w-fit items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:border-indigo-500 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50">{openingDocumentId === item.document_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : canOpen ? <Download className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}{openingDocumentId === item.document_id ? 'Opening' : canOpen ? 'Open document' : 'Metadata only'}</button></div>; })}</div></div> : <div className="mt-3"><CompactState state={details.documents.state} empty="No public source-document metadata is available." unavailable="Tender document metadata is currently unavailable." /></div>}
+                                {documents?.truncated ? <p className="mt-2 text-xs text-zinc-500">+ {documents.visible_total_count - documents.returned_count} more public source documents. Open Compliance for evidence workflows.</p> : null}
+                            </div>
                         </div>
-                        <div className="divide-y divide-zinc-900">
-                            {documents.map((doc) => {
-                                const isAvailable = doc.download_status === 'available';
-                                return (
-                                    <div key={doc.id} className="grid grid-cols-1 gap-3 px-3 py-3 text-sm md:grid-cols-[minmax(0,1fr)_180px_180px]">
-                                        <div className="flex min-w-0 items-center gap-2 text-zinc-200">
-                                            {isAvailable ? (
-                                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                                            ) : (
-                                                <FileText className="h-4 w-4 shrink-0 text-zinc-500" />
-                                            )}
-                                            <span className="truncate">{filenameForDocument(doc)}</span>
-                                        </div>
-                                        <div className={downloadStatusClasses(doc)}>
-                                            {downloadStatusText(doc)}
-                                        </div>
-                                        <div>
-                                            <button
-                                                onClick={() => handleOpenDocument(doc)}
-                                                disabled={!isAvailable || openingDocId === doc.id}
-                                                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-indigo-500 hover:text-indigo-200 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-600"
-                                            >
-                                                {openingDocId === doc.id ? (
-                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                ) : (
-                                                    <Download className="h-3.5 w-3.5" />
-                                                )}
-                                                {openingDocId === doc.id ? 'Opening' : 'Open / Download'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-            </section>
+                    </SectionShell>
 
-            <section className="rounded-lg border border-gray-800 bg-gray-950 p-5">
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
-                    <Globe2 className="h-4 w-4 text-sky-300" />
-                    Procurement Classification
-                </div>
-                <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-3">
-                    <div><p className="text-xs uppercase text-zinc-500">Category</p><p className="mt-1 text-zinc-200">{safeField(tender.procurement_category || tender.category)}</p></div>
-                    <div><p className="text-xs uppercase text-zinc-500">Method</p><p className="mt-1 text-zinc-200">{safeField(tender.procurement_method)}</p></div>
-                    <div><p className="text-xs uppercase text-zinc-500">Source</p><p className="mt-1 text-zinc-200">{sourceLabel(tender.source_system)}</p></div>
-                </div>
+                    <SectionShell id="compliance-readiness" title="Compliance & Company Readiness" description="Tender-specific analysis and company evidence are related, but remain separate authorities." icon={<ShieldCheck className="h-4 w-4" />} state={details.compliance.state === 'UNAVAILABLE' ? 'UNAVAILABLE' : compliance || readiness ? 'AVAILABLE' : 'EMPTY'}>
+                        <div className="grid gap-4 lg:grid-cols-2">
+                            <article className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4" aria-labelledby="compliance-summary-heading">
+                                <div className="flex items-center justify-between gap-2"><h3 id="compliance-summary-heading" className="font-semibold text-zinc-100">Compliance</h3><SectionStateBadge state={details.compliance.state} /></div>
+                                {compliance ? (() => { const presentation = compliancePresentation(compliance, details.compliance.state); return <div className="mt-4 space-y-3"><span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${presentation.classes}`}>{presentation.label}</span><p className="text-sm leading-5 text-zinc-400">{presentation.detail}</p><dl className="grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-zinc-500">Completeness</dt><dd className="mt-1 text-zinc-200">{compliance.compliance_completeness}</dd></div><div><dt className="text-xs text-zinc-500">Version</dt><dd className="mt-1 text-zinc-200">v{compliance.version_number}</dd></div><div><dt className="text-xs text-zinc-500">Key issues</dt><dd className="mt-1 text-zinc-200">{compliance.key_issue_count ?? 'Not reported'}</dd></div><div><dt className="text-xs text-zinc-500">Analysis created</dt><dd className="mt-1 text-zinc-200">{formatDate(compliance.created_at)}</dd></div></dl>{compliance.version_origin === 'LEGACY_BACKFILL' ? <p className="text-xs font-medium text-zinc-400">Legacy analysis · historical provenance limitations apply.</p> : null}{compliance.override_applied ? <p className="text-xs text-amber-300">A current risk-override overlay is recorded.</p> : null}</div>; })() : <div className="mt-4"><CompactState state={details.compliance.state} empty="No Compliance analysis is available." unavailable="The latest Compliance analysis is unavailable." /></div>}
+                                <Link href={`/dashboard/tenders/${tender.id}/compliance`} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-indigo-300 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><ShieldCheck className="h-4 w-4" />Open Compliance</Link>
+                            </article>
+                            <article className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4" aria-labelledby="readiness-summary-heading">
+                                <div className="flex items-center justify-between gap-2"><h3 id="readiness-summary-heading" className="font-semibold text-zinc-100">Company Readiness</h3><SectionStateBadge state={details.company_readiness.state} /></div>
+                                {readiness ? <div className="mt-4"><p className="text-sm leading-5 text-zinc-400">Evidence counts from your owned company profile. No readiness percentage is calculated.</p><dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3"><div><dt className="text-xs text-zinc-500">Certifications</dt><dd className="mt-1 text-zinc-100">{readiness.certifications_total}</dd><p className="text-xs text-zinc-500">{readiness.expired_certifications} expired</p></div><div><dt className="text-xs text-zinc-500">Licenses</dt><dd className="mt-1 text-zinc-100">{readiness.active_licenses} active</dd><p className="text-xs text-zinc-500">{readiness.licenses_total} total</p></div><div><dt className="text-xs text-zinc-500">Credentials</dt><dd className="mt-1 text-zinc-100">{readiness.credentials_total}</dd><p className="text-xs text-zinc-500">{readiness.expired_credentials} expired</p></div><div><dt className="text-xs text-zinc-500">Readiness files</dt><dd className="mt-1 text-zinc-100">{readiness.readiness_documents_available} available</dd><p className="text-xs text-zinc-500">{readiness.readiness_documents_total} total</p></div><div><dt className="text-xs text-zinc-500">Missing evidence</dt><dd className="mt-1 text-zinc-100">{readiness.readiness_documents_missing}</dd></div><div><dt className="text-xs text-zinc-500">Financial years</dt><dd className="mt-1 text-zinc-100">{readiness.financial_history_years}</dd></div></dl></div> : <div className="mt-4"><CompactState state={details.company_readiness.state} empty="Company readiness information is incomplete or not available." unavailable="Company readiness information is currently unavailable." /></div>}
+                                <Link href="/dashboard/readiness-vault" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-sky-300 hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"><FileCheck2 className="h-4 w-4" />Open Readiness Vault</Link>
+                            </article>
+                        </div>
+                    </SectionShell>
+
+                    <SectionShell id="contacts" title="Procurement Contacts" description="Tender procurement and submission details from source-exposed metadata—not Project Leadership." icon={<UserRound className="h-4 w-4" />} state={details.procurement_contacts.state}>
+                        {contacts ? <div className="grid gap-5 lg:grid-cols-2"><dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Procuring entity</dt><dd className="mt-1 text-zinc-200">{safeText(contacts.buyer_agency)}</dd></div><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Procurement contact</dt><dd className="mt-1 text-zinc-200">{safeText(contacts.contact_person, 'Not provided by source')}</dd></div><div><dt className="flex items-center gap-1 text-xs uppercase tracking-wide text-zinc-500"><Mail className="h-3.5 w-3.5" />Email</dt><dd className="mt-1 break-all text-zinc-200">{safeText(contacts.email, 'Not provided by source')}</dd></div><div><dt className="flex items-center gap-1 text-xs uppercase tracking-wide text-zinc-500"><Phone className="h-3.5 w-3.5" />Phone</dt><dd className="mt-1 text-zinc-200">{safeText(contacts.phone, 'Not provided by source')}</dd></div></dl><dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Submission method</dt><dd className="mt-1 text-zinc-200">{safeText(contacts.submission_method)}</dd></div><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Submission deadline</dt><dd className="mt-1 text-zinc-200">{formatDate(contacts.submission_deadline)}</dd></div><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Question deadline</dt><dd className="mt-1 text-zinc-200">{formatDate(contacts.question_deadline)}</dd></div><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Procedure</dt><dd className="mt-1 text-zinc-200">{safeText(contacts.procedure_type)}</dd></div></dl>{contacts.participation_instructions || contacts.address || contacts.document_access_notes ? <div className="lg:col-span-2 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-sm text-zinc-400"><p>{safeText(contacts.participation_instructions || contacts.document_access_notes || contacts.address)}</p></div> : null}</div> : <CompactState state={details.procurement_contacts.state} empty="No Procurement Contacts are available in source metadata." unavailable="Procurement Contacts are currently unavailable." />}
+                    </SectionShell>
+
+                    <SectionShell id="bid-preparation" title="Bid Preparation" description="The Proposal-backed preparation artifact remains independent from pursuit and Compliance." icon={<Landmark className="h-4 w-4" />} state={details.bid_preparation.state}>
+                        {bidPreparation ? <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-zinc-100">Preparation status: {bidPreparation.proposal_status}</p><p className="mt-1 text-sm text-zinc-500">Created {formatDate(bidPreparation.created_at)}. Pursuit state is shown separately above.</p></div><Link href={`/dashboard/bid-preparation/${bidPreparation.detail_route_id}`} className="inline-flex w-fit items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><ExternalLink className="h-3.5 w-3.5" />{pursuit ? 'Open Bid Preparation' : 'Continue Bid Preparation'}</Link></div> : <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium text-zinc-200">Not started</p><p className="mt-1 text-sm text-zinc-500">Prepare Bid from the Pursuit section when the canonical action is available.</p></div><SectionStateBadge state={details.bid_preparation.state} /></div>}
+                    </SectionShell>
+                </>
+            ) : null}
+
+            <section aria-label="Source classification" className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500"><Globe2 className="h-4 w-4" />Source classification</div>
+                <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3"><p><span className="text-zinc-500">Category:</span> <span className="text-zinc-200">{safeText(tender.procurement_category || tender.category)}</span></p><p><span className="text-zinc-500">Method:</span> <span className="text-zinc-200">{safeText(tender.procurement_method)}</span></p><p><span className="text-zinc-500">Notice type:</span> <span className="text-zinc-200">{safeText(tender.notice_type)}</span></p></div>
             </section>
-        </div>
+        </main>
     );
 }

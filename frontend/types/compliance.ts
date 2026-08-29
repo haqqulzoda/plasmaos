@@ -40,31 +40,6 @@ export interface AnalyzeTenderResponse {
     override_seal: string | null;
 }
 
-// ── Legacy backward-compatible aliases ──────────────────────────
-// These exist solely so that unreferenced legacy components
-// (StrategyPanel, TenderWorkspace) still compile. They should be
-// removed once those files are migrated.
-
-export type Severity = 'High' | 'Medium' | 'Low';
-
-export interface RiskItem {
-    risk_type: string;
-    description: string;
-    severity: Severity;
-    source_quote?: string;
-}
-
-export interface GapAnalysis {
-    is_fully_compliant: boolean;
-    missing_requirements: string[];
-    identified_risks: RiskItem[];
-    recommended_mitigation_strategy: string;
-}
-
-// Legacy aliases pointing to the new types so old import paths still resolve
-export type Requirements = DynamicRequirements;
-export type Evaluation = DynamicEvaluation;
-
 // ── Hybrid Compliance Engine Types ──────────────────────────────
 // These types mirror the backend's services/compliance_engine.py
 // output (ComplianceResult). They are ADDITIVE — no existing type

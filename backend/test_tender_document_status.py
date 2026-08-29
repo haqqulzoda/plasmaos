@@ -101,8 +101,13 @@ class TenderDocumentStatusStaticTests(unittest.TestCase):
         self.assertIn("return 'Partial coverage'", tender_types)
         self.assertIn("return 'Preparation failed'", tender_types)
         self.assertIn("return 'Prepare documents for analysis'", tender_types)
-        self.assertIn("return 'Unsupported format'", tender_detail_page)
-        self.assertIn("Prepare documents for analysis", tender_detail_page)
+        # Sprint 5.3 consumes the bounded details DTO, whose coarse document
+        # availability contract is deliberately source-neutral and does not
+        # expose format/parser-specific preparation state.
+        self.assertIn("return { label: 'Available'", tender_detail_page)
+        self.assertIn("return { label: 'Unavailable'", tender_detail_page)
+        self.assertIn("return { label: 'Metadata only'", tender_detail_page)
+        self.assertNotIn("Unsupported format", tender_detail_page)
         self.assertIn("return 'Documents unavailable'", tender_types)
 
     def test_failed_extraction_response_does_not_claim_compliance(self) -> None:

@@ -1623,6 +1623,93 @@ class ReadOnlyPreflight:
             ),
         }
 
+    async def tender_details_composition_audit(self) -> dict[str, Any]:
+        """Return count-only health metrics for the S5.2 composed read model."""
+        required_tables = {
+            "tenders",
+            "projects",
+            "tender_projects",
+            "proposals",
+            "tender_engagements",
+            "tender_analyses",
+            "analysis_versions",
+        }
+        if not required_tables.issubset(self.tables):
+            return {
+                "available": False,
+                "missing_tables": sorted(required_tables - self.tables),
+            }
+        counts = await self.fetchrow(
+            """
+            WITH flags AS (
+                SELECT
+                    t.id,
+                    EXISTS (SELECT 1 FROM tender_projects tp WHERE tp.tender_id=t.id)
+                        AS has_project,
+                    EXISTS (SELECT 1 FROM tender_engagements e WHERE e.tender_id=t.id)
+                        AS has_engagement,
+                    EXISTS (SELECT 1 FROM proposals p WHERE p.tender_id=t.id)
+                        AS has_proposal,
+                    EXISTS (
+                        SELECT 1 FROM tender_analyses a
+                        WHERE a.tender_id=t.id AND a.ownership_state='OWNED'
+                    ) AS has_compliance
+                FROM tenders t
+            )
+            SELECT
+                COUNT(*) AS tenders_total,
+                COUNT(*) FILTER (WHERE has_project) AS with_project,
+                COUNT(*) FILTER (WHERE NOT has_project) AS without_project,
+                COUNT(*) FILTER (WHERE has_engagement) AS with_engagement,
+                COUNT(*) FILTER (WHERE has_proposal) AS with_proposal,
+                COUNT(*) FILTER (WHERE has_compliance) AS with_compliance,
+                COUNT(*) FILTER (
+                    WHERE has_proposal AND NOT has_engagement AND NOT has_compliance
+                ) AS proposal_only,
+                COUNT(*) FILTER (
+                    WHERE has_engagement AND NOT has_proposal AND NOT has_compliance
+                ) AS engagement_only,
+                COUNT(*) FILTER (
+                    WHERE has_compliance AND NOT has_engagement AND NOT has_proposal
+                ) AS compliance_only,
+                COUNT(*) FILTER (WHERE has_engagement AND has_proposal)
+                    AS engagement_and_proposal,
+                COUNT(*) FILTER (
+                    WHERE has_engagement AND has_proposal AND has_compliance
+                ) AS all_private_domains
+            FROM flags
+            """
+        )
+        integrity = await self.fetchrow(
+            """
+            SELECT
+                (SELECT COUNT(*)
+                 FROM tender_projects tp
+                 LEFT JOIN tenders t ON t.id=tp.tender_id
+                 LEFT JOIN projects p ON p.id=tp.project_id
+                 WHERE t.id IS NULL OR p.id IS NULL) AS broken_project_links,
+                (SELECT COUNT(*)
+                 FROM proposals p LEFT JOIN tenders t ON t.id=p.tender_id
+                 WHERE t.id IS NULL) AS broken_proposal_tender_references,
+                (SELECT COUNT(*)
+                 FROM tender_engagements e LEFT JOIN tenders t ON t.id=e.tender_id
+                 WHERE t.id IS NULL) AS broken_engagement_tender_references,
+                (SELECT COUNT(*)
+                 FROM tender_analyses a
+                 WHERE a.ownership_state='OWNED'
+                   AND NOT EXISTS (
+                       SELECT 1 FROM analysis_versions v WHERE v.analysis_id=a.id
+                   )) AS zero_version_analysis_parents
+            """
+        )
+        return {
+            "available": True,
+            "counts": _json_value(counts),
+            "integrity": _json_value(integrity),
+            "optional_absence_is_error": False,
+            "auto_repair": False,
+        }
+
     async def referential_integrity(self) -> dict[str, int | None]:
         relationships = (
             ("tender_documents", "tender_id", "tenders", "id"),
@@ -1736,6 +1823,9 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             ),
             "admin_audit": await runner.admin_audit(),
             "project_ids": await runner.project_id_audit(),
+            "tender_details_composition": (
+                await runner.tender_details_composition_audit()
+            ),
             "referential_integrity": await runner.referential_integrity(),
         }
     finally:

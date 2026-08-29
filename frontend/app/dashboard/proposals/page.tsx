@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { permanentRedirect } from 'next/navigation';
 
 export default function LegacyProposalsRedirect() {
-    redirect('/dashboard/bid-preparation');
+    permanentRedirect('/dashboard/bid-preparation');
 }

@@ -11,8 +11,8 @@ const page = readFileSync(
     new URL('../app/dashboard/my-tenders/page.tsx', import.meta.url),
     'utf8',
 );
-const save = readFileSync(
-    new URL('../components/tenders/SaveToMyTendersButton.tsx', import.meta.url),
+const pursuitPanel = readFileSync(
+    new URL('../components/tenders/TenderEngagementPanel.tsx', import.meta.url),
     'utf8',
 );
 const layout = readFileSync(
@@ -64,13 +64,12 @@ test('empty state is truthful and never imports legacy bids', () => {
 });
 
 test('save happens only in explicit click handler and represents re-engagement', () => {
-    const effect = save.split('useEffect(() =>', 2)[1].split('const save =', 1)[0];
-    assert.match(effect, /api\.get/);
+    const effect = pursuitPanel.split('useEffect(() =>', 2)[1].split('const save =', 1)[0];
     assert.doesNotMatch(effect, /api\.post/);
-    assert.match(save, /const save = async/);
-    assert.match(save, /api\.post<SaveToMyTendersResponse>/);
-    assert.match(save, /onClick=\{save\}/);
-    assert.match(save, /Save to My Tenders again/);
+    assert.match(pursuitPanel, /const save = async/);
+    assert.match(pursuitPanel, /api\.post<SaveToMyTendersResponse>/);
+    assert.match(pursuitPanel, /onClick=\{save\}/);
+    assert.match(pursuitPanel, /Save to My Tenders/);
 });
 
 test('navigation exposes My Tenders and Bid Preparation separately', () => {

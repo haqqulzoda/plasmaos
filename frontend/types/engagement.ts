@@ -40,6 +40,12 @@ export interface TenderEngagementSummary {
     allowed_actions: EngagementAction[];
 }
 
+export interface TenderEngagementActionContext {
+    engagement_id: string;
+    engagement_status: EngagementStatus;
+    allowed_actions: EngagementAction[];
+}
+
 export interface MyTenderListItem extends TenderEngagementSummary {
     tender_title: string;
     buyer: string | null;

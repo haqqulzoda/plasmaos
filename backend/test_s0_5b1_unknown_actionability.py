@@ -305,7 +305,8 @@ class FrontendContractTests(unittest.TestCase):
     def test_31_details_remain_visible_with_explicit_status_badge(self) -> None:
         details = read_frontend("app/dashboard/tenders/[tenderId]/page.tsx")
         self.assertIn("tenderStatusLabel(tender.status)", details)
-        self.assertIn("const canAnalyze = actionable", details)
+        self.assertIn("const actionable = isTenderActionable(tender)", details)
+        self.assertIn("canStartNew={actionable}", details)
 
     def test_32_compliance_guard_still_loads_cached_history(self) -> None:
         compliance = read_frontend("app/dashboard/tenders/[tenderId]/compliance/page.tsx")
@@ -317,8 +318,9 @@ class FrontendContractTests(unittest.TestCase):
         bid = read_frontend("app/dashboard/bid-preparation/[proposalId]/page.tsx")
         self.assertIn("api.get<Proposal>", bid)
         self.assertNotIn("api.post<{ id: string }>('/proposals'", bid)
+        self.assertIn("const actionable = isTenderActionable(proposal.tender_status)", bid)
         self.assertIn("disabled={isGenerating || !actionable}", bid)
-        self.assertIn("isTenderActionable(proposal.tender_status) &&", bid)
+        self.assertIn("<TenderEngagementPanel tenderId={proposal.tender_id} proposalContext />", bid)
         prepare = read_frontend("components/bid-preparation/PrepareBidButton.tsx")
         self.assertIn("onClick={prepare}", prepare)
         self.assertIn("'/proposals/prepare'", prepare)
