@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
-from app.api.endpoints import admin, auth, hunter, meta, proposals, tenders, users, vault
+from app.api.endpoints import admin, auth, hunter, meta, my_tenders, proposals, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
 from app.core.release import VERSION, public_release_metadata, release_metadata_with_database
@@ -77,6 +77,7 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(tenders.router, prefix="/api/v1/tenders", tags=["Tenders"])
 app.include_router(proposals.router, prefix="/api/v1/proposals", tags=["Proposals"])
+app.include_router(my_tenders.router, prefix="/api/v1", tags=["My Tenders"])
 app.include_router(meta.router, prefix="/api/v1/meta", tags=["Meta"])
 app.include_router(vault.router, prefix="/api/v1", tags=["Vault"])
 app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])

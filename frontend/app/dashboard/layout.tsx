@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
     Archive,
+    Bookmark,
     Building2,
     LayoutDashboard,
     Radar,
@@ -28,8 +29,9 @@ interface NavItem {
 const baseNavItems: NavItem[] = [
     { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
     { name: 'Tenders', href: '/dashboard/tenders', icon: <ScrollText className="w-5 h-5" /> },
+    { name: 'My Tenders', href: '/dashboard/my-tenders', icon: <Bookmark className="w-5 h-5" /> },
     { name: 'Hunter Feed', href: '/dashboard/hunter', icon: <Radar className="w-5 h-5" /> },
-    { name: 'My Bids', href: '/dashboard/bids', icon: <FileText className="w-5 h-5" /> },
+    { name: 'Bid Preparation', href: '/dashboard/bid-preparation', icon: <FileText className="w-5 h-5" /> },
     { name: 'Company Profile', href: '/dashboard/settings', icon: <Building2 className="w-5 h-5" /> },
     { name: 'Readiness Vault', href: '/dashboard/readiness-vault', icon: <Archive className="w-5 h-5" /> },
 ];

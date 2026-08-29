@@ -37,3 +37,25 @@ class ProposalStatus(str, enum.Enum):
     GENERATING = "GENERATING"
     COMPLETED = "COMPLETED"
     SUBMITTED = "SUBMITTED"
+
+
+class TenderEngagementStatus(str, enum.Enum):
+    """A company's explicit lifecycle state for one tender opportunity."""
+
+    SAVED = "SAVED"
+    EVALUATING = "EVALUATING"
+    PREPARING = "PREPARING"
+    SUBMITTED = "SUBMITTED"
+    WON = "WON"
+    LOST = "LOST"
+    DISMISSED = "DISMISSED"
+
+
+class TenderEngagementOrigin(str, enum.Enum):
+    """The immutable reason an engagement first entered the workspace."""
+
+    MANUAL_SAVE = "MANUAL_SAVE"
+    MANUAL_EVALUATION = "MANUAL_EVALUATION"
+    BID_PREPARATION = "BID_PREPARATION"
+    LEGACY_PROPOSAL = "LEGACY_PROPOSAL"
+    OTHER_EXPLICIT_USER_ACTION = "OTHER_EXPLICIT_USER_ACTION"

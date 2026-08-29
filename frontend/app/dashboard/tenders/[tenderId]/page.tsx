@@ -28,6 +28,7 @@ import {
 
 import { api } from '@/lib/api';
 import { ProjectContextSection } from '@/components/tenders/ProjectContextSection';
+import { TenderEngagementPanel } from '@/components/tenders/TenderEngagementPanel';
 import {
     classifyProjectContextFailure,
     type TenderProjectContext,
@@ -649,6 +650,8 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
                     </button>
                 </div>
             </div>
+
+            <TenderEngagementPanel tenderId={tender.id} />
 
             <section className="rounded-lg border border-gray-800 bg-gray-950 p-5">
                 <div className="mb-4 flex flex-wrap items-center gap-2">

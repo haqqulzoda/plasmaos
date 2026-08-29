@@ -211,7 +211,7 @@ export default function HunterFeedPage() {
                                             <button
                                                 onClick={() =>
                                                     router.push(
-                                                        `/dashboard/bids/${rec.tender.id}`
+                                                        `/dashboard/tenders/${rec.tender.id}`
                                                     )
                                                 }
                                                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"

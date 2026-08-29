@@ -21,7 +21,7 @@ from scripts import test_s0_5b4_baseline as support
 
 
 S1_HEAD = "20260826_0002_s1_2_wb_project_enrichment"
-HEAD = "20260828_0002_s3_4_admin_audit_hardening"
+HEAD = "20260828_0003_s4_1_tender_engagement_foundation"
 
 
 async def _revision(database: str) -> str:

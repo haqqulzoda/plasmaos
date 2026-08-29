@@ -18,7 +18,7 @@ from app.core.tender_actionability import (
     actionable_tender_condition,
     is_tender_actionable,
 )
-from app.models.all_models import Tender, TenderStatus
+from app.models.all_models import ProposalStatus, Tender, TenderStatus
 from app.services.tender_sources.adb import AdbTenderSource, adb_lifecycle_status
 from app.services.tender_sources.base import upsert_tender
 from app.workers.hunter_tasks import _pending_tenders_stmt
@@ -184,11 +184,14 @@ class ComplianceAndProposalTests(unittest.TestCase):
         self.assertNotIn("is_tender_actionable", latest)
 
     def test_18_existing_proposal_is_returned_before_actionability_guard(self) -> None:
-        proposals = read_backend("app/api/endpoints/proposals.py")
-        create = proposals.split("async def create_proposal", 1)[1].split(
-            '@router.get(""', 1
+        service = read_backend("app/services/bid_preparation.py")
+        artifact = service.split("async def get_or_create_proposal_artifact", 1)[1].split(
+            "async def prepare_bid", 1
         )[0]
-        self.assertLess(create.index("if existing:"), create.index("if not is_tender_actionable(tender)"))
+        self.assertLess(
+            artifact.index("if existing is not None"),
+            artifact.index("if not is_tender_actionable(tender)"),
+        )
 
     def test_19_new_unknown_proposal_creation_is_guarded(self) -> None:
         proposals = read_backend("app/api/endpoints/proposals.py")
@@ -203,7 +206,8 @@ class ComplianceAndProposalTests(unittest.TestCase):
             '@router.put(', 1
         )[0]
         self.assertNotIn("is_tender_actionable", get_route)
-        self.assertIn("tender_status=", get_route)
+        self.assertIn("_proposal_with_tender_response", get_route)
+        self.assertIn("tender_status=tender.status", proposals)
 
     def test_21_cached_ai_draft_precedes_new_generation_guard(self) -> None:
         proposals = read_backend("app/api/endpoints/proposals.py")
@@ -232,23 +236,42 @@ class ComplianceAndProposalTests(unittest.TestCase):
     def test_24_unknown_new_proposal_returns_conflict(self) -> None:
         tender_id = uuid4()
         user = SimpleNamespace(id=uuid4())
-        db = _SequenceSession(SimpleNamespace(status=TenderStatus.UNKNOWN), None)
-        with self.assertRaises(HTTPException) as raised:
-            asyncio.run(proposal_endpoints.create_proposal(
-                ProposalCreate(tender_id=tender_id), current_user=user, db=db
-            ))
+        db = _SequenceSession(SimpleNamespace(id=tender_id, status=TenderStatus.UNKNOWN))
+        failure = proposal_endpoints.BidPreparationNotActionableError("not actionable")
+        with patch.object(
+            proposal_endpoints,
+            "get_or_create_proposal_artifact",
+            new=AsyncMock(side_effect=failure),
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(proposal_endpoints.create_proposal(
+                    ProposalCreate(tender_id=tender_id), current_user=user, db=db
+                ))
         self.assertEqual(raised.exception.status_code, 409)
         self.assertIsNone(db.added)
 
     def test_25_open_new_proposal_behavior_is_unchanged(self) -> None:
         tender_id = uuid4()
         user = SimpleNamespace(id=uuid4())
-        db = _SequenceSession(SimpleNamespace(status=TenderStatus.OPEN), None)
-        response = asyncio.run(proposal_endpoints.create_proposal(
-            ProposalCreate(tender_id=tender_id), current_user=user, db=db
-        ))
+        db = _SequenceSession(SimpleNamespace(id=tender_id, status=TenderStatus.OPEN))
+        artifact = SimpleNamespace(
+            id=uuid4(), user_id=user.id, tender_id=tender_id,
+            status=ProposalStatus.DRAFT, ai_confidence_score=0,
+            structured_data={}, final_pdf_url=None, margin_percent=20,
+            include_vat=True, currency="UZS",
+            created_at=datetime(2026, 8, 25, tzinfo=timezone.utc),
+        )
+        resolution = SimpleNamespace(proposal=artifact, created=True)
+        with patch.object(
+            proposal_endpoints,
+            "get_or_create_proposal_artifact",
+            new=AsyncMock(return_value=resolution),
+        ):
+            response = asyncio.run(proposal_endpoints.create_proposal(
+                ProposalCreate(tender_id=tender_id), current_user=user, db=db
+            ))
         self.assertEqual(response.tender_id, tender_id)
-        self.assertIsNotNone(db.added)
+        self.assertIsNone(db.added)
 
     def test_26_new_document_sync_requires_actionable_tender(self) -> None:
         tenders = read_backend("app/api/endpoints/tenders.py")
@@ -290,11 +313,15 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("setTextAccessReadyVersion", compliance)
         self.assertIn("/latest-analysis", compliance)
 
-    def test_33_bid_route_reads_existing_artifact_before_creating(self) -> None:
-        bid = read_frontend("app/dashboard/bids/[id]/page.tsx")
-        self.assertLess(bid.index("api.get<Proposal>"), bid.index("api.post<{ id: string }>"))
+    def test_33_bid_route_is_passive_and_prepare_is_explicit(self) -> None:
+        bid = read_frontend("app/dashboard/bid-preparation/[proposalId]/page.tsx")
+        self.assertIn("api.get<Proposal>", bid)
+        self.assertNotIn("api.post<{ id: string }>('/proposals'", bid)
         self.assertIn("disabled={isGenerating || !actionable}", bid)
         self.assertIn("isTenderActionable(proposal.tender_status) &&", bid)
+        prepare = read_frontend("components/bid-preparation/PrepareBidButton.tsx")
+        self.assertIn("onClick={prepare}", prepare)
+        self.assertIn("'/proposals/prepare'", prepare)
 
 
 class AdbReconciliationTests(unittest.IsolatedAsyncioTestCase):

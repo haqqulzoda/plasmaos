@@ -154,10 +154,6 @@ function filenameFromContentDisposition(value: string | null): string | null {
     return asciiMatch?.[1] ?? null;
 }
 
-function axiosStatus(error: unknown): number | undefined {
-    return (error as { response?: { status?: number } })?.response?.status;
-}
-
 async function complianceExportErrorMessage(error: unknown): Promise<string> {
     const response = (error as { response?: { data?: unknown; status?: number } })?.response;
     const status = response?.status;
@@ -450,34 +446,8 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
             setIsLoadingText(true);
             setComplianceGuardMessage(null);
             try {
-                let resolvedId = tenderId;
-                let tenderData: Tender | null = null;
-
-                try {
-                    const { data } = await api.get<Tender>(`/tenders/${tenderId}`);
-                    tenderData = data;
-                } catch (primaryErr: unknown) {
-                    const status = axiosStatus(primaryErr);
-                    if (status !== 404) {
-                        throw new Error(`Failed to fetch tender: ${status ?? 'unknown'}`);
-                    }
-
-                    // Fallback: users may paste a proposal ID from /dashboard/bids/{id}.
-                    let mappedTenderId: string | undefined;
-                    try {
-                        const proposalResponse = await api.get(`/proposals/${tenderId}`);
-                        mappedTenderId = proposalResponse.data?.tender_id;
-                    } catch {
-                        throw new Error('Failed to resolve tender from proposal ID');
-                    }
-                    if (!mappedTenderId) {
-                        throw new Error('Could not resolve tender from proposal ID');
-                    }
-
-                    resolvedId = mappedTenderId;
-                    const { data } = await api.get<Tender>(`/tenders/${resolvedId}`);
-                    tenderData = data;
-                }
+                const resolvedId = tenderId;
+                const { data: tenderData } = await api.get<Tender>(`/tenders/${resolvedId}`);
 
                 setResolvedTenderId(resolvedId);
                 setTenderTitle(tenderData?.title || `Tender ${resolvedId.slice(0, 8)}`);
@@ -496,17 +466,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                     return;
                 }
 
-                let textResponse;
-                try {
-                    textResponse = await api.get(`/tenders/${resolvedId}/compiled-text`);
-                } catch (textErr: unknown) {
-                    if (axiosStatus(textErr) !== 404) {
-                        throw textErr;
-                    }
-
-                    await api.post('/proposals', { tender_id: resolvedId });
-                    textResponse = await api.get(`/tenders/${resolvedId}/compiled-text`);
-                }
+                const textResponse = await api.get(`/tenders/${resolvedId}/compiled-text`);
 
                 setRawText(textResponse.data.compiled_master_text || '');
                 setTextAccessReadyVersion((version) => version + 1);

@@ -123,6 +123,11 @@ class CompanyProfile(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "user_id",
+            name="uq_company_profiles_id_user_id",
+        ),
         CheckConstraint(
             f"pilot_status IN ({sql_string_values(COMPANY_PILOT_STATUSES)})",
             name="ck_company_profiles_pilot_status_allowed",

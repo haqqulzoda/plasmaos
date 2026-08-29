@@ -10,7 +10,12 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.models.all_models import ProposalStatus, TenderStatus
+from app.models.all_models import (
+    ProposalStatus,
+    TenderEngagementStatus,
+    TenderStatus,
+)
+from app.schemas.engagement import TenderEngagementSummary
 
 
 class ProposalCreate(BaseModel):
@@ -63,3 +68,13 @@ class ProposalWithTenderResponse(ProposalResponse):
     tender_region: str | None
     tender_source_system: str = "uzex"
     tender_status: TenderStatus
+    engagement_status: TenderEngagementStatus | None = None
+
+
+class PrepareBidResponse(BaseModel):
+    """Result of an explicit, transactional Prepare Bid command."""
+
+    proposal: ProposalWithTenderResponse
+    engagement: TenderEngagementSummary
+    proposal_created: bool
+    engagement_created: bool

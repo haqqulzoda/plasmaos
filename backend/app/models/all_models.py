@@ -29,7 +29,14 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, ProposalStatus, SubscriptionTier, TenderStatus
+from app.models.base import (
+    Base,
+    ProposalStatus,
+    SubscriptionTier,
+    TenderEngagementOrigin,
+    TenderEngagementStatus,
+    TenderStatus,
+)
 
 
 # ============================================================================
@@ -695,6 +702,7 @@ from app.models.company import (  # noqa: E402,F401
     License,
     ReadinessDocument,
 )
+from app.models.engagement import TenderEngagement  # noqa: E402,F401
 from app.models.taxonomy import (  # noqa: E402,F401
     CompanyCredential,
     RiskOverrideLog,
@@ -710,6 +718,8 @@ __all__ = [
     "SubscriptionTier",
     "TenderStatus",
     "ProposalStatus",
+    "TenderEngagementStatus",
+    "TenderEngagementOrigin",
     "TenderSyncStatus",
     "User",
     "Project",
@@ -720,6 +730,7 @@ __all__ = [
     "SourceRefreshJob",
     "TenderDocument",
     "Proposal",
+    "TenderEngagement",
     "CompanyProfile",
     "Certification",
     "License",

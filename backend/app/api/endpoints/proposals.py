@@ -30,7 +30,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 _FONTS_DIR = _Path(__file__).resolve().parent.parent.parent.parent / "fonts"
 pdfmetrics.registerFont(TTFont("Roboto", str(_FONTS_DIR / "Roboto-Regular.ttf")))
 pdfmetrics.registerFont(TTFont("Roboto-Bold", str(_FONTS_DIR / "Roboto-Bold.ttf")))
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -49,21 +49,33 @@ from app.models.all_models import (
     SubscriptionTier,
     TaxonomyNode,
     Tender,
+    TenderEngagement,
     TenderStatus,
     User,
 )
 from app.models.company import CompanyProfile
 from app.schemas.proposal import (
     ProposalCreate,
+    PrepareBidResponse,
     ProposalResponse,
     ProposalUpdate,
     ProposalWithTenderResponse,
 )
+from app.schemas.engagement import TenderEngagementSummary
 from app.services.analysis_aggregates import get_owned_analysis_parent_for_tender
 from app.services.analysis_versions import (
     AnalysisVersionIntegrityError,
     require_latest_analysis_version,
 )
+from app.services.bid_preparation import (
+    BidPreparationNotActionableError,
+    BidPreparationNotFoundError,
+    BidPreparationOwnershipError,
+    PrepareBidResult,
+    get_or_create_proposal_artifact,
+    prepare_bid,
+)
+from app.services.tender_engagements import allowed_actions_for_status
 
 router = APIRouter(
     dependencies=[
@@ -133,6 +145,56 @@ def _proposal_response(proposal: Proposal) -> ProposalResponse:
     )
 
 
+def _proposal_with_tender_response(
+    proposal: Proposal,
+    tender: Tender,
+    engagement_status=None,
+) -> ProposalWithTenderResponse:
+    return ProposalWithTenderResponse(
+        **_proposal_response(proposal).model_dump(),
+        tender_title=tender.title,
+        tender_budget=tender.budget,
+        tender_currency=tender.currency,
+        tender_deadline=tender.deadline,
+        tender_region=tender.region,
+        tender_source_system=tender.source_system,
+        tender_status=tender.status,
+        engagement_status=engagement_status,
+    )
+
+
+async def _owned_profile_id(db: AsyncSession, user_id: UUID) -> UUID | None:
+    return await db.scalar(
+        select(CompanyProfile.id).where(CompanyProfile.user_id == user_id)
+    )
+
+
+def _engagement_summary(engagement: TenderEngagement) -> TenderEngagementSummary:
+    return TenderEngagementSummary(
+        engagement_id=engagement.id,
+        tender_id=engagement.tender_id,
+        engagement_status=engagement.status,
+        engagement_origin=engagement.origin,
+        engagement_created_at=engagement.created_at,
+        engagement_updated_at=engagement.updated_at,
+        status_changed_at=engagement.status_changed_at,
+        allowed_actions=list(allowed_actions_for_status(engagement.status)),
+    )
+
+
+def _prepare_response(result: PrepareBidResult) -> PrepareBidResponse:
+    return PrepareBidResponse(
+        proposal=_proposal_with_tender_response(
+            result.proposal,
+            result.tender,
+            result.engagement.status,
+        ),
+        engagement=_engagement_summary(result.engagement),
+        proposal_created=result.proposal_created,
+        engagement_created=result.engagement_created,
+    )
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
@@ -160,38 +222,89 @@ async def create_proposal(
             detail="Tender not found",
         )
     
-    # Check if user already has a proposal for this tender
-    existing_result = await db.execute(
-        select(Proposal).where(
-            Proposal.user_id == current_user.id,
-            Proposal.tender_id == proposal_data.tender_id,
+    try:
+        resolution = await get_or_create_proposal_artifact(
+            db,
+            user_id=current_user.id,
+            tender=tender,
         )
-    )
-    existing = existing_result.scalar_one_or_none()
-    
-    if existing:
-        # Return existing proposal
-        return _proposal_response(existing)
-
-    if not is_tender_actionable(tender):
+    except BidPreparationNotActionableError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=TENDER_NOT_ACTIONABLE_DETAIL,
+        ) from exc
+    return _proposal_response(resolution.proposal)
+
+
+@router.post("/prepare", response_model=PrepareBidResponse)
+async def prepare_bid_for_tender(
+    command: ProposalCreate,
+    current_user: User = Depends(require_tier(SubscriptionTier.SCOUT)),
+    db: AsyncSession = Depends(get_db),
+) -> PrepareBidResponse:
+    """Explicitly start/continue preparation for a Tender, atomically."""
+    profile_id = await _owned_profile_id(db, current_user.id)
+    if profile_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company profile not found",
         )
-    
-    # Create new proposal
-    proposal = Proposal(
-        user_id=current_user.id,
-        tender_id=proposal_data.tender_id,
-        status=ProposalStatus.DRAFT,
-        ai_confidence_score=0,
-        structured_data={},
-    )
-    db.add(proposal)
-    await db.commit()
-    await db.refresh(proposal)
-    
-    return _proposal_response(proposal)
+    try:
+        result = await prepare_bid(
+            db,
+            user_id=current_user.id,
+            company_profile_id=profile_id,
+            tender_id=command.tender_id,
+        )
+    except BidPreparationNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tender not found",
+        ) from exc
+    except BidPreparationOwnershipError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bid Preparation not found",
+        ) from exc
+    except BidPreparationNotActionableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=TENDER_NOT_ACTIONABLE_DETAIL,
+        ) from exc
+    return _prepare_response(result)
+
+
+@router.post("/{proposal_id}/continue", response_model=PrepareBidResponse)
+async def continue_owned_bid_preparation(
+    proposal_id: UUID,
+    current_user: User = Depends(require_tier(SubscriptionTier.SCOUT)),
+    db: AsyncSession = Depends(get_db),
+) -> PrepareBidResponse:
+    """Record current intent for one strictly owned legacy Proposal."""
+    profile_id = await _owned_profile_id(db, current_user.id)
+    if profile_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bid Preparation not found",
+        )
+    try:
+        result = await prepare_bid(
+            db,
+            user_id=current_user.id,
+            company_profile_id=profile_id,
+            proposal_id=proposal_id,
+        )
+    except (BidPreparationNotFoundError, BidPreparationOwnershipError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bid Preparation not found",
+        ) from exc
+    except BidPreparationNotActionableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=TENDER_NOT_ACTIONABLE_DETAIL,
+        ) from exc
+    return _prepare_response(result)
 
 
 @router.get("", response_model=list[ProposalWithTenderResponse])
@@ -202,39 +315,31 @@ async def list_proposals(
     """
     List all proposals for the current user.
     """
+    profile_id = await _owned_profile_id(db, current_user.id)
+    if profile_id is None:
+        return []
     result = await db.execute(
-        select(Proposal)
-        .options(selectinload(Proposal.tender))
+        select(Proposal, Tender, TenderEngagement)
+        .join(Tender, Tender.id == Proposal.tender_id)
+        .outerjoin(
+            TenderEngagement,
+            and_(
+                TenderEngagement.user_id == current_user.id,
+                TenderEngagement.company_profile_id == profile_id,
+                TenderEngagement.tender_id == Proposal.tender_id,
+            ),
+        )
         .where(Proposal.user_id == current_user.id)
         .order_by(Proposal.created_at.desc())
     )
-    proposals = result.scalars().all()
-    
-    response = []
-    for p in proposals:
-        data = ProposalWithTenderResponse(
-            id=p.id,
-            user_id=p.user_id,
-            tender_id=p.tender_id,
-            status=p.status,
-            ai_confidence_score=p.ai_confidence_score,
-            structured_data=_public_structured_data(p.structured_data),
-            final_pdf_url=p.final_pdf_url,
-            margin_percent=p.margin_percent,
-            include_vat=p.include_vat,
-            currency=p.currency,
-            created_at=p.created_at,
-            tender_title=p.tender.title if p.tender else "Unknown",
-            tender_budget=p.tender.budget if p.tender else 0,
-            tender_currency=p.tender.currency if p.tender else "UZS",
-            tender_deadline=p.tender.deadline if p.tender else None,
-            tender_region=p.tender.region if p.tender else None,
-            tender_source_system=p.tender.source_system if p.tender else "uzex",
-            tender_status=p.tender.status if p.tender else TenderStatus.UNKNOWN,
+    return [
+        _proposal_with_tender_response(
+            proposal,
+            tender,
+            engagement.status if engagement else None,
         )
-        response.append(data)
-    
-    return response
+        for proposal, tender, engagement in result.all()
+    ]
 
 
 @router.get("/{proposal_id}", response_model=ProposalWithTenderResponse)
@@ -246,41 +351,40 @@ async def get_proposal(
     """
     Get a specific proposal with tender details.
     """
+    profile_id = await _owned_profile_id(db, current_user.id)
+    if profile_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bid Preparation not found",
+        )
     result = await db.execute(
-        select(Proposal)
-        .options(selectinload(Proposal.tender))
+        select(Proposal, Tender, TenderEngagement)
+        .join(Tender, Tender.id == Proposal.tender_id)
+        .outerjoin(
+            TenderEngagement,
+            and_(
+                TenderEngagement.user_id == current_user.id,
+                TenderEngagement.company_profile_id == profile_id,
+                TenderEngagement.tender_id == Proposal.tender_id,
+            ),
+        )
         .where(
             Proposal.id == proposal_id,
             Proposal.user_id == current_user.id,
         )
     )
-    proposal = result.scalar_one_or_none()
+    row = result.one_or_none()
     
-    if not proposal:
+    if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Proposal not found",
+            detail="Bid Preparation not found",
         )
-    
-    return ProposalWithTenderResponse(
-        id=proposal.id,
-        user_id=proposal.user_id,
-        tender_id=proposal.tender_id,
-        status=proposal.status,
-        ai_confidence_score=proposal.ai_confidence_score,
-        structured_data=_public_structured_data(proposal.structured_data),
-        final_pdf_url=proposal.final_pdf_url,
-        margin_percent=proposal.margin_percent,
-        include_vat=proposal.include_vat,
-        currency=proposal.currency,
-        created_at=proposal.created_at,
-        tender_title=proposal.tender.title if proposal.tender else "Unknown",
-        tender_budget=proposal.tender.budget if proposal.tender else 0,
-        tender_currency=proposal.tender.currency if proposal.tender else "UZS",
-        tender_deadline=proposal.tender.deadline if proposal.tender else None,
-        tender_region=proposal.tender.region if proposal.tender else None,
-        tender_source_system=proposal.tender.source_system if proposal.tender else "uzex",
-        tender_status=proposal.tender.status if proposal.tender else TenderStatus.UNKNOWN,
+    proposal, tender, engagement = row
+    return _proposal_with_tender_response(
+        proposal,
+        tender,
+        engagement.status if engagement else None,
     )
 
 

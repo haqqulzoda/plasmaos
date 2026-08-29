@@ -33,7 +33,7 @@ def test_repository_has_one_s2_2_head_with_s2_1_parent() -> None:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20260828_0002_s3_4_admin_audit_hardening"]
+    assert script.get_heads() == ["20260828_0003_s4_1_tender_engagement_foundation"]
     assert (
         script.get_revision("20260827_0002_s2_2_analysis_version_foundation").down_revision
         == "20260827_0001_s2_1_compliance_ownership"

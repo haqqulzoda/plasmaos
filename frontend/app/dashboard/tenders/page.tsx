@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
     AlertCircle,
-    ArrowRight,
     CheckCircle,
     Clock,
     FileText,
@@ -20,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { PrepareBidButton } from '@/components/bid-preparation/PrepareBidButton';
 import { CENTRAL_ASIA_REGION, useGeographyMeta } from '@/lib/geography';
 import { labelForService, useServiceMeta } from '@/lib/services';
 import type { Tender, TenderStatus } from '@/types/tender';
@@ -939,15 +939,11 @@ function TendersPageContent() {
                                             <ShieldCheck className="h-3.5 w-3.5" />
                                             Compliance
                                         </button>
-                                        <button
-                                            onClick={() => router.push(`/dashboard/bids/${tender.id}`)}
+                                        <PrepareBidButton
+                                            tenderId={tender.id}
                                             disabled={!actionable || isExpired(tender.deadline)}
                                             title={!actionable ? actionabilityMessage : isExpired(tender.deadline) ? 'Tender deadline has passed' : 'Start bid preparation'}
-                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
-                                        >
-                                            Draft
-                                            <ArrowRight className="h-3.5 w-3.5" />
-                                        </button>
+                                        />
                                     </div>
                                 </motion.div>
                             );

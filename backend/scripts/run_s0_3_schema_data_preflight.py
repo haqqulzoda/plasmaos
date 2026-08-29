@@ -40,6 +40,7 @@ TABLES = (
     "analysis_versions",
     "analysis_version_document_snapshots",
     "proposals",
+    "tender_engagements",
     "tender_recommendations",
     "risk_override_logs",
     "readiness_documents",
@@ -435,7 +436,169 @@ class ReadOnlyPreflight:
                     """
                 )
             )
+        if all(
+            self.has_table(required)
+            for required in ("users", "company_profiles", "tenders")
+        ) and self.has_columns(table, "user_id", "tender_id"):
+            ownership = await self.fetchrow(
+                """
+                SELECT
+                    COUNT(*) AS total_proposals,
+                    COUNT(*) FILTER (
+                        WHERE u.id IS NOT NULL
+                          AND cp.id IS NOT NULL
+                          AND t.id IS NOT NULL
+                    ) AS valid_owner_tender_profile_relationship,
+                    COUNT(*) FILTER (
+                        WHERE u.id IS NULL OR cp.id IS NULL OR t.id IS NULL
+                    ) AS incomplete_ownership,
+                    COUNT(*) FILTER (WHERE u.id IS NULL) AS missing_owner,
+                    COUNT(*) FILTER (WHERE t.id IS NULL) AS missing_tender,
+                    COUNT(*) FILTER (
+                        WHERE u.id IS NOT NULL AND cp.id IS NULL
+                    ) AS owner_without_profile
+                FROM proposals p
+                LEFT JOIN users u ON u.id = p.user_id
+                LEFT JOIN company_profiles cp ON cp.user_id = p.user_id
+                LEFT JOIN tenders t ON t.id = p.tender_id
+                """
+            )
+            data["reconciliation_ownership"] = _json_value(ownership)
+            if self.has_table("tender_engagements"):
+                engagement_context = await self.fetchrow(
+                    """
+                    SELECT
+                        COUNT(*) FILTER (WHERE e.id IS NOT NULL)
+                            AS proposals_with_engagement,
+                        COUNT(*) FILTER (WHERE e.id IS NULL)
+                            AS proposals_without_engagement
+                    FROM proposals p
+                    LEFT JOIN company_profiles cp ON cp.user_id = p.user_id
+                    LEFT JOIN tender_engagements e
+                      ON e.user_id = p.user_id
+                     AND e.company_profile_id = cp.id
+                     AND e.tender_id = p.tender_id
+                    """
+                )
+                data["engagement_context"] = _json_value(engagement_context)
+            else:
+                data["engagement_context"] = {"available": False}
         return {"table_exists": True, "schema": snapshot, "data": data}
+
+    async def tender_engagement_audit(self) -> dict[str, Any]:
+        """Report aggregate-only Sprint 4.1 ownership and lifecycle health."""
+        table = "tender_engagements"
+        snapshot = await self.schema_snapshot(table)
+        if snapshot is None:
+            return {"table_exists": False, "schema": None, "data": None}
+
+        allowed_statuses = (
+            "SAVED",
+            "EVALUATING",
+            "PREPARING",
+            "SUBMITTED",
+            "WON",
+            "LOST",
+            "DISMISSED",
+        )
+        status_rows = await self.fetch(
+            """
+            SELECT status::text AS status, COUNT(*) AS rows
+            FROM tender_engagements
+            GROUP BY status::text
+            ORDER BY status::text
+            """
+        )
+        status_counts = {status: 0 for status in allowed_statuses}
+        status_counts.update(
+            {str(row["status"]): int(row["rows"]) for row in status_rows}
+        )
+
+        duplicate_keys = await self.fetchrow(
+            """
+            SELECT COUNT(*) AS duplicate_groups,
+                   COALESCE(SUM(rows - 1), 0)::bigint AS excess_rows
+            FROM (
+                SELECT COUNT(*)::bigint AS rows
+                FROM tender_engagements
+                GROUP BY user_id, company_profile_id, tender_id
+                HAVING COUNT(*) > 1
+            ) duplicates
+            """
+        )
+        integrity = await self.fetchrow(
+            """
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE u.id IS NULL OR cp.id IS NULL OR cp.user_id <> e.user_id
+                ) AS invalid_user_profile_relationships,
+                COUNT(*) FILTER (WHERE t.id IS NULL) AS broken_tender_fks,
+                COUNT(*) FILTER (
+                    WHERE e.status::text NOT IN (
+                        'SAVED', 'EVALUATING', 'PREPARING', 'SUBMITTED',
+                        'WON', 'LOST', 'DISMISSED'
+                    )
+                ) AS unknown_or_invalid_status
+            FROM tender_engagements e
+            LEFT JOIN users u ON u.id = e.user_id
+            LEFT JOIN company_profiles cp ON cp.id = e.company_profile_id
+            LEFT JOIN tenders t ON t.id = e.tender_id
+            """
+        )
+
+        legacy_proposals: dict[str, Any] | None = None
+        if all(
+            self.has_table(required)
+            for required in ("proposals", "users", "company_profiles", "tenders")
+        ):
+            counts = await self.fetchrow(
+                """
+                SELECT
+                    COUNT(*) AS total_proposals,
+                    COUNT(*) FILTER (
+                        WHERE u.id IS NOT NULL AND cp.id IS NOT NULL AND t.id IS NOT NULL
+                    ) AS valid_owner_profile_tender,
+                    COUNT(*) FILTER (
+                        WHERE u.id IS NULL OR cp.id IS NULL OR t.id IS NULL
+                    ) AS invalid_or_missing_owner_relationship,
+                    COUNT(*) AS possibly_auto_generated
+                FROM proposals p
+                LEFT JOIN users u ON u.id = p.user_id
+                LEFT JOIN company_profiles cp ON cp.user_id = p.user_id
+                LEFT JOIN tenders t ON t.id = p.tender_id
+                """
+            )
+            duplicate_proposals = await self.fetchval(
+                """
+                SELECT COUNT(*) FROM (
+                    SELECT p.user_id, cp.id AS company_profile_id, p.tender_id
+                    FROM proposals p
+                    LEFT JOIN company_profiles cp ON cp.user_id = p.user_id
+                    GROUP BY p.user_id, cp.id, p.tender_id
+                    HAVING COUNT(*) > 1
+                ) duplicates
+                """
+            )
+            legacy_proposals = {
+                **_json_value(counts),
+                "created_by_explicit_user_action": None,
+                "explicit_intent_determinability": "not_determinable_from_persisted_data",
+                "duplicate_logical_engagement_keys": int(duplicate_proposals),
+            }
+
+        return {
+            "table_exists": True,
+            "schema": snapshot,
+            "data": {
+                "total_tender_engagements": int(
+                    await self.fetchval("SELECT COUNT(*) FROM tender_engagements")
+                ),
+                "status_counts": status_counts,
+                "duplicate_logical_keys": _json_value(duplicate_keys),
+                **_json_value(integrity),
+                "legacy_proposal_candidates": legacy_proposals,
+            },
+        }
 
     def _legacy_candidate_sql(self) -> str:
         candidates: list[str] = []
@@ -1565,6 +1728,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             "schema": schema,
             "tender_recommendations": await runner.recommendation_audit(),
             "proposals": await runner.proposal_audit(),
+            "tender_engagements": await runner.tender_engagement_audit(),
             "tender_analyses": await runner.analysis_audit(),
             "analysis_versions": await runner.analysis_version_audit(),
             "identity": await runner.identity_audit(
