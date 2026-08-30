@@ -1,0 +1,282 @@
+# Sprint 6.1 — Hunter → Explorer Convergence Foundation
+
+Status: complete as an audit and contract sprint. No unified Explorer backend or frontend was implemented, Hunter remains operational, no route was retired, no migration/backfill was added, and nothing was deployed.
+
+## 1. Current Explorer Surface
+
+| Item | Current contract |
+| --- | --- |
+| Customer route | `/dashboard/tenders` |
+| Backend route | `GET /api/v1/tenders` |
+| Data authority | Globally customer-visible `Tender` source facts; no Recommendation join |
+| Filters | Tender lifecycle, source, search, region/country, service, deadline range/status, price, document status, category |
+| Sorts | Newest, deadline soonest, highest price, document availability, source |
+| Pagination | Backend `limit/offset` without total; frontend reloads a cumulative `page × 50` window |
+| Tenant scope | Response has no tenant-private domain; dashboard shell still enforces customer access |
+| Passive behavior | Tender SELECT plus batched document summaries; response-only live UzEx date lookup may perform an external POST but does not dirty ORM rows |
+| Explicit writes | Source refresh and Prepare Bid are click actions; initial render does not invoke them |
+| Detail identity | Every Tender opens `/dashboard/tenders/{tender_id}` |
+
+Explorer currently presents source, Tender lifecycle, document availability, buyer/project, value, deadline, category/method, Details, Compliance, and explicit Prepare. It does not load or render persisted Recommendation or pursuit state.
+
+## 2. Current Hunter Surface
+
+`/dashboard/hunter` is a separate navigation destination. Its initial effect performs only `GET /api/v1/hunter/`. The endpoint resolves the authenticated user's unique CompanyProfile, reads owned non-dismissed Recommendations joined to actionable Tenders, and orders by score descending. There is no pagination, total count, search, Tender filter reuse, dismissed view, restore, detail endpoint, or deterministic equal-score tie-breaker.
+
+The UI presents `Hunter Feed`, an integer `match`, stored rationale, budget/deadline, canonical Tender Details navigation, and an explicit Dismiss button. Its empty copy claims Hunter is scanning, but current persisted state cannot prove whether generation is pending, failed, stale, or simply produced no qualifying results. That copy must become neutral during Sprint 6.3.
+
+## 3. Recommendation Model
+
+Canonical persistence is `TenderRecommendation` in `tender_recommendations`:
+
+| Field | Contract |
+| --- | --- |
+| `id` | UUID primary key |
+| `tender_id` | Required FK to global Tender; cascade delete |
+| `company_profile_id` | Required FK to private CompanyProfile; cascade delete |
+| `match_score` | Required integer, database constrained 0–100 |
+| `strategic_rationale` | Required stored text |
+| `is_dismissed` | Required boolean, default false |
+| `created_at` | Required generation/persistence timestamp |
+
+There is no direct `user_id`, `updated_at`, profile hash/version, algorithm/model version, recompute timestamp, generation job ID, or separate status enum.
+
+## 4. Recommendation Identity
+
+The canonical logical identity is `(company_profile_id, tender_id)`. The database unique constraint is physically ordered `(tender_id, company_profile_id)`, which enforces the same pair. CompanyProfile has a unique `user_id`, so the owning user is derived canonically from the profile rather than duplicated in Recommendation. Company name, user email, Tender title/URL, score, and rationale are never identity. Logical duplicates are prevented by the database and the local audit found zero duplicate groups.
+
+## 5. Ownership
+
+Recommendation data is tenant-private. Reads first resolve `CompanyProfile.id` using `CompanyProfile.user_id == current_user.id`, then constrain Recommendation by that profile UUID. Dismissal joins the Recommendation's CompanyProfile and applies the same user UUID ownership check. Same-name profiles cannot collide. Foreign ownership uses the anti-enumerating 404 response.
+
+`require_approved_pilot_access` permits operator/admin authentication, but that does not grant customer Recommendation access: an operator/admin without their own CompanyProfile receives an empty list and cannot dismiss another profile's row. No impersonation or platform-admin customer backdoor exists.
+
+## 6. Score Semantics
+
+The score is a stored, profile-dependent Gemini `gemini-2.5-flash-lite` assessment of “strategic fit” on the integer range 0–100. Inputs are a bounded Tender title/description/budget payload and the Company's profile, licenses, certifications, and financial history. Generation uses temperature 0.1 and API retries, so it is not guaranteed deterministic. The worker persists only scores of at least 10. It is advisory and is not win probability, eligibility, Compliance, readiness, submission likelihood, or award likelihood.
+
+## 7. Rationale Semantics
+
+`strategic_rationale` is concise text generated by the same LLM call and stored as a snapshot. It is not source evidence, a Compliance finding, or an eligibility proof. The database text field is unbounded even though the prompt requests concision; the future Explorer list contract therefore returns a bounded summary of at most 280 Unicode characters and must never expose prompts, retries, or provider traces.
+
+## 8. Recommendation Generation
+
+The canonical writer is the scheduled Celery task `app.workers.hunter_tasks.run_hunter_sweep`, run every 30 minutes. It considers actionable Tenders created in the preceding 24 hours for each CompanyProfile, skips every profile/Tender pair that already has a Recommendation (including dismissed rows), batches at 25, invokes Gemini, discards invalid/duplicate/empty outputs and scores below 10, then inserts `TenderRecommendation` rows in one transaction.
+
+The same sweep explicitly dispatches Tender document processing for recent UzEx Tenders before evaluation. That is background ingestion work, not a Hunter/Explorer read effect. The worker currently processes all CompanyProfile rows because the model has no `is_active` column; approval/profile completeness gating should be reviewed in Sprint 6.2 without inventing a new profile lifecycle field.
+
+## 9. Freshness
+
+Only `created_at` can be shown truthfully as “generated at.” There is no persisted model version, prompt version, profile version/hash, updated timestamp, or stale flag. Existing rows are never recomputed by the current sweep because existence excludes them. CompanyProfile changes therefore leave the stored score/rationale as a historical snapshot with no machine-verifiable staleness signal. Sprint 6.3 must not display “stale” or “up to date.”
+
+## 10. Dismissal
+
+Dismissal means only: “do not show this owned Recommendation as active for this user/company.” `POST /api/v1/hunter/{recommendation_id}/dismiss` sets `is_dismissed = true`. It does not delete or hide the Tender globally, mutate source facts, create/change TenderEngagement, remove Proposal, or alter Compliance. Canonical future copy is `Dismiss recommendation` or `Not relevant`, never ambiguous `Dismiss Tender`.
+
+## 11. Restore
+
+The boolean schema safely supports restore by setting the existing owned row back to false, preserving identity and avoiding duplicates. No restore endpoint or UI currently exists. Sprint 6.2 should add one canonical Recommendation service command with the same ownership/404 rules; it must update the existing row and must not regenerate the score/rationale or create another row. No schema change is needed.
+
+## 12. Recommendation vs Tender
+
+Tender remains the sole authority for title, buyer, budget/value, deadline, source status, source provenance, and global discoverability. Recommendation may overlay score, rationale, dismissal, and generation time but never overrides a Tender field. Dismissal never removes the Tender from All mode.
+
+## 13. Recommendation vs Pursuit
+
+Recommendation and `TenderEngagement` are independent. Active Recommendation plus no pursuit, SAVED, PREPARING, WON, LOST, or DISMISSED pursuit are all valid. Dismissed Recommendation plus PREPARING pursuit is also valid. Recommendation reads/generation/dismissal write no engagement state, and engagement commands do not rewrite Recommendation.
+
+## 14. Recommendation vs Proposal
+
+Recommendation presence, score, generation, dismissal, and restore never create or mutate Proposal. Prepare Bid remains the only explicit path that creates/reuses the Proposal artifact and navigates with Proposal ID.
+
+## 15. Recommendation vs Compliance
+
+Recommendation is discovery intelligence only. It does not create TenderAnalysis/AnalysisVersion, change readiness or risk override, or prove eligibility. Tender Details and Compliance remain the decision surfaces.
+
+## 16. Final Explorer Purpose
+
+Tender Explorer is the single global Tender discovery surface with optional private Recommendation intelligence. It supports “show all accessible Tenders” and “show the best matches for my company” without making Hunter a second product model or turning the list into Tender Details.
+
+## 17. Discovery Modes
+
+Use one canonical URL parameter:
+
+- `view=all` — default; every accessible Tender matching Tender filters.
+- `view=recommended` — owned active Recommendations joined to matching Tenders.
+- `view=dismissed` — owned dismissed Recommendations joined to matching Tenders.
+
+These are modes of the same Explorer rather than separate customer surfaces or excessive tabs.
+
+## 18. Recommended Membership
+
+A Tender belongs to Recommended mode if and only if an owned `TenderRecommendation` row exists with `is_dismissed = false`. Tender value, engagement, Proposal, Compliance, Project source, score threshold at read time, and source status do not define membership. Existing worker thresholding is generation policy, not membership policy. Tender lifecycle filters may exclude a row from a particular result without mutating its Recommendation.
+
+## 19. Sorting
+
+Recommended and Dismissed default to server-side Best match:
+
+`match_score DESC, created_at DESC, recommendation_id ASC`.
+
+The ID tie-breaker makes equal-score pages stable. Existing Tender sorts remain valid where meaningful; `best_match` is accepted only when a Recommendation mode is selected. All mode retains its current default newest ordering. No client-side score sort is allowed.
+
+## 20. Filters
+
+Recommendation mode is an additional server-side constraint on the same Tender query builder. Existing status, source, search, region/country, service, deadline, price, document, and category filters apply before counting and pagination. Search remains Tender-source search over current Tender fields; rationale is not searched by default. Source CLOSED/CANCELLED and expired deadlines filter presentation only and never mutate Recommendation or pursuit.
+
+## 21. Pagination
+
+Recommended/Dismissed filtering, ownership, Tender filters, and sorting must all occur before `OFFSET/LIMIT`. The endpoint returns stable total, limit, and offset. It is forbidden to paginate all Tenders first and then attach/filter Recommendation client-side. The current Explorer's cumulative page window and Hunter's unbounded list are not the Sprint 6.2 contract.
+
+## 22. Counts
+
+Return three separate counts under the same Tender filters/search, before `view` is applied:
+
+- `all_tenders`
+- `active_recommendations`
+- `dismissed_recommendations`
+
+Counts never include My Tenders, Proposal, or Compliance totals. They are tenant-private where Recommendation is involved.
+
+## 23. Company Profile Absence
+
+All mode works without a CompanyProfile. Recommended and Dismissed return empty items and a machine-readable `recommendation_availability = "profile_required"`; no score zero is fabricated. With a profile, the backend can distinguish no active rows from all dismissed and filters excluding rows. It cannot currently distinguish generation pending, failure, or staleness, so those diagnoses must not be claimed.
+
+## 24. Route Strategy
+
+The canonical route remains `/dashboard/tenders`. Sprint 6.1 keeps `/dashboard/hunter` fully operational. Sprint 6.4 will make it a passive compatibility redirect to `/dashboard/tenders?view=recommended`; it must not trigger generation or refresh. No Hunter-specific Tender detail route exists or should be introduced.
+
+## 25. Navigation Strategy
+
+Current navigation retains Tenders and Hunter Feed through Sprint 6.1/6.2. Sprint 6.3 removes Hunter from primary navigation when the unified UI exists, leaving one Tenders entry. My Tenders and Bid Preparation remain separate because pursuit and Proposal are separate domains.
+
+## 26. Deep-Link Strategy
+
+Canonical shareable state is `/dashboard/tenders?view=all|recommended|dismissed` plus existing Tender filter/sort/pagination parameters. Browser back/forward must restore URL state. Recommended cards always open `/dashboard/tenders/{tender_id}`; Recommendation ID is mutation identity only, never a page identity.
+
+## 27. Backend Convergence Decision
+
+Choose option B: create one unified Explorer read endpoint while retaining current Tender and Hunter APIs for compatibility during rollout. Proposed route: `GET /api/v1/explorer/tenders`. This avoids breaking the existing `GET /tenders` response shape, gives Recommendation modes correct server-side totals/pagination, centralizes filter reuse, and permits All-mode Recommendation failure isolation. Sprint 6.2 owns implementation.
+
+## 28. Query Plans
+
+Recommended/Dismissed plan:
+
+1. Resolve the authenticated user's owned CompanyProfile; no platform-admin substitution.
+2. Start from owned Recommendation rows and filter `is_dismissed` for the selected mode.
+3. Join canonical customer-visible Tender.
+4. Apply shared Tender lifecycle/source/search/geography/service/deadline/price/document/category predicates.
+5. Count the fully filtered relation.
+6. Sort by score, generation time, and Recommendation ID.
+7. Paginate after all predicates.
+
+All plan:
+
+1. Start from customer-visible Tenders and apply shared Tender filters.
+2. LEFT JOIN at most one Recommendation using the owned profile UUID plus Tender ID.
+3. Keep Recommendation nullable and never synthesize score zero.
+4. Count filtered Tenders, apply selected Tender sort, then paginate.
+5. If optional Recommendation overlay fails safely, return Tenders with `recommendation = null` and `recommendation_availability = "unavailable"`; Recommended mode instead returns an isolated error state.
+
+The unique profile/Tender pair prevents duplicate Tender rows.
+
+## 29. Response Contract Proposal
+
+```text
+ExplorerResponse {
+  items: [{
+    tender: bounded canonical Tender summary,
+    recommendation: null | {
+      recommendation_id: UUID,
+      match_score: integer 0..100,
+      rationale_summary: string <= 280 Unicode characters,
+      status: ACTIVE | DISMISSED,
+      generated_at: datetime
+    }
+  }],
+  total: integer,
+  limit: integer,
+  offset: integer,
+  counts: {
+    all_tenders: integer,
+    active_recommendations: integer,
+    dismissed_recommendations: integer
+  },
+  recommendation_availability: AVAILABLE | PROFILE_REQUIRED | UNAVAILABLE
+}
+```
+
+Do not include full Compliance, Project, documents, Proposal content, AnalysisVersion evidence, prompts, or provider traces. Pursuit remains a separate optional future overlay; Sprint 6.2 must not infer it from Recommendation.
+
+## 30. Security
+
+Every Recommendation selection, count, dismiss, and restore is scoped through authenticated user UUID plus owned CompanyProfile UUID. Global Tender visibility never grants another tenant's score/rationale/dismissal/timestamp. Same-name text is irrelevant. Foreign IDs return the anti-enumerating not-found outcome. Pending/rejected/disabled/stale credentials retain Sprint 3 denial. Platform admin gains no customer data backdoor.
+
+## 31. Same-Name Tenant Matrix
+
+For the same Tender, profile A may have score 91/reason A while same-name profile B has score 43/reason B. The unique keys are separate because profile UUIDs differ. All queries constrain the resolved owned UUID before returning Recommendation data; dismissal/restore of A cannot affect B. The conceptual domain matrix also covers active/dismissed Recommendation with every pursuit/source combination, no rationale, and missing profile.
+
+## 32. Static Writer Audit
+
+Normal runtime writers are fully inventoried:
+
+| Writer | Classification | Writes |
+| --- | --- | --- |
+| `_run_hunter_sweep_async` | Scheduled generation | Inserts new Recommendation rows; also dispatches UzEx document ingestion |
+| `dismiss_recommendation` | Explicit customer mutation | Sets owned Recommendation `is_dismissed = true` |
+| Future restore service | Deferred explicit mutation | Will set the same owned row false |
+
+Migration/bootstrap code creates/validates schema and test/disposable scripts insert fixtures; neither is a normal customer runtime writer. No unknown runtime writer exists. No writer touches TenderEngagement, Proposal, Compliance/AnalysisVersion, or Tender source facts.
+
+## 33. Legacy Recommendation Audit
+
+The read-only local PostgreSQL audit (not production truth) reported:
+
+| Metric | Local count |
+| --- | ---: |
+| Total | 4,109 |
+| Active | 4,107 |
+| Dismissed | 2 |
+| Other states | 0 |
+| Valid user/profile/Tender | 4,109 |
+| Invalid user/profile | 0 |
+| Broken Tender | 0 |
+| Duplicate logical keys | 0 |
+| Null score | 0 |
+| Score range | 10–95 |
+| With rationale | 4,109 |
+| Without rationale | 0 |
+| With engagement | 0 |
+| Without engagement | 4,109 |
+
+The audit used a transaction declared read-only, emitted only counts/schema, called no ORM/application helper, committed nothing, and rolled back in `finally`.
+
+## 34. Migration / Backfill Decision
+
+No backfill and no migration are required for convergence correctness. Existing Recommendations are directly usable; All mode never requires Recommendation rows for every Tender. The schema's boolean supports restore and its unique constraint prevents duplicates. No freshness fields will be added for UI convenience in Sprint 6.1.
+
+Index inventory: primary key on ID; unique `(tender_id, company_profile_id)`; individual indexes on Tender, CompanyProfile, and created_at. Overlay lookup is supported. Recommended-mode profile/status/score ordering lacks a compound index; Sprint 6.2 must benchmark the actual unified query and consider `(company_profile_id, is_dismissed, match_score DESC, created_at DESC, id)` only if EXPLAIN/load evidence justifies a performance migration.
+
+## 35. Prefight Plan
+
+The existing read-only preflight now reports total, active/dismissed/other, distinct profiles/Tenders, valid and invalid ownership, broken Tender, duplicate logical keys, null/min/max score, rationale presence, and Recommendation coexistence with/without engagement. It dumps no customer content and performs no repair. Sprint 6.2 should keep these checks as pre- and post-deployment count evidence without treating engagement presence/absence as defects.
+
+## 36. Sprint 6.2 Contract
+
+Sprint 6.2 may implement only the unified backend/query contract:
+
+- new `/api/v1/explorer/tenders` bounded response and shared Tender filter builder;
+- server-side `view=all|recommended|dismissed`;
+- tenant-first Recommendation scoping;
+- deterministic Best match sort;
+- filter-before-count-before-pagination correctness;
+- nullable All-mode overlay and availability state;
+- active/dismissed/all counts;
+- owned canonical dismiss/restore service;
+- query-count, EXPLAIN/load, same-name tenant, authorization, failure-isolation, and passive-read tests;
+- index migration only if measured evidence justifies it.
+
+It must not build the final UI, remove Hunter navigation/route, infer pursuit, create Proposal/Compliance, redesign scoring, backfill Recommendations, or deploy.
+
+## 37. Deferred Sprint 6.3 / 6.4 Work
+
+Sprint 6.3 owns the unified Explorer UI, URL-backed modes, score/rationale presentation, dismiss/restore UI, neutral empty states, and removal of Hunter from primary navigation. Sprint 6.4 owns the passive Hunter redirect, dead Hunter component/client cleanup where safe, deep-link reconciliation, and final browser QA. None of that is implemented in Sprint 6.1.

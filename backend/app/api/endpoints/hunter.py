@@ -21,6 +21,10 @@ from app.db.session import get_db
 from app.models.all_models import Tender, User
 from app.models.audit import TenderRecommendation
 from app.models.company import CompanyProfile
+from app.services.recommendations import (
+    RecommendationNotFoundError,
+    dismiss_recommendation as dismiss_owned_recommendation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -131,27 +135,18 @@ async def dismiss_recommendation(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Set is_dismissed = True for a specific recommendation.
-    Ownership is verified through company_profile → user_id.
+    Delegate the legacy Hunter command to the canonical owned service.
     """
-    stmt = (
-        select(TenderRecommendation)
-        .join(CompanyProfile)
-        .where(
-            TenderRecommendation.id == recommendation_id,
-            CompanyProfile.user_id == current_user.id,
+    try:
+        await dismiss_owned_recommendation(
+            db,
+            recommendation_id=recommendation_id,
+            user_id=current_user.id,
         )
-    )
-    result = await db.execute(stmt)
-    rec = result.scalar_one_or_none()
-
-    if rec is None:
+    except RecommendationNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recommendation not found or access denied.",
-        )
-
-    rec.is_dismissed = True
-    await db.flush()
+        ) from exc
 
     return {"status": "ok", "message": "Recommendation dismissed."}

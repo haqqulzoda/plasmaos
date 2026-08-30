@@ -1910,9 +1910,14 @@ def _apply_tender_sort(query, sort: str | None):
             Tender.deadline.is_(None).asc(),
             Tender.deadline.asc(),
             Tender.created_at.desc(),
+            Tender.id.asc(),
         )
     if normalized_sort == "highest_price":
-        return query.order_by(Tender.budget.desc(), Tender.created_at.desc())
+        return query.order_by(
+            Tender.budget.desc(),
+            Tender.created_at.desc(),
+            Tender.id.asc(),
+        )
     if normalized_sort == "document_availability":
         available_rank = case(
             (_document_status_predicate("documents_available"), 0),
@@ -1922,13 +1927,165 @@ def _apply_tender_sort(query, sort: str | None):
             (_document_status_predicate("failed"), 4),
             else_=5,
         )
-        return query.order_by(available_rank.asc(), Tender.created_at.desc())
+        return query.order_by(
+            available_rank.asc(),
+            Tender.created_at.desc(),
+            Tender.id.asc(),
+        )
     if normalized_sort == "source":
-        return query.order_by(Tender.source_system.asc(), Tender.created_at.desc())
+        return query.order_by(
+            Tender.source_system.asc(),
+            Tender.created_at.desc(),
+            Tender.id.asc(),
+        )
     return query.order_by(
         func.coalesce(Tender.publication_date, Tender.created_at).desc(),
         Tender.created_at.desc(),
+        Tender.id.asc(),
     )
+
+
+def apply_explorer_tender_filters(
+    query,
+    *,
+    source: str | None = None,
+    source_system: str | None = None,
+    q: str | None = None,
+    region: list[str] | None = None,
+    country: str | None = None,
+    countries: list[str] | None = None,
+    service: str | None = None,
+    services: list[str] | None = None,
+    tender_status: str | None = None,
+    deadline_status: str | None = None,
+    deadline_from: datetime | None = None,
+    deadline_to: datetime | None = None,
+    price_min: float | None = None,
+    price_max: float | None = None,
+    document_status: str | None = None,
+    document_tender_ids: tuple[UUID, ...] | None = None,
+    category: str | None = None,
+):
+    """Apply every Explorer membership predicate before count and pagination.
+
+    This is the shared SQL contract for the legacy Tender list and the unified
+    Sprint 6 Explorer query. It returns the normalized document filter so the
+    caller may report or test the resolved contract without filtering rows in
+    Python.
+    """
+    try:
+        lifecycle_condition = _tender_lifecycle_condition(tender_status)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    if lifecycle_condition is not None:
+        query = query.where(lifecycle_condition)
+
+    normalized_source = _normalize_tender_source_filter(source_system or source)
+    if normalized_source:
+        query = query.where(Tender.source_system == normalized_source)
+
+    search_term = (q or "").strip()
+    if search_term:
+        pattern = f"%{search_term}%"
+        query = query.where(
+            or_(
+                Tender.title.ilike(pattern),
+                Tender.description.ilike(pattern),
+                Tender.buyer.ilike(pattern),
+                Tender.project_id.ilike(pattern),
+                Tender.external_id.ilike(pattern),
+                Tender.sector.ilike(pattern),
+                Tender.category.ilike(pattern),
+                Tender.procurement_category.ilike(pattern),
+                Tender.procurement_method.ilike(pattern),
+                Tender.notice_type.ilike(pattern),
+            )
+        )
+
+    normalized_regions = _normalize_region_filter(region)
+    normalized_countries = _normalize_list_filter(
+        [*(_split_query_values(country)), *(_split_query_values(countries))],
+        label="country",
+    )
+    region_countries = _expanded_region_countries(normalized_regions)
+    country_predicates = []
+    if normalized_countries:
+        country_predicates.append(_country_predicate(normalized_countries))
+    if region_countries:
+        country_predicates.append(_country_predicate(region_countries))
+    for selected_region in normalized_regions:
+        if selected_region != CENTRAL_ASIA_REGION:
+            country_predicates.append(Tender.region.ilike(f"%{selected_region}%"))
+    if country_predicates:
+        query = query.where(or_(*country_predicates))
+
+    normalized_services = _normalize_service_filter(
+        [*(_split_query_values(service)), *(_split_query_values(services))]
+    )
+    if normalized_services:
+        query = query.where(_service_predicate(normalized_services))
+
+    normalized_deadline_status = (deadline_status or "").strip().casefold()
+    if normalized_deadline_status:
+        now = datetime.now(timezone.utc)
+        if normalized_deadline_status == "active":
+            query = query.where(Tender.deadline.is_not(None), Tender.deadline >= now)
+        elif normalized_deadline_status == "expired":
+            query = query.where(Tender.deadline.is_not(None), Tender.deadline < now)
+        elif normalized_deadline_status == "unknown":
+            query = query.where(Tender.deadline.is_(None))
+        elif normalized_deadline_status not in {"all", "any"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported deadline_status",
+            )
+    if deadline_from is not None:
+        query = query.where(Tender.deadline.is_not(None), Tender.deadline >= deadline_from)
+    if deadline_to is not None:
+        query = query.where(Tender.deadline.is_not(None), Tender.deadline <= deadline_to)
+    if price_min is not None:
+        query = query.where(Tender.budget >= price_min)
+    if price_max is not None:
+        query = query.where(Tender.budget <= price_max)
+    if price_min is not None and price_max is not None and price_min > price_max:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="price_min cannot be greater than price_max",
+        )
+
+    normalized_document_status = (document_status or "").strip().casefold()
+    if normalized_document_status:
+        if normalized_document_status in {"all", "any"}:
+            normalized_document_status = ""
+        elif normalized_document_status not in DOCUMENT_STATUS_FILTERS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported document_status",
+            )
+    if normalized_document_status and document_tender_ids is not None:
+        query = query.where(Tender.id.in_(document_tender_ids))
+    elif normalized_document_status:
+        query = query.where(_document_status_predicate(normalized_document_status))
+
+    category_filter = (category or "").strip()
+    if category_filter and category_filter.casefold() not in {"all", "any"}:
+        pattern = f"%{category_filter}%"
+        query = query.where(
+            or_(
+                Tender.sector.ilike(pattern),
+                Tender.procurement_category.ilike(pattern),
+                Tender.category.ilike(pattern),
+                Tender.procurement_method.ilike(pattern),
+                Tender.notice_type.ilike(pattern),
+                Tender.title.ilike(pattern),
+                Tender.description.ilike(pattern),
+            )
+        )
+
+    return query, normalized_document_status
 
 
 def _document_status_from_summary(summary: DocumentSummary) -> str:
@@ -2084,6 +2241,51 @@ async def _batched_tender_summaries(
         summary["document_status"] = _document_status_from_summary(summary)
 
     return summaries
+
+
+async def resolve_filesystem_document_filter_tender_ids(
+    *,
+    db: AsyncSession,
+    document_status: str | None,
+) -> tuple[UUID, ...] | None:
+    """Resolve document modes whose truth depends on application file state.
+
+    Persisted document states use correlated SQL ``EXISTS``. The established
+    availability and missing-file response semantics additionally inspect the
+    application filesystem, so these matching IDs are resolved once before
+    count/order/page and are then applied by SQL as a Tender membership
+    predicate. No bounded page is filtered after retrieval.
+    """
+    normalized = (document_status or "").strip().casefold()
+    if normalized in {"", "all", "any"}:
+        return None
+    if normalized not in DOCUMENT_STATUS_FILTERS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported document_status",
+        )
+    if normalized not in {"documents_available", "files_missing"}:
+        return None
+
+    tenders = (
+        await db.execute(
+            select(Tender).where(customer_visible_tender_condition(Tender))
+        )
+    ).scalars().all()
+    summaries = await _batched_tender_summaries(
+        db=db,
+        tender_ids=[tender.id for tender in tenders],
+    )
+    matching_ids = [
+        tender.id
+        for tender in tenders
+        if _serialize_tender(
+            tender,
+            summary=summaries.get(tender.id),
+        ).document_status
+        == normalized
+    ]
+    return tuple(sorted(matching_ids, key=str))
 
 
 async def _single_tender_summary(
@@ -4459,6 +4661,10 @@ async def list_tenders(
 
     Returns a paginated tender list.
     """
+    document_tender_ids = await resolve_filesystem_document_filter_tender_ids(
+        db=db,
+        document_status=document_status,
+    )
     query = select(Tender).options(
         load_only(
             Tender.id,
@@ -4486,114 +4692,26 @@ async def list_tenders(
             Tender.created_at,
         )
     ).where(customer_visible_tender_condition(Tender))
-    try:
-        lifecycle_condition = _tender_lifecycle_condition(tender_status)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-    if lifecycle_condition is not None:
-        query = query.where(lifecycle_condition)
-    normalized_source = _normalize_tender_source_filter(source_system or source)
-    if normalized_source:
-        query = query.where(Tender.source_system == normalized_source)
-
-    search_term = (q or "").strip()
-    if search_term:
-        pattern = f"%{search_term}%"
-        query = query.where(
-            or_(
-                Tender.title.ilike(pattern),
-                Tender.description.ilike(pattern),
-                Tender.buyer.ilike(pattern),
-                Tender.project_id.ilike(pattern),
-                Tender.external_id.ilike(pattern),
-                Tender.sector.ilike(pattern),
-                Tender.category.ilike(pattern),
-                Tender.procurement_category.ilike(pattern),
-                Tender.procurement_method.ilike(pattern),
-                Tender.notice_type.ilike(pattern),
-            )
-        )
-
-    normalized_regions = _normalize_region_filter(region)
-    normalized_countries = _normalize_list_filter(
-        [*(_split_query_values(country)), *(_split_query_values(countries))],
-        label="country",
+    query, _ = apply_explorer_tender_filters(
+        query,
+        source=source,
+        source_system=source_system,
+        q=q,
+        region=region,
+        country=country,
+        countries=countries,
+        service=service,
+        services=services,
+        tender_status=tender_status,
+        deadline_status=deadline_status,
+        deadline_from=deadline_from,
+        deadline_to=deadline_to,
+        price_min=price_min,
+        price_max=price_max,
+        document_status=document_status,
+        document_tender_ids=document_tender_ids,
+        category=category,
     )
-    region_countries = _expanded_region_countries(normalized_regions)
-    country_predicates = []
-    if normalized_countries:
-        country_predicates.append(_country_predicate(normalized_countries))
-    if region_countries:
-        country_predicates.append(_country_predicate(region_countries))
-    for selected_region in normalized_regions:
-        if selected_region != CENTRAL_ASIA_REGION:
-            country_predicates.append(Tender.region.ilike(f"%{selected_region}%"))
-    if country_predicates:
-        query = query.where(or_(*country_predicates))
-
-    normalized_services = _normalize_service_filter(
-        [*(_split_query_values(service)), *(_split_query_values(services))]
-    )
-    if normalized_services:
-        query = query.where(_service_predicate(normalized_services))
-
-    normalized_deadline_status = (deadline_status or "").strip().casefold()
-    if normalized_deadline_status:
-        now = datetime.now(timezone.utc)
-        if normalized_deadline_status == "active":
-            query = query.where(Tender.deadline.is_not(None), Tender.deadline >= now)
-        elif normalized_deadline_status == "expired":
-            query = query.where(Tender.deadline.is_not(None), Tender.deadline < now)
-        elif normalized_deadline_status == "unknown":
-            query = query.where(Tender.deadline.is_(None))
-        elif normalized_deadline_status not in {"all", "any"}:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unsupported deadline_status",
-            )
-    if deadline_from is not None:
-        query = query.where(Tender.deadline.is_not(None), Tender.deadline >= deadline_from)
-    if deadline_to is not None:
-        query = query.where(Tender.deadline.is_not(None), Tender.deadline <= deadline_to)
-    if price_min is not None:
-        query = query.where(Tender.budget >= price_min)
-    if price_max is not None:
-        query = query.where(Tender.budget <= price_max)
-    if price_min is not None and price_max is not None and price_min > price_max:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="price_min cannot be greater than price_max",
-        )
-
-    normalized_document_status = (document_status or "").strip().casefold()
-    if normalized_document_status:
-        if normalized_document_status in {"all", "any"}:
-            normalized_document_status = ""
-        elif normalized_document_status not in DOCUMENT_STATUS_FILTERS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unsupported document_status",
-            )
-    if normalized_document_status and normalized_document_status != "files_missing":
-        query = query.where(_document_status_predicate(normalized_document_status))
-
-    category_filter = (category or "").strip()
-    if category_filter and category_filter.casefold() not in {"all", "any"}:
-        pattern = f"%{category_filter}%"
-        query = query.where(
-            or_(
-                Tender.sector.ilike(pattern),
-                Tender.procurement_category.ilike(pattern),
-                Tender.category.ilike(pattern),
-                Tender.procurement_method.ilike(pattern),
-                Tender.notice_type.ilike(pattern),
-                Tender.title.ilike(pattern),
-                Tender.description.ilike(pattern),
-            )
-        )
 
     query = (
         _apply_tender_sort(query, sort)
@@ -4619,12 +4737,6 @@ async def list_tenders(
         )
         for t in tenders
     ]
-    if normalized_document_status:
-        serialized_tenders = [
-            tender
-            for tender in serialized_tenders
-            if tender.document_status == normalized_document_status
-        ]
     return serialized_tenders
 
 

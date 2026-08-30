@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
-from app.api.endpoints import admin, auth, hunter, meta, my_tenders, proposals, tenders, users, vault
+from app.api.endpoints import admin, auth, explorer, hunter, meta, my_tenders, proposals, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
 from app.core.release import VERSION, public_release_metadata, release_metadata_with_database
@@ -83,6 +83,7 @@ app.include_router(vault.router, prefix="/api/v1", tags=["Vault"])
 app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
 app.include_router(audit.router, prefix="/audit", tags=["Audit"])
 app.include_router(hunter.router, prefix="/api/v1/hunter", tags=["Hunter"])
+app.include_router(explorer.router, prefix="/api/v1", tags=["Explorer"])
 
 
 @app.get("/health")

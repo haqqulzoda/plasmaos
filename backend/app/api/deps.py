@@ -187,6 +187,40 @@ async def require_approved_pilot_access(
     return current_user
 
 
+async def require_explorer_access(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Allow approved global discovery while preserving company approval gates.
+
+    An approved account without a CompanyProfile may use the global ``all``
+    Explorer mode, but has no private Recommendation overlay. If a profile is
+    present, its normal approval contract remains mandatory. Operators and
+    administrators retain their existing enabled-account bypass without gaining
+    access to any customer's private profile data.
+    """
+    _require_enabled_account(current_user)
+    if is_operator_user(current_user):
+        return current_user
+    if not is_approved_user(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User approval required",
+        )
+
+    profile_approval = await db.scalar(
+        select(CompanyProfile.approval_status).where(
+            CompanyProfile.user_id == current_user.id
+        )
+    )
+    if profile_approval is not None and profile_approval != COMPANY_APPROVAL_APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Approved pilot access required",
+        )
+    return current_user
+
+
 def require_tier(required_tier: SubscriptionTier) -> Callable:
     """
     Validate user subscription tier against required endpoint tier.

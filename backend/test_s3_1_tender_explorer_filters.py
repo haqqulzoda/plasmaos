@@ -64,8 +64,8 @@ class S31TenderExplorerFilterStaticTests(unittest.TestCase):
     def test_frontend_uses_s2_taxonomies_for_tender_filters(self) -> None:
         explorer = read("../frontend/app/dashboard/tenders/page.tsx")
 
-        self.assertIn("useGeographyMeta", explorer)
-        self.assertIn("useServiceMeta", explorer)
+        self.assertIn("CENTRAL_ASIA_COUNTRIES", explorer)
+        self.assertIn("DEFAULT_SERVICE_OPTIONS", explorer)
         self.assertIn("Central Asia", explorer)
         for expected in (
             "Uzbekistan",
@@ -77,10 +77,10 @@ class S31TenderExplorerFilterStaticTests(unittest.TestCase):
             self.assertIn(expected, read("../frontend/lib/geography.ts"))
 
         self.assertIn("useSearchParams", explorer)
-        self.assertIn("queryState.countries", explorer)
-        self.assertIn("queryState.services", explorer)
-        self.assertIn("activeFilterBadges", explorer)
-        self.assertIn("resetFilters", explorer)
+        self.assertIn("query.countries", explorer)
+        self.assertIn("query.services", explorer)
+        self.assertIn("countries: query.countries", explorer)
+        self.assertIn("services: query.services", explorer)
 
 
 @unittest.skipUnless(HAS_BACKEND_DEPS, "Backend dependencies are not installed")

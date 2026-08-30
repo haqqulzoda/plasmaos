@@ -101,16 +101,19 @@ class P0SecurityStaticTests(unittest.TestCase):
     def test_tender_list_supports_int4_filters_and_batched_summaries(self) -> None:
         tenders = read("app/api/endpoints/tenders.py")
         list_block = function_block(tenders, "list_tenders")
+        filter_block = tenders.split("def apply_explorer_tender_filters", 1)[1].split(
+            "@router.get(\"/\"", 1
+        )[0]
 
         for param in ("q:", "country:", "deadline_status:", "category:", "source_system:"):
             self.assertIn(param, list_block)
 
-        self.assertIn('normalized_deadline_status == "active"', list_block)
-        self.assertIn("Tender.deadline >= now", list_block)
-        self.assertIn('normalized_deadline_status == "expired"', list_block)
-        self.assertIn("Tender.deadline < now", list_block)
-        self.assertIn('normalized_deadline_status == "unknown"', list_block)
-        self.assertIn("Tender.deadline.is_(None)", list_block)
+        self.assertIn('normalized_deadline_status == "active"', filter_block)
+        self.assertIn("Tender.deadline >= now", filter_block)
+        self.assertIn('normalized_deadline_status == "expired"', filter_block)
+        self.assertIn("Tender.deadline < now", filter_block)
+        self.assertIn('normalized_deadline_status == "unknown"', filter_block)
+        self.assertIn("Tender.deadline.is_(None)", filter_block)
         self.assertIn("_batched_tender_summaries", list_block)
         self.assertNotIn("TenderDocument", list_block)
 
@@ -175,7 +178,7 @@ class P0SecurityStaticTests(unittest.TestCase):
         self.assertIn("_fetch_live_uzex_ids", purge_script)
         self.assertIn("Dependent rows covered by tender FK cascades", purge_script)
         self.assertIn("UzEx enterprise", frontend_tenders)
-        self.assertIn("{ value: 'uzex', label: 'UzEx' }", frontend_tenders)
+        self.assertIn("['uzex', 'UzEx enterprise']", frontend_tenders)
 
     def test_compiled_text_has_dedicated_authenticated_route(self) -> None:
         tenders = read("app/api/endpoints/tenders.py")
@@ -293,10 +296,10 @@ class P0SecurityStaticTests(unittest.TestCase):
     def test_tender_source_refresh_controls_cover_all_supported_sources(self) -> None:
         page = read("../frontend/app/dashboard/tenders/page.tsx")
 
-        self.assertIn("SOURCE_REFRESH_ACTIONS", page)
-        self.assertIn("'/tenders/sources/uzex/refresh'", page)
-        self.assertIn("'/tenders/sources/world_bank/refresh'", page)
-        self.assertIn("'/tenders/sources/adb/refresh'", page)
+        self.assertIn("SOURCE_REFRESH", page)
+        self.assertIn("`/tenders/sources/${source[0]}/refresh`", page)
+        for source in ("uzex", "world_bank", "adb", "giz", "ebrd"):
+            self.assertIn(f"['{source}'", page)
         self.assertIn("refreshingSource", page)
 
     def test_tender_document_sync_enqueue_uses_heavy_queue(self) -> None:

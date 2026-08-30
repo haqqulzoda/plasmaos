@@ -294,6 +294,25 @@ class ReadOnlyPreflight:
                     """
                 )
             )
+            data["other_state_rows"] = 0
+        if self.has_columns(table, "match_score", "strategic_rationale"):
+            data["score_and_rationale"] = _json_value(
+                await self.fetchrow(
+                    f"""
+                    SELECT
+                        COUNT(*) FILTER (WHERE match_score IS NULL) AS null_score,
+                        MIN(match_score) AS score_min,
+                        MAX(match_score) AS score_max,
+                        COUNT(*) FILTER (
+                            WHERE NULLIF(BTRIM(strategic_rationale), '') IS NOT NULL
+                        ) AS with_rationale,
+                        COUNT(*) FILTER (
+                            WHERE NULLIF(BTRIM(strategic_rationale), '') IS NULL
+                        ) AS without_rationale
+                    FROM {table}
+                    """
+                )
+            )
         if self.has_columns(table, "company_profile_id", "tender_id"):
             data["distinct_company_profiles"] = int(
                 await self.fetchval(
@@ -334,6 +353,68 @@ class ReadOnlyPreflight:
                         FROM {table} r
                         LEFT JOIN tenders t ON t.id = r.tender_id
                         WHERE t.id IS NULL
+                        """
+                    )
+                )
+            if (
+                self.has_table("company_profiles")
+                and self.has_table("users")
+                and self.has_table("tenders")
+                and self.has_columns("company_profiles", "id", "user_id")
+                and self.has_columns("users", "id")
+                and self.has_columns("tenders", "id")
+            ):
+                data["ownership_and_tender_validity"] = _json_value(
+                    await self.fetchrow(
+                        f"""
+                        SELECT
+                            COUNT(*) FILTER (
+                                WHERE c.id IS NOT NULL
+                                  AND u.id IS NOT NULL
+                                  AND t.id IS NOT NULL
+                            ) AS valid_user_profile_tender,
+                            COUNT(*) FILTER (
+                                WHERE c.id IS NULL OR u.id IS NULL
+                            ) AS invalid_user_or_profile,
+                            COUNT(*) FILTER (WHERE t.id IS NULL) AS broken_tender
+                        FROM {table} r
+                        LEFT JOIN company_profiles c ON c.id = r.company_profile_id
+                        LEFT JOIN users u ON u.id = c.user_id
+                        LEFT JOIN tenders t ON t.id = r.tender_id
+                        """
+                    )
+                )
+            if (
+                self.has_table("tender_engagements")
+                and self.has_table("company_profiles")
+                and self.has_columns("company_profiles", "id", "user_id")
+                and self.has_columns(
+                    "tender_engagements",
+                    "user_id",
+                    "company_profile_id",
+                    "tender_id",
+                )
+            ):
+                data["engagement_coexistence"] = _json_value(
+                    await self.fetchrow(
+                        f"""
+                        SELECT
+                            COUNT(*) FILTER (WHERE EXISTS (
+                                SELECT 1
+                                FROM tender_engagements e
+                                WHERE e.user_id = c.user_id
+                                  AND e.company_profile_id = r.company_profile_id
+                                  AND e.tender_id = r.tender_id
+                            )) AS recommendations_with_engagement,
+                            COUNT(*) FILTER (WHERE NOT EXISTS (
+                                SELECT 1
+                                FROM tender_engagements e
+                                WHERE e.user_id = c.user_id
+                                  AND e.company_profile_id = r.company_profile_id
+                                  AND e.tender_id = r.tender_id
+                            )) AS recommendations_without_engagement
+                        FROM {table} r
+                        JOIN company_profiles c ON c.id = r.company_profile_id
                         """
                     )
                 )

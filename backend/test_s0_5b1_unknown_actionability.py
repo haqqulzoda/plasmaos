@@ -294,13 +294,13 @@ class FrontendContractTests(unittest.TestCase):
 
     def test_29_explorer_defaults_status_filter_to_open(self) -> None:
         explorer = read_frontend("app/dashboard/tenders/page.tsx")
-        self.assertIn("searchParams.get('status') || 'OPEN'", explorer)
-        self.assertIn("status: queryState.lifecycleStatus.toLowerCase()", explorer)
+        self.assertIn("params.get('status') || 'OPEN'", explorer)
+        self.assertIn("status: query.lifecycleStatus.toLowerCase()", explorer)
 
     def test_30_explorer_unknown_ctas_use_actionability(self) -> None:
         explorer = read_frontend("app/dashboard/tenders/page.tsx")
-        self.assertIn("const actionable = isTenderActionable(tender)", explorer)
-        self.assertIn("disabled={!actionable || isExpired(tender.deadline)}", explorer)
+        self.assertIn("const actionable = isTenderActionable(tender.status)", explorer)
+        self.assertIn("disabled={!actionable || expired}", explorer)
 
     def test_31_details_remain_visible_with_explicit_status_badge(self) -> None:
         details = read_frontend("app/dashboard/tenders/[tenderId]/page.tsx")

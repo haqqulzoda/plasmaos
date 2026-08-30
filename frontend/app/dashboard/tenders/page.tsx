@@ -1,109 +1,57 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
-import {
-    AlertCircle,
-    CheckCircle,
-    Clock,
-    FileText,
-    Filter,
-    Loader2,
-    MapPin,
-    Radar,
-    RefreshCw,
-    Search,
-    ShieldCheck,
-    X,
-} from 'lucide-react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, ChevronLeft, ChevronRight, Clock, FileText, Filter, Loader2, MapPin, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
 
-import { api } from '@/lib/api';
 import { PrepareBidButton } from '@/components/bid-preparation/PrepareBidButton';
-import { CENTRAL_ASIA_REGION, useGeographyMeta } from '@/lib/geography';
-import { labelForService, useServiceMeta } from '@/lib/services';
-import type { Tender, TenderStatus } from '@/types/tender';
-import {
-    complianceUnavailableMessage,
-    documentAggregateLabel,
-    documentStatusClasses,
-    isTenderActionable,
-    sourceBadgeClasses,
-    sourceLabel,
-    tenderActionabilityMessage,
-    tenderStatusClasses,
-    tenderStatusLabel,
-} from '@/types/tender';
+import { EngagementWorkflowActions } from '@/components/tenders/EngagementWorkflowActions';
+import { RecommendationSummary } from '@/components/tenders/RecommendationSummary';
+import { api } from '@/lib/api';
+import { dismissRecommendation, listExplorer, restoreRecommendation } from '@/lib/explorer';
+import { CENTRAL_ASIA_COUNTRIES, CENTRAL_ASIA_REGION } from '@/lib/geography';
+import { DEFAULT_SERVICE_OPTIONS } from '@/lib/services';
+import { engagementStatusClasses, engagementStatusLabel } from '@/types/engagement';
+import type { ExplorerItem, ExplorerResponse, ExplorerView } from '@/types/explorer';
+import type { TenderStatus } from '@/types/tender';
+import { documentStatusClasses, documentStatusLabel, isTenderActionable, sourceBadgeClasses, sourceLabel, tenderActionabilityMessage, tenderStatusClasses, tenderStatusLabel } from '@/types/tender';
 
-const SOURCE_FILTERS = [
-    { value: 'All', label: 'All' },
-    { value: 'uzex', label: 'UzEx' },
-    { value: 'world_bank', label: 'World Bank' },
-    { value: 'adb', label: 'ADB' },
-    { value: 'giz', label: 'GIZ' },
-    { value: 'ebrd', label: 'EBRD' },
-];
-
-const LIFECYCLE_FILTERS: Array<{ value: TenderStatus | 'ALL'; label: string }> = [
-    { value: 'OPEN', label: 'Open' },
-    { value: 'UNKNOWN', label: 'Actionability unknown' },
-    { value: 'CLOSED', label: 'Closed' },
-    { value: 'CANCELLED', label: 'Cancelled' },
-    { value: 'ALL', label: 'All statuses' },
-];
-
-const SORT_OPTIONS = [
-    { value: 'newest', label: 'Newest' },
-    { value: 'deadline_soonest', label: 'Deadline soonest' },
-    { value: 'highest_price', label: 'Highest price' },
-    { value: 'document_availability', label: 'Document availability' },
-    { value: 'source', label: 'Source' },
-];
-
-const SOURCE_REFRESH_ACTIONS = [
-    { value: 'uzex', label: 'UzEx', endpoint: '/tenders/sources/uzex/refresh' },
-    { value: 'world_bank', label: 'World Bank', endpoint: '/tenders/sources/world_bank/refresh' },
-    { value: 'adb', label: 'ADB', endpoint: '/tenders/sources/adb/refresh' },
-    { value: 'giz', label: 'GIZ', endpoint: '/tenders/sources/giz/refresh' },
-    { value: 'ebrd', label: 'EBRD', endpoint: '/tenders/sources/ebrd/refresh' },
+const PAGE_SIZE = 25;
+const SOURCES = [
+    ['', 'All sources'], ['uzex', 'UzEx enterprise'], ['world_bank', 'World Bank'],
+    ['adb', 'ADB'], ['giz', 'GIZ'], ['ebrd', 'EBRD'],
 ] as const;
-
-type SourceRefreshTarget = (typeof SOURCE_REFRESH_ACTIONS)[number]['value'];
-type SourceRefreshState = {
-    status: string;
-    lastUpdated: string | null;
-    message?: string;
-};
-
-type SourceRefreshStatusPayload = {
-    source_system: SourceRefreshTarget;
-    status: string;
-    last_updated: string | null;
-    message?: string;
-};
-
-const ACTIVE_REFRESH_STATUSES = new Set(['queued', 'running']);
-
-function sourceRefreshStatusLabel(state: SourceRefreshState | undefined, updatedAt: string): string {
-    if (!state) return 'Not refreshed yet';
-    if (state.status === 'queued') return 'Queued';
-    if (state.status === 'running') return 'Refreshing';
-    if (state.status === 'source_unavailable') return `Source unavailable · ${updatedAt}`;
-    if (state.status === 'partial') return `Partial · ${updatedAt}`;
-    if (state.status === 'failed') return `Refresh failed · ${updatedAt}`;
-    return `Last updated: ${updatedAt}`;
-}
-
-const PAGE_SIZE = 50;
-const EXPLORER_RESTORE_KEY = 'plasmaos:tender-explorer:return';
-const EXPLORER_PATH = '/dashboard/tenders';
+const SOURCE_REFRESH = [
+    ['uzex', 'UzEx enterprise'], ['world_bank', 'World Bank'], ['adb', 'ADB'], ['giz', 'GIZ'], ['ebrd', 'EBRD'],
+] as const;
+const STATUSES: Array<[TenderStatus | 'ALL', string]> = [
+    ['OPEN', 'Open'], ['UNKNOWN', 'Actionability unknown'], ['CLOSED', 'Closed'],
+    ['CANCELLED', 'Cancelled'], ['ALL', 'All statuses'],
+];
+const DOCUMENTS = [
+    ['', 'All document states'], ['documents_available', 'Ready for analysis'],
+    ['files_missing', 'Preparation failed'], ['metadata_only', 'Document discovered'],
+    ['access_required', 'Access required'], ['no_documents_found', 'Documents unavailable'],
+    ['processing', 'Processing'], ['failed', 'Failed'],
+] as const;
+const TENDER_SORTS = [
+    ['newest', 'Newest'], ['deadline_soonest', 'Deadline soonest'],
+    ['highest_price', 'Highest price'], ['document_availability', 'Document availability'],
+    ['source', 'Source'],
+] as const;
+const RECOMMENDATION_SORTS = [['best_match', 'Best match'], ...TENDER_SORTS] as const;
 
 interface ExplorerQueryState {
+    view: ExplorerView;
     lifecycleStatus: TenderStatus | 'ALL';
     source: string;
     region: string;
     countries: string[];
     services: string[];
+    deadlineStatus: string;
+    documentStatus: string;
+    category: string;
     sort: string;
     priceMin: string;
     priceMax: string;
@@ -111,871 +59,235 @@ interface ExplorerQueryState {
     page: number;
 }
 
-interface ExplorerRestoreState {
-    explorerUrl: string;
-    tenderId: string;
-    scrollY: number;
-    page: number;
-    cursor: number;
-    createdAt: number;
-}
+const splitList = (value: string | null) => value ? value.split(',').map((item) => item.trim()).filter(Boolean) : [];
+const positiveInteger = (value: string | null) => {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+const defaultSort = (view: ExplorerView) => view === 'all' ? 'newest' : 'best_match';
 
-function splitList(value: string | null) {
-    if (!value) return [];
-    return value.split(',').map((item) => item.trim()).filter(Boolean);
-}
-
-function positiveInteger(value: string | null) {
-    if (!value) return null;
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function parseExplorerQuery(searchParams: URLSearchParams): ExplorerQueryState {
-    const cursorPage = Math.floor((positiveInteger(searchParams.get('cursor')) ?? 0) / PAGE_SIZE) + 1;
-    const page = positiveInteger(searchParams.get('page')) ?? cursorPage;
-
-    const requestedStatus = (searchParams.get('status') || 'OPEN').toUpperCase();
-    const lifecycleStatus = LIFECYCLE_FILTERS.some((item) => item.value === requestedStatus)
-        ? requestedStatus as TenderStatus | 'ALL'
-        : 'OPEN';
-
+export function parseExplorerQuery(params: URLSearchParams): ExplorerQueryState {
+    const rawView = params.get('view');
+    const view: ExplorerView = rawView === 'recommended' || rawView === 'dismissed' ? rawView : 'all';
+    const rawStatus = (params.get('status') || 'OPEN').toUpperCase();
+    const lifecycleStatus = STATUSES.some(([value]) => value === rawStatus) ? rawStatus as TenderStatus | 'ALL' : 'OPEN';
+    const requestedSort = params.get('sort') || defaultSort(view);
+    const availableSorts = view === 'all' ? TENDER_SORTS : RECOMMENDATION_SORTS;
+    const sort = availableSorts.some(([value]) => value === requestedSort) ? requestedSort : defaultSort(view);
+    const cursorPage = Math.floor((positiveInteger(params.get('cursor')) ?? 0) / PAGE_SIZE) + 1;
     return {
+        view,
         lifecycleStatus,
-        source: searchParams.get('source') || searchParams.get('source_system') || 'All',
-        region: searchParams.get('region') || '',
-        countries: splitList(searchParams.get('countries')),
-        services: splitList(searchParams.get('services')),
-        sort: searchParams.get('sort') || 'newest',
-        priceMin: searchParams.get('min_price') || searchParams.get('price_min') || '',
-        priceMax: searchParams.get('max_price') || searchParams.get('price_max') || '',
-        keyword: searchParams.get('search') || searchParams.get('q') || '',
-        page: Math.max(1, page),
+        source: params.get('source') || params.get('source_system') || '',
+        region: params.get('region') || '',
+        countries: splitList(params.get('countries') || params.get('country')),
+        services: splitList(params.get('services') || params.get('service')),
+        deadlineStatus: params.get('deadline_status') || '',
+        documentStatus: params.get('document_status') || '',
+        category: params.get('category') || '',
+        sort,
+        priceMin: params.get('price_min') || params.get('min_price') || '',
+        priceMax: params.get('price_max') || params.get('max_price') || '',
+        keyword: params.get('q') || params.get('search') || '',
+        page: positiveInteger(params.get('page')) ?? cursorPage,
     };
 }
 
-function buildExplorerSearch(query: ExplorerQueryState) {
-    const params = new URLSearchParams();
+export function buildExplorerSearch(query: ExplorerQueryState): string {
+    const params = new URLSearchParams({ view: query.view });
     if (query.lifecycleStatus !== 'OPEN') params.set('status', query.lifecycleStatus.toLowerCase());
-    if (query.source !== 'All') params.set('source', query.source);
+    if (query.source) params.set('source', query.source);
     if (query.region) params.set('region', query.region);
-    if (query.countries.length > 0) params.set('countries', query.countries.join(','));
-    if (query.services.length > 0) params.set('services', query.services.join(','));
-    if (query.keyword.trim()) params.set('search', query.keyword.trim());
-    if (query.priceMin.trim()) params.set('min_price', query.priceMin.trim());
-    if (query.priceMax.trim()) params.set('max_price', query.priceMax.trim());
-    if (query.sort !== 'newest') params.set('sort', query.sort);
+    if (query.countries.length) params.set('countries', query.countries.join(','));
+    if (query.services.length) params.set('services', query.services.join(','));
+    if (query.deadlineStatus) params.set('deadline_status', query.deadlineStatus);
+    if (query.documentStatus) params.set('document_status', query.documentStatus);
+    if (query.category.trim()) params.set('category', query.category.trim());
+    if (query.priceMin.trim()) params.set('price_min', query.priceMin.trim());
+    if (query.priceMax.trim()) params.set('price_max', query.priceMax.trim());
+    if (query.keyword.trim()) params.set('q', query.keyword.trim());
+    if (query.sort !== defaultSort(query.view)) params.set('sort', query.sort);
     if (query.page > 1) params.set('page', String(query.page));
     return params.toString();
 }
 
-function explorerHref(query: ExplorerQueryState) {
-    const search = buildExplorerSearch(query);
-    return search ? `${EXPLORER_PATH}?${search}` : EXPLORER_PATH;
-}
-
-function formatDate(value: string | null) {
-    if (!value) return 'Unknown';
-    return new Date(value).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-    });
-}
-
-function publishedDateLabel(tender: Tender) {
-    return tender.publication_date ? formatDate(tender.publication_date) : 'Unknown';
-}
-
-function timeRemaining(deadline: string | null) {
-    if (!deadline) return 'Unknown deadline';
-    const date = new Date(deadline);
-    const daysLeft = Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (daysLeft < 0) return 'Expired';
-    if (daysLeft === 0) return 'Due today';
-    if (daysLeft === 1) return '1 day remaining';
-    return `${daysLeft} days remaining`;
-}
-
-function isExpired(deadline: string | null) {
-    return Boolean(deadline && new Date(deadline).getTime() < Date.now());
-}
-
-function tenderCategory(tender: Tender) {
-    return tender.sector || tender.procurement_category || tender.category || 'Uncategorized';
-}
-
-function buyerOrProject(tender: Tender) {
-    return tender.buyer || tender.project_id || 'Not specified';
-}
-
-function priceDisplay(tender: Tender) {
-    if (tender.price_display) return tender.price_display;
-    if (typeof tender.budget === 'number' && tender.budget > 0) {
-        const amount = tender.budget.toLocaleString('en-US', {
-            maximumFractionDigits: 2,
-        });
-        return `${amount}${tender.currency ? ` ${tender.currency}` : ''}`;
-    }
-    return 'Price not specified';
-}
+const formatDate = (value: string | null) => value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not specified';
+const deadlineLabel = (value: string | null) => {
+    if (!value) return 'Deadline not specified';
+    const days = Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000);
+    if (days < 0) return `Expired ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago`;
+    if (days === 0) return 'Due today';
+    return `${days} day${days === 1 ? '' : 's'} remaining`;
+};
+const isExpiredDeadline = (value: string | null) => Boolean(
+    value && new Date(value).getTime() < Date.now(),
+);
+const priceLabel = (budget: number, currency: string) => budget > 0
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 0 }).format(budget)
+    : 'Value not disclosed';
 
 function TendersPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const fetchRequestId = useRef(0);
-    const skipNextUrlFetchRef = useRef(false);
-    const geography = useGeographyMeta();
-    const serviceOptions = useServiceMeta();
-    const [tenders, setTenders] = useState<Tender[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [refreshingSource, setRefreshingSource] = useState<SourceRefreshTarget | null>(null);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [hasMore, setHasMore] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [showToast, setShowToast] = useState(false);
-    const [toastMessage, setToastMessage] = useState('');
-    const [draftKeyword, setDraftKeyword] = useState('');
-    const [sourceRefreshState, setSourceRefreshState] = useState<
-        Partial<Record<SourceRefreshTarget, SourceRefreshState>>
-    >({});
-
     const searchString = searchParams.toString();
-    const queryState = useMemo(
-        () => parseExplorerQuery(new URLSearchParams(searchString)),
-        [searchString],
-    );
-    const isRefreshing = refreshingSource !== null;
-    const refreshingLabel = SOURCE_REFRESH_ACTIONS.find((item) => item.value === refreshingSource)?.label;
-    const centralAsiaCountries = geography.central_asia_countries;
-    const normalizedHref = useMemo(() => explorerHref(queryState), [queryState]);
+    const query = useMemo(() => parseExplorerQuery(new URLSearchParams(searchString)), [searchString]);
+    const [response, setResponse] = useState<ExplorerResponse | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [mutationError, setMutationError] = useState<string | null>(null);
+    const [pendingRecommendation, setPendingRecommendation] = useState<string | null>(null);
+    const [refreshVersion, setRefreshVersion] = useState(0);
+    const [searchDraft, setSearchDraft] = useState(query.keyword);
+    const [categoryDraft, setCategoryDraft] = useState(query.category);
+    const [minimumDraft, setMinimumDraft] = useState(query.priceMin);
+    const [maximumDraft, setMaximumDraft] = useState(query.priceMax);
+    const [refreshingSource, setRefreshingSource] = useState<string | null>(null);
+    const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
+    const requestSequence = useRef(0);
 
-    const showNotification = (message: string) => {
-        setToastMessage(message);
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 4000);
-    };
-
-    const clearStoredRestoreState = useCallback(() => {
-        if (typeof window !== 'undefined') {
-            window.sessionStorage.removeItem(EXPLORER_RESTORE_KEY);
-        }
-    }, []);
-
-    const replaceQuery = useCallback((patch: Partial<ExplorerQueryState>, resetPage = true) => {
-        const nextQuery = {
-            ...queryState,
-            ...patch,
-            page: resetPage ? 1 : (patch.page ?? queryState.page),
-        };
-        clearStoredRestoreState();
-        router.replace(explorerHref(nextQuery), { scroll: false });
-    }, [clearStoredRestoreState, queryState, router]);
-
-    const fetchTenders = useCallback(async ({
-        offset = 0,
-        append = false,
-        limit = PAGE_SIZE,
-    }: {
-        offset?: number;
-        append?: boolean;
-        limit?: number;
-    } = {}) => {
-        const requestId = fetchRequestId.current + 1;
-        fetchRequestId.current = requestId;
-        if (append) {
-            setIsLoadingMore(true);
-        }
-
-        try {
-            const params: Record<string, string | number> = {
-                limit,
-                offset,
-                status: queryState.lifecycleStatus.toLowerCase(),
-            };
-            if (queryState.source !== 'All') params.source_system = queryState.source;
-            if (queryState.region) params.region = queryState.region;
-            if (queryState.countries.length > 0) params.countries = queryState.countries.join(',');
-            if (queryState.services.length > 0) params.services = queryState.services.join(',');
-            if (queryState.sort) params.sort = queryState.sort;
-            if (queryState.priceMin.trim()) params.price_min = queryState.priceMin.trim();
-            if (queryState.priceMax.trim()) params.price_max = queryState.priceMax.trim();
-            if (queryState.keyword.trim()) params.q = queryState.keyword.trim();
-
-            const response = await api.get<Tender[]>('/tenders', { params });
-            if (requestId !== fetchRequestId.current) return;
-
-            setTenders((prev) => append ? [...prev, ...response.data] : response.data);
-            setHasMore(response.data.length === limit);
-            setError(null);
-            return response.data;
-        } catch (err) {
-            if (requestId !== fetchRequestId.current) return;
-            console.error('Failed to fetch tenders:', err);
-            setError('Failed to load tenders');
-        } finally {
-            if (requestId === fetchRequestId.current) {
-                setIsLoading(false);
-                setIsLoadingMore(false);
-            }
-        }
-    }, [queryState]);
+    const navigate = useCallback((patch: Partial<ExplorerQueryState>, resetPage = true) => {
+        const next = { ...query, ...patch, page: resetPage ? 1 : (patch.page ?? query.page) };
+        router.push(`/dashboard/tenders?${buildExplorerSearch(next)}`);
+    }, [query, router]);
 
     useEffect(() => {
-        if (normalizedHref !== `${EXPLORER_PATH}${searchString ? `?${searchString}` : ''}`) {
-            router.replace(normalizedHref, { scroll: false });
-        }
-    }, [normalizedHref, router, searchString]);
+        const canonical = buildExplorerSearch(query);
+        if (canonical !== searchString) router.replace(`/dashboard/tenders?${canonical}`);
+    }, [query, router, searchString]);
+    useEffect(() => setSearchDraft(query.keyword), [query.keyword]);
+    useEffect(() => setCategoryDraft(query.category), [query.category]);
+    useEffect(() => setMinimumDraft(query.priceMin), [query.priceMin]);
+    useEffect(() => setMaximumDraft(query.priceMax), [query.priceMax]);
+    useEffect(() => {
+        if (searchDraft === query.keyword) return;
+        const timer = window.setTimeout(() => navigate({ keyword: searchDraft }), 350);
+        return () => window.clearTimeout(timer);
+    }, [navigate, query.keyword, searchDraft]);
 
     useEffect(() => {
-        setDraftKeyword(queryState.keyword);
-    }, [queryState.keyword]);
-
-    useEffect(() => {
-        let active = true;
-        api.get<SourceRefreshStatusPayload[]>('/tenders/sources/refresh-status')
-            .then(({ data }) => {
-                if (!active) return;
-                setSourceRefreshState(Object.fromEntries(
-                    data.map((item) => [
-                        item.source_system,
-                        {
-                            status: item.status,
-                            lastUpdated: item.last_updated,
-                            message: item.message,
-                        },
-                    ]),
-                ));
-            })
-            .catch(() => {
-                // Refresh metadata is supplementary; tender loading remains independent.
-            });
-        return () => {
-            active = false;
-        };
-    }, []);
-
-    const activeRefreshSources = useMemo(
-        () => Object.entries(sourceRefreshState)
-            .filter(([, state]) => state && ACTIVE_REFRESH_STATUSES.has(state.status))
-            .map(([source]) => source as SourceRefreshTarget)
-            .sort()
-            .join(','),
-        [sourceRefreshState],
-    );
-
-    useEffect(() => {
-        if (!activeRefreshSources) return;
-        let active = true;
-        let requestInFlight = false;
-        const pendingSources = new Set(activeRefreshSources.split(','));
-
-        const pollRefreshStatus = async () => {
-            if (requestInFlight) return;
-            requestInFlight = true;
-            try {
-                const { data } = await api.get<SourceRefreshStatusPayload[]>(
-                    '/tenders/sources/refresh-status',
-                );
-                if (!active) return;
-                const completedPendingSource = data.some(
-                    (item) => pendingSources.has(item.source_system)
-                        && !ACTIVE_REFRESH_STATUSES.has(item.status),
-                );
-                setSourceRefreshState(Object.fromEntries(
-                    data.map((item) => [
-                        item.source_system,
-                        {
-                            status: item.status,
-                            lastUpdated: item.last_updated,
-                            message: item.message,
-                        },
-                    ]),
-                ));
-                if (completedPendingSource) {
-                    await fetchTenders({ limit: PAGE_SIZE * queryState.page });
-                }
-            } catch {
-                // Keep the last durable status; polling will retry on the next interval.
-            } finally {
-                requestInFlight = false;
-            }
-        };
-
-        const interval = window.setInterval(pollRefreshStatus, 3000);
-        void pollRefreshStatus();
-        return () => {
-            active = false;
-            window.clearInterval(interval);
-        };
-    }, [activeRefreshSources, fetchTenders, queryState.page]);
-
-    useEffect(() => {
-        if (draftKeyword === queryState.keyword) return;
-
-        const timeout = window.setTimeout(() => {
-            replaceQuery({ keyword: draftKeyword });
-        }, 350);
-
-        return () => window.clearTimeout(timeout);
-    }, [draftKeyword, queryState.keyword, replaceQuery]);
-
-    useEffect(() => {
-        if (skipNextUrlFetchRef.current) {
-            skipNextUrlFetchRef.current = false;
-            return;
-        }
-
-        setIsLoading(true);
-        setTenders([]);
-        setHasMore(false);
-        fetchTenders({ limit: PAGE_SIZE * queryState.page });
-    }, [fetchTenders, queryState.page]);
-
-    useEffect(() => {
-        if (isLoading || isLoadingMore || typeof window === 'undefined') return;
-
-        const rawState = window.sessionStorage.getItem(EXPLORER_RESTORE_KEY);
-        if (!rawState) return;
-
-        let restoreState: ExplorerRestoreState | null = null;
-        try {
-            restoreState = JSON.parse(rawState) as ExplorerRestoreState;
-        } catch {
-            window.sessionStorage.removeItem(EXPLORER_RESTORE_KEY);
-            return;
-        }
-
-        if (!restoreState || restoreState.explorerUrl !== normalizedHref) return;
-
-        const row = window.document.querySelector<HTMLElement>(`[data-tender-id="${CSS.escape(restoreState.tenderId)}"]`);
-        window.requestAnimationFrame(() => {
-            if (row) {
-                row.scrollIntoView({ block: 'center' });
-            } else {
-                window.scrollTo({ top: restoreState.scrollY, behavior: 'auto' });
-            }
-            window.sessionStorage.removeItem(EXPLORER_RESTORE_KEY);
-        });
-    }, [isLoading, isLoadingMore, normalizedHref, tenders]);
-
-    const toggleCountry = (countryName: string) => {
-        replaceQuery({
-            countries: queryState.countries.includes(countryName)
-                ? queryState.countries.filter((item) => item !== countryName)
-                : [...queryState.countries, countryName],
-        });
-    };
-
-    const toggleService = (serviceName: string) => {
-        replaceQuery({
-            services: queryState.services.includes(serviceName)
-                ? queryState.services.filter((item) => item !== serviceName)
-                : [...queryState.services, serviceName],
-        });
-    };
-
-    const toggleCentralAsia = () => {
-        replaceQuery({ region: queryState.region === CENTRAL_ASIA_REGION ? '' : CENTRAL_ASIA_REGION });
-    };
-
-    const resetFilters = () => {
-        clearStoredRestoreState();
-        router.replace(EXPLORER_PATH, { scroll: false });
-    };
-
-    const openTenderRoute = (tenderId: string, href: string) => {
-        if (typeof window !== 'undefined') {
-            const restoreState: ExplorerRestoreState = {
-                explorerUrl: normalizedHref,
-                tenderId,
-                scrollY: window.scrollY,
-                page: queryState.page,
-                cursor: (queryState.page - 1) * PAGE_SIZE,
-                createdAt: Date.now(),
-            };
-            window.sessionStorage.setItem(EXPLORER_RESTORE_KEY, JSON.stringify(restoreState));
-        }
-        router.push(href);
-    };
-
-    const loadMore = async () => {
-        const response = await fetchTenders({ offset: tenders.length, append: true });
-        if (response && response.length > 0) {
-            skipNextUrlFetchRef.current = true;
-            replaceQuery({ page: queryState.page + 1 }, false);
-        }
-    };
-
-    const activeFilterBadges = [
-        ...(queryState.lifecycleStatus !== 'OPEN'
-            ? [{
-                key: 'status',
-                label: `Status: ${LIFECYCLE_FILTERS.find((item) => item.value === queryState.lifecycleStatus)?.label}`,
-                onRemove: () => replaceQuery({ lifecycleStatus: 'OPEN' }),
-            }]
-            : []),
-        ...(queryState.source !== 'All'
-            ? [{
-                key: 'source',
-                label: `Source: ${SOURCE_FILTERS.find((item) => item.value === queryState.source)?.label ?? queryState.source}`,
-                onRemove: () => replaceQuery({ source: 'All' }),
-            }]
-            : []),
-        ...(queryState.region
-            ? [{
-                key: 'region',
-                label: `Region: ${queryState.region}`,
-                onRemove: () => replaceQuery({ region: '' }),
-            }]
-            : []),
-        ...queryState.countries.map((countryName) => ({
-            key: `country-${countryName}`,
-            label: countryName,
-            onRemove: () => replaceQuery({ countries: queryState.countries.filter((item) => item !== countryName) }),
-        })),
-        ...queryState.services.map((serviceName) => ({
-            key: `service-${serviceName}`,
-            label: labelForService(serviceName, serviceOptions),
-            onRemove: () => replaceQuery({ services: queryState.services.filter((item) => item !== serviceName) }),
-        })),
-        ...(queryState.priceMin.trim()
-            ? [{
-                key: 'price-min',
-                label: `Min: ${queryState.priceMin}`,
-                onRemove: () => replaceQuery({ priceMin: '' }),
-            }]
-            : []),
-        ...(queryState.priceMax.trim()
-            ? [{
-                key: 'price-max',
-                label: `Max: ${queryState.priceMax}`,
-                onRemove: () => replaceQuery({ priceMax: '' }),
-            }]
-            : []),
-    ];
-
-    const handleRefresh = async (target: SourceRefreshTarget) => {
-        const refreshAction = SOURCE_REFRESH_ACTIONS.find((item) => item.value === target);
-        if (!refreshAction) return;
-
-        setRefreshingSource(target);
+        const controller = new AbortController();
+        const sequence = ++requestSequence.current;
+        setLoading(true);
         setError(null);
+        void listExplorer({
+            view: query.view, limit: PAGE_SIZE, offset: (query.page - 1) * PAGE_SIZE,
+            status: query.lifecycleStatus.toLowerCase(), source: query.source || undefined,
+            q: query.keyword || undefined, region: query.region || undefined,
+            countries: query.countries.length ? query.countries.join(',') : undefined,
+            services: query.services.length ? query.services.join(',') : undefined,
+            deadline_status: query.deadlineStatus || undefined,
+            document_status: query.documentStatus || undefined, category: query.category || undefined,
+            price_min: query.priceMin || undefined, price_max: query.priceMax || undefined,
+            sort: query.sort,
+        }, controller.signal).then(({ data }) => {
+            if (sequence !== requestSequence.current) return;
+            const finalPage = Math.max(1, Math.ceil(data.total / data.limit));
+            if (query.page > finalPage) navigate({ page: finalPage }, false);
+            else setResponse(data);
+        }).catch((requestError: unknown) => {
+            if (controller.signal.aborted || sequence !== requestSequence.current) return;
+            const status = (requestError as { response?: { status?: number } }).response?.status;
+            setError(status === 401 || status === 403 ? 'You do not have access to Tender Explorer.' : 'Tender Explorer could not be loaded.');
+        }).finally(() => {
+            if (sequence === requestSequence.current && !controller.signal.aborted) setLoading(false);
+        });
+        return () => controller.abort();
+    }, [navigate, query, refreshVersion]);
 
+    const toggleList = (field: 'countries' | 'services', value: string) => {
+        const current = query[field];
+        navigate({ [field]: current.includes(value) ? current.filter((item) => item !== value) : [...current, value] });
+    };
+    const commitDrafts = () => navigate({ category: categoryDraft, priceMin: minimumDraft, priceMax: maximumDraft });
+    const mutateRecommendation = async (id: string, restore: boolean) => {
+        setPendingRecommendation(id);
+        setMutationError(null);
         try {
-            const response = await api.post(refreshAction.endpoint);
-            const payload = response.data;
-            const status = payload.status ?? 'failed';
-            const lastUpdated = payload.last_updated ?? null;
-            setSourceRefreshState((previous) => ({
-                ...previous,
-                [target]: { status, lastUpdated, message: payload.message },
-            }));
-
-            if (status === 'source_unavailable') {
-                const errorMsg = 'Source unavailable. Existing tenders are still shown.';
-                setError(errorMsg);
-                showNotification(errorMsg);
-                return;
-            }
-            if (status === 'failed') {
-                const errorMsg = payload.message || 'Refresh failed. Existing tenders are still shown.';
-                setError(errorMsg);
-                showNotification(errorMsg);
-                return;
-            }
-            if (status === 'queued' || status === 'running') {
-                showNotification(payload.reused ? 'Already refreshing' : 'Refreshing');
-                return;
-            }
-            if (status === 'fresh') {
-                showNotification('Updated successfully');
-                return;
-            }
-
-            showNotification('Updated successfully');
-            await fetchTenders({ limit: PAGE_SIZE * queryState.page });
-        } catch (err) {
-            const axiosError = err as { response?: { data?: { detail?: string } } };
-            const errorMsg = axiosError.response?.data?.detail || 'Failed to refresh feed';
-            setError(errorMsg);
-            showNotification(errorMsg);
-        } finally {
-            setRefreshingSource(null);
-        }
+            if (restore) await restoreRecommendation(id); else await dismissRecommendation(id);
+            setRefreshVersion((value) => value + 1);
+        } catch (requestError: unknown) {
+            const status = (requestError as { response?: { status?: number } }).response?.status;
+            setMutationError(status === 401 || status === 403
+                ? 'You do not have permission to change this recommendation.'
+                : status === 404 ? 'This recommendation is no longer available. Refresh and try again.'
+                    : 'The recommendation could not be updated. Nothing was changed.');
+        } finally { setPendingRecommendation(null); }
+    };
+    const refreshSource = async (source: typeof SOURCE_REFRESH[number]) => {
+        setRefreshingSource(source[0]); setRefreshNotice(null);
+        try {
+            await api.post(`/tenders/sources/${source[0]}/refresh`);
+            setRefreshNotice(`${source[1]} refresh requested.`);
+            setRefreshVersion((value) => value + 1);
+        } catch { setRefreshNotice(`${source[1]} refresh could not be requested.`); }
+        finally { setRefreshingSource(null); }
     };
 
-    return (
-        <div className="space-y-5 relative">
-            {showToast && (
-                <motion.div
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="fixed top-4 right-4 z-50 bg-zinc-900 border border-zinc-700 rounded-lg px-5 py-3 shadow-xl flex items-center gap-3"
-                >
-                    <CheckCircle className="w-4 h-4 text-emerald-400" />
-                    <span className="text-white text-sm font-medium">{toastMessage}</span>
-                </motion.div>
-            )}
+    const counts = response?.counts ?? { all_tenders: 0, active_recommendations: 0, dismissed_recommendations: 0 };
+    const modes: Array<[ExplorerView, string, number]> = [
+        ['all', 'All', counts.all_tenders], ['recommended', 'Recommended', counts.active_recommendations],
+        ['dismissed', 'Dismissed', counts.dismissed_recommendations],
+    ];
+    const lastPage = response ? Math.max(1, Math.ceil(response.total / response.limit)) : 1;
+    const profileRequired = response?.recommendation_availability === 'PROFILE_REQUIRED';
+    const allDismissed = query.view === 'recommended' && counts.active_recommendations === 0 && counts.dismissed_recommendations > 0;
 
-            <motion.div
-                initial={{ opacity: 0, y: -14 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"
-            >
-                <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-                        <Radar className="w-5 h-5 text-indigo-400" />
+    return <main className="mx-auto w-full max-w-[1600px] space-y-5 p-4 sm:p-6">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div><h1 className="text-2xl font-bold text-white">Tender Explorer</h1><p className="mt-1 text-sm text-zinc-400">Discover tenders, review advisory matches, and manage pursuit actions independently.</p></div>
+            <details className="relative w-fit"><summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-semibold text-zinc-200 focus-visible:ring-2 focus-visible:ring-indigo-400"><RefreshCw className="h-4 w-4" />Source refresh</summary><div className="absolute right-0 z-30 mt-2 w-52 rounded-lg border border-zinc-700 bg-zinc-950 p-2 shadow-xl">{SOURCE_REFRESH.map((source) => <button key={source[0]} type="button" disabled={refreshingSource !== null} onClick={() => void refreshSource(source)} className="flex w-full gap-2 rounded px-3 py-2 text-left text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-60">{refreshingSource === source[0] ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}{source[1]}</button>)}</div></details>
+        </header>
+        {refreshNotice ? <p role="status" className="text-xs text-zinc-300">{refreshNotice}</p> : null}
+
+        <div role="tablist" aria-label="Tender Explorer view" className="flex max-w-full overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-1">{modes.map(([value, label, count]) => <button key={value} role="tab" type="button" aria-selected={query.view === value} onClick={() => navigate({ view: value, sort: defaultSort(value) })} className={`min-w-fit flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-indigo-400 ${query.view === value ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:bg-zinc-900'}`}>{label} <span className="ml-1 tabular-nums" aria-label={`${count} items`}>{count}</span></button>)}</div>
+
+        <section aria-label="Tender filters" className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <label className="relative xl:col-span-2"><span className="sr-only">Search tenders</span><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-500" /><input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search tenders" className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-400" /></label>
+                <select aria-label="Tender source" value={query.source} onChange={(event) => navigate({ source: event.target.value })} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white">{SOURCES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+                <select aria-label="Tender lifecycle status" value={query.lifecycleStatus} onChange={(event) => navigate({ lifecycleStatus: event.target.value as TenderStatus | 'ALL' })} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white">{STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+                <select aria-label="Sort tenders" value={query.sort} onChange={(event) => navigate({ sort: event.target.value })} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white">{(query.view === 'all' ? TENDER_SORTS : RECOMMENDATION_SORTS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+            </div>
+            <details><summary className="flex w-fit cursor-pointer list-none items-center gap-2 rounded px-2 py-1 text-sm font-semibold text-zinc-300 focus-visible:ring-2 focus-visible:ring-indigo-400"><SlidersHorizontal className="h-4 w-4" />More filters</summary>
+                <div className="mt-3 space-y-4 border-t border-zinc-800 pt-4">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <select aria-label="Deadline" value={query.deadlineStatus} onChange={(event) => navigate({ deadlineStatus: event.target.value })} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"><option value="">Any deadline</option><option value="active">Active deadline</option><option value="expired">Expired deadline</option><option value="unknown">Unknown deadline</option></select>
+                        <select aria-label="Document status" value={query.documentStatus} onChange={(event) => navigate({ documentStatus: event.target.value })} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white">{DOCUMENTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+                        <input aria-label="Category" value={categoryDraft} onChange={(event) => setCategoryDraft(event.target.value)} onBlur={commitDrafts} onKeyDown={(event) => { if (event.key === 'Enter') commitDrafts(); }} placeholder="Category" className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white" />
+                        <button type="button" aria-pressed={query.region === CENTRAL_ASIA_REGION} onClick={() => navigate({ region: query.region === CENTRAL_ASIA_REGION ? '' : CENTRAL_ASIA_REGION })} className={`rounded-lg border px-3 py-2 text-sm ${query.region === CENTRAL_ASIA_REGION ? 'border-indigo-400 text-indigo-200' : 'border-zinc-700 text-zinc-300'}`}>Central Asia</button>
+                        <input type="number" min="0" aria-label="Minimum value" value={minimumDraft} onChange={(event) => setMinimumDraft(event.target.value)} onBlur={commitDrafts} onKeyDown={(event) => { if (event.key === 'Enter') commitDrafts(); }} placeholder="Minimum value" className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white" />
+                        <input type="number" min="0" aria-label="Maximum value" value={maximumDraft} onChange={(event) => setMaximumDraft(event.target.value)} onBlur={commitDrafts} onKeyDown={(event) => { if (event.key === 'Enter') commitDrafts(); }} placeholder="Maximum value" className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white" />
                     </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-white">Tender Explorer</h1>
-                        <p className="text-zinc-400 text-sm mt-1">UzEx enterprise, World Bank, ADB, GIZ, and EBRD opportunities in one worklist</p>
-                    </div>
+                    <fieldset><legend className="mb-2 text-xs font-semibold uppercase text-zinc-500">Countries</legend><div className="flex flex-wrap gap-2">{CENTRAL_ASIA_COUNTRIES.map((country) => <button key={country} type="button" aria-pressed={query.countries.includes(country)} onClick={() => toggleList('countries', country)} className={`rounded-full border px-3 py-1 text-xs ${query.countries.includes(country) ? 'border-indigo-400 text-indigo-200' : 'border-zinc-700 text-zinc-400'}`}>{country}</button>)}</div></fieldset>
+                    <fieldset><legend className="mb-2 text-xs font-semibold uppercase text-zinc-500">Services</legend><div className="flex flex-wrap gap-2">{DEFAULT_SERVICE_OPTIONS.map((service) => <button key={service.value} type="button" aria-pressed={query.services.includes(service.value)} onClick={() => toggleList('services', service.value)} className={`rounded-full border px-3 py-1 text-xs ${query.services.includes(service.value) ? 'border-indigo-400 text-indigo-200' : 'border-zinc-700 text-zinc-400'}`}>{service.label}</button>)}</div></fieldset>
                 </div>
+            </details>
+        </section>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    {SOURCE_REFRESH_ACTIONS.map((action) => {
-                        const refreshState = sourceRefreshState[action.value];
-                        const updatedAt = refreshState?.lastUpdated
-                            ? new Date(refreshState.lastUpdated).toLocaleString()
-                            : 'Not refreshed yet';
-                        const statusLabel = sourceRefreshStatusLabel(refreshState, updatedAt);
-                        return (
-                            <div key={action.value} className="flex flex-col gap-1">
-                                <button
-                                    onClick={() => handleRefresh(action.value)}
-                                    disabled={isRefreshing}
-                                    title={`Refresh ${action.label}`}
-                                    className="inline-flex items-center justify-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-900/50 border border-zinc-700 text-white text-sm font-medium rounded-lg transition-colors"
-                                >
-                                    <RefreshCw className={`w-4 h-4 ${refreshingSource === action.value ? 'animate-spin' : ''}`} />
-                                    {refreshingSource === action.value ? 'Refreshing...' : action.label}
-                                </button>
-                                <span
-                                    className="text-[10px] text-zinc-500"
-                                    title={refreshState?.message || updatedAt}
-                                >
-                                    {statusLabel}
-                                </span>
-                            </div>
-                        );
-                    })}
-                    <div className="px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-900 text-sm text-zinc-300">
-                        {tenders.length} shown
-                    </div>
-                </div>
-            </motion.div>
+        {mutationError ? <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"><AlertCircle className="h-4 w-4" />{mutationError}</div> : null}
+        {profileRequired && query.view !== 'all' && !loading ? <section className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-8 text-center"><h2 className="text-lg font-semibold text-white">Complete your company profile</h2><p className="mt-2 text-sm text-zinc-300">Complete your company profile to receive personalized recommendations.</p><Link href="/dashboard/settings" className="mt-4 inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Open Company Profile</Link></section>
+            : loading ? <div role="status" aria-live="polite" className="flex min-h-52 items-center justify-center gap-3 rounded-xl border border-zinc-800 text-sm text-zinc-300"><Loader2 className="h-5 w-5 animate-spin" />Loading Tender Explorer…</div>
+                : error ? <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center"><p className="text-sm text-red-200">{error}</p><button type="button" onClick={() => setRefreshVersion((value) => value + 1)} className="mt-4 rounded-lg border border-red-400/40 px-4 py-2 text-sm text-red-100">Retry</button></div>
+                    : response && !response.items.length ? <section className="rounded-xl border border-zinc-800 p-10 text-center"><Filter className="mx-auto h-7 w-7 text-zinc-500" /><h2 className="mt-3 text-base font-semibold text-white">{query.view === 'all' ? 'No tenders match these filters.' : query.view === 'dismissed' ? 'No dismissed recommendations.' : allDismissed ? 'No active recommendations.' : 'No recommendations match your current filters.'}</h2></section>
+                        : response ? <section aria-label="Tender results" className="space-y-3"><p className="text-xs text-zinc-500">Showing {response.offset + 1}–{Math.min(response.offset + response.items.length, response.total)} of {response.total}</p>{response.items.map((item) => <ExplorerCard key={item.tender.id} item={item} pendingRecommendation={pendingRecommendation} onDismiss={(id) => void mutateRecommendation(id, false)} onRestore={(id) => void mutateRecommendation(id, true)} onRefresh={() => setRefreshVersion((value) => value + 1)} />)}<nav aria-label="Tender result pages" className="flex items-center justify-between rounded-xl border border-zinc-800 p-3"><button type="button" disabled={query.page <= 1} onClick={() => navigate({ page: query.page - 1 }, false)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40"><ChevronLeft className="h-4 w-4" />Previous</button><span className="text-sm text-zinc-400">Page {query.page} of {lastPage}</span><button type="button" disabled={query.page >= lastPage} onClick={() => navigate({ page: query.page + 1 }, false)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40">Next<ChevronRight className="h-4 w-4" /></button></nav></section> : null}
+    </main>;
+}
 
-            <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 space-y-4"
-            >
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr]">
-                    <label className="relative">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                        <input
-                            value={draftKeyword}
-                            onChange={(event) => setDraftKeyword(event.target.value)}
-                            placeholder="Search title, buyer, project, sector, method..."
-                            className="w-full rounded-lg border border-zinc-800 bg-gray-950 py-2.5 pl-9 pr-3 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
-                        />
-                    </label>
-                    <input
-                        value={queryState.priceMin}
-                        onChange={(event) => replaceQuery({ priceMin: event.target.value })}
-                        inputMode="decimal"
-                        placeholder="Min price"
-                        className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
-                    />
-                    <input
-                        value={queryState.priceMax}
-                        onChange={(event) => replaceQuery({ priceMax: event.target.value })}
-                        inputMode="decimal"
-                        placeholder="Max price"
-                        className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
-                    />
-                    <select
-                        value={queryState.sort}
-                        onChange={(event) => replaceQuery({ sort: event.target.value })}
-                        className="w-full rounded-lg border border-zinc-800 bg-gray-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-indigo-500"
-                    >
-                        {SORT_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                    <Filter className="h-4 w-4 text-zinc-500" />
-                    <select
-                        value={queryState.lifecycleStatus}
-                        onChange={(event) => replaceQuery({ lifecycleStatus: event.target.value as TenderStatus | 'ALL' })}
-                        aria-label="Tender lifecycle status"
-                        className="rounded-lg border border-zinc-800 bg-gray-950 px-3 py-1.5 text-sm font-medium text-zinc-300 outline-none transition focus:border-indigo-500"
-                    >
-                        {LIFECYCLE_FILTERS.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                    </select>
-                    <div className="flex flex-wrap items-center gap-2">
-                        {SOURCE_FILTERS.map((source) => (
-                            <button
-                                key={source.value}
-                                onClick={() => replaceQuery({ source: source.value })}
-                                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${queryState.source === source.value
-                                    ? 'border-indigo-500 bg-indigo-600 text-white'
-                                    : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                                    }`}
-                            >
-                                {source.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    <button
-                        onClick={toggleCentralAsia}
-                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${queryState.region === CENTRAL_ASIA_REGION
-                            ? 'border-emerald-500 bg-emerald-600 text-white'
-                            : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                            }`}
-                    >
-                        Central Asia
-                    </button>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                    <MapPin className="h-4 w-4 text-zinc-500" />
-                    {centralAsiaCountries.map((countryName) => (
-                        <button
-                            key={countryName}
-                            onClick={() => toggleCountry(countryName)}
-                            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${queryState.countries.includes(countryName)
-                                ? 'border-emerald-500 bg-emerald-600 text-white'
-                                : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                                }`}
-                        >
-                            {countryName}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                    {serviceOptions.map((option) => (
-                        <button
-                            key={option.value}
-                            onClick={() => toggleService(option.value)}
-                            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${queryState.services.includes(option.value)
-                                ? 'border-sky-500 bg-sky-600 text-white'
-                                : 'border-zinc-800 bg-gray-950 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                                }`}
-                        >
-                            {option.label}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                    <button
-                        onClick={resetFilters}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500"
-                    >
-                        <X className="h-3.5 w-3.5" />
-                        Reset
-                    </button>
-                </div>
-
-                {activeFilterBadges.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2 border-t border-zinc-900 pt-3">
-                        {activeFilterBadges.map((badge) => (
-                            <button
-                                key={badge.key}
-                                onClick={badge.onRemove}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-medium text-zinc-300 transition hover:border-zinc-500 hover:text-white"
-                            >
-                                {badge.label}
-                                <X className="h-3 w-3" />
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </motion.div>
-
-            {isRefreshing && (
-                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-3 flex items-center gap-3">
-                    <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
-                    <span className="text-indigo-300 text-sm">Refreshing {refreshingLabel} source feed.</span>
-                </div>
-            )}
-
-            {error && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-center gap-3">
-                    <AlertCircle className="w-4 h-4 text-red-400" />
-                    <span className="text-red-300 text-sm">{error}</span>
-                </div>
-            )}
-
-            {isLoading ? (
-                <div className="flex items-center justify-center h-64">
-                    <Loader2 className="w-7 h-7 text-indigo-500 animate-spin" />
-                </div>
-            ) : tenders.length === 0 ? (
-                <div className="bg-gray-900 border border-gray-800 rounded-lg p-10 text-center">
-                    <Radar className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-white mb-2">No tenders found</h3>
-                    <p className="text-zinc-400 text-sm">Adjust filters or refresh the relevant source sync.</p>
-                </div>
-            ) : (
-                <div className="overflow-hidden rounded-lg border border-gray-800 bg-gray-950">
-                    <div className="hidden xl:grid grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_1fr_1fr_220px] gap-4 border-b border-gray-800 bg-gray-900/70 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                        <span>Tender</span>
-                        <span>Location</span>
-                        <span>Buyer / Project</span>
-                        <span>Price</span>
-                        <span>Deadline</span>
-                        <span>Category / Method</span>
-                        <span>Actions</span>
-                    </div>
-                    <div className="divide-y divide-gray-900">
-                        {tenders.map((tender, index) => {
-                            const actionable = isTenderActionable(tender);
-                            const disabledCompliance = !actionable || !tender.compliance_analysis_available;
-                            const actionabilityMessage = tenderActionabilityMessage(tender.status);
-                            return (
-                                <motion.div
-                                    key={tender.id}
-                                    data-tender-id={tender.id}
-                                    initial={{ opacity: 0, y: 8 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: Math.min(index * 0.02, 0.2) }}
-                                    className="grid grid-cols-1 gap-4 px-4 py-4 transition hover:bg-gray-900/70 xl:grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_1fr_1fr_220px]"
-                                >
-                                    <div className="min-w-0 space-y-2">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${sourceBadgeClasses(tender.source_system)}`}>
-                                                {sourceLabel(tender.source_system)}
-                                            </span>
-                                            <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${tenderStatusClasses(tender.status)}`}>
-                                                {tenderStatusLabel(tender.status)}
-                                            </span>
-                                            {tender.source_url ? (
-                                                <a
-                                                    href={tender.source_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    title="Open source notice"
-                                                    className="text-[11px] text-zinc-500 underline-offset-2 transition hover:text-indigo-300 hover:underline"
-                                                >
-                                                    ID {tender.external_id}
-                                                </a>
-                                            ) : (
-                                                <span className="text-[11px] text-zinc-500">ID {tender.external_id}</span>
-                                            )}
-                                            <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${documentStatusClasses(tender.document_status)}`}>
-                                                {documentAggregateLabel(tender)}
-                                            </span>
-                                        </div>
-                                        <button
-                                            onClick={() => openTenderRoute(tender.id, `/dashboard/tenders/${tender.id}`)}
-                                            className="block text-left text-[15px] font-semibold leading-snug text-gray-100 hover:text-indigo-300"
-                                        >
-                                            {tender.title}
-                                        </button>
-                                        <div className="text-[12px] text-zinc-500">
-                                            Published {publishedDateLabel(tender)}
-                                        </div>
-                                    </div>
-
-                                    <div className="text-sm text-zinc-300">
-                                        <div className="flex items-center gap-1.5">
-                                            <MapPin className="h-3.5 w-3.5 text-zinc-500" />
-                                            <span>{tender.country || 'Unknown Region'}</span>
-                                        </div>
-                                        <p className="mt-1 text-xs text-zinc-500">{tender.region || 'No region'}</p>
-                                    </div>
-
-                                    <div className="min-w-0 text-sm text-zinc-300">
-                                        <p className="truncate">{buyerOrProject(tender)}</p>
-                                        {tender.project_id && tender.buyer && (
-                                            <p className="mt-1 text-xs text-zinc-500 truncate">{tender.project_id}</p>
-                                        )}
-                                    </div>
-
-                                    <div className="text-sm text-zinc-300">
-                                        <p className={(tender.price_display || tender.budget > 0) ? 'font-semibold text-emerald-300' : 'text-zinc-500'}>
-                                            {priceDisplay(tender)}
-                                        </p>
-                                    </div>
-
-                                    <div className="text-sm">
-                                        <div className={`flex items-center gap-1.5 ${isExpired(tender.deadline) ? 'text-zinc-500' : 'text-zinc-300'}`}>
-                                            <Clock className="h-3.5 w-3.5" />
-                                            <span>{timeRemaining(tender.deadline)}</span>
-                                        </div>
-                                        <p className="mt-1 text-xs text-zinc-500">{formatDate(tender.deadline)}</p>
-                                    </div>
-
-                                    <div className="min-w-0 text-sm text-zinc-300">
-                                        <p className="truncate">{tenderCategory(tender)}</p>
-                                        <p className="mt-1 text-xs text-zinc-500 truncate">{tender.procurement_method || tender.notice_type || 'Method not specified'}</p>
-                                    </div>
-
-                                    <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                                        <button
-                                            onClick={() => openTenderRoute(tender.id, `/dashboard/tenders/${tender.id}`)}
-                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-indigo-500 hover:text-indigo-200"
-                                        >
-                                            <FileText className="h-3.5 w-3.5" />
-                                            Details
-                                        </button>
-                                        <button
-                                            onClick={() => openTenderRoute(tender.id, `/dashboard/tenders/${tender.id}/compliance`)}
-                                            disabled={disabledCompliance}
-                                            title={!actionable ? actionabilityMessage : disabledCompliance ? complianceUnavailableMessage(tender) : 'Open compliance analysis'}
-                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-emerald-500 hover:text-emerald-200 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-600"
-                                        >
-                                            <ShieldCheck className="h-3.5 w-3.5" />
-                                            Compliance
-                                        </button>
-                                        <PrepareBidButton
-                                            tenderId={tender.id}
-                                            disabled={!actionable || isExpired(tender.deadline)}
-                                            title={!actionable ? actionabilityMessage : isExpired(tender.deadline) ? 'Tender deadline has passed' : 'Start bid preparation'}
-                                        />
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
-                    </div>
-                    {hasMore && (
-                        <div className="border-t border-gray-800 p-4 text-center">
-                            <button
-                                onClick={loadMore}
-                                disabled={isLoadingMore}
-                                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:opacity-60"
-                            >
-                                <Loader2 className={`w-4 h-4 ${isLoadingMore ? 'animate-spin' : 'hidden'}`} />
-                                {isLoadingMore ? 'Loading...' : 'Load more'}
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
+function ExplorerCard({ item, pendingRecommendation, onDismiss, onRestore, onRefresh }: { item: ExplorerItem; pendingRecommendation: string | null; onDismiss: (id: string) => void; onRestore: (id: string) => void; onRefresh: () => void }) {
+    const { tender, recommendation, pursuit } = item;
+    const actionable = isTenderActionable(tender.status);
+    const expired = isExpiredDeadline(tender.deadline);
+    const remember = () => sessionStorage.setItem('tender-explorer-restore', JSON.stringify({ tenderId: tender.id, href: window.location.href }));
+    return <article data-tender-id={tender.id} className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(12rem,0.7fr)_minmax(13rem,auto)]">
+            <div className="min-w-0"><div className="flex flex-wrap gap-2"><span className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${sourceBadgeClasses(tender.source_system)}`}>{sourceLabel(tender.source_system)}</span><span className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${tenderStatusClasses(tender.status)}`}>Source status: {tenderStatusLabel(tender.status)}</span><span className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${documentStatusClasses(tender.document_status)}`}>{documentStatusLabel(tender.document_status)} · {tender.document_count}</span></div><Link onClick={remember} href={`/dashboard/tenders/${tender.id}`} className="mt-3 block text-base font-semibold text-white hover:text-indigo-300">{tender.title}</Link><p className="mt-1 text-xs text-zinc-500">{tender.buyer || 'Buyer not specified'} · {tender.external_id}</p><div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-400"><span className="inline-flex gap-1"><MapPin className="h-3.5 w-3.5" />{tender.country || tender.region || 'Location not specified'}</span><span>{tender.sector || tender.category || 'Uncategorized'}</span></div></div>
+            <div className="space-y-2 text-sm"><p className={tender.budget > 0 ? 'font-semibold text-emerald-300' : 'text-zinc-500'}>{priceLabel(tender.budget, tender.currency)}</p><p className={`inline-flex gap-1.5 ${expired ? 'text-zinc-500' : 'text-zinc-300'}`}><Clock className="h-3.5 w-3.5" />{deadlineLabel(tender.deadline)}</p><p className="text-xs text-zinc-500">{formatDate(tender.deadline)}</p>{pursuit ? <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${engagementStatusClasses(pursuit.status)}`}>Pursuit: {engagementStatusLabel(pursuit.status)}</span> : null}</div>
+            <div className="flex flex-wrap gap-2 xl:justify-end"><Link onClick={remember} href={`/dashboard/tenders/${tender.id}`} className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200"><FileText className="h-3.5 w-3.5" />View Tender</Link>{pursuit ? <EngagementWorkflowActions engagement={{ engagement_id: pursuit.engagement_id, engagement_status: pursuit.status, allowed_actions: pursuit.allowed_actions }} tenderId={tender.id} onRefresh={onRefresh} /> : <PrepareBidButton tenderId={tender.id} disabled={!actionable || expired} title={!actionable ? tenderActionabilityMessage(tender.status) : expired ? 'Tender deadline has passed' : 'Start bid preparation'} />}</div>
         </div>
-    );
+        {recommendation ? <RecommendationSummary recommendation={recommendation} pending={pendingRecommendation === recommendation.recommendation_id} onDismiss={onDismiss} onRestore={onRestore} /> : null}
+    </article>;
 }
 
 export default function TendersPage() {
-    return (
-        <Suspense fallback={(
-            <div className="flex h-64 items-center justify-center">
-                <Loader2 className="h-7 w-7 animate-spin text-indigo-500" />
-            </div>
-        )}
-        >
-            <TendersPageContent />
-        </Suspense>
-    );
+    return <Suspense fallback={<div role="status" className="flex h-64 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-indigo-500" /></div>}><TendersPageContent /></Suspense>;
 }
