@@ -12,6 +12,7 @@ import { EngagementWorkflowActions } from '@/components/tenders/EngagementWorkfl
 import { NewTenderBadge } from '@/components/tenders/NewTenderBadge';
 import { RecommendationSummary } from '@/components/tenders/RecommendationSummary';
 import { dismissRecommendation, listExplorer, restoreRecommendation } from '@/lib/explorer';
+import { clearExplorerReturnState, readExplorerReturnState, writeExplorerReturnState } from '@/lib/explorerReturnState';
 import { CENTRAL_ASIA_COUNTRIES, CENTRAL_ASIA_REGION } from '@/lib/geography';
 import { DEFAULT_SERVICE_OPTIONS } from '@/lib/services';
 import { createServerClockReference, nextBadgeTickDelay, type ServerClockReference } from '@/lib/tenderNewness';
@@ -145,9 +146,11 @@ function TendersPageContent() {
     const [monotonicNow, setMonotonicNow] = useState(0);
     const [dismissedBatchId, setDismissedBatchId] = useState(0);
     const requestSequence = useRef(0);
+    const explorerHref = useMemo(() => `/dashboard/tenders?${buildExplorerSearch(query)}`, [query]);
 
     const navigate = useCallback((patch: Partial<ExplorerQueryState>, resetPage = true) => {
         const next = { ...query, ...patch, page: resetPage ? 1 : (patch.page ?? query.page) };
+        clearExplorerReturnState();
         router.push(`/dashboard/tenders?${buildExplorerSearch(next)}`);
     }, [query, router]);
 
@@ -209,6 +212,21 @@ function TendersPageContent() {
         );
         return () => window.clearTimeout(timer);
     }, [monotonicNow, response, serverClock]);
+
+    useEffect(() => {
+        if (loading || !response) return;
+        const restoreState = readExplorerReturnState();
+        if (!restoreState || restoreState.explorerUrl !== explorerHref) return;
+        const row = window.document.querySelector<HTMLElement>(
+            `[data-tender-id="${CSS.escape(restoreState.tenderId)}"]`,
+        );
+        const frame = window.requestAnimationFrame(() => {
+            if (row) row.scrollIntoView({ block: 'center' });
+            else window.scrollTo({ top: restoreState.scrollY, behavior: 'auto' });
+            clearExplorerReturnState();
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [explorerHref, loading, response]);
 
     const toggleList = (field: 'countries' | 'services', value: string) => {
         const current = query[field];
@@ -285,15 +303,15 @@ function TendersPageContent() {
             : loading ? <div role="status" aria-live="polite" className="flex min-h-52 items-center justify-center gap-3 rounded-xl border border-zinc-800 text-sm text-zinc-300"><Loader2 className="h-5 w-5 animate-spin" />Loading Tender Explorer…</div>
                 : error ? <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center"><p className="text-sm text-red-200">{error}</p><button type="button" onClick={() => setRefreshVersion((value) => value + 1)} className="mt-4 rounded-lg border border-red-400/40 px-4 py-2 text-sm text-red-100">Retry</button></div>
                     : response && !response.items.length ? <section className="rounded-xl border border-zinc-800 p-10 text-center"><Filter className="mx-auto h-7 w-7 text-zinc-500" /><h2 className="mt-3 text-base font-semibold text-white">{query.view === 'all' ? 'No tenders match these filters.' : query.view === 'dismissed' ? 'No dismissed recommendations.' : allDismissed ? 'No active recommendations.' : 'No recommendations match your current filters.'}</h2></section>
-                        : response ? <section aria-label="Tender results" className="space-y-3"><p className="text-xs text-zinc-500">Showing {response.offset + 1}–{Math.min(response.offset + response.items.length, response.total)} of {response.total}</p>{response.items.map((item) => <ExplorerCard key={item.tender.id} item={item} sourceDisplayName={displayNameForSource(item.tender.source_system)} clock={serverClock} monotonicNow={monotonicNow} pendingRecommendation={pendingRecommendation} onDismiss={(id) => void mutateRecommendation(id, false)} onRestore={(id) => void mutateRecommendation(id, true)} onRefresh={() => setRefreshVersion((value) => value + 1)} />)}<nav aria-label="Tender result pages" className="flex items-center justify-between rounded-xl border border-zinc-800 p-3"><button type="button" disabled={query.page <= 1} onClick={() => navigate({ page: query.page - 1 }, false)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40"><ChevronLeft className="h-4 w-4" />Previous</button><span className="text-sm text-zinc-400">Page {query.page} of {lastPage}</span><button type="button" disabled={query.page >= lastPage} onClick={() => navigate({ page: query.page + 1 }, false)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40">Next<ChevronRight className="h-4 w-4" /></button></nav></section> : null}
+                        : response ? <section aria-label="Tender results" className="space-y-3"><p className="text-xs text-zinc-500">Showing {response.offset + 1}–{Math.min(response.offset + response.items.length, response.total)} of {response.total}</p>{response.items.map((item) => <ExplorerCard key={item.tender.id} item={item} sourceDisplayName={displayNameForSource(item.tender.source_system)} clock={serverClock} monotonicNow={monotonicNow} pendingRecommendation={pendingRecommendation} onDismiss={(id) => void mutateRecommendation(id, false)} onRestore={(id) => void mutateRecommendation(id, true)} onRefresh={() => setRefreshVersion((value) => value + 1)} onOpen={(tenderId) => writeExplorerReturnState({ explorerUrl: explorerHref, tenderId, scrollY: window.scrollY, page: query.page, createdAt: Date.now() })} />)}<nav aria-label="Tender result pages" className="flex items-center justify-between rounded-xl border border-zinc-800 p-3"><button type="button" disabled={query.page <= 1} onClick={() => navigate({ page: query.page - 1 }, false)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40"><ChevronLeft className="h-4 w-4" />Previous</button><span className="text-sm text-zinc-400">Page {query.page} of {lastPage}</span><button type="button" disabled={query.page >= lastPage} onClick={() => navigate({ page: query.page + 1 }, false)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40">Next<ChevronRight className="h-4 w-4" /></button></nav></section> : null}
     </main>;
 }
 
-function ExplorerCard({ item, sourceDisplayName, clock, monotonicNow, pendingRecommendation, onDismiss, onRestore, onRefresh }: { item: ExplorerItem; sourceDisplayName: string; clock: ServerClockReference | null; monotonicNow: number; pendingRecommendation: string | null; onDismiss: (id: string) => void; onRestore: (id: string) => void; onRefresh: () => void }) {
+function ExplorerCard({ item, sourceDisplayName, clock, monotonicNow, pendingRecommendation, onDismiss, onRestore, onRefresh, onOpen }: { item: ExplorerItem; sourceDisplayName: string; clock: ServerClockReference | null; monotonicNow: number; pendingRecommendation: string | null; onDismiss: (id: string) => void; onRestore: (id: string) => void; onRefresh: () => void; onOpen: (tenderId: string) => void }) {
     const { tender, recommendation, pursuit } = item;
     const actionable = isTenderActionable(tender.status);
     const expired = isExpiredDeadline(tender.deadline);
-    const remember = () => sessionStorage.setItem('tender-explorer-restore', JSON.stringify({ tenderId: tender.id, href: window.location.href }));
+    const remember = () => onOpen(tender.id);
     return <article data-tender-id={tender.id} className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(12rem,0.7fr)_minmax(13rem,auto)]">
             <div className="min-w-0"><div className="flex flex-wrap gap-2"><NewTenderBadge isNew={tender.is_new} newUntil={tender.new_until} clock={clock} monotonicNow={monotonicNow} /><span className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${sourceBadgeClasses(tender.source_system)}`}>{sourceDisplayName}</span><span className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${tenderStatusClasses(tender.status)}`}>Source status: {tenderStatusLabel(tender.status)}</span><span className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${documentStatusClasses(tender.document_status)}`}>{documentStatusLabel(tender.document_status)} · {tender.document_count}</span></div><Link onClick={remember} href={`/dashboard/tenders/${tender.id}`} className="mt-3 block text-base font-semibold text-white hover:text-indigo-300">{tender.title}</Link><p className="mt-1 text-xs text-zinc-500">{tender.buyer || 'Buyer not specified'} · {tender.external_id}</p><div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-400"><span className="inline-flex gap-1"><MapPin className="h-3.5 w-3.5" />{tender.country || tender.region || 'Location not specified'}</span><span>{tender.sector || tender.category || 'Uncategorized'}</span></div></div>

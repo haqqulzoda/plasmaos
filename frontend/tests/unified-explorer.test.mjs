@@ -2,6 +2,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
+import {
+    EXPLORER_RETURN_STATE_KEY,
+    clearExplorerReturnState,
+    readExplorerReturnState,
+    writeExplorerReturnState,
+} from '../lib/explorerReturnState.ts';
+
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const page = read('app/dashboard/tenders/page.tsx');
 const client = read('lib/explorer.ts');
@@ -9,6 +16,8 @@ const types = read('types/explorer.ts');
 const recommendation = read('components/tenders/RecommendationSummary.tsx');
 const layout = read('app/dashboard/layout.tsx');
 const hunter = read('app/dashboard/hunter/page.tsx');
+const detail = read('app/dashboard/tenders/[tenderId]/page.tsx');
+const returnState = read('lib/explorerReturnState.ts');
 
 test('canonical unified request graph', () => {
     assert.match(client, /api\.get<ExplorerResponse>\('\/explorer\/tenders'/);
@@ -34,6 +43,46 @@ test('URL-backed modes, filters, reset, and pagination', () => {
     assert.match(page, /total \/ response\.limit/);
     assert.match(page, /Page \{query\.page\} of \{lastPage\}/);
     assert.match(page, /defaultSort\(view\)/);
+});
+
+test('filtered Explorer return state is shared with Tender Details', () => {
+    assert.match(page, /writeExplorerReturnState\(\{ explorerUrl: explorerHref/);
+    assert.match(page, /readExplorerReturnState\(\)/);
+    assert.match(detail, /readExplorerReturnState\(\)/);
+    assert.match(returnState, /plasmaos:tender-explorer:return/);
+    assert.doesNotMatch(page, /tender-explorer-restore|JSON\.stringify\(\{ tenderId: tender\.id, href/);
+});
+
+test('filtered Explorer return state round-trips and rejects unsafe paths', () => {
+    const values = new Map();
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+        sessionStorage: {
+            getItem: (key) => values.get(key) ?? null,
+            setItem: (key, value) => values.set(key, value),
+            removeItem: (key) => values.delete(key),
+        },
+    };
+    try {
+        const state = {
+            explorerUrl: '/dashboard/tenders?view=recommended&source=world_bank&q=water&page=2',
+            tenderId: 'tender-42',
+            scrollY: 640,
+            page: 2,
+            createdAt: 1_000,
+        };
+        writeExplorerReturnState(state);
+        assert.deepEqual(readExplorerReturnState(), state);
+        clearExplorerReturnState();
+        assert.equal(readExplorerReturnState(), null);
+
+        values.set(EXPLORER_RETURN_STATE_KEY, JSON.stringify({ ...state, explorerUrl: 'https://example.invalid/dashboard/tenders' }));
+        assert.equal(readExplorerReturnState(), null);
+        assert.equal(values.has(EXPLORER_RETURN_STATE_KEY), false);
+    } finally {
+        if (previousWindow === undefined) delete globalThis.window;
+        else globalThis.window = previousWindow;
+    }
 });
 
 test('authoritative refresh and stale-response protection', () => {

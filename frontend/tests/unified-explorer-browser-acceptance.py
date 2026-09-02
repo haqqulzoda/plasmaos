@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real Chromium acceptance for all 70 Sprint 6.3 Explorer cases."""
+"""Real Chromium acceptance for all 71 Explorer and filter-return cases."""
 
 from __future__ import annotations
 
@@ -164,7 +164,7 @@ def start_frontend() -> subprocess.Popen:
 
 
 CASES = [
-    "All mode default", "Recommended mode", "Dismissed mode", "direct recommended deep link", "direct dismissed deep link", "invalid view handled safely", "mode counts", "filters persist between modes", "filter resets offset", "search URL state", "source filter", "deadline filter", "document filter", "sort All", "Best Match Recommended", "Best Match unavailable in All", "pagination", "stable score ties", "no-profile All", "PROFILE_REQUIRED Recommended", "PROFILE_REQUIRED Dismissed", "Tender with no Recommendation", "active Recommendation overlay", "dismissed Recommendation overlay in All", "Match score copy", "rationale copy", "no freshness claim", "no win-probability claim", "no pursuit", "SAVED pursuit", "EVALUATING pursuit", "PREPARING pursuit", "SUBMITTED pursuit", "WON pursuit", "LOST pursuit", "DISMISSED pursuit", "active Recommendation plus DISMISSED pursuit", "dismissed Recommendation plus PREPARING pursuit", "dismiss Recommendation", "restore Recommendation", "counts after dismiss", "counts after restore", "last-row page dismiss recovery", "last-row page restore recovery", "engagement unchanged by dismiss", "Proposal unchanged by dismiss", "Compliance unchanged by dismiss", "Tender OPEN", "Tender CLOSED", "Tender CANCELLED", "expired deadline", "Tender Details link uses Tender ID", "pursuit action remains explicit", "Prepare remains explicit", "same-name tenant A", "same-name tenant B", "same-name tenant dismissal isolation", "foreign Recommendation mutation", "admin without owned profile", "pending/rejected/disabled/stale auth", "browser back/forward", "filtered empty All", "zero active Recommendations", "zero dismissed Recommendations", "all Recommendations dismissed", "Recommendation with absent rationale", "slow document-filter loading", "stale request cannot overwrite new state", "passive mode/filter/page navigation causes zero writes", "initial network uses unified Explorer only",
+    "All mode default", "Recommended mode", "Dismissed mode", "direct recommended deep link", "direct dismissed deep link", "invalid view handled safely", "mode counts", "filters persist between modes", "filter resets offset", "search URL state", "source filter", "deadline filter", "document filter", "sort All", "Best Match Recommended", "Best Match unavailable in All", "pagination", "stable score ties", "no-profile All", "PROFILE_REQUIRED Recommended", "PROFILE_REQUIRED Dismissed", "Tender with no Recommendation", "active Recommendation overlay", "dismissed Recommendation overlay in All", "Match score copy", "rationale copy", "no freshness claim", "no win-probability claim", "no pursuit", "SAVED pursuit", "EVALUATING pursuit", "PREPARING pursuit", "SUBMITTED pursuit", "WON pursuit", "LOST pursuit", "DISMISSED pursuit", "active Recommendation plus DISMISSED pursuit", "dismissed Recommendation plus PREPARING pursuit", "dismiss Recommendation", "restore Recommendation", "counts after dismiss", "counts after restore", "last-row page dismiss recovery", "last-row page restore recovery", "engagement unchanged by dismiss", "Proposal unchanged by dismiss", "Compliance unchanged by dismiss", "Tender OPEN", "Tender CLOSED", "Tender CANCELLED", "expired deadline", "Tender Details link uses Tender ID", "pursuit action remains explicit", "Prepare remains explicit", "same-name tenant A", "same-name tenant B", "same-name tenant dismissal isolation", "foreign Recommendation mutation", "admin without owned profile", "pending/rejected/disabled/stale auth", "browser back/forward", "filtered empty All", "zero active Recommendations", "zero dismissed Recommendations", "all Recommendations dismissed", "Recommendation with absent rationale", "slow document-filter loading", "stale request cannot overwrite new state", "passive mode/filter/page navigation causes zero writes", "initial network uses unified Explorer only", "filtered Tender detail return",
 ]
 
 
@@ -224,6 +224,8 @@ def main() -> int:
             page.goto(f"{BASE_URL}/dashboard/tenders?view=all&document_status=files_missing", wait_until="domcontentloaded"); page.get_by_text("Loading Tender Explorer…").wait_for(); check(True, CASES[66]); page.get_by_text("No tenders match these filters.").wait_for(); check(True, CASES[67])
             passive_before = len(State.writes); State.request_log = []; page.goto(f"{BASE_URL}/dashboard/tenders?view=all", wait_until="networkidle"); page.get_by_role("button", name="Next", exact=True).click(); page.wait_for_url("**page=2**"); page.wait_for_load_state("networkidle"); check(len(State.writes) == passive_before, CASES[68])
             domain_gets = [path for method, path in State.request_log if method == "GET" and path.startswith("/api/v1/") and path not in {"/api/v1/users/me", "/api/v1/users/me/access-status"}]; check(domain_gets and set(domain_gets).issubset({"/api/v1/explorer/tenders", "/api/v1/tenders/sources/catalog", "/api/v1/tenders/sources/refresh-status", "/api/v1/tenders/sources/refresh-activity"}) and "/api/v1/explorer/tenders" in domain_gets, CASES[69])
+            filtered_href = "/dashboard/tenders?view=all&source=world_bank&document_status=documents_available&q=Tender+01"
+            page.goto(f"{BASE_URL}{filtered_href}", wait_until="networkidle"); page.get_by_role("link", name="View Tender").click(); page.wait_for_url("**/dashboard/tenders/tender-01"); back_link = page.get_by_role("link", name="Back to tenders"); back_link.wait_for(); check(back_link.get_attribute("href") == filtered_href, CASES[70]); back_link.click(); page.wait_for_url(f"**{filtered_href}"); assert page.locator("select[aria-label='Tender source']").input_value() == "world_bank"; assert page.get_by_placeholder("Search tenders").input_value() == "Tender 01"; page.locator("summary", has_text="More filters").click(); assert page.locator("select[aria-label='Document status']").input_value() == "documents_available"; assert page.evaluate("sessionStorage.getItem('plasmaos:tender-explorer:return')") is None
             browser.close(); browser = None
     finally:
         server.shutdown()
@@ -235,7 +237,7 @@ def main() -> int:
         base.kill_listener(3112); base.kill_listener(9232)
     print(json.dumps({"results": [{"case": case, "result": "passed"} for case in passed], "passed": len(passed)}, indent=2))
     assert passed == CASES
-    print("70/70 PASS")
+    print("71/71 PASS")
     return 0
 
 

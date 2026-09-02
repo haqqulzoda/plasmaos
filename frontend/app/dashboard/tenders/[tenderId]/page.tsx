@@ -28,6 +28,7 @@ import {
 import { TenderEngagementPanel } from '@/components/tenders/TenderEngagementPanel';
 import { useSourceRefresh } from '@/components/source-refresh/SourceRefreshProvider';
 import { api } from '@/lib/api';
+import { EXPLORER_PATH, readExplorerReturnState } from '@/lib/explorerReturnState';
 import type {
     DetailsSectionState,
     TenderDetailsCompliance,
@@ -42,9 +43,6 @@ import {
     tenderStatusClasses,
     tenderStatusLabel,
 } from '@/types/tender';
-
-const EXPLORER_RESTORE_KEY = 'plasmaos:tender-explorer:return';
-const EXPLORER_FALLBACK_HREF = '/dashboard/tenders';
 
 const SECTION_LINKS = [
     { href: '#pursuit', label: 'Pursuit' },
@@ -188,7 +186,7 @@ function documentAvailability(item: TenderDetailsDocumentItem) {
 export default function TenderDetailPage({ params }: { params: Promise<{ tenderId: string }> }) {
     const { displayNameForSource } = useSourceRefresh();
     const { tenderId } = use(params);
-    const [returnHref, setReturnHref] = useState(EXPLORER_FALLBACK_HREF);
+    const [returnHref, setReturnHref] = useState(EXPLORER_PATH);
     const [tender, setTender] = useState<Tender | null>(null);
     const [details, setDetails] = useState<TenderDetailsResponse | null>(null);
     const [isLoadingTender, setIsLoadingTender] = useState(true);
@@ -199,14 +197,8 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
     const [documentActionError, setDocumentActionError] = useState<string | null>(null);
 
     useEffect(() => {
-        const rawState = window.sessionStorage.getItem(EXPLORER_RESTORE_KEY);
-        if (!rawState) return;
-        try {
-            const explorerUrl = JSON.parse(rawState)?.explorerUrl;
-            if (typeof explorerUrl === 'string' && explorerUrl.startsWith(EXPLORER_FALLBACK_HREF)) setReturnHref(explorerUrl);
-        } catch {
-            window.sessionStorage.removeItem(EXPLORER_RESTORE_KEY);
-        }
+        const restoreState = readExplorerReturnState();
+        if (restoreState) setReturnHref(restoreState.explorerUrl);
     }, []);
 
     const loadTender = useCallback(async () => {
