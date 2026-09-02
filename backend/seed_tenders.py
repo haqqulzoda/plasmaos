@@ -1,14 +1,13 @@
 import asyncio
-import uuid
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import text
-from app.db.session import engine
+
+from app.db.session import AsyncSessionLocal
 from app.models.all_models import TenderStatus
+from app.services.tender_sources.base import NormalizedTender, persist_tender_batch
 
 # Mock Data representing UzEx Tenders
 MOCK_TENDERS = [
     {
-        "id": uuid.uuid4(),
         "external_id": "998231",
         "source_url": "https://etender.uzex.uz/lot/998231",
         "title": "Current repair of the roof of School No. 45 in Chilanzar district",
@@ -20,7 +19,6 @@ MOCK_TENDERS = [
         "status": TenderStatus.OPEN.value,
     },
     {
-        "id": uuid.uuid4(),
         "external_id": "998232",
         "source_url": "https://etender.uzex.uz/lot/998232",
         "title": "Supply of Office Equipment (Laptops, Printers) for Ministry of Health",
@@ -32,7 +30,6 @@ MOCK_TENDERS = [
         "status": TenderStatus.OPEN.value,
     },
     {
-        "id": uuid.uuid4(),
         "external_id": "998233",
         "source_url": "https://etender.uzex.uz/lot/998233",
         "title": "Construction of internal roads in mahalla 'Dustlik'",
@@ -44,7 +41,6 @@ MOCK_TENDERS = [
         "status": TenderStatus.OPEN.value,
     },
     {
-        "id": uuid.uuid4(),
         "external_id": "998234",
         "source_url": "https://etender.uzex.uz/lot/998234",
         "title": "Supply of Medical Equipment for Regional Hospital",
@@ -56,7 +52,6 @@ MOCK_TENDERS = [
         "status": TenderStatus.OPEN.value,
     },
     {
-        "id": uuid.uuid4(),
         "external_id": "998235",
         "source_url": "https://etender.uzex.uz/lot/998235",
         "title": "Road Repair Works - M39 Highway Section",
@@ -69,35 +64,33 @@ MOCK_TENDERS = [
     },
 ]
 
+
 async def seed_data():
-    async with engine.begin() as conn:
+    async with AsyncSessionLocal() as session:
         print("--- SEEDING TENDERS ---")
-        for t in MOCK_TENDERS:
-            try:
-                await conn.execute(
-                    text(
-                        "INSERT INTO tenders (id, external_id, source_system, canonical_source_key, source_url, title, description, budget, currency, region, deadline, status, created_at) "
-                        "VALUES (:id, :eid, :source_system, :canonical_source_key, :url, :title, :desc, :budget, :currency, :region, :dl, :status, NOW())"
-                    ),
-                    {
-                        "id": t["id"],
-                        "eid": t["external_id"],
-                        "source_system": "uzex",
-                        "canonical_source_key": f"uzex:{t['external_id']}",
-                        "url": t["source_url"],
-                        "title": t["title"],
-                        "desc": t["description"],
-                        "budget": t["budget"],
-                        "currency": t["currency"],
-                        "region": t["region"],
-                        "dl": t["deadline"],
-                        "status": t["status"],
-                    },
-                )
-                print(f"Inserted: {t['title'][:40]}...")
-            except Exception as e:
-                print(f"Skipped {t['external_id']} - {e}")
+        normalized = [
+            NormalizedTender(
+                source_system="uzex",
+                external_id=t["external_id"],
+                source_url=t["source_url"],
+                title=t["title"],
+                description=t["description"],
+                budget=t["budget"],
+                currency=t["currency"],
+                region=t["region"],
+                deadline=t["deadline"],
+                status=TenderStatus(t["status"]),
+            )
+            for t in MOCK_TENDERS
+        ]
+        result = await persist_tender_batch(session, normalized)
+        await session.commit()
+        print(
+            f"Created {result.created_count}; updated {result.updated_count}; "
+            f"unchanged {result.unchanged_count}"
+        )
         print("--- SEED COMPLETE ---")
+
 
 if __name__ == "__main__":
     asyncio.run(seed_data())

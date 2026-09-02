@@ -976,6 +976,9 @@ def normalize_adb_notice_payload(raw: dict[str, Any]) -> dict[str, Any]:
         f"Sectors: {sector}" if sector else None,
     ]
     description = " | ".join(part for part in description_parts if part)
+    document_candidate_id = hashlib.sha256(
+        f"adb:{guid}:notice_pdf:{node_url}".encode("utf-8")
+    ).hexdigest()
 
     return {
         "source_system": "adb",
@@ -1004,6 +1007,7 @@ def normalize_adb_notice_payload(raw: dict[str, Any]) -> dict[str, Any]:
             "feed_url": raw.get("feed_url"),
             "feed_type": raw.get("feed_type"),
             "node_url": node_url,
+            "adb_document_candidate_id": document_candidate_id,
             "rss_categories": raw.get("categories") or [],
             "rss_category_fields": fields,
         },
@@ -1089,6 +1093,9 @@ class AdbTenderSource:
         self.execution_health = "NOT_RUN"
         self.freshness_health = "UNKNOWN"
         self.coverage_health = "NONE"
+        self.http_request_count = 0
+        self.http_retry_count = 0
+        self.http_failure_count = 0
 
     @staticmethod
     def _listing_page_url(page: int) -> str:
@@ -1114,6 +1121,7 @@ class AdbTenderSource:
 
         for attempt in range(self.config.max_retries + 1):
             try:
+                self.http_request_count += 1
                 response = await client.request(
                     method,
                     url,
@@ -1124,10 +1132,12 @@ class AdbTenderSource:
                 response.raise_for_status()
                 return response
             except Exception as exc:
+                self.http_failure_count += 1
                 details = connector_failure_details(exc)
                 if attempt >= self.config.max_retries or not details.retryable:
                     raise
                 delay = retry_after_seconds(exc, attempt=attempt)
+                self.http_retry_count += 1
                 logger.warning(
                     "adb_request_retry stage=network attempt=%s failure_class=%s "
                     "http_status=%s retryable=true delay_seconds=%.2f",
@@ -1289,17 +1299,20 @@ class AdbTenderSource:
         node_url = f"https://www.adb.org/node/{str(external_id).strip()}"
         return await self.resolve_node_redirect(node_url)
 
-    async def resolve_node_redirect(self, node_url: str) -> AdbAttachmentMetadata | None:
+    async def resolve_node_redirect(self, node_url: str, *, client: Any | None = None) -> AdbAttachmentMetadata | None:
         import httpx
 
         if not _safe_adb_url(node_url):
             return None
 
-        async with httpx.AsyncClient(
-            timeout=self.config.timeout_seconds,
-            max_redirects=self.config.max_redirects,
-            headers={"User-Agent": ADB_USER_AGENT},
-        ) as client:
+        owns_client = client is None
+        if client is None:
+            client = httpx.AsyncClient(
+                timeout=self.config.timeout_seconds,
+                max_redirects=self.config.max_redirects,
+                headers={"User-Agent": ADB_USER_AGENT},
+            )
+        try:
             response = None
             try:
                 response = await self._request(
@@ -1320,6 +1333,9 @@ class AdbTenderSource:
                     },
                 )
                 response.raise_for_status()
+        finally:
+            if owns_client:
+                await client.aclose()
 
         final_url = str(response.url)
         return attachment_metadata_from_response(
@@ -1329,16 +1345,19 @@ class AdbTenderSource:
             status_code=response.status_code,
         )
 
-    async def fetch_notice_pdf_bytes(self, pdf_url: str) -> bytes | None:
+    async def fetch_notice_pdf_bytes(self, pdf_url: str, *, client: Any | None = None) -> bytes | None:
         import httpx
 
         if not _safe_adb_url(pdf_url):
             return None
-        async with httpx.AsyncClient(
-            timeout=self.config.timeout_seconds,
-            max_redirects=self.config.max_redirects,
-            headers={"User-Agent": ADB_USER_AGENT},
-        ) as client:
+        owns_client = client is None
+        if client is None:
+            client = httpx.AsyncClient(
+                timeout=self.config.timeout_seconds,
+                max_redirects=self.config.max_redirects,
+                headers={"User-Agent": ADB_USER_AGENT},
+            )
+        try:
             response = await self._request(
                 client,
                 "GET",
@@ -1346,6 +1365,9 @@ class AdbTenderSource:
                 headers={"Accept": "application/pdf"},
             )
             response.raise_for_status()
+        finally:
+            if owns_client:
+                await client.aclose()
         content_type = response.headers.get("content-type")
         if not _is_pdf_response(str(response.url), content_type):
             return None
@@ -1359,18 +1381,19 @@ class AdbTenderSource:
         *,
         node_url: str | None = None,
         final_pdf_url: str | None = None,
+        client: Any | None = None,
     ) -> dict[str, Any] | None:
         pdf_url = _clean_whitespace(final_pdf_url)
         attachment: AdbAttachmentMetadata | None = None
         if not pdf_url:
             if not node_url:
                 return None
-            attachment = await self.resolve_node_redirect(node_url)
+            attachment = await self.resolve_node_redirect(node_url, client=client)
             if attachment is None:
                 return None
             pdf_url = attachment.final_url
 
-        pdf_bytes = await self.fetch_notice_pdf_bytes(pdf_url)
+        pdf_bytes = await self.fetch_notice_pdf_bytes(pdf_url, client=client)
         text = _pdf_text(pdf_bytes or b"")
         contact_info = extract_adb_contact_info(text)
         safe_contact_info = {
@@ -1398,60 +1421,24 @@ class AdbTenderSource:
 
     async def discover_attachments(self, normalized_tender: Any) -> list[Any]:
         metadata = normalized_tender.source_metadata_json or {}
-        node_url = metadata.get("node_url") or normalized_tender.source_url
-        try:
-            attachment = await self.resolve_node_redirect(str(node_url))
-        except Exception as exc:
-            metadata["attachment_discovery_status"] = "failed"
-            metadata["attachment_discovery_error_type"] = type(exc).__name__
-            logger.warning(
-                "adb_attachment_discovery_failed source_system=%s external_id=%s status=failed error_type=%s",
-                self.source_system,
-                getattr(normalized_tender, "external_id", None),
-                type(exc).__name__,
-            )
+        node_url = str(metadata.get("node_url") or normalized_tender.source_url).strip()
+        if not _safe_adb_url(node_url):
             return []
-        if attachment is None:
-            metadata["attachment_discovery_status"] = "metadata_only"
-            return []
-        metadata["attachment_discovery_status"] = "success"
-        metadata["final_pdf_url"] = attachment.final_url
-        metadata["final_pdf_url_hash"] = attachment.final_url_hash
-        metadata["final_pdf_content_type"] = attachment.content_type
-        metadata["final_pdf_content_length"] = attachment.content_length
-        metadata["final_pdf_last_modified"] = attachment.last_modified
-        metadata["final_pdf_status_code"] = attachment.status_code
-        try:
-            contact_metadata = await self.fetch_contact_metadata(
-                final_pdf_url=attachment.final_url,
-            )
-        except Exception as exc:
-            contact_metadata = None
-            metadata["adb_contact_extraction_status"] = "failed"
-            metadata["adb_contact_extraction_error_type"] = type(exc).__name__
-            logger.warning(
-                "adb_contact_extraction_failed source_system=%s external_id=%s status=failed error_type=%s",
-                self.source_system,
-                getattr(normalized_tender, "external_id", None),
-                type(exc).__name__,
-            )
-        if contact_metadata:
-            metadata.update(contact_metadata)
+        candidate_id = str(metadata.get("adb_document_candidate_id") or "").strip()
+        if not candidate_id:
+            candidate_id = hashlib.sha256(
+                f"adb:{normalized_tender.external_id}:notice_pdf:{node_url}".encode("utf-8")
+            ).hexdigest()
+            metadata["adb_document_candidate_id"] = candidate_id
+        metadata["attachment_discovery_status"] = "metadata_only"
         from app.services.tender_sources.base import NormalizedAttachment
 
         return [
             NormalizedAttachment(
-                source_document_url=attachment.final_url,
+                source_document_url=node_url,
                 source_document_type="notice_pdf",
-                external_file_id=attachment.final_url_hash,
-                file_size=attachment.content_length,
-                mime_type=attachment.content_type,
-                source_metadata_json={
-                    "node_url": attachment.node_url,
-                    "final_url_hash": attachment.final_url_hash,
-                    "last_modified": attachment.last_modified,
-                    "status_code": attachment.status_code,
-                },
+                external_file_id=candidate_id,
+                source_metadata_json={"node_url": node_url, "candidate_id": candidate_id},
             )
         ]
 
@@ -1493,6 +1480,14 @@ class AdbTenderSource:
             category="ADB",
             source_metadata_json=payload["source_metadata_json"],
             scrape_status=payload["scrape_status"],
+            preserve_source_metadata_keys=(
+                "buyer_agency", "contact_person", "email", "phone", "address",
+                "submission_method", "submission_instructions",
+                "adb_contact_extraction_status", "adb_contact_source",
+                "adb_contact_document_external_file_id",
+                "adb_contact_evidence_url_hash", "adb_contact_enriched_at",
+                "final_pdf_url", "final_pdf_url_hash",
+            ),
         )
 
     async def upsert(self, db: Any, normalized_tender: Any) -> tuple[Any, bool]:
@@ -1526,51 +1521,11 @@ class AdbTenderSource:
         tender: Any,
         documents: list[Any],
     ) -> tuple[int, int]:
-        from sqlalchemy import or_, select
+        from app.services.tender_sources.base import persist_document_descriptors
 
-        from app.models.all_models import TenderDocument
-        from app.services.tender_sources.base import assert_source_scope
-
-        assert_source_scope(self.source_system, tender)
-        created = 0
-        updated = 0
-        for document in documents:
-            source_url = str(document.source_document_url or "").strip()
-            external_file_id = str(document.external_file_id or "").strip()
-            if not source_url or not external_file_id:
-                continue
-            result = await db.execute(
-                select(TenderDocument).where(
-                    TenderDocument.tender_id == tender.id,
-                    or_(
-                        TenderDocument.external_file_id == external_file_id,
-                        TenderDocument.source_document_url == source_url,
-                    ),
-                )
-            )
-            doc = result.scalar_one_or_none()
-            if doc is None:
-                db.add(
-                    TenderDocument(
-                        tender_id=tender.id,
-                        file_url=source_url[:500],
-                        file_type="pdf",
-                        source_document_url=source_url,
-                        source_document_type="notice_pdf",
-                        download_status="metadata_only",
-                        external_file_id=external_file_id,
-                        file_size=document.file_size,
-                        mime_type=document.mime_type,
-                    )
-                )
-                created += 1
-            else:
-                doc.file_type = "pdf"
-                doc.source_document_url = source_url
-                doc.source_document_type = "notice_pdf"
-                doc.download_status = "metadata_only"
-                doc.external_file_id = external_file_id
-                doc.file_size = document.file_size or doc.file_size
-                doc.mime_type = document.mime_type or doc.mime_type
-                updated += 1
-        return created, updated
+        result = await persist_document_descriptors(
+            db, source_system=self.source_system, tender=tender,
+            documents=documents, url_validator=_safe_adb_url,
+            default_status="metadata_only",
+        )
+        return result.created_count, result.updated_count

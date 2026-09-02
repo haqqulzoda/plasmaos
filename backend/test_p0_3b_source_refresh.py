@@ -104,7 +104,7 @@ class SourceRefreshTests(IsolatedAsyncioTestCase):
         self.assertEqual(response.fetched_count, 35)
         self.assertEqual(response.updated_count, 35)
         self.assertTrue(response.fallback_used)
-        self.assertEqual(response.failure_class, "HTTPStatusError")
+        self.assertNotIn("failure_class", response.model_dump())
         self.assertEqual(response.completed_at, completed)
         self.assertEqual(response.last_updated, completed)
         self.assertEqual(response.source_newest_published_at, newest)

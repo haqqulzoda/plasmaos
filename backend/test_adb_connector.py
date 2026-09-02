@@ -423,17 +423,12 @@ class AdbConnectorTests(unittest.TestCase):
             source_metadata_json={"node_url": "https://www.adb.org/node/1142361"},
         )
 
-        with self.assertLogs("app.services.tender_sources.adb", level="WARNING"):
-            attachments = asyncio.run(source.discover_attachments(normalized))
+        attachments = asyncio.run(source.discover_attachments(normalized))
 
-        self.assertEqual(attachments, [])
+        self.assertEqual(len(attachments), 1)
         self.assertEqual(
             normalized.source_metadata_json["attachment_discovery_status"],
-            "failed",
-        )
-        self.assertEqual(
-            normalized.source_metadata_json["attachment_discovery_error_type"],
-            "RuntimeError",
+            "metadata_only",
         )
 
     def test_attachment_discovery_stores_pdf_contact_metadata(self) -> None:
@@ -464,14 +459,10 @@ class AdbConnectorTests(unittest.TestCase):
         attachments = asyncio.run(source.discover_attachments(normalized))
 
         self.assertEqual(len(attachments), 1)
-        self.assertEqual(
-            normalized.source_metadata_json["contact_person"],
-            "PAG Manager, Mr. Bobokhon Abdulmajid",
-        )
-        self.assertEqual(normalized.source_metadata_json["email"], "istem.taj@gmail.com")
+        self.assertNotIn("contact_person", normalized.source_metadata_json)
         self.assertEqual(
             normalized.source_metadata_json["attachment_discovery_status"],
-            "success",
+            "metadata_only",
         )
 
     def test_deadline_extraction_from_sample_text(self) -> None:

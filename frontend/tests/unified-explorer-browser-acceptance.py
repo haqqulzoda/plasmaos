@@ -53,6 +53,7 @@ def tender(index: int, *, status: str = "OPEN", deadline: str = "2026-12-20T00:0
         "country": "Uzbekistan", "region": "Central Asia", "sector": "Digital services",
         "status": status, "category": "Consulting", "document_status": "documents_available",
         "document_count": 2, "created_at": f"2026-08-{(index % 28) + 1:02d}T10:00:00Z",
+        "is_new": index < 2, "new_until": "2026-12-31T00:00:00Z",
     }
 
 
@@ -103,6 +104,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, {"id": "tenant-a", "email": "a@example.invalid"}); return
         if parsed.path == "/api/v1/users/me/access-status":
             self.send_json(200, {"company_profile_id": None if State.profile_required else "profile-a", "company_name": "Acme Engineering", "onboarding_required": False, "onboarding_completed": True, "user_approval_status": "approved", "company_approval_status": "approved", "platform_role": "pilot_user", "access_allowed": True, "state": "approved"}); return
+        if parsed.path == "/api/v1/tenders/sources/catalog":
+            self.send_json(200, [{"source_system": "uzex", "display_name": "UzEx", "refresh_enabled": True, "can_refresh": True}, {"source_system": "world_bank", "display_name": "World Bank", "refresh_enabled": True, "can_refresh": True}]); return
+        if parsed.path == "/api/v1/tenders/sources/refresh-status":
+            self.send_json(200, [{"source_system": "uzex", "display_name": "UzEx", "refresh_enabled": True, "can_refresh": True, "active_job": None, "latest_terminal": None, "last_clean_completed": None, "last_partial": None, "last_failure": None, "activity_cursor": "s63-baseline"}, {"source_system": "world_bank", "display_name": "World Bank", "refresh_enabled": True, "can_refresh": True, "active_job": None, "latest_terminal": None, "last_clean_completed": None, "last_partial": None, "last_failure": None, "activity_cursor": "s63-baseline"}]); return
+        if parsed.path == "/api/v1/tenders/sources/refresh-activity":
+            self.send_json(200, {"events": [], "next_cursor": "s63-baseline", "has_more": False}); return
         if parsed.path == "/api/v1/explorer/tenders":
             query = parse_qs(parsed.query); view = query.get("view", ["all"])[0]
             rows = list(State.items)
@@ -117,7 +124,7 @@ class Handler(BaseHTTPRequestHandler):
             if view != "all": selected.sort(key=lambda row: (-row["recommendation"]["match_score"], row["recommendation"]["recommendation_id"]))
             offset = int(query.get("offset", [0])[0]); limit = int(query.get("limit", [25])[0])
             if document == "files_missing": time.sleep(1.0)
-            self.send_json(200, {"view": view, "items": selected[offset:offset + limit], "total": len(selected), "limit": limit, "offset": offset, "counts": {"all_tenders": len(rows), "active_recommendations": len(active), "dismissed_recommendations": len(dismissed)}, "recommendation_availability": "PROFILE_REQUIRED" if State.profile_required else "AVAILABLE"}); return
+            self.send_json(200, {"view": view, "items": selected[offset:offset + limit], "total": len(selected), "limit": limit, "offset": offset, "counts": {"all_tenders": len(rows), "active_recommendations": len(active), "dismissed_recommendations": len(dismissed)}, "recommendation_availability": "PROFILE_REQUIRED" if State.profile_required else "AVAILABLE", "server_time": "2026-09-01T10:00:00Z"}); return
         self.send_json(404, {"detail": "not found"})
 
     def do_POST(self) -> None:
@@ -216,7 +223,7 @@ def main() -> int:
             page.goto(f"{BASE_URL}/dashboard/tenders?view=recommended&q=03", wait_until="networkidle"); check("match score" in page.locator("body").inner_text().lower() and "Why this may match" in page.locator("body").inner_text(), CASES[65])
             page.goto(f"{BASE_URL}/dashboard/tenders?view=all&document_status=files_missing", wait_until="domcontentloaded"); page.get_by_text("Loading Tender Explorer…").wait_for(); check(True, CASES[66]); page.get_by_text("No tenders match these filters.").wait_for(); check(True, CASES[67])
             passive_before = len(State.writes); State.request_log = []; page.goto(f"{BASE_URL}/dashboard/tenders?view=all", wait_until="networkidle"); page.get_by_role("button", name="Next", exact=True).click(); page.wait_for_url("**page=2**"); page.wait_for_load_state("networkidle"); check(len(State.writes) == passive_before, CASES[68])
-            domain_gets = [path for method, path in State.request_log if method == "GET" and path.startswith("/api/v1/") and path not in {"/api/v1/users/me", "/api/v1/users/me/access-status"}]; check(domain_gets and set(domain_gets) == {"/api/v1/explorer/tenders"}, CASES[69])
+            domain_gets = [path for method, path in State.request_log if method == "GET" and path.startswith("/api/v1/") and path not in {"/api/v1/users/me", "/api/v1/users/me/access-status"}]; check(domain_gets and set(domain_gets).issubset({"/api/v1/explorer/tenders", "/api/v1/tenders/sources/catalog", "/api/v1/tenders/sources/refresh-status", "/api/v1/tenders/sources/refresh-activity"}) and "/api/v1/explorer/tenders" in domain_gets, CASES[69])
             browser.close(); browser = None
     finally:
         server.shutdown()

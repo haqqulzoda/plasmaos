@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { useSourceRefresh } from '@/components/source-refresh/SourceRefreshProvider';
 import {
     expiryState,
     labelForDocumentType,
@@ -26,7 +27,6 @@ import type { Tender } from '@/types/tender';
 import {
     documentAggregateLabel,
     isTenderActionable,
-    sourceLabel,
 } from '@/types/tender';
 import type {
     DynamicEvaluation,
@@ -90,7 +90,6 @@ type ActionItem = {
     priority: number;
 };
 
-const SUPPORTED_SOURCES = ['uzex', 'world_bank', 'adb', 'giz', 'ebrd'];
 const REQUIRED_READINESS_TYPES = [
     'registration_document',
     'tax_clearance',
@@ -341,6 +340,7 @@ function isTestOnlyTender(tender: Tender) {
 
 export default function DashboardPage() {
     const serviceOptions = useServiceMeta();
+    const { catalog, displayNameForSource } = useSourceRefresh();
     const [state, setState] = useState<LoadState>({
         profile: null,
         readiness: [],
@@ -415,9 +415,9 @@ export default function DashboardPage() {
 
     const priorityOpportunities = useMemo(
         () => state.opportunities
-            .filter((tender) => SUPPORTED_SOURCES.includes(tender.source_system))
+            .filter((tender) => catalog.some((source) => source.source_system === tender.source_system))
             .slice(0, 8),
-        [state.opportunities],
+        [catalog, state.opportunities],
     );
 
     const readinessStats = useMemo(() => {
@@ -581,7 +581,7 @@ export default function DashboardPage() {
                                     href={`/dashboard/tenders/${tender.id}`}
                                     className="grid gap-3 px-4 py-3 hover:bg-zinc-900/60 lg:grid-cols-[92px_minmax(0,1fr)_120px_118px_150px]"
                                 >
-                                    <span className="text-xs font-semibold uppercase text-zinc-500">{sourceLabel(tender.source_system)}</span>
+                                    <span className="text-xs font-semibold uppercase text-zinc-500">{displayNameForSource(tender.source_system)}</span>
                                     <div className="min-w-0">
                                         <p className="truncate text-sm font-medium text-zinc-100">{tender.title}</p>
                                         <p className="mt-1 truncate text-xs text-zinc-500">
@@ -667,7 +667,7 @@ export default function DashboardPage() {
                                     >
                                         <div className="min-w-0">
                                             <p className="truncate font-medium text-zinc-100">{tender.title}</p>
-                                            <p className="mt-1 text-xs text-zinc-500">{sourceLabel(tender.source_system)}</p>
+                                            <p className="mt-1 text-xs text-zinc-500">{displayNameForSource(tender.source_system)}</p>
                                         </div>
                                         <span className={`w-fit rounded border px-2 py-1 text-xs font-semibold ${statusClasses(tone)}`}>
                                             {status}

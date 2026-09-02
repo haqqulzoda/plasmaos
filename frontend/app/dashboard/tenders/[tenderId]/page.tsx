@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 
 import { TenderEngagementPanel } from '@/components/tenders/TenderEngagementPanel';
+import { useSourceRefresh } from '@/components/source-refresh/SourceRefreshProvider';
 import { api } from '@/lib/api';
 import type {
     DetailsSectionState,
@@ -38,7 +39,6 @@ import type { Tender } from '@/types/tender';
 import {
     isTenderActionable,
     sourceBadgeClasses,
-    sourceLabel,
     tenderStatusClasses,
     tenderStatusLabel,
 } from '@/types/tender';
@@ -161,8 +161,8 @@ function DetailsLoading() {
     );
 }
 
-function leadershipRoleLabel(role: TenderDetailsProjectLeadershipItem) {
-    if (role.native_role.trim().toLowerCase() === 'teamleadname') return `${sourceLabel(role.source_system)} project team`;
+function leadershipRoleLabel(role: TenderDetailsProjectLeadershipItem, sourceDisplayName: string) {
+    if (role.native_role.trim().toLowerCase() === 'teamleadname') return `${sourceDisplayName} project team`;
     if (role.canonical_role === 'TASK_TEAM_LEADER') return 'Task Team Leader';
     if (role.canonical_role === 'CO_TASK_TEAM_LEADER') return 'Co-Task Team Leader';
     if (role.canonical_role === 'PROJECT_TASK_MANAGER') return 'Project Task Manager';
@@ -186,6 +186,7 @@ function documentAvailability(item: TenderDetailsDocumentItem) {
 }
 
 export default function TenderDetailPage({ params }: { params: Promise<{ tenderId: string }> }) {
+    const { displayNameForSource } = useSourceRefresh();
     const { tenderId } = use(params);
     const [returnHref, setReturnHref] = useState(EXPLORER_FALLBACK_HREF);
     const [tender, setTender] = useState<Tender | null>(null);
@@ -312,7 +313,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
             <header className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
                 <div className="border-b border-zinc-800 bg-gradient-to-r from-indigo-500/10 via-transparent to-sky-500/5 p-5 sm:p-6">
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${sourceBadgeClasses(tender.source_system)}`}>Source: {sourceLabel(tender.source_system)}</span>
+                        <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${sourceBadgeClasses(tender.source_system)}`}>Source: {displayNameForSource(tender.source_system)}</span>
                         <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${tenderStatusClasses(tender.status)}`}>Tender status: {tenderStatusLabel(tender.status)}</span>
                         <span className="inline-flex rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs font-medium text-zinc-400">Reference: {tender.external_id}</span>
                     </div>
@@ -347,13 +348,13 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
                         {project ? (
                             <div className="space-y-5">
                                 {details.project_context.state === 'UNAVAILABLE' ? <div role="status" className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />Project details are not currently available. Existing source identity is shown below.</div> : ['queued', 'running', 'never_attempted'].includes(project.enrichment_state) ? <div role="status" className="flex items-start gap-2 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-sm text-sky-200"><Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />Project details are being prepared. This page does not trigger enrichment.</div> : null}
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="font-semibold text-zinc-100">{project.name || `${sourceLabel(project.source_system)} Project`}</h3><p className="mt-1 text-sm text-zinc-500">{sourceLabel(project.source_system)} · {project.external_project_id}</p></div><span className="w-fit rounded-md border border-sky-500/25 bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">Project status: {safeText(project.project_status, 'Not reported')}</span></div>
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="font-semibold text-zinc-100">{project.name || `${displayNameForSource(project.source_system)} Project`}</h3><p className="mt-1 text-sm text-zinc-500">{displayNameForSource(project.source_system)} · {project.external_project_id}</p></div><span className="w-fit rounded-md border border-sky-500/25 bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">Project status: {safeText(project.project_status, 'Not reported')}</span></div>
                                 <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Country / Region</dt><dd className="mt-1 text-zinc-200">{[project.country, project.region].filter(Boolean).join(' / ') || 'Not reported'}</dd></div><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Project approval</dt><dd className="mt-1 text-zinc-200">{formatDate(project.approval_date)}</dd></div><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Project closing</dt><dd className="mt-1 text-zinc-200">{formatDate(project.closing_date)}</dd></div><div><dt className="text-xs uppercase tracking-wide text-zinc-500">Project enrichment</dt><dd className="mt-1 capitalize text-zinc-200">{project.enrichment_state.replaceAll('_', ' ')}</dd></div></dl>
                                 <div aria-labelledby="project-leadership-heading" className="border-t border-zinc-800 pt-5">
                                     <div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-cyan-300" /><h3 id="project-leadership-heading" className="text-sm font-semibold uppercase tracking-wide text-zinc-200">Project Leadership</h3></div>
                                     <p className="mt-2 text-xs leading-5 text-zinc-500">Project leadership is source Project context and is not the Tender&apos;s procurement contact.</p>
-                                    {currentRoles.length ? <div className="mt-3 grid gap-2 md:grid-cols-2">{currentRoles.map((role) => <div key={role.role_id} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3"><p className="font-medium text-zinc-100">{role.display_name}</p><p className="mt-1 text-xs text-zinc-400">{leadershipRoleLabel(role)}</p><p className="mt-2 text-xs text-zinc-500">Source: {sourceLabel(role.source_system)}</p></div>)}</div> : <p className="mt-3 text-sm text-zinc-500">No current Project Leadership is available.</p>}
-                                    {historicalRoles.length ? <details className="mt-3"><summary className="cursor-pointer text-sm font-medium text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">Previous project leadership ({historicalRoles.length})</summary><div className="mt-2 grid gap-2 md:grid-cols-2">{historicalRoles.map((role) => <div key={role.role_id} className="rounded-lg border border-zinc-800 p-3 text-sm text-zinc-300"><p>{role.display_name}</p><p className="mt-1 text-xs text-zinc-500">{leadershipRoleLabel(role)} · observed until {formatDate(role.ended_at)}</p></div>)}</div></details> : null}
+                                    {currentRoles.length ? <div className="mt-3 grid gap-2 md:grid-cols-2">{currentRoles.map((role) => <div key={role.role_id} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3"><p className="font-medium text-zinc-100">{role.display_name}</p><p className="mt-1 text-xs text-zinc-400">{leadershipRoleLabel(role, displayNameForSource(role.source_system))}</p><p className="mt-2 text-xs text-zinc-500">Source: {displayNameForSource(role.source_system)}</p></div>)}</div> : <p className="mt-3 text-sm text-zinc-500">No current Project Leadership is available.</p>}
+                                    {historicalRoles.length ? <details className="mt-3"><summary className="cursor-pointer text-sm font-medium text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">Previous project leadership ({historicalRoles.length})</summary><div className="mt-2 grid gap-2 md:grid-cols-2">{historicalRoles.map((role) => <div key={role.role_id} className="rounded-lg border border-zinc-800 p-3 text-sm text-zinc-300"><p>{role.display_name}</p><p className="mt-1 text-xs text-zinc-500">{leadershipRoleLabel(role, displayNameForSource(role.source_system))} · observed until {formatDate(role.ended_at)}</p></div>)}</div></details> : null}
                                 </div>
                             </div>
                         ) : <CompactState state={details.project_context.state} empty="No canonical Project is linked to this Tender." unavailable="Project details are not currently available." />}
@@ -369,7 +370,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
                             <div>
                                 <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-zinc-100">Tender documents</h3><SectionStateBadge state={details.documents.state} /></div>
                                 {documentActionError ? <p role="alert" className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{documentActionError}</p> : null}
-                                {documents?.items.length ? <div className="mt-3 overflow-hidden rounded-lg border border-zinc-800"><div className="divide-y divide-zinc-800">{documents.items.map((item) => { const availability = documentAvailability(item); const canOpen = item.availability === 'AVAILABLE'; return <div key={item.document_id} className="grid gap-3 p-3 text-sm sm:grid-cols-[minmax(0,1fr)_130px_auto] sm:items-center"><div className="min-w-0"><p className="truncate font-medium text-zinc-100">{item.display_name}</p><p className="mt-1 text-xs text-zinc-500">{item.document_type} · {sourceLabel(item.source_system)} · {formatFileSize(item.file_size)}</p></div><p className={`text-xs font-semibold ${availability.classes}`}>{availability.label}</p><button type="button" onClick={() => void openDocument(item)} disabled={!canOpen || openingDocumentId !== null} className="inline-flex w-fit items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:border-indigo-500 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50">{openingDocumentId === item.document_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : canOpen ? <Download className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}{openingDocumentId === item.document_id ? 'Opening' : canOpen ? 'Open document' : 'Metadata only'}</button></div>; })}</div></div> : <div className="mt-3"><CompactState state={details.documents.state} empty="No public source-document metadata is available." unavailable="Tender document metadata is currently unavailable." /></div>}
+                                {documents?.items.length ? <div className="mt-3 overflow-hidden rounded-lg border border-zinc-800"><div className="divide-y divide-zinc-800">{documents.items.map((item) => { const availability = documentAvailability(item); const canOpen = item.availability === 'AVAILABLE'; return <div key={item.document_id} className="grid gap-3 p-3 text-sm sm:grid-cols-[minmax(0,1fr)_130px_auto] sm:items-center"><div className="min-w-0"><p className="truncate font-medium text-zinc-100">{item.display_name}</p><p className="mt-1 text-xs text-zinc-500">{item.document_type} · {displayNameForSource(item.source_system)} · {formatFileSize(item.file_size)}</p></div><p className={`text-xs font-semibold ${availability.classes}`}>{availability.label}</p><button type="button" onClick={() => void openDocument(item)} disabled={!canOpen || openingDocumentId !== null} className="inline-flex w-fit items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:border-indigo-500 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50">{openingDocumentId === item.document_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : canOpen ? <Download className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}{openingDocumentId === item.document_id ? 'Opening' : canOpen ? 'Open document' : 'Metadata only'}</button></div>; })}</div></div> : <div className="mt-3"><CompactState state={details.documents.state} empty="No public source-document metadata is available." unavailable="Tender document metadata is currently unavailable." /></div>}
                                 {documents?.truncated ? <p className="mt-2 text-xs text-zinc-500">+ {documents.visible_total_count - documents.returned_count} more public source documents. Open Compliance for evidence workflows.</p> : null}
                             </div>
                         </div>

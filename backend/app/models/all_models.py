@@ -496,19 +496,43 @@ class SourceRefreshJob(Base):
         nullable=True,
     )
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="queued")
+    trigger_kind: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    options_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
     force: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unchanged_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     fetched_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     rejected_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    documents_discovered_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+    documents_queued_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
     fallback_used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     skip_reasons: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     failure_class: Mapped[str | None] = mapped_column(String(100), nullable=True)
     failure_stage: Mapped[str | None] = mapped_column(String(100), nullable=True)
     retryable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fetch_elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    normalize_elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    persist_elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    document_dispatch_elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    http_request_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    http_retry_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    http_failure_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_newest_published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -528,6 +552,18 @@ class SourceRefreshJob(Base):
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_owner: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=True,
+    )
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -543,7 +579,23 @@ class SourceRefreshJob(Base):
             "'source_unavailable', 'failed')",
             name="ck_source_refresh_jobs_status_allowed",
         ),
+        CheckConstraint(
+            "trigger_kind IS NULL OR trigger_kind IN "
+            "('customer', 'operator', 'scheduled')",
+            name="ck_source_refresh_jobs_trigger_kind_allowed",
+        ),
         Index("ix_source_refresh_jobs_source_created", "source_system", "created_at"),
+        Index(
+            "ix_source_refresh_jobs_source_status_completed",
+            "source_system",
+            "status",
+            "completed_at",
+        ),
+        Index(
+            "ix_source_refresh_jobs_running_lease_expiry",
+            "lease_expires_at",
+            postgresql_where=text("status = 'running'"),
+        ),
         Index(
             "uq_source_refresh_jobs_active_source",
             "source_system",

@@ -66,25 +66,19 @@ export const classifyProjectContextFailure = (status?: number): ProjectContextFa
     return 'endpoint_failure';
 };
 
-export const projectSourceLabel = (source?: string | null) => {
-    if (source === 'world_bank') return 'World Bank';
-    if (source === 'adb') return 'ADB';
-    if (source === 'giz') return 'GIZ';
-    if (source === 'ebrd') return 'EBRD';
-    if (source === 'uzex') return 'UzEx';
-    return 'Official project source';
-};
-
-export const projectRoleLabel = (role: Pick<ProjectContextRole, 'canonical_role' | 'native_role' | 'source_system'>) => {
+export const projectRoleLabel = (
+    role: Pick<ProjectContextRole, 'canonical_role' | 'native_role' | 'source_system'>,
+    sourceDisplayName = 'Official project source',
+) => {
     // Defense in depth: this technical Projects API field never claims TTL semantics.
     if (role.native_role.trim().toLowerCase() === 'teamleadname') {
-        return `${projectSourceLabel(role.source_system)} project team`;
+        return `${sourceDisplayName} project team`;
     }
     if (role.canonical_role === 'TASK_TEAM_LEADER') return 'Task Team Leader';
     if (role.canonical_role === 'CO_TASK_TEAM_LEADER') return 'Co-Task Team Leader';
     if (role.canonical_role === 'PROJECT_TASK_MANAGER') return 'Task Manager';
     if (role.canonical_role === 'OTHER_PROJECT_ROLE') {
-        return `${projectSourceLabel(role.source_system)} project team`;
+        return `${sourceDisplayName} project team`;
     }
     return 'Project role';
 };

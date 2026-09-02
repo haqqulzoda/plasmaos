@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -17,6 +17,7 @@ from app.api.endpoints.tenders import (
     apply_explorer_tender_filters,
     resolve_filesystem_document_filter_tender_ids,
 )
+from app.core.tender_newness import tender_newness
 from app.models.all_models import Tender
 from app.models.audit import TenderRecommendation
 from app.models.company import CompanyProfile
@@ -58,6 +59,8 @@ class ExplorerQuery:
     sort: str | None = None
     limit: int = 25
     offset: int = 0
+    new_only: bool = False
+    reference_time: datetime | None = None
 
 
 def _filtered(statement, query: ExplorerQuery):
@@ -80,6 +83,8 @@ def _filtered(statement, query: ExplorerQuery):
         document_status=query.document_status,
         document_tender_ids=query.document_tender_ids,
         category=query.category,
+        new_only=query.new_only,
+        newness_reference_time=query.reference_time,
     )[0]
 
 
@@ -283,6 +288,8 @@ async def list_explorer_tenders(
     query: ExplorerQuery,
 ) -> ExplorerTenderListResponse:
     """Run fixed-count SQL reads and bounded response-only composition."""
+    server_time = datetime.now(timezone.utc)
+    query = replace(query, reference_time=server_time)
     profile_id = await resolve_owned_profile_id(db, user_id=user_id)
     document_tender_ids = await resolve_filesystem_document_filter_tender_ids(
         db=db,
@@ -310,6 +317,7 @@ async def list_explorer_tenders(
     items: list[ExplorerTenderItem] = []
     for tender, recommendation, engagement in rows:
         serialized = _serialize_tender(tender, summary=summaries.get(tender.id))
+        newness = tender_newness(serialized.created_at, server_time=server_time)
         items.append(
             ExplorerTenderItem(
                 tender=ExplorerTenderSummary(
@@ -331,7 +339,9 @@ async def list_explorer_tenders(
                     category=serialized.category,
                     document_status=serialized.document_status,
                     document_count=serialized.document_count,
-                    created_at=serialized.created_at,
+                    created_at=newness.created_at,
+                    is_new=newness.is_new,
+                    new_until=newness.new_until,
                 ),
                 recommendation=recommendation_summary(recommendation),
                 pursuit=_pursuit_summary(engagement),
@@ -351,6 +361,7 @@ async def list_explorer_tenders(
         offset=query.offset,
         counts=counts,
         recommendation_availability=availability,
+        server_time=server_time,
     )
 
 

@@ -57,6 +57,10 @@ async def get_explorer_tenders(
     document_status: str | None = Query(default=None),
     category: str | None = Query(default=None),
     sort: str | None = Query(default=None),
+    new_only: bool = Query(
+        default=False,
+        description="Return only Tenders first persisted by Plasma in the last 24 hours.",
+    ),
     current_user: User = Depends(require_explorer_access),
     db: AsyncSession = Depends(get_db),
 ) -> ExplorerTenderListResponse:
@@ -83,6 +87,7 @@ async def get_explorer_tenders(
             document_status=document_status,
             category=category,
             sort=sort,
+            new_only=new_only,
             limit=limit,
             offset=offset,
         ),

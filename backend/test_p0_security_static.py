@@ -177,8 +177,10 @@ class P0SecurityStaticTests(unittest.TestCase):
         self.assertIn("UZEX_UNKNOWN", purge_script)
         self.assertIn("_fetch_live_uzex_ids", purge_script)
         self.assertIn("Dependent rows covered by tender FK cascades", purge_script)
-        self.assertIn("UzEx enterprise", frontend_tenders)
-        self.assertIn("['uzex', 'UzEx enterprise']", frontend_tenders)
+        self.assertIn("SourceRefreshMenu", frontend_tenders)
+        self.assertIn("displayNameForSource", frontend_tenders)
+        self.assertNotIn("const SOURCES", frontend_tenders)
+        self.assertIn('SourceDefinition("uzex", "UzEx"', read("app/services/source_registry.py"))
 
     def test_compiled_text_has_dedicated_authenticated_route(self) -> None:
         tenders = read("app/api/endpoints/tenders.py")
@@ -295,12 +297,19 @@ class P0SecurityStaticTests(unittest.TestCase):
 
     def test_tender_source_refresh_controls_cover_all_supported_sources(self) -> None:
         page = read("../frontend/app/dashboard/tenders/page.tsx")
+        menu = read("../frontend/components/source-refresh/SourceRefreshMenu.tsx")
+        provider = read("../frontend/components/source-refresh/SourceRefreshProvider.tsx")
+        client = read("../frontend/lib/sourceRefresh.ts")
 
-        self.assertIn("SOURCE_REFRESH", page)
-        self.assertIn("`/tenders/sources/${source[0]}/refresh`", page)
-        for source in ("uzex", "world_bank", "adb", "giz", "ebrd"):
-            self.assertIn(f"['{source}'", page)
-        self.assertIn("refreshingSource", page)
+        self.assertIn("SourceRefreshMenu", page)
+        self.assertNotIn("SOURCE_REFRESH", page)
+        self.assertNotIn("const SOURCES", page)
+        self.assertIn("catalog.map", menu)
+        self.assertIn("pendingSources.has(source.source_system)", menu)
+        self.assertIn("!source.can_refresh", menu)
+        self.assertIn("requestRefresh(source.source_system)", menu)
+        self.assertIn("`/tenders/sources/${encodeURIComponent(sourceSystem)}/refresh`", client)
+        self.assertIn("listSourceCatalog", provider)
 
     def test_tender_document_sync_enqueue_uses_heavy_queue(self) -> None:
         tenders = read("app/api/endpoints/tenders.py")

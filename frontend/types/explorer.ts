@@ -24,6 +24,8 @@ export interface ExplorerTenderSummary {
     document_status: TenderDocumentStatus;
     document_count: number;
     created_at: string;
+    is_new: boolean;
+    new_until: string;
 }
 
 export interface RecommendationSummary {
@@ -60,6 +62,7 @@ export interface ExplorerResponse {
     offset: number;
     counts: ExplorerCounts;
     recommendation_availability: RecommendationAvailability;
+    server_time: string;
 }
 
 export interface RecommendationCommandResponse {
@@ -83,4 +86,5 @@ export interface ExplorerListParams {
     document_status?: string;
     category?: string;
     sort?: string;
+    new_only?: boolean;
 }

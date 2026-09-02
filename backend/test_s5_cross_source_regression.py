@@ -133,7 +133,9 @@ class CrossSourceStaticGateTests(unittest.TestCase):
 
         for block in (world_bank_block, giz_block, adb_block, ebrd_block):
             self.assertIn("discover_documents", block)
-            self.assertIn("upsert_documents", block)
+            self.assertTrue(
+                "upsert_documents" in block or "persist_document_descriptors" in block
+            )
             self.assertNotIn("discover_attachments", block)
             self.assertNotIn("upsert_attachments", block)
 
@@ -151,10 +153,10 @@ class CrossSourceStaticGateTests(unittest.TestCase):
         self.assertIn('assert_source_scope("giz", tender)', worker)
         self.assertIn('assert_source_scope("giz", tender)', giz_hydration)
         self.assertIn('assert_source_scope("giz", tender)', tenders)
-        self.assertIn("assert_source_scope(self.source_system, tender)", world_bank)
-        self.assertIn("assert_source_scope(self.source_system, tender)", adb)
-        self.assertIn("assert_source_scope(self.source_system, tender)", ebrd)
-        self.assertIn('assert_source_scope("giz", tender)', giz)
+        shared = read("app/services/tender_sources/base.py")
+        for connector in (world_bank, adb, ebrd, giz):
+            self.assertIn("persist_document_descriptors", connector)
+        self.assertIn("assert_source_scope(source_system, tender)", shared)
         self.assertIn('source_system != "uzex"', tenders)
         self.assertIn("Document sync worker is UzEx-only", tenders)
         self.assertIn('tender.source_system != "uzex"', hunter)
@@ -201,7 +203,7 @@ class CrossSourceBehaviorTests(unittest.TestCase):
         second = asyncio.run(source.upsert_documents(session, tender=tender, documents=[document]))
 
         self.assertEqual(first, (1, 0))
-        self.assertEqual(second, (0, 1))
+        self.assertEqual(second, (0, 0))
         self.assertEqual(len(session.docs), 1)
         self.assertEqual(session.docs[0].download_status, "metadata_only")
 

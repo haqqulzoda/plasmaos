@@ -107,6 +107,10 @@ celery_app.conf.task_routes = {
         "queue": "heavy_dl_queue",
         "routing_key": "heavy_dl_queue",
     },
+    "app.workers.tender_tasks.enrich_adb_document": {
+        "queue": "heavy_dl_queue",
+        "routing_key": "heavy_dl_queue",
+    },
     "app.workers.tender_tasks.*": {
         "queue": "heavy_dl_queue",
         "routing_key": "heavy_dl_queue",

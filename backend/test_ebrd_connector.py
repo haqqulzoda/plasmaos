@@ -209,7 +209,7 @@ class EbrdConnectorTests(unittest.TestCase):
         second = asyncio.run(source.upsert_documents(session, tender=tender, documents=documents))
 
         self.assertEqual(first, (1, 0))
-        self.assertEqual(second, (0, 1))
+        self.assertEqual(second, (0, 0))
         self.assertEqual(len(session.docs), 1)
         self.assertEqual(session.docs[0].download_status, "access_required")
         self.assertIsNone(session.docs[0].storage_path)

@@ -41,7 +41,9 @@ class ExplorerTenderSummary(BaseModel):
     category: str
     document_status: str
     document_count: int = 0
-    created_at: datetime
+    created_at: datetime = Field(description="Immutable first durable insertion time in Plasma.")
+    is_new: bool = Field(description="True only inside the server-authoritative 24-hour discovery window.")
+    new_until: datetime = Field(description="UTC instant when the Tender stops being New.")
 
 
 class ExplorerRecommendationSummary(BaseModel):
@@ -78,6 +80,7 @@ class ExplorerTenderListResponse(BaseModel):
     offset: int
     counts: ExplorerCounts
     recommendation_availability: RecommendationAvailability
+    server_time: datetime = Field(description="Single UTC reference used for all newness values in this response.")
 
 
 class RecommendationCommandResponse(BaseModel):

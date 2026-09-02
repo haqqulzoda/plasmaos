@@ -14,6 +14,7 @@ import re
 import shutil
 import time
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID, uuid4
@@ -46,6 +47,171 @@ DOCUMENTS_ROOT = Path(os.getenv("TENDER_DOCUMENTS_ROOT", str(DEFAULT_DOCUMENTS_R
 MAX_ERROR_MESSAGE_LENGTH = 2000
 TRACE_FILE_MARKER_RE = re.compile(r"\[\[FILE:\s*(.+?)\]\]")
 TRACE_PAGE_MARKER_RE = re.compile(r"\[\[PAGE\s+(\d+)\]\]")
+
+ADB_CONTACT_KEYS = (
+    "buyer_agency", "contact_person", "email", "phone", "address",
+    "submission_method", "submission_instructions",
+)
+
+
+async def _enrich_adb_document_async(
+    document_uuid: UUID,
+    *,
+    expected_external_file_id: str,
+    expected_source_url: str,
+    delivery_id: str,
+) -> dict[str, Any]:
+    """Resolve and parse one ADB candidate after metadata commit, fenced by identity."""
+    import httpx
+
+    from app.services.tender_sources.adb import (
+        ADB_USER_AGENT,
+        AdbTenderSource,
+        final_url_hash,
+    )
+
+    try:
+        inflight_marker = f"inflight:{delivery_id}"[:2000]
+        # Claim quickly. No database transaction or lock is held over HTTP/PDF work.
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(TenderDocument)
+                .where(TenderDocument.id == document_uuid)
+                .with_for_update()
+            )
+            document = result.scalar_one_or_none()
+            if document is None:
+                return {"status": "missing", "document_id": str(document_uuid)}
+            if str(document.external_file_id or "") != expected_external_file_id:
+                await db.rollback()
+                return {"status": "superseded", "document_id": str(document_uuid)}
+            tender = await db.get(Tender, document.tender_id)
+            if tender is None:
+                await db.rollback()
+                return {"status": "missing_tender", "document_id": str(document_uuid)}
+            assert_source_scope("adb", tender)
+            metadata = dict(tender.source_metadata_json or {})
+            if metadata.get("adb_document_candidate_id") != expected_external_file_id:
+                await db.rollback()
+                return {"status": "superseded", "document_id": str(document_uuid)}
+            if document.download_status in {"processed", "parsed", "usable"}:
+                await db.rollback()
+                return {"status": "deduplicated", "document_id": str(document_uuid)}
+            if document.download_status == "processing" and document.download_error != inflight_marker:
+                await db.rollback()
+                return {"status": "deduplicated", "document_id": str(document_uuid)}
+
+            document.download_status = "processing"
+            document.download_error = inflight_marker
+            await db.commit()
+
+        source = AdbTenderSource()
+        async with httpx.AsyncClient(
+            timeout=source.config.timeout_seconds,
+            max_redirects=source.config.max_redirects,
+            headers={"User-Agent": ADB_USER_AGENT},
+        ) as client:
+            attachment = await source.resolve_node_redirect(
+                expected_source_url, client=client
+            )
+            if attachment is None:
+                raise ValueError("ADB notice did not resolve to a PDF")
+            contact = await source.fetch_contact_metadata(
+                final_pdf_url=attachment.final_url, client=client
+            )
+
+        # Re-read and lock both records after remote work. This is the authoritative
+        # stale-work fence and cannot rely on an earlier ORM identity-map snapshot.
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(TenderDocument)
+                .where(TenderDocument.id == document_uuid)
+                .with_for_update()
+            )
+            document = result.scalar_one_or_none()
+            if document is None or str(document.external_file_id or "") != expected_external_file_id:
+                await db.rollback()
+                return {"status": "superseded", "document_id": str(document_uuid)}
+            tender_result = await db.execute(
+                select(Tender).where(Tender.id == document.tender_id).with_for_update()
+            )
+            tender = tender_result.scalar_one_or_none()
+            if tender is None:
+                await db.rollback()
+                return {"status": "missing_tender", "document_id": str(document_uuid)}
+            assert_source_scope("adb", tender)
+            current_metadata = dict(tender.source_metadata_json or {})
+            if current_metadata.get("adb_document_candidate_id") != expected_external_file_id:
+                document.download_status = "metadata_only"
+                document.download_error = None
+                await db.commit()
+                return {"status": "superseded", "document_id": str(document_uuid)}
+            if document.download_status != "processing" or document.download_error != inflight_marker:
+                await db.rollback()
+                return {"status": "deduplicated", "document_id": str(document_uuid)}
+            if contact:
+                for key in ADB_CONTACT_KEYS:
+                    if contact.get(key) not in (None, ""):
+                        current_metadata[key] = contact[key]
+                current_metadata.update(
+                    {
+                        "adb_contact_extraction_status": "success",
+                        "adb_contact_source": "notice_pdf",
+                        "adb_contact_document_external_file_id": expected_external_file_id,
+                        "adb_contact_evidence_url_hash": final_url_hash(attachment.final_url),
+                        "adb_contact_enriched_at": datetime.now(timezone.utc).isoformat(),
+                        "final_pdf_url": attachment.final_url,
+                        "final_pdf_url_hash": attachment.final_url_hash,
+                    }
+                )
+                tender.source_metadata_json = current_metadata
+            document.file_url = attachment.final_url[:500]
+            document.source_document_url = attachment.final_url
+            document.mime_type = attachment.content_type or document.mime_type
+            document.file_size = attachment.content_length or document.file_size
+            document.download_status = "processed"
+            document.download_error = None
+            await db.commit()
+            return {
+                "status": "processed",
+                "document_id": str(document_uuid),
+                "contact_found": bool(contact),
+            }
+    except Exception as exc:
+        async with AsyncSessionLocal() as failure_db:
+            failed = await failure_db.get(TenderDocument, document_uuid)
+            if failed is not None and str(failed.external_file_id or "") == expected_external_file_id:
+                failed.download_status = "failed"
+                failed.download_error = type(exc).__name__[:2000]
+                await failure_db.commit()
+        logger.exception("adb_document_enrichment_failed document_id=%s", document_uuid)
+        raise
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(
+    name="app.workers.tender_tasks.enrich_adb_document",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+)
+def enrich_adb_document(
+    self: Any,
+    document_id: str,
+    expected_external_file_id: str,
+    expected_source_url: str,
+) -> dict[str, Any]:
+    delivery_id = str(getattr(self.request, "id", None) or uuid4())
+    return asyncio.run(
+        _enrich_adb_document_async(
+            UUID(document_id),
+            expected_external_file_id=expected_external_file_id,
+            expected_source_url=expected_source_url,
+            delivery_id=delivery_id,
+        )
+    )
 
 
 def _env_float(

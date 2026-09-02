@@ -91,14 +91,6 @@ export interface TenderDocument {
     created_at: string;
 }
 
-export const sourceLabel = (source?: string | null) => {
-    if (source === 'world_bank') return 'World Bank';
-    if (source === 'adb') return 'ADB';
-    if (source === 'giz') return 'GIZ';
-    if (source === 'ebrd') return 'EBRD';
-    return 'UzEx';
-};
-
 export const sourceBadgeClasses = (source?: string | null) => {
     if (source === 'world_bank') {
         return 'border-sky-500/30 bg-sky-500/10 text-sky-300';

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { useSourceRefresh } from '@/components/source-refresh/SourceRefreshProvider';
 import { EngagementWorkflowActions } from '@/components/tenders/EngagementWorkflowActions';
 import {
     engagementStatusClasses,
@@ -25,7 +26,6 @@ import {
 } from '@/types/engagement';
 import {
     sourceBadgeClasses,
-    sourceLabel,
     tenderStatusClasses,
     tenderStatusLabel,
 } from '@/types/tender';
@@ -41,15 +41,6 @@ const STATUS_FILTERS = [
     ['WON', 'Won'],
     ['LOST', 'Lost'],
     ['DISMISSED', 'Dismissed'],
-] as const;
-
-const SOURCES = [
-    ['', 'All sources'],
-    ['uzex', 'UzEx'],
-    ['world_bank', 'World Bank'],
-    ['adb', 'ADB'],
-    ['giz', 'GIZ'],
-    ['ebrd', 'EBRD'],
 ] as const;
 
 const SOURCE_STATUSES = [
@@ -75,7 +66,7 @@ function formattedValue(item: MyTenderListItem) {
     return `${new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(item.estimated_value)} ${item.currency ?? ''}`.trim();
 }
 
-function MyTenderCard({ item, onRefresh }: { item: MyTenderListItem; onRefresh: () => void }) {
+function MyTenderCard({ item, sourceDisplayName, onRefresh }: { item: MyTenderListItem; sourceDisplayName: string; onRefresh: () => void }) {
     return (
         <article className="rounded-xl border border-zinc-800 bg-zinc-950 p-5 shadow-sm">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
@@ -88,7 +79,7 @@ function MyTenderCard({ item, onRefresh }: { item: MyTenderListItem; onRefresh: 
                             Tender: {tenderStatusLabel(item.tender_status)}
                         </span>
                         <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${sourceBadgeClasses(item.source_system)}`}>
-                            {sourceLabel(item.source_system)}
+                            {sourceDisplayName}
                         </span>
                     </div>
                     <div>
@@ -138,6 +129,7 @@ function MyTenderCard({ item, onRefresh }: { item: MyTenderListItem; onRefresh: 
 }
 
 function MyTendersContent() {
+    const { catalog, catalogError, displayNameForSource } = useSourceRefresh();
     const router = useRouter();
     const searchParams = useSearchParams();
     const searchString = searchParams.toString();
@@ -265,8 +257,10 @@ function MyTendersContent() {
                     <button type="submit" className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300">Search</button>
                 </form>
                 <label className="sr-only" htmlFor="my-tenders-source">Tender source</label>
-                <select id="my-tenders-source" value={source} onChange={(event) => updateQuery({ source: event.target.value, page: '1' })} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400">
-                    {SOURCES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                <select id="my-tenders-source" value={source} disabled={Boolean(catalogError)} onChange={(event) => updateQuery({ source: event.target.value, page: '1' })} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400 disabled:opacity-60">
+                    <option value="">All sources</option>
+                    {source && !catalog.some((item) => item.source_system === source) ? <option value={source}>{source}</option> : null}
+                    {catalog.map((item) => <option key={item.source_system} value={item.source_system}>{item.display_name}</option>)}
                 </select>
                 <label className="sr-only" htmlFor="my-tenders-source-status">Tender source status</label>
                 <select id="my-tenders-source-status" value={tenderStatus} onChange={(event) => updateQuery({ tender_status: event.target.value, page: '1' })} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400">
@@ -301,7 +295,7 @@ function MyTendersContent() {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {data.items.map((item) => <MyTenderCard key={item.engagement_id} item={item} onRefresh={() => setRefreshVersion((value) => value + 1)} />)}
+                    {data.items.map((item) => <MyTenderCard key={item.engagement_id} item={item} sourceDisplayName={displayNameForSource(item.source_system)} onRefresh={() => setRefreshVersion((value) => value + 1)} />)}
                 </div>
             )}
 

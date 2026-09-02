@@ -1,12 +1,11 @@
 """Dependency-free tender source key helpers."""
 
-VALID_SOURCE_SYSTEMS = frozenset({"uzex", "world_bank", "adb", "giz", "ebrd"})
-
-
 def normalize_source_system(source_system: str) -> str:
     """Normalize and validate a source-system identifier."""
+    from app.services.source_registry import SOURCE_REGISTRY
+
     normalized = (source_system or "").strip().casefold()
-    if normalized not in VALID_SOURCE_SYSTEMS:
+    if normalized not in SOURCE_REGISTRY:
         raise ValueError(f"Unsupported tender source_system: {source_system!r}")
     return normalized
 

@@ -18,6 +18,11 @@ import {
 import { clsx } from 'clsx';
 import { signOut, useSession } from 'next-auth/react';
 import { api, setApiAccessToken } from '@/lib/api';
+import {
+    clearSourceRefreshSession,
+    GlobalRefreshIndicator,
+    SourceRefreshProvider,
+} from '@/components/source-refresh/SourceRefreshProvider';
 
 interface NavItem {
     name: string;
@@ -58,8 +63,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     const router = useRouter();
     const { data: session, status, update } = useSession();
     const [accessReadyPath, setAccessReadyPath] = useState<string | null>(null);
+    const [workspaceAccessAllowed, setWorkspaceAccessAllowed] = useState<boolean | null>(null);
 
     const handleLogout = async () => {
+        clearSourceRefreshSession();
         await api.post('/auth/logout').catch(() => undefined);
         await signOut({ callbackUrl: '/' });
         router.push('/');
@@ -83,6 +90,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 const access = response.data;
 
                 if (access.state === 'rejected' || access.state === 'disabled') {
+                    if (!cancelled) setWorkspaceAccessAllowed(false);
                     if (pathname !== '/dashboard/access-blocked') {
                         router.replace('/dashboard/access-blocked');
                         return;
@@ -92,6 +100,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 }
 
                 if (!access.onboarding_completed || access.onboarding_required) {
+                    if (!cancelled) setWorkspaceAccessAllowed(false);
                     if (pathname !== '/dashboard/onboarding') {
                         router.replace('/dashboard/onboarding');
                         return;
@@ -101,6 +110,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 }
 
                 if (access.access_allowed) {
+                    if (!cancelled) setWorkspaceAccessAllowed(true);
                     if (CONTROL_PATHS.has(pathname)) {
                         const refreshedSession = await update();
                         setApiAccessToken(refreshedSession?.accessToken ?? null);
@@ -112,12 +122,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 }
 
                 if (pathname !== '/dashboard/pending-approval') {
+                    if (!cancelled) setWorkspaceAccessAllowed(false);
                     router.replace('/dashboard/pending-approval');
                     return;
                 }
+                if (!cancelled) setWorkspaceAccessAllowed(false);
                 if (!cancelled) setAccessReadyPath(pathname);
             } catch (error) {
                 console.error('Failed to evaluate workspace access:', error);
+                if (!cancelled) setWorkspaceAccessAllowed(false);
                 if (!CONTROL_PATHS.has(pathname)) {
                     router.replace('/dashboard/pending-approval');
                     return;
@@ -138,7 +151,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         update,
     ]);
 
-    if (status === 'loading' || accessReadyPath !== pathname) {
+    if (status === 'loading' || (accessReadyPath !== pathname && workspaceAccessAllowed !== true)) {
         return (
             <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
                 <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
@@ -153,7 +166,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         role === 'operator';
     const navItems = baseNavItems;
 
-    return (
+    const dashboardShell = (
         <div className="flex h-screen bg-gray-900 text-white">
             {/* Sidebar */}
             <aside className="w-16 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col sm:w-64">
@@ -209,6 +222,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <header className="h-16 border-b border-gray-800 bg-gray-950/50 backdrop-blur-sm flex items-center justify-between px-3 shrink-0 sm:px-8">
                     <h2 className="text-sm font-medium text-gray-400 tracking-wide uppercase">Command Center</h2>
                     <div className="flex items-center gap-3">
+                        {workspaceAccessAllowed ? <GlobalRefreshIndicator /> : null}
                         {isOperatorOrAdmin && (
                             <Link
                                 href="/admin"
@@ -231,4 +245,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </div>
         </div>
     );
+
+    return workspaceAccessAllowed
+        ? <SourceRefreshProvider enabled>{dashboardShell}</SourceRefreshProvider>
+        : dashboardShell;
 }

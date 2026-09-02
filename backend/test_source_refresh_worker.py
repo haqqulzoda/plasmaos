@@ -66,8 +66,10 @@ class SourceRefreshWorkerTests(IsolatedAsyncioTestCase):
             fetched_count=8,
             created_count=3,
             updated_count=2,
+            unchanged_count=4,
             skipped_count=1,
             failed_count=2,
+            attachment_count=6,
             failure_stage="eproc_detail",
             failure_class="ReadTimeout",
             retryable=True,
@@ -96,11 +98,14 @@ class SourceRefreshWorkerTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(job.status, "partial")
         self.assertEqual((job.created_count, job.updated_count, job.failed_count), (3, 2, 2))
+        self.assertEqual(job.unchanged_count, 4)
         self.assertIsNotNone(job.started_at)
         self.assertIsNotNone(job.completed_at)
         self.assertEqual(job.fetched_count, 8)
         self.assertEqual(job.skipped_count, 1)
         self.assertEqual(job.rejected_count, 3)
+        self.assertEqual(job.documents_discovered_count, 6)
+        self.assertEqual(job.documents_queued_count, 0)
         self.assertTrue(job.fallback_used)
         self.assertEqual(job.skip_reasons, {"duplicate": 1})
         self.assertEqual(job.failure_stage, "eproc_detail")

@@ -650,9 +650,25 @@ class WorldBankTenderSource:
 
     async def upsert(self, db: Any, normalized_tender: Any) -> tuple[Any, bool]:
         from app.services.tender_sources.base import upsert_tender
-        from app.services.projects import link_tender_to_project
 
         tender, created = await upsert_tender(db, normalized_tender)
+        await self.link_project(
+            db,
+            tender=tender,
+            normalized_tender=normalized_tender,
+        )
+        return tender, created
+
+    async def link_project(
+        self,
+        db: Any,
+        *,
+        tender: Any,
+        normalized_tender: Any,
+    ) -> None:
+        """Preserve World Bank Project/TenderProject ownership after batch persist."""
+        from app.services.projects import link_tender_to_project
+
         source_metadata = normalized_tender.source_metadata_json or {}
         raw_project_id = source_metadata.get(
             "project_id",
@@ -667,7 +683,6 @@ class WorldBankTenderSource:
             observed_at=tender.last_synced_at,
             authoritative_metadata={"country": normalized_tender.country},
         )
-        return tender, created
 
     async def upsert_attachments(
         self,
@@ -695,54 +710,10 @@ class WorldBankTenderSource:
         tender: Any,
         documents: list[Any],
     ) -> tuple[int, int]:
-        from sqlalchemy import select
+        from app.services.tender_sources.base import persist_document_descriptors
 
-        from app.models.all_models import TenderDocument
-        from app.services.tender_sources.base import assert_source_scope
-
-        assert_source_scope(self.source_system, tender)
-        created = 0
-        updated = 0
-        for document in documents:
-            source_url = str(document.source_document_url).strip()
-            if not source_url:
-                continue
-            result = await db.execute(
-                select(TenderDocument).where(
-                    TenderDocument.tender_id == tender.id,
-                    TenderDocument.source_document_url == source_url,
-                )
-            )
-            existing = result.scalar_one_or_none()
-            file_type = (
-                document.source_document_type
-                or document.file_type
-                or "document"
-            )
-            if existing is None:
-                db.add(
-                    TenderDocument(
-                        tender_id=tender.id,
-                        file_url=source_url[:500],
-                        file_type=file_type,
-                        source_document_url=source_url,
-                        source_document_type=file_type,
-                        download_status=document.download_status or "metadata_only",
-                        external_file_id=document.external_file_id,
-                        file_size=document.file_size,
-                        mime_type=document.mime_type,
-                        sha256=document.sha256,
-                    )
-                )
-                created += 1
-            else:
-                existing.source_document_type = file_type
-                existing.download_status = existing.download_status or "metadata_only"
-                existing.external_file_id = (
-                    document.external_file_id or existing.external_file_id
-                )
-                existing.file_size = document.file_size or existing.file_size
-                existing.mime_type = document.mime_type or existing.mime_type
-                existing.sha256 = document.sha256 or existing.sha256
-                updated += 1
-        return created, updated
+        result = await persist_document_descriptors(
+            db, source_system=self.source_system, tender=tender,
+            documents=documents, default_status="metadata_only",
+        )
+        return result.created_count, result.updated_count

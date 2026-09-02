@@ -108,7 +108,13 @@ def run_redirect_cases() -> list[str]:
                 and path not in {"/api/v1/users/me", "/api/v1/users/me/access-status"}
             ]
             check(
-                set(domain_paths) == {"/api/v1/explorer/tenders"}
+                set(domain_paths).issubset({
+                    "/api/v1/explorer/tenders",
+                    "/api/v1/tenders/sources/catalog",
+                    "/api/v1/tenders/sources/refresh-status",
+                    "/api/v1/tenders/sources/refresh-activity",
+                })
+                and "/api/v1/explorer/tenders" in domain_paths
                 and not any("/api/v1/hunter" in url for url in observed_urls)
                 and not s63.State.writes,
                 REDIRECT_CASES[2],

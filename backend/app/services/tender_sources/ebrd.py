@@ -702,48 +702,14 @@ class EbrdTenderSource:
         tender: Any,
         documents: list[CanonicalDocument],
     ) -> tuple[int, int]:
-        assert_source_scope(self.source_system, tender)
-        created = 0
-        updated = 0
-        for document in documents:
-            source_url = str(document.source_document_url or "").strip()
-            if not source_url or not _safe_ebrd_url(source_url):
-                continue
-            result = await db.execute(
-                select(TenderDocument).where(
-                    TenderDocument.tender_id == tender.id,
-                    TenderDocument.source_document_url == source_url,
-                )
-            )
-            existing = result.scalar_one_or_none()
-            file_type = document.source_document_type or document.file_type or "access_required"
-            if existing is None:
-                db.add(
-                    TenderDocument(
-                        tender_id=tender.id,
-                        file_url=source_url[:500],
-                        file_type=file_type,
-                        source_document_url=source_url,
-                        source_document_type=file_type,
-                        download_status=document.download_status or "access_required",
-                        external_file_id=document.external_file_id,
-                        file_size=document.file_size,
-                        mime_type=document.mime_type,
-                        sha256=document.sha256,
-                    )
-                )
-                created += 1
-            else:
-                existing.file_url = source_url[:500]
-                existing.file_type = file_type
-                existing.source_document_type = file_type
-                existing.download_status = "access_required"
-                existing.external_file_id = document.external_file_id or existing.external_file_id
-                existing.file_size = document.file_size or existing.file_size
-                existing.mime_type = document.mime_type or existing.mime_type
-                existing.sha256 = document.sha256 or existing.sha256
-                updated += 1
-        return created, updated
+        from app.services.tender_sources.base import persist_document_descriptors
+
+        result = await persist_document_descriptors(
+            db, source_system=self.source_system, tender=tender,
+            documents=documents, url_validator=_safe_ebrd_url,
+            default_status="access_required",
+        )
+        return result.created_count, result.updated_count
 
 
 def _merge_listing_detail(listing: dict[str, Any], detail: dict[str, Any] | None) -> dict[str, Any]:

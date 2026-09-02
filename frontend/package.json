@@ -16,6 +16,7 @@
     "test:tender-details": "node --no-warnings --experimental-strip-types --test tests/tender-details.test.mjs",
     "test:tender-cleanup": "node --no-warnings --experimental-strip-types --test tests/tender-cleanup.test.mjs",
     "test:explorer": "node --no-warnings --experimental-strip-types --test tests/unified-explorer.test.mjs",
+    "test:sr3": "node --no-warnings --experimental-strip-types --test tests/source-refresh-newness.test.mjs",
     "test:hunter-retirement": "node --no-warnings --experimental-strip-types --test tests/hunter-retirement.test.mjs"
   },
   "dependencies": {

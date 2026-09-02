@@ -104,7 +104,7 @@ test('Task Manager canonical label is exact and not TTL', () => {
 });
 
 test('teamleadname never renders as TTL', () => {
-    const label = projectRoleLabel(role('OTHER_PROJECT_ROLE', 'teamleadname'));
+    const label = projectRoleLabel(role('OTHER_PROJECT_ROLE', 'teamleadname'), 'World Bank');
     assert.equal(label, 'World Bank project team');
     assert.doesNotMatch(label, /Task Team Leader|\bTTL\b|Co-TTL/i);
 });
