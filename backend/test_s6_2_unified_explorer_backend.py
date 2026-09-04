@@ -26,7 +26,7 @@ from app.services.explorer import (
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-HEAD = "20260901_0001_sr2_3_connector_metrics"
+HEAD = "20260902_0001_s7_2_user_ui_locale"
 
 
 def source(relative: str) -> str:
@@ -195,8 +195,8 @@ def test_sprint_6_4_frontend_consumes_contract_with_passive_compatibility_redire
     explorer_page = source("frontend/app/dashboard/tenders/page.tsx")
     hunter_page = source("frontend/app/dashboard/hunter/page.tsx")
     navigation = source("frontend/app/dashboard/layout.tsx")
-    assert "listExplorer({" in explorer_page
-    assert "'recommended', 'Recommended'" in explorer_page
+    assert "listExplorer(" in explorer_page
+    assert 't("views.recommended")' in explorer_page
     assert "permanentRedirect" not in hunter_page
     assert "redirect('/dashboard/tenders?view=recommended')" in hunter_page
     assert "href: '/dashboard/hunter'" not in navigation

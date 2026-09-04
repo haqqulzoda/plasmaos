@@ -1,0 +1,13 @@
+{
+  "dashboard": "Dashboard",
+  "tenders": "Tender Explorer",
+  "myTenders": "My Tenders",
+  "bidPreparation": "Bid Preparation",
+  "companyProfile": "Company Profile",
+  "readinessVault": "Readiness Vault",
+  "dashboardLabel": "Plasma AI dashboard",
+  "navigationLabel": "Dashboard navigation",
+  "logout": "Logout",
+  "commandCenter": "Command Center",
+  "adminConsole": "Admin Console"
+}

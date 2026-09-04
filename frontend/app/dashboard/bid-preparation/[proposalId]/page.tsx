@@ -1,9 +1,10 @@
-'use client';
+"use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowLeft,
   Check,
@@ -16,22 +17,22 @@ import {
   Loader2,
   Save,
   Sparkles,
-} from 'lucide-react';
+} from "lucide-react";
 
-import { api } from '@/lib/api';
-import { TenderEngagementPanel } from '@/components/tenders/TenderEngagementPanel';
+import { api } from "@/lib/api";
+import {
+  formatCurrency as formatLocaleCurrency,
+  formatDate as formatLocaleDate,
+  formatNumber,
+} from "@/i18n/formatters";
+import type { CustomerSelectableLocale } from "@/i18n/locales";
+import { TenderEngagementPanel } from "@/components/tenders/TenderEngagementPanel";
 import {
   engagementStatusClasses,
-  engagementStatusLabel,
   type EngagementStatus,
-} from '@/types/engagement';
-import type { TenderDocument, TenderStatus } from '@/types/tender';
-import {
-  isTenderActionable,
-  tenderActionabilityMessage,
-  tenderStatusClasses,
-  tenderStatusLabel,
-} from '@/types/tender';
+} from "@/types/engagement";
+import type { TenderDocument, TenderStatus } from "@/types/tender";
+import { isTenderActionable, tenderStatusClasses } from "@/types/tender";
 
 interface StrategicLineItem {
   name: string;
@@ -78,15 +79,25 @@ const getDeliveryDaysInt = (value: string): number => {
   return Math.max(1, parseInt(match[0], 10));
 };
 
-const formatCurrency = (amount: number, currency: string) =>
-  `${new Intl.NumberFormat('en-US').format(amount)} ${currency}`;
+const escapePreviewHtml = (value: string) =>
+  value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ] ?? character,
+  );
 
-const PREVIEW_LOADING_HTML = `<!doctype html>
-<html lang="en">
+const previewLoadingHtml = (
+  locale: CustomerSelectableLocale,
+  title: string,
+  help: string,
+) => `<!doctype html>
+<html lang="${locale}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Preparing document preview</title>
+    <title>${escapePreviewHtml(title)}</title>
     <style>
       :root { color-scheme: light; }
       body {
@@ -120,17 +131,21 @@ const PREVIEW_LOADING_HTML = `<!doctype html>
   </head>
   <body>
     <main>
-      <h1>Preparing PDF preview</h1>
-      <p>The document is being fetched from UzEx. This tab will open the PDF automatically when it is ready.</p>
+      <h1>${escapePreviewHtml(title)}</h1>
+      <p>${escapePreviewHtml(help)}</p>
     </main>
   </body>
 </html>`;
-const PREVIEW_ERROR_HTML = `<!doctype html>
-<html lang="en">
+const previewErrorHtml = (
+  locale: CustomerSelectableLocale,
+  title: string,
+  help: string,
+) => `<!doctype html>
+<html lang="${locale}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Preview unavailable</title>
+    <title>${escapePreviewHtml(title)}</title>
     <style>
       :root { color-scheme: light; }
       body {
@@ -163,34 +178,35 @@ const PREVIEW_ERROR_HTML = `<!doctype html>
   </head>
   <body>
     <main>
-      <h1>Preview unavailable</h1>
-      <p>The PDF could not be opened right now. Close this tab and try again from the tender page.</p>
+      <h1>${escapePreviewHtml(title)}</h1>
+      <p>${escapePreviewHtml(help)}</p>
     </main>
   </body>
 </html>`;
 
 /** Strip non-digits, return raw numeric string */
-const stripNonDigits = (v: string) => v.replace(/\D/g, '');
+const stripNonDigits = (v: string) => v.replace(/\D/g, "");
 
 /** Format a raw numeric string with commas: "21890000000" → "21,890,000,000" */
-const formatPriceDisplay = (raw: string) => {
+const formatPriceDisplay = (raw: string, locale: CustomerSelectableLocale) => {
   const digits = stripNonDigits(raw);
-  if (!digits) return '';
-  return Number(digits).toLocaleString('en-US');
+  if (!digits) return "";
+  return formatNumber(Number(digits), locale);
 };
 
 /** File extension helper */
 const getFileExtension = (value: string) => {
-  const sanitized = value.split('?')[0].split('#')[0];
-  const parts = sanitized.split('.');
-  return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
+  const sanitized = value.split("?")[0].split("#")[0];
+  const parts = sanitized.split(".");
+  return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "";
 };
 
-const isArchiveFile = (ext: string) => ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext);
-const isPdfFile = (ext: string) => ext === 'pdf';
+const isArchiveFile = (ext: string) =>
+  ["zip", "rar", "7z", "tar", "gz"].includes(ext);
+const isPdfFile = (ext: string) => ext === "pdf";
 
 const getDocumentFilename = (doc: TenderDocument) => {
-  const fallbackExtension = (doc.file_type || '').trim().toLowerCase();
+  const fallbackExtension = (doc.file_type || "").trim().toLowerCase();
   if (doc.display_name) {
     return doc.display_name;
   }
@@ -203,21 +219,22 @@ const getDocumentFilename = (doc: TenderDocument) => {
     return doc.storage_filename;
   }
 
-  return fallbackExtension ? `document.${fallbackExtension}` : 'document';
+  return fallbackExtension ? `document.${fallbackExtension}` : "document";
 };
 
-const formatDeadline = (deadline: string | null) => {
-  if (!deadline) return 'No deadline';
-  return new Date(deadline).toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
-
-export default function BidPreparationWorkspacePage({ params }: { params: Promise<{ proposalId: string }> }) {
+export default function BidPreparationWorkspacePage({
+  params,
+}: {
+  params: Promise<{ proposalId: string }>;
+}) {
   const resolvedParams = use(params);
   const router = useRouter();
+  const t = useTranslations("bidPreparation");
+  const tExplorer = useTranslations("explorer");
+  const tMy = useTranslations("myTenders");
+  const locale = useLocale() as CustomerSelectableLocale;
+  const translateRef = useRef(t);
+  translateRef.current = t;
 
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [documents, setDocuments] = useState<TenderDocument[]>([]);
@@ -234,41 +251,56 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [previewingDocId, setPreviewingDocId] = useState<string | null>(null);
 
-  const [companyName, setCompanyName] = useState('');
-  const [strategicSummary, setStrategicSummary] = useState('');
-  const [suggestedPrice, setSuggestedPrice] = useState('');
-  const [deliveryDays, setDeliveryDays] = useState('');
+  const [companyName, setCompanyName] = useState("");
+  const [strategicSummary, setStrategicSummary] = useState("");
+  const [suggestedPrice, setSuggestedPrice] = useState("");
+  const [deliveryDays, setDeliveryDays] = useState("");
   const [lineItems, setLineItems] = useState<StrategicLineItem[]>([]);
 
   const fetchTenderDocuments = useCallback(async (tenderId: string) => {
-    const response = await api.get<TenderDocument[]>(`/tenders/${tenderId}/documents`);
+    const response = await api.get<TenderDocument[]>(
+      `/tenders/${tenderId}/documents`,
+    );
     setDocuments(response.data);
   }, []);
 
   useEffect(() => {
     const fetchProposal = async () => {
       try {
-        const response = await api.get<Proposal>(`/proposals/${resolvedParams.proposalId}`);
+        const response = await api.get<Proposal>(
+          `/proposals/${resolvedParams.proposalId}`,
+        );
         const data = response.data;
         setProposal(data);
 
         const structured = data.structured_data ?? {};
-        setStrategicSummary((structured.strategic_summary || structured.ai_summary || '').trim());
+        setStrategicSummary(
+          (structured.strategic_summary || structured.ai_summary || "").trim(),
+        );
         setSuggestedPrice(
-          typeof structured.our_price === 'number' ? String(structured.our_price) : '',
+          typeof structured.our_price === "number"
+            ? String(structured.our_price)
+            : "",
         );
         setDeliveryDays(
-          structured.delivery_days !== undefined ? String(structured.delivery_days) : '',
+          structured.delivery_days !== undefined
+            ? String(structured.delivery_days)
+            : "",
         );
-        setLineItems((structured.line_items || structured.ai_items || []).map((item) => ({
-          ...item,
-          quantity: Number(item.quantity) || 1,
-          unit_price: Number(item.unit_price) || 0,
-          total: Number(item.total) || 0,
-        })));
+        setLineItems(
+          (structured.line_items || structured.ai_items || []).map((item) => ({
+            ...item,
+            quantity: Number(item.quantity) || 1,
+            unit_price: Number(item.unit_price) || 0,
+            total: Number(item.total) || 0,
+          })),
+        );
       } catch (requestError: unknown) {
-        const detail = (requestError as { response?: { data?: { detail?: string } } }).response?.data?.detail;
-        setError(detail || 'Bid Preparation not found');
+        const detail = (
+          requestError as { response?: { data?: { detail?: string } } }
+        ).response?.data?.detail;
+        console.error("Failed to load Bid Preparation:", requestError, detail);
+        setError(translateRef.current("notAvailable"));
       } finally {
         setIsLoading(false);
       }
@@ -281,7 +313,7 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
   useEffect(() => {
     const fetchVault = async () => {
       try {
-        const res = await api.get('/vault');
+        const res = await api.get("/vault");
         const name = res.data?.company_name;
         if (name) setCompanyName(name);
       } catch {
@@ -302,13 +334,22 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
       .catch((requestError: unknown) => {
         if (!isActive) return;
         setDocuments([]);
-        const detail = (requestError as { response?: { data?: { detail?: string } } }).response?.data?.detail;
-        setDocumentsError(detail || 'Persisted Tender documents could not be loaded.');
+        const detail = (
+          requestError as { response?: { data?: { detail?: string } } }
+        ).response?.data?.detail;
+        console.error(
+          "Failed to load persisted Tender documents:",
+          requestError,
+          detail,
+        );
+        setDocumentsError(translateRef.current("documentsFailed"));
       })
       .finally(() => {
         if (isActive) setIsLoadingDocs(false);
       });
-    return () => { isActive = false; };
+    return () => {
+      isActive = false;
+    };
   }, [fetchTenderDocuments, proposalTenderId]);
 
   const handleGenerateStrategicProposal = async () => {
@@ -316,26 +357,29 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
     try {
       setIsGenerating(true);
       setGenerationError(null);
-      const response = await api.post<StrategicDraftResponse>(`/proposals/${proposal.id}/ai-draft`);
+      const response = await api.post<StrategicDraftResponse>(
+        `/proposals/${proposal.id}/ai-draft`,
+      );
       if (response.status < 200 || response.status >= 300) {
-        throw new Error('Non-OK response from AI draft endpoint');
+        throw new Error("Non-OK response from AI draft endpoint");
       }
       const draft = response.data;
 
       // Check if the AI returned an error inside the successful response
-      const errorType = (draft as unknown as Record<string, unknown>).error_type as string | undefined;
-      if (errorType === 'quota_exceeded') {
-        setGenerationError('Monthly AI quota reached. Please try again later or contact support.');
+      const errorType = (draft as unknown as Record<string, unknown>)
+        .error_type as string | undefined;
+      if (errorType === "quota_exceeded") {
+        setGenerationError(t("quotaReached"));
         return;
       }
-      if (errorType === 'model_overloaded') {
-        setGenerationError('AI models are temporarily overloaded. Please retry in a few minutes.');
+      if (errorType === "model_overloaded") {
+        setGenerationError(t("modelsBusy"));
         return;
       }
 
-      setStrategicSummary(draft.strategic_summary || '');
-      setSuggestedPrice(String(draft.suggested_price ?? ''));
-      setDeliveryDays(draft.delivery_days || '');
+      setStrategicSummary(draft.strategic_summary || "");
+      setSuggestedPrice(String(draft.suggested_price ?? ""));
+      setDeliveryDays(draft.delivery_days || "");
       setLineItems(
         (draft.line_items || []).map((item) => ({
           ...item,
@@ -346,88 +390,110 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
       );
     } catch (err: unknown) {
       // Parse structured error from backend if available
-      const axiosErr = err as { response?: { data?: { detail?: string }; status?: number } };
+      const axiosErr = err as {
+        response?: { data?: { detail?: string }; status?: number };
+      };
       const status = axiosErr?.response?.status;
-      const detail = axiosErr?.response?.data?.detail || '';
+      const detail = axiosErr?.response?.data?.detail || "";
 
-      if (status === 429 || detail.toLowerCase().includes('quota')) {
-        setGenerationError('Monthly AI quota reached across all models. Please try again later or contact support.');
-      } else if (status === 503 || detail.toLowerCase().includes('overload')) {
-        setGenerationError('AI models are temporarily overloaded. Please retry in a few minutes.');
+      if (status === 429 || detail.toLowerCase().includes("quota")) {
+        setGenerationError(t("quotaReached"));
+      } else if (status === 503 || detail.toLowerCase().includes("overload")) {
+        setGenerationError(t("modelsBusy"));
       } else {
-        setGenerationError(
-          detail || 'AI generation failed. Please check your connection and try again.',
-        );
+        setGenerationError(t("generationFailed"));
       }
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleDocumentDownload = useCallback(async (docId: string, filename?: string) => {
-    setDownloadingDocId(docId);
+  const handleDocumentDownload = useCallback(
+    async (docId: string, filename?: string) => {
+      setDownloadingDocId(docId);
 
-    try {
-      const response = await api.get(`/tenders/documents/${docId}/download`, {
-        responseType: 'blob',
-      });
+      try {
+        const response = await api.get(`/tenders/documents/${docId}/download`, {
+          responseType: "blob",
+        });
 
-      const contentType = response.headers['content-type'] || 'application/octet-stream';
-      const blob = new Blob([response.data], { type: contentType });
-      const url = URL.createObjectURL(blob);
+        const contentType =
+          response.headers["content-type"] || "application/octet-stream";
+        const blob = new Blob([response.data], { type: contentType });
+        const url = URL.createObjectURL(blob);
 
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename || `document_${docId}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename || `document_${docId}`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
 
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } finally {
-      window.setTimeout(() => {
-        setDownloadingDocId((current) => (current === docId ? null : current));
-      }, 1200);
-    }
-  }, []);
-
-  const handleDocumentPreview = useCallback(async (docId: string) => {
-    setPreviewingDocId(docId);
-    const previewTab = window.open('', '_blank');
-    if (previewTab) {
-      previewTab.opener = null;
-      previewTab.document.write(PREVIEW_LOADING_HTML);
-      previewTab.document.close();
-    }
-
-    try {
-      const response = await api.get(`/tenders/documents/${docId}/download`, {
-        responseType: 'blob',
-      });
-
-      const contentType = response.headers['content-type'] || 'application/octet-stream';
-      const blob = new Blob([response.data], { type: contentType });
-      const url = URL.createObjectURL(blob);
-
-      if (previewTab) {
-        previewTab.location.replace(url);
-      } else {
-        window.open(url, '_blank', 'noopener,noreferrer');
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } finally {
+        window.setTimeout(() => {
+          setDownloadingDocId((current) =>
+            current === docId ? null : current,
+          );
+        }, 1200);
       }
+    },
+    [],
+  );
 
-      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch {
+  const handleDocumentPreview = useCallback(
+    async (docId: string) => {
+      setPreviewingDocId(docId);
+      const previewTab = window.open("", "_blank");
       if (previewTab) {
-        previewTab.document.open();
-        previewTab.document.write(PREVIEW_ERROR_HTML);
+        previewTab.opener = null;
+        previewTab.document.write(
+          previewLoadingHtml(
+            locale,
+            t("previewPreparingTitle"),
+            t("previewPreparingHelp"),
+          ),
+        );
         previewTab.document.close();
       }
-    } finally {
-      window.setTimeout(() => {
-        setPreviewingDocId((current) => (current === docId ? null : current));
-      }, 1200);
-    }
-  }, []);
+
+      try {
+        const response = await api.get(`/tenders/documents/${docId}/download`, {
+          responseType: "blob",
+        });
+
+        const contentType =
+          response.headers["content-type"] || "application/octet-stream";
+        const blob = new Blob([response.data], { type: contentType });
+        const url = URL.createObjectURL(blob);
+
+        if (previewTab) {
+          previewTab.location.replace(url);
+        } else {
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+
+        window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch {
+        if (previewTab) {
+          previewTab.document.open();
+          previewTab.document.write(
+            previewErrorHtml(
+              locale,
+              t("previewUnavailableTitle"),
+              t("previewUnavailableHelp"),
+            ),
+          );
+          previewTab.document.close();
+        }
+      } finally {
+        window.setTimeout(() => {
+          setPreviewingDocId((current) => (current === docId ? null : current));
+        }, 1200);
+      }
+    },
+    [locale, t],
+  );
 
   const handleCopySummary = async () => {
     if (!strategicSummary) return;
@@ -444,11 +510,11 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
     if (!proposal) return;
     setIsSaving(true);
     try {
-      const rawPrice = stripNonDigits(suggestedPrice || '0');
-      const priceNum = parseFloat(rawPrice || '0');
+      const rawPrice = stripNonDigits(suggestedPrice || "0");
+      const priceNum = parseFloat(rawPrice || "0");
       await api.put(`/proposals/${proposal.id}`, {
         our_price: Number.isFinite(priceNum) ? priceNum : null,
-        delivery_days: getDeliveryDaysInt(deliveryDays || '30'),
+        delivery_days: getDeliveryDaysInt(deliveryDays || "30"),
         structured_data: {
           ...(proposal.structured_data || {}),
           strategic_summary: strategicSummary,
@@ -458,13 +524,13 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
       setProposal((prev) =>
         prev
           ? {
-            ...prev,
-            structured_data: {
-              ...(prev.structured_data || {}),
-              strategic_summary: strategicSummary,
-              line_items: lineItems,
-            },
-          }
+              ...prev,
+              structured_data: {
+                ...(prev.structured_data || {}),
+                strategic_summary: strategicSummary,
+                line_items: lineItems,
+              },
+            }
           : prev,
       );
     } finally {
@@ -476,19 +542,19 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
     if (!proposal) return;
     setIsGeneratingPdf(true);
     try {
-      const rawPrice = stripNonDigits(suggestedPrice || '0');
+      const rawPrice = stripNonDigits(suggestedPrice || "0");
       const response = await api.post(
         `/proposals/${proposal.id}/generate-pdf`,
         {
-          price: parseFloat(rawPrice || '0'),
-          delivery_days: getDeliveryDaysInt(deliveryDays || '30'),
+          price: parseFloat(rawPrice || "0"),
+          delivery_days: getDeliveryDaysInt(deliveryDays || "30"),
           company_name: companyName,
         },
-        { responseType: 'blob' },
+        { responseType: "blob" },
       );
-      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      window.open(url, "_blank");
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -498,21 +564,21 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
     if (!proposal) return;
     setIsGeneratingDocx(true);
     try {
-      const rawPrice = stripNonDigits(suggestedPrice || '0');
+      const rawPrice = stripNonDigits(suggestedPrice || "0");
       const response = await api.post(
         `/proposals/${proposal.id}/export/docx`,
         {
-          price: parseFloat(rawPrice || '0'),
-          delivery_days: getDeliveryDaysInt(deliveryDays || '30'),
+          price: parseFloat(rawPrice || "0"),
+          delivery_days: getDeliveryDaysInt(deliveryDays || "30"),
           company_name: companyName,
         },
-        { responseType: 'blob' },
+        { responseType: "blob" },
       );
       const blob = new Blob([response.data], {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       });
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `proposal_${proposal.id.slice(0, 8)}.docx`;
       document.body.appendChild(a);
@@ -528,6 +594,28 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
     () => lineItems.reduce((acc, item) => acc + (Number(item.total) || 0), 0),
     [lineItems],
   );
+  const localizedTenderStatus = (status: TenderStatus) =>
+    status === "OPEN"
+      ? tExplorer("status.open")
+      : status === "CLOSED"
+        ? tExplorer("status.closed")
+        : status === "CANCELLED"
+          ? tExplorer("status.cancelled")
+          : tExplorer("status.unknown");
+  const localizedEngagementStatus = (status: EngagementStatus) =>
+    status === "SAVED"
+      ? tMy("statuses.saved")
+      : status === "EVALUATING"
+        ? tMy("statuses.evaluating")
+        : status === "PREPARING"
+          ? tMy("statuses.preparing")
+          : status === "SUBMITTED"
+            ? tMy("statuses.submitted")
+            : status === "WON"
+              ? tMy("statuses.won")
+              : status === "LOST"
+                ? tMy("statuses.lost")
+                : tMy("statuses.dismissed");
 
   if (isLoading) {
     return (
@@ -545,17 +633,16 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
           className="inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Tender Explorer
+          {t("backExplorer")}
         </Link>
         <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
-          {error || 'Bid Preparation not found'}
+          {error || t("notAvailable")}
         </div>
       </div>
     );
   }
 
   const actionable = isTenderActionable(proposal.tender_status);
-  const actionabilityMessage = tenderActionabilityMessage(proposal.tender_status);
 
   return (
     <div className="space-y-6">
@@ -566,20 +653,37 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
             className="mb-2 inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Tender Details
+            {t("backDetails")}
           </Link>
-          <h1 className="text-2xl font-bold text-white">{proposal.tender_title}</h1>
+          <h1 className="text-2xl font-bold text-white">
+            {proposal.tender_title}
+          </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Budget {formatCurrency(proposal.tender_budget, proposal.tender_currency)} | Deadline{' '}
-            {formatDeadline(proposal.tender_deadline)} | {proposal.tender_region || 'No region'}
+            {t("summaryLine", {
+              budget: formatLocaleCurrency(
+                proposal.tender_budget,
+                proposal.tender_currency,
+                locale,
+              ),
+              deadline: formatLocaleDate(proposal.tender_deadline, locale),
+              region: proposal.tender_region || t("noRegion"),
+            })}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${tenderStatusClasses(proposal.tender_status)}`}>
-              Tender: {tenderStatusLabel(proposal.tender_status)}
+            <span
+              className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${tenderStatusClasses(proposal.tender_status)}`}
+            >
+              {t("tenderStatus", {
+                status: localizedTenderStatus(proposal.tender_status),
+              })}
             </span>
             {proposal.engagement_status ? (
-              <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${engagementStatusClasses(proposal.engagement_status)}`}>
-                Engagement: {engagementStatusLabel(proposal.engagement_status)}
+              <span
+                className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${engagementStatusClasses(proposal.engagement_status)}`}
+              >
+                {t("engagement", {
+                  status: localizedEngagementStatus(proposal.engagement_status),
+                })}
               </span>
             ) : null}
           </div>
@@ -587,11 +691,15 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
         <button
           onClick={handleGenerateStrategicProposal}
           disabled={isGenerating || !actionable}
-          title={!actionable ? actionabilityMessage : 'Generate strategic draft'}
+          title={!actionable ? t("actionUnavailable") : t("generateStrategic")}
           className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          Generate Strategic Draft
+          {isGenerating ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
+          )}
+          {t("generateStrategic")}
         </button>
       </div>
 
@@ -603,7 +711,7 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
           animate={{ opacity: 1, y: 0 }}
           className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-5 text-indigo-200"
         >
-          <p className="font-semibold">Analyzing Compliance Ledger... Drafting Executive Summary...</p>
+          <p className="font-semibold">{t("generatingStrategic")}</p>
         </motion.div>
       )}
 
@@ -611,21 +719,32 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: 'easeOut' }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
           className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 shadow-lg shadow-amber-500/5"
         >
           <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/20">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-amber-400">
-              <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="h-4 w-4 text-amber-400"
+            >
+              <path
+                fillRule="evenodd"
+                d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z"
+                clipRule="evenodd"
+              />
             </svg>
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-200">{generationError}</p>
+            <p className="text-sm font-semibold text-amber-200">
+              {generationError}
+            </p>
             <button
               onClick={() => setGenerationError(null)}
               className="mt-2 text-xs font-medium text-amber-400/80 underline decoration-amber-400/30 underline-offset-2 transition hover:text-amber-300 hover:decoration-amber-300/50"
             >
-              Dismiss
+              {t("dismiss")}
             </button>
           </div>
         </motion.div>
@@ -637,7 +756,9 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-sky-400" />
-                <h2 className="text-lg font-semibold text-white">Strategic Executive Summary</h2>
+                <h2 className="text-lg font-semibold text-white">
+                  {t("executiveSummary")}
+                </h2>
               </div>
               <button
                 onClick={handleCopySummary}
@@ -647,12 +768,12 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
                 {isCopied ? (
                   <>
                     <Check className="h-3.5 w-3.5 text-emerald-400" />
-                    Copied
+                    {t("copied")}
                   </>
                 ) : (
                   <>
                     <Copy className="h-3.5 w-3.5" />
-                    Copy
+                    {t("copy")}
                   </>
                 )}
               </button>
@@ -661,7 +782,7 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
               value={strategicSummary}
               onChange={(e) => setStrategicSummary(e.target.value)}
               rows={14}
-              placeholder="Strategic summary will appear here after generation."
+              placeholder={t("summaryPlaceholder")}
               className="w-full resize-y min-h-[200px] bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-sm leading-6 text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-500"
             />
           </div>
@@ -669,28 +790,35 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
             <div className="mb-4 flex items-center gap-2">
               <FileOutput className="h-5 w-5 text-emerald-400" />
-              <h2 className="text-lg font-semibold text-white">Line Items</h2>
+              <h2 className="text-lg font-semibold text-white">
+                {t("lineItems")}
+              </h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[620px] text-sm">
                 <thead>
                   <tr className="border-b border-zinc-800 text-left text-zinc-400">
-                    <th className="px-3 py-2">Item</th>
-                    <th className="px-3 py-2 text-right">Qty</th>
-                    <th className="px-3 py-2 text-right">Unit Price</th>
-                    <th className="px-3 py-2 text-right">Total</th>
+                    <th className="px-3 py-2">{t("item")}</th>
+                    <th className="px-3 py-2 text-right">{t("quantity")}</th>
+                    <th className="px-3 py-2 text-right">{t("unitPrice")}</th>
+                    <th className="px-3 py-2 text-right">{t("total")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lineItems.map((item, index) => (
-                    <tr key={`${item.name}-${index}`} className="border-b border-zinc-900">
+                    <tr
+                      key={`${item.name}-${index}`}
+                      className="border-b border-zinc-900"
+                    >
                       <td className="px-3 py-2 text-zinc-200">{item.name}</td>
                       <td className="px-3 py-2 text-right text-zinc-300">
                         {item.quantity} {item.unit}
                       </td>
-                      <td className="px-3 py-2 text-right text-zinc-300">{item.unit_price.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right text-zinc-300">
+                        {formatNumber(item.unit_price, locale)}
+                      </td>
                       <td className="px-3 py-2 text-right font-medium text-emerald-300">
-                        {item.total.toLocaleString()}
+                        {formatNumber(item.total, locale)}
                       </td>
                     </tr>
                   ))}
@@ -698,11 +826,17 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
               </table>
             </div>
             {lineItems.length === 0 && (
-              <p className="text-sm text-zinc-500">No line items yet. Generate a strategic draft first.</p>
+              <p className="text-sm text-zinc-500">{t("noLineItems")}</p>
             )}
             {lineItems.length > 0 && (
               <p className="mt-4 text-right text-sm font-semibold text-zinc-200">
-                Computed Total: {computedTotal.toLocaleString()} {proposal.tender_currency}
+                {t("computedTotal", {
+                  value: formatLocaleCurrency(
+                    computedTotal,
+                    proposal.tender_currency,
+                    locale,
+                  ),
+                })}
               </p>
             )}
           </div>
@@ -710,11 +844,13 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
 
         <div className="space-y-6">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">Commercial Inputs</h2>
+            <h2 className="mb-4 text-lg font-semibold text-white">
+              {t("commercialInputs")}
+            </h2>
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
-                  Company Name
+                  {t("companyName")}
                 </label>
                 <input
                   type="text"
@@ -725,26 +861,28 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
-                  Suggested Price ({proposal.tender_currency})
+                  {t("suggestedPrice", { currency: proposal.tender_currency })}
                 </label>
                 <input
                   type="text"
                   inputMode="numeric"
-                  value={formatPriceDisplay(suggestedPrice)}
-                  onChange={(e) => setSuggestedPrice(stripNonDigits(e.target.value))}
+                  value={formatPriceDisplay(suggestedPrice, locale)}
+                  onChange={(e) =>
+                    setSuggestedPrice(stripNonDigits(e.target.value))
+                  }
                   placeholder="21,890,000,000"
                   className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
                 />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
-                  Delivery Window
+                  {t("deliveryWindow")}
                 </label>
                 <input
                   type="text"
                   value={deliveryDays}
                   onChange={(e) => setDeliveryDays(e.target.value)}
-                  placeholder="45 calendar days"
+                  placeholder={t("deliveryPlaceholder")}
                   className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
                 />
               </div>
@@ -755,8 +893,12 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
                 disabled={isSaving}
                 className="w-full inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Save Draft
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {t("saveDraft")}
               </button>
             </div>
             <div className="mt-3 flex gap-3">
@@ -770,7 +912,7 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
                 ) : (
                   <FileOutput className="h-4 w-4" />
                 )}
-                Download PDF
+                {t("downloadPdf")}
               </button>
               <button
                 onClick={handleGenerateDocx}
@@ -782,17 +924,19 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
                 ) : (
                   <FileType className="h-4 w-4" />
                 )}
-                Download Word
+                {t("downloadWord")}
               </button>
             </div>
           </div>
 
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">Tender Documents</h2>
+            <h2 className="mb-4 text-lg font-semibold text-white">
+              {t("documents")}
+            </h2>
             {isLoadingDocs && (
               <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading persisted Tender documents…
+                {t("loadingDocuments")}
               </div>
             )}
             {documentsError && (
@@ -801,36 +945,53 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
               </div>
             )}
             {!isLoadingDocs && !documentsError && documents.length === 0 && (
-              <p className="text-sm text-zinc-500">No prepared documents found for this tender.</p>
+              <p className="text-sm text-zinc-500">
+                {t("noPreparedDocuments")}
+              </p>
             )}
             <div className="space-y-2">
               {documents.map((doc) => {
                 const filename = getDocumentFilename(doc);
                 const ext = getFileExtension(filename || doc.file_type);
-                const isPdf = isPdfFile(ext) || doc.file_type?.toLowerCase() === 'pdf';
+                const isPdf =
+                  isPdfFile(ext) || doc.file_type?.toLowerCase() === "pdf";
                 const isArchive =
-                  isArchiveFile(ext) || ['zip', 'rar', '7z', 'tar', 'gz'].includes(doc.file_type?.toLowerCase());
-                const isAvailable = doc.download_status === 'available';
+                  isArchiveFile(ext) ||
+                  ["zip", "rar", "7z", "tar", "gz"].includes(
+                    doc.file_type?.toLowerCase(),
+                  );
+                const isAvailable = doc.download_status === "available";
                 const isPreviewAction = isPdf;
-                const isBusy = isPreviewAction ? previewingDocId === doc.id : downloadingDocId === doc.id;
-                const typeLabel = (ext || doc.file_type || 'file').toUpperCase();
-                const isUnsupported = ['doc', 'xls', 'xlsx', 'rtf'].includes(ext || doc.file_type?.toLowerCase());
+                const isBusy = isPreviewAction
+                  ? previewingDocId === doc.id
+                  : downloadingDocId === doc.id;
+                const typeLabel = (
+                  ext ||
+                  doc.file_type ||
+                  "file"
+                ).toUpperCase();
+                const isUnsupported = ["doc", "xls", "xlsx", "rtf"].includes(
+                  ext || doc.file_type?.toLowerCase(),
+                );
                 const statusLabel = doc.analysis_text_available
-                  ? 'Ready for analysis'
-                  : doc.download_status === 'metadata_only' || doc.download_status === 'access_required'
-                    ? 'Document discovered'
-                    : doc.download_status === 'failed' && isUnsupported
-                      ? 'Unsupported format'
-                      : doc.download_status === 'failed'
-                        ? 'Preparation failed'
-                        : 'Document discovered';
+                  ? t("documentReady")
+                  : doc.download_status === "metadata_only" ||
+                      doc.download_status === "access_required"
+                    ? t("documentDiscovered")
+                    : doc.download_status === "failed" && isUnsupported
+                      ? t("unsupportedFormat")
+                      : doc.download_status === "failed"
+                        ? t("preparationFailed")
+                        : t("documentDiscovered");
 
                 return (
                   <button
                     key={doc.id}
                     disabled={isBusy || !isAvailable}
                     onClick={() =>
-                      isPreviewAction ? handleDocumentPreview(doc.id) : handleDocumentDownload(doc.id, filename)
+                      isPreviewAction
+                        ? handleDocumentPreview(doc.id)
+                        : handleDocumentDownload(doc.id, filename)
                     }
                     className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-zinc-700 disabled:cursor-not-allowed disabled:opacity-70"
                   >
@@ -844,22 +1005,28 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
                       ) : (
                         <FileType className="h-4 w-4 shrink-0 text-zinc-300" />
                       )}
-                      <span className="truncate">{typeLabel} | {filename}</span>
+                      <span className="truncate">
+                        {typeLabel} | {filename}
+                      </span>
                     </span>
                     <span className="inline-flex items-center gap-1 text-zinc-400">
                       {!isAvailable ? (
-                        <span className="max-w-[180px] text-right text-xs font-medium text-amber-300">{statusLabel}</span>
+                        <span className="max-w-[180px] text-right text-xs font-medium text-amber-300">
+                          {statusLabel}
+                        </span>
                       ) : isBusy ? (
-                        <span className="text-xs font-medium text-sky-300">Opening...</span>
+                        <span className="text-xs font-medium text-sky-300">
+                          {t("opening")}
+                        </span>
                       ) : isPreviewAction ? (
                         <>
                           <FileText className="h-4 w-4" />
-                          Preview
+                          {t("preview")}
                         </>
                       ) : (
                         <>
                           <Download className="h-4 w-4" />
-                          Download
+                          {t("download")}
                         </>
                       )}
                     </span>
@@ -873,10 +1040,10 @@ export default function BidPreparationWorkspacePage({ params }: { params: Promis
 
       <div className="flex justify-end">
         <button
-          onClick={() => router.push('/dashboard/bid-preparation')}
+          onClick={() => router.push("/dashboard/bid-preparation")}
           className="text-sm text-zinc-400 transition hover:text-zinc-200"
         >
-          Back to Bid Preparation
+          {t("back")}
         </button>
       </div>
     </div>

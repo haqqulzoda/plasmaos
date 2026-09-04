@@ -1,0 +1,13 @@
+{
+  "dashboard": "Панель управления",
+  "tenders": "Каталог тендеров",
+  "myTenders": "Мои тендеры",
+  "bidPreparation": "Подготовка заявки",
+  "companyProfile": "Профиль компании",
+  "readinessVault": "Документы готовности",
+  "dashboardLabel": "Панель управления Plasma AI",
+  "navigationLabel": "Навигация панели управления",
+  "logout": "Выйти",
+  "commandCenter": "Центр управления",
+  "adminConsole": "Панель администратора"
+}

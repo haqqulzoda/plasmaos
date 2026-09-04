@@ -1,6 +1,7 @@
 'use client';
 
 import { FileText, Hash } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface DocumentViewerProps {
     title: string;
@@ -8,6 +9,7 @@ interface DocumentViewerProps {
 }
 
 export default function DocumentViewer({ title, content }: DocumentViewerProps) {
+    const t = useTranslations('documentViewer');
     const lines = content.split('\n');
 
     return (
@@ -19,7 +21,7 @@ export default function DocumentViewer({ title, content }: DocumentViewerProps) 
                 </div>
                 <div>
                     <p className="text-[11px] font-medium uppercase tracking-widest text-zinc-500">
-                        Source Document
+                        {t('sourceDocument')}
                     </p>
                     <h3 className="text-sm font-semibold text-zinc-200 truncate max-w-md">
                         {title}
@@ -61,9 +63,9 @@ export default function DocumentViewer({ title, content }: DocumentViewerProps) 
             <div className="flex items-center justify-between px-5 py-2 border-t border-zinc-800 bg-zinc-950/80 text-[11px] text-zinc-500 shrink-0">
                 <div className="flex items-center gap-1.5">
                     <Hash className="w-3 h-3" />
-                    <span>{lines.length} lines</span>
+                    <span>{t('lineCount', { count: lines.length })}</span>
                 </div>
-                <span>UTF-8 · Plain Text</span>
+                <span>{t('plainTextEncoding')}</span>
             </div>
         </div>
     );

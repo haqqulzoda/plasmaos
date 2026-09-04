@@ -7,7 +7,7 @@ from alembic.script import ScriptDirectory
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD = "20260901_0001_sr2_3_connector_metrics"
+HEAD = "20260902_0001_s7_2_user_ui_locale"
 
 
 def source(relative: str) -> str:
@@ -80,11 +80,17 @@ def test_canonical_and_legacy_openapi_routes_remain_registered() -> None:
 
 def test_navigation_and_customer_copy_are_converged() -> None:
     layout = source("frontend/app/dashboard/layout.tsx")
+    navigation = source("frontend/messages/en/navigation.json")
     recommendation = source("frontend/components/tenders/RecommendationSummary.tsx")
+    explorer_messages = source("frontend/messages/en/explorer.json")
+    for key in ("tenders", "myTenders", "bidPreparation"):
+        assert f"nameKey: '{key}'" in layout
     for label in ("Tenders", "My Tenders", "Bid Preparation"):
-        assert f"name: '{label}'" in layout
+        assert label in navigation
+    for key in ("matchScore", "why", "recommendedOn", "dismiss", "restore"):
+        assert f't("{key}"' in recommendation
     for copy in ("Match score", "Why this may match", "Recommended on", "Dismiss recommendation", "Restore recommendation"):
-        assert copy in recommendation
+        assert copy in explorer_messages
     for forbidden in ("Win probability", "Guaranteed fit", "Last refreshed", "Dismiss Tender"):
         assert forbidden not in recommendation
 

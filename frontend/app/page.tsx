@@ -3,6 +3,7 @@
 import { getSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 /* ── SVG: Google "G" icon ─────────────────────────────────────────────── */
 function GoogleIcon({ className }: { className?: string }) {
@@ -58,6 +59,7 @@ function Spinner({ className }: { className?: string }) {
 /*  LOGIN PAGE                                                          */
 /* ══════════════════════════════════════════════════════════════════════ */
 export default function LoginPage() {
+  const t = useTranslations('auth');
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -96,7 +98,7 @@ export default function LoginPage() {
           {/* Headlines */}
           <div className="space-y-3">
             <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
-              Welcome back
+              {t('welcomeBack')}
             </h1>
             <p className="text-gray-400 text-base leading-relaxed">
               Sign in to your workspace to continue managing tenders, compliance, and strategic proposals.
@@ -116,7 +118,7 @@ export default function LoginPage() {
               ) : (
                 <GoogleIcon className="h-5 w-5" />
               )}
-              {isLoading ? 'Connecting…' : 'Continue with Google'}
+              {isLoading ? t('connecting') : t('continueWithGoogle')}
             </button>
 
             <p className="text-center text-xs text-gray-600">

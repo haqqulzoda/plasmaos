@@ -7,7 +7,8 @@ Protected endpoints for user operations.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic_core import PydanticCustomError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +25,7 @@ from app.core.access import (
     USER_APPROVAL_APPROVED,
 )
 from app.core.geography import normalize_target_countries, normalize_target_regions
+from app.core.locales import UiLocale, is_customer_selectable_ui_locale
 from app.core.services import normalize_target_services
 from app.db.session import get_db
 from app.models.all_models import User, SubscriptionTier
@@ -47,8 +49,38 @@ class UserResponse(BaseModel):
     is_admin: bool
     approval_status: str
     platform_role: str
+    ui_locale: UiLocale | None = None
     
     model_config = {"from_attributes": True}
+
+
+class UserPreferencesUpdate(BaseModel):
+    """Authenticated self-service presentation preferences."""
+
+    ui_locale: UiLocale
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("ui_locale", mode="before")
+    @classmethod
+    def _validate_customer_ui_locale(cls, value: object) -> UiLocale:
+        try:
+            locale = UiLocale(value)
+        except (TypeError, ValueError) as exc:
+            raise PydanticCustomError(
+                "unsupported_ui_locale",
+                "Unsupported customer UI locale",
+            ) from exc
+        if not is_customer_selectable_ui_locale(locale):
+            raise PydanticCustomError(
+                "unsupported_ui_locale",
+                "Unsupported customer UI locale",
+            )
+        return locale
+
+
+class UserPreferencesResponse(BaseModel):
+    ui_locale: UiLocale
 
 
 class AccessStatusResponse(BaseModel):
@@ -81,6 +113,19 @@ async def get_current_user_info(
         User details including subscription tier and admin status.
     """
     return UserResponse.model_validate(current_user)
+
+
+@router.patch("/me/preferences", response_model=UserPreferencesResponse)
+async def update_current_user_preferences(
+    payload: UserPreferencesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserPreferencesResponse:
+    """Persist the authenticated user's non-security presentation preference."""
+    current_user.ui_locale = payload.ui_locale.value
+    await db.commit()
+    await db.refresh(current_user)
+    return UserPreferencesResponse(ui_locale=payload.ui_locale)
 
 
 @router.get("/me/access-status", response_model=AccessStatusResponse)

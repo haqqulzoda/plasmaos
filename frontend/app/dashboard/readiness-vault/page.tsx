@@ -1,7 +1,8 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import {
     Archive,
     Check,
@@ -17,10 +18,13 @@ import {
     DOCUMENT_STATUS_OPTIONS,
     DOCUMENT_TYPE_OPTIONS,
     expiryState,
-    labelForDocumentStatus,
-    labelForDocumentType,
-    labelForExpiryState,
+    documentStatusMessageKey,
+    documentTypeMessageKey,
+    expiryMessageKey,
 } from '@/lib/readiness';
+import { formatDate } from '@/i18n/formatters';
+import type { CustomerSelectableLocale } from '@/i18n/locales';
+import { translateServiceLabel } from '@/i18n/taxonomy';
 import { labelForService, serviceValueSet, useServiceMeta } from '@/lib/services';
 
 type ReadinessDocument = {
@@ -56,6 +60,8 @@ type Filters = {
     status: string;
     related_service: string;
 };
+
+type ReadinessTranslator = (key: string, values?: Record<string, string | number>) => string;
 
 const emptyForm: FormState = {
     document_type: 'license',
@@ -141,6 +147,12 @@ function apiStatus(error: unknown): number | undefined {
 }
 
 export default function ReadinessVaultPage() {
+    const translate = useTranslations('readiness');
+    const t = translate as ReadinessTranslator;
+    const tCommon = useTranslations('common');
+    const locale = useLocale() as CustomerSelectableLocale;
+    const translateRef = useRef(t);
+    useEffect(() => { translateRef.current = t; }, [t]);
     const services = useServiceMeta();
     const [documents, setDocuments] = useState<ReadinessDocument[]>([]);
     const [form, setForm] = useState<FormState>(emptyForm);
@@ -189,7 +201,7 @@ export default function ReadinessVaultPage() {
                 setProfileRequired(true);
                 return;
             }
-            setError('Readiness vault could not be loaded.');
+            setError(translateRef.current('loadFailed'));
         } finally {
             setLoading(false);
         }
@@ -201,7 +213,7 @@ export default function ReadinessVaultPage() {
 
     const openCreateForm = () => {
         if (profileRequired) {
-            setError('Company profile is required before adding readiness records.');
+            setError(t('profileRequiredAdd'));
             return;
         }
         setEditingId(null);
@@ -241,7 +253,7 @@ export default function ReadinessVaultPage() {
     const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!form.document_name.trim()) {
-            setError('Document name is required.');
+            setError(t('nameRequired'));
             return;
         }
 
@@ -272,17 +284,17 @@ export default function ReadinessVaultPage() {
         } catch (err) {
             if (apiStatus(err) === 404) {
                 setProfileRequired(true);
-                setError('Company profile is required before saving readiness records.');
+                setError(t('profileRequiredSave'));
                 return;
             }
-            setError('Readiness document could not be saved.');
+            setError(t('saveFailed'));
         } finally {
             setSaving(false);
         }
     };
 
     const deleteDocument = async (document: ReadinessDocument) => {
-        const confirmed = window.confirm(`Delete ${document.document_name}?`);
+        const confirmed = window.confirm(t('deleteConfirm', { name: document.document_name }));
         if (!confirmed) return;
 
         setDeletingId(document.id);
@@ -295,10 +307,10 @@ export default function ReadinessVaultPage() {
             }
         } catch (err) {
             if (apiStatus(err) === 404) {
-                setError('Readiness document was not found.');
+                setError(t('notFound'));
                 return;
             }
-            setError('Readiness document could not be deleted.');
+            setError(t('deleteFailed'));
         } finally {
             setDeletingId(null);
         }
@@ -312,9 +324,9 @@ export default function ReadinessVaultPage() {
                         <Archive className="h-5 w-5 text-cyan-300" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-semibold text-white">Readiness vault</h1>
+                        <h1 className="text-2xl font-semibold text-white">{t('title')}</h1>
                         <p className="text-sm text-gray-400">
-                            {filteredDocuments.length} of {documents.length} records
+                            {t('recordCount', { shown: filteredDocuments.length, total: documents.length })}
                         </p>
                     </div>
                 </div>
@@ -325,7 +337,7 @@ export default function ReadinessVaultPage() {
                     className="inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-cyan-500 disabled:bg-gray-700 disabled:text-gray-400"
                 >
                     <Plus className="h-4 w-4" />
-                    Add record
+                    {t('addRecord')}
                 </button>
             </div>
 
@@ -337,14 +349,14 @@ export default function ReadinessVaultPage() {
 
             {profileRequired && (
                 <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                    Company profile is required before readiness records can be shown.
+                    {t('profileRequiredView')}
                 </div>
             )}
 
             {saved && (
                 <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
                     <Check className="h-4 w-4" />
-                    Saved
+                    {t('saved')}
                 </div>
             )}
 
@@ -355,20 +367,20 @@ export default function ReadinessVaultPage() {
                 >
                     <div className="flex items-center justify-between gap-3">
                         <h2 className="text-base font-semibold text-white">
-                            {editingDocument ? 'Edit readiness record' : 'Add readiness record'}
+                            {editingDocument ? t('editRecord') : t('addRecordTitle')}
                         </h2>
                         <button
                             type="button"
                             onClick={closeForm}
                             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-900 hover:text-white"
-                            aria-label="Close form"
+                            aria-label={t('closeForm')}
                         >
                             <X className="h-4 w-4" />
                         </button>
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <FormField label="Document type">
+                        <FormField label={t('documentType')}>
                             <select
                                 className={inputClass}
                                 value={form.document_type}
@@ -376,12 +388,12 @@ export default function ReadinessVaultPage() {
                             >
                                 {DOCUMENT_TYPE_OPTIONS.map((type) => (
                                     <option key={type.value} value={type.value}>
-                                        {type.label}
+                                        {t(type.messageKey)}
                                     </option>
                                 ))}
                             </select>
                         </FormField>
-                        <FormField label="Document name">
+                        <FormField label={t('documentName')}>
                             <input
                                 className={inputClass}
                                 value={form.document_name}
@@ -389,21 +401,21 @@ export default function ReadinessVaultPage() {
                                 required
                             />
                         </FormField>
-                        <FormField label="Document number">
+                        <FormField label={t('documentNumber')}>
                             <input
                                 className={inputClass}
                                 value={form.document_number}
                                 onChange={(event) => updateField('document_number', event.target.value)}
                             />
                         </FormField>
-                        <FormField label="Issuer">
+                        <FormField label={t('issuer')}>
                             <input
                                 className={inputClass}
                                 value={form.issuer}
                                 onChange={(event) => updateField('issuer', event.target.value)}
                             />
                         </FormField>
-                        <FormField label="Issue date">
+                        <FormField label={t('issueDate')}>
                             <input
                                 className={inputClass}
                                 value={form.issue_date}
@@ -411,7 +423,7 @@ export default function ReadinessVaultPage() {
                                 type="date"
                             />
                         </FormField>
-                        <FormField label="Expiry date">
+                        <FormField label={t('expiryDate')}>
                             <input
                                 className={inputClass}
                                 value={form.expiry_date}
@@ -419,7 +431,7 @@ export default function ReadinessVaultPage() {
                                 type="date"
                             />
                         </FormField>
-                        <FormField label="Status">
+                        <FormField label={t('status')}>
                             <select
                                 className={inputClass}
                                 value={form.status}
@@ -427,36 +439,36 @@ export default function ReadinessVaultPage() {
                             >
                                 {DOCUMENT_STATUS_OPTIONS.map((status) => (
                                     <option key={status.value} value={status.value}>
-                                        {status.label}
+                                        {t(status.messageKey)}
                                     </option>
                                 ))}
                             </select>
                         </FormField>
-                        <FormField label="Related service">
+                        <FormField label={t('relatedService')}>
                             <select
                                 className={inputClass}
                                 value={form.related_service}
                                 onChange={(event) => updateField('related_service', event.target.value)}
                             >
-                                <option value="">none</option>
+                                <option value="">{t('none')}</option>
                                 {services.map((service) => (
                                     <option key={service.value} value={service.value}>
-                                        {service.label}
+                                        {translateServiceLabel(service.value, tCommon, service.label)}
                                     </option>
                                 ))}
                             </select>
                         </FormField>
-                        <FormField label="Optional file URL/reference">
+                        <FormField label={t('fileReference')}>
                             <input
                                 className={inputClass}
                                 value={form.optional_file_url}
                                 onChange={(event) => updateField('optional_file_url', event.target.value)}
-                                placeholder="https:// or internal reference"
+                                placeholder={t('fileReferencePlaceholder')}
                             />
                         </FormField>
                     </div>
 
-                    <FormField label="Notes">
+                    <FormField label={t('notes')}>
                         <textarea
                             className={`${inputClass} min-h-24 resize-y`}
                             value={form.notes}
@@ -471,51 +483,51 @@ export default function ReadinessVaultPage() {
                             className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-cyan-500 disabled:bg-gray-700 disabled:text-gray-400"
                         >
                             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                            Save record
+                            {t('saveRecord')}
                         </button>
                     </div>
                 </form>
             )}
 
             <section className="grid grid-cols-1 gap-3 rounded-lg border border-gray-800 bg-gray-950 p-4 md:grid-cols-4">
-                <FormField label="Document type">
+                <FormField label={t('documentType')}>
                     <select
                         className={inputClass}
                         value={filters.document_type}
                         onChange={(event) => updateFilter('document_type', event.target.value)}
                     >
-                        <option value="">All types</option>
+                        <option value="">{t('allTypes')}</option>
                         {DOCUMENT_TYPE_OPTIONS.map((type) => (
                             <option key={type.value} value={type.value}>
-                                {type.label}
+                                {t(type.messageKey)}
                             </option>
                         ))}
                     </select>
                 </FormField>
-                <FormField label="Status">
+                <FormField label={t('status')}>
                     <select
                         className={inputClass}
                         value={filters.status}
                         onChange={(event) => updateFilter('status', event.target.value)}
                     >
-                        <option value="">All statuses</option>
+                        <option value="">{t('allStatuses')}</option>
                         {DOCUMENT_STATUS_OPTIONS.map((status) => (
                             <option key={status.value} value={status.value}>
-                                {status.label}
+                                {t(status.messageKey)}
                             </option>
                         ))}
                     </select>
                 </FormField>
-                <FormField label="Related service">
+                <FormField label={t('relatedService')}>
                     <select
                         className={inputClass}
                         value={filters.related_service}
                         onChange={(event) => updateFilter('related_service', event.target.value)}
                     >
-                        <option value="">All services</option>
+                        <option value="">{t('allServices')}</option>
                         {services.map((service) => (
                             <option key={service.value} value={service.value}>
-                                {service.label}
+                                {translateServiceLabel(service.value, tCommon, service.label)}
                             </option>
                         ))}
                     </select>
@@ -526,35 +538,27 @@ export default function ReadinessVaultPage() {
                         onClick={() => setFilters(emptyFilters)}
                         className="min-h-10 rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-900 hover:text-white"
                     >
-                        Reset filters
+                        {t('resetFilters')}
                     </button>
                 </div>
             </section>
 
             <section className="overflow-hidden rounded-lg border border-gray-800 bg-gray-950">
                 {loading ? (
-                    <div className="flex h-56 items-center justify-center">
+                    <div role="status" aria-label={t('loading')} className="flex h-56 items-center justify-center">
                         <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />
                     </div>
                 ) : documents.length === 0 ? (
-                    <div className="p-8 text-sm text-gray-400">No readiness records yet.</div>
+                    <div className="p-8 text-sm text-gray-400">{t('empty')}</div>
                 ) : filteredDocuments.length === 0 ? (
-                    <div className="p-8 text-sm text-gray-400">No readiness records match these filters.</div>
+                    <div className="p-8 text-sm text-gray-400">{t('noMatches')}</div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="min-w-[1100px] w-full text-sm">
                             <thead className="bg-gray-900 text-gray-400">
                                 <tr>
-                                    <th className="px-4 py-3 text-left font-medium">Type</th>
-                                    <th className="px-4 py-3 text-left font-medium">Name</th>
-                                    <th className="px-4 py-3 text-left font-medium">Number</th>
-                                    <th className="px-4 py-3 text-left font-medium">Issuer</th>
-                                    <th className="px-4 py-3 text-left font-medium">Issue</th>
-                                    <th className="px-4 py-3 text-left font-medium">Expiry</th>
-                                    <th className="px-4 py-3 text-left font-medium">Status</th>
-                                    <th className="px-4 py-3 text-left font-medium">Service</th>
-                                    <th className="px-4 py-3 text-left font-medium">File</th>
-                                    <th className="px-4 py-3 text-right font-medium">Actions</th>
+                                    {(['type', 'name', 'number', 'issuer', 'issue', 'expiry', 'status', 'service', 'file'] as const).map((key) => <th key={key} className="px-4 py-3 text-left font-medium">{t(`table.${key}`)}</th>)}
+                                    <th className="px-4 py-3 text-right font-medium">{t('table.actions')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-800">
@@ -562,27 +566,27 @@ export default function ReadinessVaultPage() {
                                     const expiry = expiryState(document.expiry_date);
                                     return (
                                     <tr key={document.id} className="text-gray-300">
-                                        <td className="px-4 py-3">{labelForDocumentType(document.document_type)}</td>
+                                        <td className="px-4 py-3">{t(documentTypeMessageKey(document.document_type))}</td>
                                         <td className="px-4 py-3 text-white">{document.document_name}</td>
                                         <td className="px-4 py-3">{displayValue(document.document_number)}</td>
                                         <td className="px-4 py-3">{displayValue(document.issuer)}</td>
-                                        <td className="px-4 py-3">{displayValue(document.issue_date)}</td>
+                                        <td className="px-4 py-3">{document.issue_date ? formatDate(document.issue_date, locale) : displayValue(null)}</td>
                                         <td className="px-4 py-3">
-                                            <div>{displayValue(document.expiry_date)}</div>
+                                            <div>{document.expiry_date ? formatDate(document.expiry_date, locale) : displayValue(null)}</div>
                                             {expiry !== 'valid' && expiry !== 'none' && (
                                                 <span className={`mt-1 inline-flex rounded border px-2 py-1 text-xs ${expiryClass(expiry)}`}>
-                                                    {labelForExpiryState(expiry)}
+                                                    {t(expiryMessageKey(expiry))}
                                                 </span>
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className={`rounded border px-2 py-1 text-xs ${statusClass(document.status)}`}>
-                                                {labelForDocumentStatus(document.status)}
+                                                {t(documentStatusMessageKey(document.status))}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
                                             {serviceValues.has(document.related_service ?? '')
-                                                ? labelForService(document.related_service, services)
+                                                ? translateServiceLabel(document.related_service ?? '', tCommon, labelForService(document.related_service, services))
                                                 : displayValue(null)}
                                         </td>
                                         <td className="max-w-48 truncate px-4 py-3">
@@ -594,7 +598,7 @@ export default function ReadinessVaultPage() {
                                                     type="button"
                                                     onClick={() => openEditForm(document)}
                                                     className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-900 hover:text-cyan-200"
-                                                    aria-label={`Edit ${document.document_name}`}
+                                                    aria-label={t('editNamed', { name: document.document_name })}
                                                 >
                                                     <Edit3 className="h-4 w-4" />
                                                 </button>
@@ -603,7 +607,7 @@ export default function ReadinessVaultPage() {
                                                     onClick={() => deleteDocument(document)}
                                                     disabled={deletingId === document.id}
                                                     className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:text-gray-600"
-                                                    aria-label={`Delete ${document.document_name}`}
+                                                    aria-label={t('deleteNamed', { name: document.document_name })}
                                                 >
                                                     {deletingId === document.id ? (
                                                         <Loader2 className="h-4 w-4 animate-spin" />

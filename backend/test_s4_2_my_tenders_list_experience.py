@@ -13,7 +13,7 @@ from app.services.my_tenders import MyTendersQuery, _base_list_statement, _order
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT = BACKEND_DIR.parent
-HEAD = "20260901_0001_sr2_3_connector_metrics"
+HEAD = "20260902_0001_s7_2_user_ui_locale"
 
 
 def source(relative: str) -> str:
@@ -108,12 +108,14 @@ def test_save_is_explicit_idempotent_and_never_downgrades_higher_state() -> None
 
 def test_frontend_my_tenders_has_no_legacy_data_source_or_workflow_leakage() -> None:
     page = source("frontend/app/dashboard/my-tenders/page.tsx")
-    assert "'/my-tenders'" in page
-    assert "My Tenders" in page
-    assert "No tenders saved yet" in page
-    assert "Explore Tenders" in page
-    assert "Engagement:" in page
-    assert "Tender:" in page
+    messages = source("frontend/messages/en/myTenders.json")
+    assert '"/my-tenders"' in page
+    assert 'useTranslations("myTenders")' in page
+    assert '"title": "My Tenders"' in messages
+    assert '"emptyTitle": "No tenders saved yet"' in messages
+    assert '"explore": "Explore Tenders"' in messages
+    assert '"engagement": "Engagement: {status}"' in messages
+    assert '"tender": "Tender: {status}"' in messages
     assert "PAGE_SIZE = 25" in page
     assert "useSearchParams" in page
     for forbidden in (
@@ -131,12 +133,15 @@ def test_frontend_my_tenders_has_no_legacy_data_source_or_workflow_leakage() -> 
 
 def test_frontend_navigation_separates_bid_preparation_and_my_tenders() -> None:
     layout = source("frontend/app/dashboard/layout.tsx")
-    assert "name: 'My Tenders'" in layout
+    navigation = source("frontend/messages/en/navigation.json")
+    assert "nameKey: 'myTenders'" in layout
     assert "href: '/dashboard/my-tenders'" in layout
-    assert "name: 'Bid Preparation'" in layout
+    assert "nameKey: 'bidPreparation'" in layout
     assert "href: '/dashboard/bid-preparation'" in layout
+    assert '"myTenders": "My Tenders"' in navigation
+    assert '"bidPreparation": "Bid Preparation"' in navigation
     bids = source("frontend/app/dashboard/bid-preparation/page.tsx")
-    assert "api.get('/proposals')" in bids
+    assert 'api.get("/proposals")' in bids
 
 
 def test_passive_tender_detail_only_reads_and_click_handler_is_the_only_post() -> None:
@@ -147,7 +152,10 @@ def test_passive_tender_detail_only_reads_and_click_handler_is_the_only_post() -
     assert "api.post" not in effect
     assert "api.post<SaveToMyTendersResponse>" in save
     assert "onClick={save}" in save
-    assert "Save to My Tenders" in component
+    assert 't("panel.save")' in component
+    assert '"save": "Save to My Tenders"' in source(
+        "frontend/messages/en/myTenders.json"
+    )
 
 
 def test_source_status_is_separate_in_schema_and_frontend() -> None:
@@ -155,6 +163,6 @@ def test_source_status_is_separate_in_schema_and_frontend() -> None:
     assert "engagement_status: TenderEngagementStatus" in schema
     assert "tender_status: TenderStatus" in schema
     page = source("frontend/app/dashboard/my-tenders/page.tsx")
-    assert "Engagement: {engagementStatusLabel" in page
-    assert "Tender: {tenderStatusLabel" in page
+    assert 't("engagement", { status: engagementLabel })' in page
+    assert 't("tender", { status: tenderLabel })' in page
     assert TenderStatus.CANCELLED.value in page

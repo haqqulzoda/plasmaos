@@ -1,0 +1,63 @@
+{
+  "runtimeReady": "Mahalliylashtirish tizimi tayyor",
+  "tenderCount": "{count, plural, =0 {Tenderlar yo‘q} other {# ta tender}}",
+  "newTendersFromSource": "{source}: {count, plural, =0 {yangi tender yo‘q} other {# ta yangi tender}}",
+  "richReview": "<strong>{source}</strong> manbasini xavfsiz ko‘rib chiqing.",
+  "actions": {
+    "save": "Saqlash",
+    "cancel": "Bekor qilish",
+    "close": "Yopish",
+    "retry": "Qayta urinish",
+    "back": "Orqaga",
+    "continue": "Davom etish",
+    "search": "Qidirish",
+    "clear": "Tozalash",
+    "apply": "Qo‘llash",
+    "open": "Ochish",
+    "download": "Yuklab olish",
+    "view": "Ko‘rish",
+    "previous": "Oldingi",
+    "next": "Keyingi"
+  },
+  "states": {
+    "loading": "Yuklanmoqda…",
+    "error": "Xato",
+    "noResults": "Natija topilmadi",
+    "unavailable": "Mavjud emas",
+    "available": "Mavjud",
+    "notAvailable": "Mavjud emas",
+    "unknown": "Noma’lum",
+    "saved": "Saqlandi",
+    "processing": "Qayta ishlanmoqda",
+    "failed": "Muvaffaqiyatsiz"
+  },
+  "pagination": "{totalPages} sahifadan {page}-sahifa",
+  "paginationResults": "{totalPages} sahifadan {page}-sahifa · {count, plural, other {# ta natija}}",
+  "notFound": {"title": "Sahifa topilmadi", "help": "So‘ralgan mijoz sahifasi mavjud emas yoki boshqa taqdim etilmaydi.", "back": "Boshqaruv paneliga qaytish"},
+  "taxonomy": {
+    "regions": {
+      "centralAsia": "Markaziy Osiyo",
+      "asia": "Osiyo",
+      "europe": "Yevropa",
+      "africa": "Afrika",
+      "northAmerica": "Shimoliy Amerika",
+      "latinAmerica": "Lotin Amerikasi"
+    },
+    "countries": {
+      "uzbekistan": "O‘zbekiston",
+      "kazakhstan": "Qozog‘iston",
+      "kyrgyzstan": "Qirg‘iziston",
+      "tajikistan": "Tojikiston",
+      "turkmenistan": "Turkmaniston"
+    },
+    "services": {
+      "construction": "Qurilish",
+      "medical": "Tibbiyot",
+      "it": "IT",
+      "industrialServices": "Sanoat xizmatlari",
+      "consulting": "Konsalting",
+      "equipmentSupply": "Uskuna yetkazib berish",
+      "other": "Boshqa"
+    }
+  }
+}

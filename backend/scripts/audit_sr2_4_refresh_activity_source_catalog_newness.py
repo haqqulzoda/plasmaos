@@ -38,7 +38,7 @@ from app.services.source_registry import SOURCE_REGISTRY
 from scripts import bootstrap_database as bootstrap
 
 
-HEAD = "20260901_0001_sr2_3_connector_metrics"
+HEAD = "20260902_0001_s7_2_user_ui_locale"
 PREFIX = "plasma_sr24_"
 
 

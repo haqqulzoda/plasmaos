@@ -3,15 +3,17 @@
 import { useEffect, useState } from 'react';
 import { Ban, LogOut } from 'lucide-react';
 import { signOut } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 
 export default function AccessBlockedPage() {
+    const t = useTranslations('auth');
     const [state, setState] = useState<'rejected' | 'disabled'>('rejected');
     const [reason, setReason] = useState<string | null>(null);
-    const title = state === 'disabled' ? 'Access disabled' : 'Access request not approved';
+    const title = state === 'disabled' ? t('disabledTitle') : t('blockedTitle');
     const message = state === 'disabled'
-        ? 'Please contact Plasma support.'
-        : 'Contact Plasma support if you believe this is a mistake.';
+        ? t('disabledHelp')
+        : t('blockedHelp');
 
     useEffect(() => {
         api.get<{
@@ -39,7 +41,7 @@ export default function AccessBlockedPage() {
                 <div className="space-y-2">
                     <h1 className="text-2xl font-semibold text-white">{title}</h1>
                     <p className="text-gray-300 leading-6">{message}</p>
-                    {reason && <p className="text-sm text-gray-500">Reason: {reason}</p>}
+                    {reason && <p className="text-sm text-gray-500">{t('reason', {reason})}</p>}
                 </div>
                 <button
                     type="button"
@@ -47,7 +49,7 @@ export default function AccessBlockedPage() {
                     className="inline-flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-900 hover:text-white transition-colors"
                 >
                     <LogOut className="w-4 h-4" />
-                    Logout
+                    {t('logout')}
                 </button>
             </section>
         </div>

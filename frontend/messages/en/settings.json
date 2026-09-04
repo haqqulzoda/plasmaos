@@ -1,0 +1,40 @@
+{
+  "language": {
+    "title": "Interface language",
+    "onboardingHelp": "Choose your language first. The rest of onboarding will use it immediately.",
+    "settingsHelp": "Choose the language used for product navigation, labels, and actions. Your company and tender content will not be translated.",
+    "optionsLabel": "Available interface languages",
+    "optionLabel": "Use {language}",
+    "saving": "Saving interface language…",
+    "saveFailed": "Your interface language could not be saved. Your previous language is still active. Try again."
+  },
+  "title": "Company profile",
+  "pilotStatus": "Pilot: {status}",
+  "approvalStatus": "Approval: {status}",
+  "company": "Company",
+  "companyName": "Company name",
+  "industry": "Industry",
+  "registrationNumber": "INN / registration number",
+  "website": "Website",
+  "phone": "Phone",
+  "address": "Address",
+  "marketsServices": "Markets and services",
+  "targetRegions": "Target regions",
+  "targetCountries": "Target countries",
+  "centralAsiaCountries": "Central Asia countries",
+  "targetServices": "Target services",
+  "clearCentralAsia": "Clear Central Asia",
+  "selectCentralAsia": "Select all Central Asia",
+  "noneSelected": "None selected",
+  "saveProfile": "Save profile",
+  "profileSaved": "Profile saved",
+  "loadFailed": "Company profile could not be loaded.",
+  "saveFailed": "Company profile could not be saved.",
+  "status": {
+    "approved": "Approved",
+    "pending": "Pending",
+    "rejected": "Rejected",
+    "disabled": "Disabled",
+    "unknown": "Unknown"
+  }
+}

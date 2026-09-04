@@ -1,0 +1,63 @@
+{
+  "runtimeReady": "Localization runtime ready",
+  "tenderCount": "{count, plural, =0 {No tenders} one {# tender} other {# tenders}}",
+  "newTendersFromSource": "{count, plural, =0 {No new tenders} one {# new tender} other {# new tenders}} from {source}",
+  "richReview": "Review <strong>{source}</strong> safely.",
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "retry": "Retry",
+    "back": "Back",
+    "continue": "Continue",
+    "search": "Search",
+    "clear": "Clear",
+    "apply": "Apply",
+    "open": "Open",
+    "download": "Download",
+    "view": "View",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "states": {
+    "loading": "Loading…",
+    "error": "Error",
+    "noResults": "No results",
+    "unavailable": "Unavailable",
+    "available": "Available",
+    "notAvailable": "Not available",
+    "unknown": "Unknown",
+    "saved": "Saved",
+    "processing": "Processing",
+    "failed": "Failed"
+  },
+  "pagination": "Page {page} of {totalPages}",
+  "paginationResults": "Page {page} of {totalPages} · {count, plural, one {# result} other {# results}}",
+  "notFound": {"title": "Page not found", "help": "The requested customer page does not exist or is no longer available.", "back": "Back to dashboard"},
+  "taxonomy": {
+    "regions": {
+      "centralAsia": "Central Asia",
+      "asia": "Asia",
+      "europe": "Europe",
+      "africa": "Africa",
+      "northAmerica": "North America",
+      "latinAmerica": "Latin America"
+    },
+    "countries": {
+      "uzbekistan": "Uzbekistan",
+      "kazakhstan": "Kazakhstan",
+      "kyrgyzstan": "Kyrgyzstan",
+      "tajikistan": "Tajikistan",
+      "turkmenistan": "Turkmenistan"
+    },
+    "services": {
+      "construction": "Construction",
+      "medical": "Medical",
+      "it": "IT",
+      "industrialServices": "Industrial Services",
+      "consulting": "Consulting",
+      "equipmentSupply": "Equipment Supply",
+      "other": "Other"
+    }
+  }
+}

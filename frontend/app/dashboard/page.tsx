@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import {
     AlertTriangle,
@@ -20,9 +21,12 @@ import { api } from '@/lib/api';
 import { useSourceRefresh } from '@/components/source-refresh/SourceRefreshProvider';
 import {
     expiryState,
-    labelForDocumentType,
+    documentTypeMessageKey,
 } from '@/lib/readiness';
 import { labelForService, useServiceMeta } from '@/lib/services';
+import { formatDate as formatLocaleDate } from '@/i18n/formatters';
+import type { CustomerSelectableLocale } from '@/i18n/locales';
+import { translateServiceLabel } from '@/i18n/taxonomy';
 import type { Tender } from '@/types/tender';
 import {
     documentAggregateLabel,
@@ -90,6 +94,8 @@ type ActionItem = {
     priority: number;
 };
 
+type DashboardTranslator = (key: string, values?: Record<string, string | number>) => string;
+
 const REQUIRED_READINESS_TYPES = [
     'registration_document',
     'tax_clearance',
@@ -105,33 +111,17 @@ function normalizeList(values?: string[] | null): string[] {
     return Array.isArray(values) ? unique(values) : [];
 }
 
-function formatDate(value?: string | null) {
-    if (!value) return 'Not set';
-    return new Date(value).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-    });
+function customerDate(value: string | null | undefined, locale: CustomerSelectableLocale, t: DashboardTranslator) {
+    return value ? formatLocaleDate(value, locale) : t('updatedUnavailable');
 }
 
-function relativeDate(value?: string | null) {
-    if (!value) return 'Last updated unavailable';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return 'Last updated unavailable';
-    return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-    });
-}
-
-function deadlineState(deadline: string | null) {
-    if (!deadline) return 'Unknown deadline';
+function deadlineState(deadline: string | null, t: DashboardTranslator) {
+    if (!deadline) return t('deadline.unknown');
     const days = Math.ceil((new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (days < 0) return 'Expired';
-    if (days === 0) return 'Due today';
-    if (days === 1) return '1 day left';
-    return `${days} days left`;
+    if (days < 0) return t('deadline.expired');
+    if (days === 0) return t('deadline.today');
+    if (days === 1) return t('deadline.one');
+    return t('deadline.many', { count: days });
 }
 
 function isCurrentTender(tender: Tender) {
@@ -148,7 +138,7 @@ function matchesAny(values: string[], candidates: string[]) {
     return candidates.some((candidate) => normalized.has(candidate.toLowerCase()));
 }
 
-function matchReason(tender: Tender, profile: CompanyProfile | null, serviceOptions: ReturnType<typeof useServiceMeta>) {
+function matchReason(tender: Tender, profile: CompanyProfile | null, serviceOptions: ReturnType<typeof useServiceMeta>, t: DashboardTranslator, tCommon: DashboardTranslator) {
     const countries = normalizeList(profile?.target_countries);
     const regions = normalizeList(profile?.target_regions);
     const services = normalizeList(profile?.target_services);
@@ -158,12 +148,15 @@ function matchReason(tender: Tender, profile: CompanyProfile | null, serviceOpti
         ?? regions.find((region) => tender.region === region)
         ?? tender.country
         ?? tender.region
-        ?? 'supported geography';
+        ?? t('supportedGeography');
     const serviceMatch = services.find((service) => matchesAny([service], tenderServices))
         ?? tenderServices[0]
-        ?? 'source coverage';
+        ?? t('sourceCoverage');
 
-    return `Matches ${geographyMatch} · ${labelForService(serviceMatch, serviceOptions) || serviceMatch}`;
+    return t('matchReason', {
+        geography: geographyMatch,
+        service: translateServiceLabel(serviceMatch, tCommon, labelForService(serviceMatch, serviceOptions) || serviceMatch),
+    });
 }
 
 function analysisRequirementCount(analysis: LatestAnalysis) {
@@ -198,6 +191,28 @@ function cleanAnalysisStatus(analysis: LatestAnalysis) {
     return 'Completed';
 }
 
+function analysisStatusMessageKey(status: string) {
+    if (status === 'Failed') return 'status.failed';
+    if (status === 'Needs review') return 'status.needsReview';
+    if (status === 'Partial coverage') return 'status.partial';
+    return 'status.complete';
+}
+
+function coverageStatusMessageKey(status: string) {
+    if (status === 'Failed') return 'status.failed';
+    if (status === 'Partial coverage') return 'status.partial';
+    if (status === 'Complete coverage') return 'status.coverageComplete';
+    return 'status.coverageRecorded';
+}
+
+function documentAggregateMessageKey(label: string) {
+    if (label === 'Partial coverage') return 'status.partial';
+    if (label === 'Ready for analysis') return 'status.readyAnalysis';
+    if (label === 'Document discovered') return 'status.documentDiscovered';
+    if (label === 'Preparation failed') return 'status.preparationFailed';
+    return 'status.documentsUnavailable';
+}
+
 function statusClasses(tone: 'danger' | 'warning' | 'review' | 'success' | 'neutral') {
     if (tone === 'danger') return 'border-red-500/25 bg-red-500/10 text-red-200';
     if (tone === 'warning') return 'border-amber-500/25 bg-amber-500/10 text-amber-200';
@@ -220,6 +235,9 @@ function buildActionItems(
     analyses: AnalysisSummary[],
     opportunities: Tender[],
     readiness: ReadinessDocument[],
+    locale: CustomerSelectableLocale,
+    t: DashboardTranslator,
+    tReadiness: DashboardTranslator,
 ) {
     const items: ActionItem[] = [];
 
@@ -228,9 +246,9 @@ function buildActionItems(
         if (status === 'Failed') {
             items.push({
                 key: `analysis-failed-${analysis.analysis_id}`,
-                issue: 'Compliance analysis failed',
+                issue: t('issues.analysisFailed'),
                 subject: tender.title,
-                status: 'Failed',
+                status: t('status.failed'),
                 href: `/dashboard/tenders/${tender.id}/compliance`,
                 tone: 'danger',
                 priority: 1,
@@ -238,9 +256,9 @@ function buildActionItems(
         } else if (status === 'Needs review') {
             items.push({
                 key: `analysis-review-${analysis.analysis_id}`,
-                issue: 'Manual compliance review required',
+                issue: t('issues.manualReview'),
                 subject: tender.title,
-                status: `${analysis.hybrid_compliance?.manual_review_count ?? 1} item(s) need review`,
+                status: t('status.reviewCount', { count: analysis.hybrid_compliance?.manual_review_count ?? 1 }),
                 href: `/dashboard/tenders/${tender.id}/compliance`,
                 tone: 'review',
                 priority: 2,
@@ -254,9 +272,9 @@ function buildActionItems(
         .forEach((tender) => {
             items.push({
                 key: `coverage-${tender.id}`,
-                issue: 'Document coverage needs attention',
+                issue: t('issues.coverage'),
                 subject: tender.title,
-                status: documentAggregateLabel(tender),
+                status: t(documentAggregateMessageKey(documentAggregateLabel(tender))),
                 href: `/dashboard/tenders/${tender.id}`,
                 tone: 'warning',
                 priority: 3,
@@ -268,9 +286,9 @@ function buildActionItems(
         if (document.status === 'expired' || expiry === 'expired') {
             items.push({
                 key: `readiness-expired-${document.id}`,
-                issue: 'Readiness record expired',
+                issue: t('issues.expired'),
                 subject: document.document_name,
-                status: formatDate(document.expiry_date),
+                status: customerDate(document.expiry_date, locale, t),
                 href: '/dashboard/readiness-vault',
                 tone: 'danger',
                 priority: 1,
@@ -278,9 +296,9 @@ function buildActionItems(
         } else if (expiry === 'expiring_soon') {
             items.push({
                 key: `readiness-soon-${document.id}`,
-                issue: 'Readiness record expiring soon',
+                issue: t('issues.expiring'),
                 subject: document.document_name,
-                status: formatDate(document.expiry_date),
+                status: customerDate(document.expiry_date, locale, t),
                 href: '/dashboard/readiness-vault',
                 tone: 'warning',
                 priority: 4,
@@ -291,9 +309,9 @@ function buildActionItems(
     requiredMissingTypes(readiness).forEach((type) => {
         items.push({
             key: `readiness-missing-${type}`,
-            issue: 'Readiness record missing',
-            subject: labelForDocumentType(type),
-            status: 'Required for bid preparation',
+            issue: t('issues.missing'),
+            subject: tReadiness(documentTypeMessageKey(type)),
+            status: t('status.requiredBid'),
             href: '/dashboard/readiness-vault',
             tone: 'warning',
             priority: 5,
@@ -339,6 +357,15 @@ function isTestOnlyTender(tender: Tender) {
 }
 
 export default function DashboardPage() {
+    const locale = useLocale() as CustomerSelectableLocale;
+    const translate = useTranslations('dashboard');
+    const translateCommon = useTranslations('common');
+    const translateReadiness = useTranslations('readiness');
+    const t = translate as DashboardTranslator;
+    const tCommon = translateCommon as DashboardTranslator;
+    const tReadiness = translateReadiness as DashboardTranslator;
+    const translateRef = useRef(t);
+    useEffect(() => { translateRef.current = t; }, [t]);
     const serviceOptions = useServiceMeta();
     const { catalog, displayNameForSource } = useSourceRefresh();
     const [state, setState] = useState<LoadState>({
@@ -360,7 +387,7 @@ export default function DashboardPage() {
             const profileResult = await api.get<CompanyProfile>('/users/me/company')
                 .then((response) => response.data)
                 .catch(() => {
-                    failures.push('Company profile unavailable');
+                    failures.push(translateRef.current('failures.profile'));
                     return null;
                 });
 
@@ -371,20 +398,20 @@ export default function DashboardPage() {
             ]);
 
             const readiness = readinessResult.status === 'fulfilled' ? readinessResult.value.data ?? [] : [];
-            if (readinessResult.status === 'rejected') failures.push('Readiness vault unavailable');
+            if (readinessResult.status === 'rejected') failures.push(translateRef.current('failures.readiness'));
 
             const opportunities = opportunityResult.status === 'fulfilled'
                 ? (opportunityResult.value.data ?? []).filter((tender) => isCurrentTender(tender) && !isTestOnlyTender(tender))
                 : [];
-            if (opportunityResult.status === 'rejected') failures.push('Priority tenders unavailable');
+            if (opportunityResult.status === 'rejected') failures.push(translateRef.current('failures.opportunities'));
 
             const analysisCandidates = analysisTenderResult.status === 'fulfilled'
                 ? (analysisTenderResult.value.data ?? []).filter((tender) => !isTestOnlyTender(tender))
                 : opportunities;
-            if (analysisTenderResult.status === 'rejected') failures.push('Recent analyses unavailable');
+            if (analysisTenderResult.status === 'rejected') failures.push(translateRef.current('failures.analyses'));
 
             const analyses = await fetchLatestAnalyses(analysisCandidates).catch(() => {
-                failures.push('Recent analyses unavailable');
+                failures.push(translateRef.current('failures.analyses'));
                 return [];
             });
 
@@ -438,16 +465,16 @@ export default function DashboardPage() {
     }, [state.readiness]);
 
     const actionItems = useMemo(
-        () => buildActionItems(state.analyses, state.opportunities, state.readiness),
-        [state.analyses, state.opportunities, state.readiness],
+        () => buildActionItems(state.analyses, state.opportunities, state.readiness, locale, t, tReadiness),
+        [locale, state.analyses, state.opportunities, state.readiness, t, tReadiness],
     );
 
     const recentActivity = useMemo(() => {
         const analysisEvents = state.analyses.slice(0, 4).map(({ tender, analysis }) => ({
             key: `analysis-${analysis.analysis_id}`,
             label: cleanAnalysisStatus(analysis) === 'Completed'
-                ? 'Compliance analysis completed'
-                : `Compliance analysis ${cleanAnalysisStatus(analysis).toLowerCase()}`,
+                ? t('analysisCompleted')
+                : t('analysisState', { status: t(analysisStatusMessageKey(cleanAnalysisStatus(analysis))) }),
             subject: tender.title,
             when: analysis.created_at,
             href: `/dashboard/tenders/${tender.id}/compliance`,
@@ -461,7 +488,7 @@ export default function DashboardPage() {
             .slice(0, 2)
             .map((document) => ({
                 key: `readiness-${document.id}`,
-                label: 'Readiness record updated',
+                label: t('readinessUpdated'),
                 subject: document.document_name,
                 when: document.updated_at ?? document.created_at,
                 href: '/dashboard/readiness-vault',
@@ -469,7 +496,7 @@ export default function DashboardPage() {
         return [...analysisEvents, ...readinessEvents]
             .sort((a, b) => new Date(b.when ?? 0).getTime() - new Date(a.when ?? 0).getTime())
             .slice(0, 6);
-    }, [state.analyses, state.readiness]);
+    }, [state.analyses, state.readiness, t]);
 
     const readinessTone = readinessStats.expired > 0
         ? 'danger'
@@ -479,7 +506,7 @@ export default function DashboardPage() {
 
     if (loading) {
         return (
-            <div className="flex h-64 items-center justify-center">
+            <div role="status" aria-label={t('loading')} className="flex h-64 items-center justify-center">
                 <Loader2 className="h-7 w-7 animate-spin text-zinc-400" />
             </div>
         );
@@ -497,24 +524,24 @@ export default function DashboardPage() {
         <div className="space-y-5">
             <header className="flex flex-col gap-2 border-b border-zinc-800 pb-4 md:flex-row md:items-end md:justify-between">
                 <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Institutional overview</p>
-                    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">Dashboard</h1>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{t('eyebrow')}</p>
+                    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">{t('title')}</h1>
                     <p className="mt-1 max-w-3xl text-sm text-zinc-400">
-                        Decision queue for tenders, compliance coverage, and bid readiness.
+                        {t('subtitle')}
                     </p>
                 </div>
                 <Link
                     href="/dashboard/tenders"
                     className="inline-flex items-center gap-2 rounded-md border border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500"
                 >
-                    Open Tender Explorer
+                    {t('openExplorer')}
                     <ArrowRight className="h-4 w-4" />
                 </Link>
             </header>
 
             {state.failures.length > 0 && (
                 <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                    Some supporting data is unavailable. Showing the sections that loaded successfully.
+                    {t('partialData')}
                 </div>
             )}
 
@@ -523,14 +550,14 @@ export default function DashboardPage() {
             <section className="rounded-md border border-zinc-800 bg-zinc-950">
                 <SectionHeader
                     icon={<AlertTriangle className="h-4 w-4" />}
-                    title="Action Required"
-                    description="Highest-priority items to clear before bidding."
+                    title={t('actionTitle')}
+                    description={t('actionHelp')}
                 />
                 {actionItems.length === 0 ? (
                     <EmptySection
                         icon={<CheckCircle2 className="h-5 w-5" />}
-                        title="No urgent actions"
-                        body="No failed analyses, partial document coverage, or readiness expiry issues are visible right now."
+                        title={t('noUrgent')}
+                        body={t('noUrgentHelp')}
                     />
                 ) : (
                     <div className="divide-y divide-zinc-900">
@@ -546,7 +573,7 @@ export default function DashboardPage() {
                                     {item.status}
                                 </span>
                                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-300 md:justify-end">
-                                    Open <ArrowRight className="h-3.5 w-3.5" />
+                                    {t('open')} <ArrowRight className="h-3.5 w-3.5" />
                                 </span>
                             </Link>
                         ))}
@@ -558,20 +585,20 @@ export default function DashboardPage() {
                 <section className="rounded-md border border-zinc-800 bg-zinc-950">
                     <SectionHeader
                         icon={<Radar className="h-4 w-4" />}
-                        title="Priority Opportunities"
-                        description="Current tenders aligned to the company profile and supported sources."
+                        title={t('opportunitiesTitle')}
+                        description={t('opportunitiesHelp')}
                     />
                     {priorityOpportunities.length === 0 ? (
                         <EmptySection
                             icon={<FileSearch className="h-5 w-5" />}
                             title={profileTargets.countries.length + profileTargets.regions.length + profileTargets.services.length === 0
-                                ? 'Company targeting is not set'
-                                : 'No matching tenders loaded'}
+                                ? t('targetingMissing')
+                                : t('noMatches')}
                             body={profileTargets.countries.length + profileTargets.regions.length + profileTargets.services.length === 0
-                                ? 'Complete company profile targets to prioritize relevant tenders.'
-                                : 'Open Tender Explorer to broaden filters or review all supported sources.'}
+                                ? t('targetingHelp')
+                                : t('broadenHelp')}
                             actionHref="/dashboard/settings"
-                            actionLabel="Open company profile"
+                            actionLabel={t('openProfile')}
                         />
                     ) : (
                         <div className="divide-y divide-zinc-900">
@@ -585,13 +612,13 @@ export default function DashboardPage() {
                                     <div className="min-w-0">
                                         <p className="truncate text-sm font-medium text-zinc-100">{tender.title}</p>
                                         <p className="mt-1 truncate text-xs text-zinc-500">
-                                            {matchReason(tender, state.profile, serviceOptions)}
+                                            {matchReason(tender, state.profile, serviceOptions, t, tCommon)}
                                         </p>
                                     </div>
-                                    <span className="text-sm text-zinc-300">{tender.country || 'Unknown'}</span>
-                                    <span className="text-sm text-zinc-400">{deadlineState(tender.deadline)}</span>
+                                    <span className="text-sm text-zinc-300">{tender.country || t('unknown')}</span>
+                                    <span className="text-sm text-zinc-400">{deadlineState(tender.deadline, t)}</span>
                                     <span className={`w-fit rounded border px-2 py-1 text-xs font-semibold ${tender.compliance_analysis_available ? statusClasses('success') : statusClasses('warning')}`}>
-                                        {documentAggregateLabel(tender)}
+                                        {t(documentAggregateMessageKey(documentAggregateLabel(tender)))}
                                     </span>
                                 </Link>
                             ))}
@@ -602,33 +629,33 @@ export default function DashboardPage() {
                 <section className="rounded-md border border-zinc-800 bg-zinc-950">
                     <SectionHeader
                         icon={<Archive className="h-4 w-4" />}
-                        title="Company Readiness"
-                        description="Bid-readiness records and expiry risk."
+                        title={t('readinessTitle')}
+                        description={t('readinessHelp')}
                         actionHref="/dashboard/readiness-vault"
-                        actionLabel="Readiness Vault"
+                        actionLabel={t('readinessVault')}
                     />
                     <div className="p-4">
                         <div className={`rounded-md border px-4 py-3 ${statusClasses(readinessTone)}`}>
                             <div className="text-sm font-semibold">
                                 {readinessTone === 'danger'
-                                    ? 'Readiness risk requires action'
+                                    ? t('readinessRisk')
                                     : readinessTone === 'warning'
-                                        ? 'Readiness has open gaps'
-                                        : 'Readiness records are current'}
+                                        ? t('readinessGaps')
+                                        : t('readinessCurrent')}
                             </div>
                             <p className="mt-1 text-xs opacity-80">
-                                {readinessStats.expired} expired · {readinessStats.expiringSoon} expiring soon · {readinessStats.missing} missing
+                                {t('readinessSummary', { expired: readinessStats.expired, expiring: readinessStats.expiringSoon, missing: readinessStats.missing })}
                             </p>
                         </div>
                         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                            <ReadinessMetric label="Available" value={readinessStats.available} />
-                            <ReadinessMetric label="Missing" value={readinessStats.missing} urgent={readinessStats.missing > 0} />
-                            <ReadinessMetric label="Expired" value={readinessStats.expired} urgent={readinessStats.expired > 0} />
-                            <ReadinessMetric label="Expiring soon" value={readinessStats.expiringSoon} urgent={readinessStats.expiringSoon > 0} />
+                            <ReadinessMetric label={t('available')} value={readinessStats.available} />
+                            <ReadinessMetric label={t('missing')} value={readinessStats.missing} urgent={readinessStats.missing > 0} />
+                            <ReadinessMetric label={t('expired')} value={readinessStats.expired} urgent={readinessStats.expired > 0} />
+                            <ReadinessMetric label={t('expiringSoon')} value={readinessStats.expiringSoon} urgent={readinessStats.expiringSoon > 0} />
                         </div>
                         {readinessStats.missingTypes.length > 0 && (
                             <div className="mt-4 text-xs text-zinc-400">
-                                Missing: {readinessStats.missingTypes.map(labelForDocumentType).join(', ')}
+                                {t('missingList', { items: readinessStats.missingTypes.map((type) => tReadiness(documentTypeMessageKey(type))).join(', ') })}
                             </div>
                         )}
                     </div>
@@ -639,16 +666,16 @@ export default function DashboardPage() {
                 <section className="rounded-md border border-zinc-800 bg-zinc-950">
                     <SectionHeader
                         icon={<ShieldCheck className="h-4 w-4" />}
-                        title="Recent Compliance Analyses"
-                        description="Latest saved analyses for visible tenders."
+                        title={t('analysesTitle')}
+                        description={t('analysesHelp')}
                     />
                     {state.analyses.length === 0 ? (
                         <EmptySection
                             icon={<ShieldAlert className="h-5 w-5" />}
-                            title="No saved analyses found"
-                            body="Review a tender and run compliance analysis to populate this section."
+                            title={t('noAnalyses')}
+                            body={t('noAnalysesHelp')}
                             actionHref="/dashboard/tenders"
-                            actionLabel="Review tenders"
+                            actionLabel={t('reviewTenders')}
                         />
                     ) : (
                         <div className="divide-y divide-zinc-900">
@@ -670,13 +697,13 @@ export default function DashboardPage() {
                                             <p className="mt-1 text-xs text-zinc-500">{displayNameForSource(tender.source_system)}</p>
                                         </div>
                                         <span className={`w-fit rounded border px-2 py-1 text-xs font-semibold ${statusClasses(tone)}`}>
-                                            {status}
+                                            {t(analysisStatusMessageKey(status))}
                                         </span>
-                                        <span className="text-zinc-400">{coverageStatus(analysis)}</span>
-                                        <span className="text-zinc-400">{analysisRequirementCount(analysis)} requirements</span>
-                                        <span className="text-zinc-500">{relativeDate(analysis.created_at)}</span>
+                                        <span className="text-zinc-400">{t(coverageStatusMessageKey(coverageStatus(analysis)))}</span>
+                                        <span className="text-zinc-400">{t('requirementCount', { count: analysisRequirementCount(analysis) })}</span>
+                                        <span className="text-zinc-500">{customerDate(analysis.created_at, locale, t)}</span>
                                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-300 lg:justify-end">
-                                            Open <ArrowRight className="h-3.5 w-3.5" />
+                                            {t('open')} <ArrowRight className="h-3.5 w-3.5" />
                                         </span>
                                     </Link>
                                 );
@@ -688,14 +715,14 @@ export default function DashboardPage() {
                 <section className="rounded-md border border-zinc-800 bg-zinc-950">
                     <SectionHeader
                         icon={<ClipboardCheck className="h-4 w-4" />}
-                        title="Recent Activity"
-                        description="Meaningful work only; sync and infrastructure events are excluded."
+                        title={t('activityTitle')}
+                        description={t('activityHelp')}
                     />
                     {recentActivity.length === 0 ? (
                         <EmptySection
                             icon={<Clock className="h-5 w-5" />}
-                            title="No recent activity"
-                            body="Completed compliance analyses and readiness updates will appear here."
+                            title={t('noActivity')}
+                            body={t('noActivityHelp')}
                         />
                     ) : (
                         <div className="divide-y divide-zinc-900">
@@ -703,7 +730,7 @@ export default function DashboardPage() {
                                 <Link key={event.key} href={event.href} className="block px-4 py-3 hover:bg-zinc-900/60">
                                     <p className="text-sm font-medium text-zinc-100">{event.label}</p>
                                     <p className="mt-1 truncate text-sm text-zinc-400">{event.subject}</p>
-                                    <p className="mt-1 text-xs text-zinc-500">{relativeDate(event.when)}</p>
+                                    <p className="mt-1 text-xs text-zinc-500">{customerDate(event.when, locale, t)}</p>
                                 </Link>
                             ))}
                         </div>
@@ -788,15 +815,17 @@ function ReadinessMetric({ label, value, urgent = false }: { label: string; valu
 }
 
 function NewCompanySteps() {
+    const translate = useTranslations('dashboard');
+    const t = translate as DashboardTranslator;
     const steps = [
-        { label: 'Complete company profile', href: '/dashboard/settings' },
-        { label: 'Add readiness records', href: '/dashboard/readiness-vault' },
-        { label: 'Review relevant tenders', href: '/dashboard/tenders' },
-        { label: 'Run first compliance analysis', href: '/dashboard/tenders' },
+        { label: t('steps.profile'), href: '/dashboard/settings' },
+        { label: t('steps.readiness'), href: '/dashboard/readiness-vault' },
+        { label: t('steps.tenders'), href: '/dashboard/tenders' },
+        { label: t('steps.analysis'), href: '/dashboard/tenders' },
     ];
     return (
         <section className="rounded-md border border-zinc-800 bg-zinc-950 px-4 py-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-200">Getting Started</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-200">{t('gettingStarted')}</h2>
             <div className="mt-3 grid gap-2 md:grid-cols-4">
                 {steps.map((step) => (
                     <Link

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { signOut, useSession } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
 import { api, setApiAccessToken } from '@/lib/api';
 import {
     clearSourceRefreshSession,
@@ -25,18 +26,18 @@ import {
 } from '@/components/source-refresh/SourceRefreshProvider';
 
 interface NavItem {
-    name: string;
+    nameKey: 'dashboard' | 'tenders' | 'myTenders' | 'bidPreparation' | 'companyProfile' | 'readinessVault';
     href: string;
     icon: ReactNode;
 }
 
 const baseNavItems: NavItem[] = [
-    { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { name: 'Tenders', href: '/dashboard/tenders', icon: <ScrollText className="w-5 h-5" /> },
-    { name: 'My Tenders', href: '/dashboard/my-tenders', icon: <Bookmark className="w-5 h-5" /> },
-    { name: 'Bid Preparation', href: '/dashboard/bid-preparation', icon: <FileText className="w-5 h-5" /> },
-    { name: 'Company Profile', href: '/dashboard/settings', icon: <Building2 className="w-5 h-5" /> },
-    { name: 'Readiness Vault', href: '/dashboard/readiness-vault', icon: <Archive className="w-5 h-5" /> },
+    { nameKey: 'dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+    { nameKey: 'tenders', href: '/dashboard/tenders', icon: <ScrollText className="w-5 h-5" /> },
+    { nameKey: 'myTenders', href: '/dashboard/my-tenders', icon: <Bookmark className="w-5 h-5" /> },
+    { nameKey: 'bidPreparation', href: '/dashboard/bid-preparation', icon: <FileText className="w-5 h-5" /> },
+    { nameKey: 'companyProfile', href: '/dashboard/settings', icon: <Building2 className="w-5 h-5" /> },
+    { nameKey: 'readinessVault', href: '/dashboard/readiness-vault', icon: <Archive className="w-5 h-5" /> },
 ];
 
 export type AccessStatus = {
@@ -59,6 +60,7 @@ const CONTROL_PATHS = new Set([
 ]);
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
+    const t = useTranslations('navigation');
     const pathname = usePathname();
     const router = useRouter();
     const { data: session, status, update } = useSession();
@@ -172,7 +174,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <aside className="w-16 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col sm:w-64">
                 {/* Logo */}
                 <div className="border-b border-gray-800 p-3 sm:p-6">
-                    <Link href="/dashboard" aria-label="Plasma AI dashboard" className="flex items-center justify-center gap-3 sm:justify-start">
+                    <Link href="/dashboard" aria-label={t('dashboardLabel')} className="flex items-center justify-center gap-3 sm:justify-start">
                         <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                             <Sparkles className="w-5 h-5 text-white" />
                         </div>
@@ -181,14 +183,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 </div>
 
                 {/* Navigation */}
-                <nav aria-label="Dashboard navigation" className="flex-1 space-y-1 p-2 sm:p-4">
+                <nav aria-label={t('navigationLabel')} className="flex-1 space-y-1 p-2 sm:p-4">
                     {navItems.map((item) => {
                         const isActive = pathname === item.href;
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                aria-label={item.name}
+                                aria-label={t(item.nameKey)}
                                 className={clsx(
                                     'flex items-center justify-center gap-3 rounded-lg px-2 py-3 transition-all duration-200 sm:justify-start sm:px-4',
                                     isActive
@@ -197,7 +199,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                 )}
                             >
                                 {item.icon}
-                                <span className="hidden font-medium sm:inline">{item.name}</span>
+                                <span className="hidden font-medium sm:inline">{t(item.nameKey)}</span>
                             </Link>
                         );
                     })}
@@ -207,11 +209,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <div className="border-t border-gray-800 p-2 sm:p-4">
                     <button
                         onClick={handleLogout}
-                        aria-label="Logout"
+                        aria-label={t('logout')}
                         className="flex w-full items-center justify-center gap-3 rounded-lg px-2 py-3 text-gray-400 transition-all duration-200 hover:bg-gray-800/50 hover:text-red-400 sm:justify-start sm:px-4"
                     >
                         <LogOut className="w-5 h-5" />
-                        <span className="hidden font-medium sm:inline">Logout</span>
+                        <span className="hidden font-medium sm:inline">{t('logout')}</span>
                     </button>
                 </div>
             </aside>
@@ -220,7 +222,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Top Header */}
                 <header className="h-16 border-b border-gray-800 bg-gray-950/50 backdrop-blur-sm flex items-center justify-between px-3 shrink-0 sm:px-8">
-                    <h2 className="text-sm font-medium text-gray-400 tracking-wide uppercase">Command Center</h2>
+                    <h2 className="text-sm font-medium text-gray-400 tracking-wide uppercase">{t('commandCenter')}</h2>
                     <div className="flex items-center gap-3">
                         {workspaceAccessAllowed ? <GlobalRefreshIndicator /> : null}
                         {isOperatorOrAdmin && (
@@ -229,7 +231,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                 className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 px-3 py-2 text-sm font-medium text-cyan-200 hover:bg-cyan-500/10 hover:text-cyan-100 transition-colors"
                             >
                                 <ShieldCheck className="w-4 h-4" />
-                                Admin Console
+                                {t('adminConsole')}
                             </Link>
                         )}
                       

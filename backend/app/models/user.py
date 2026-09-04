@@ -15,6 +15,7 @@ from app.core.access import (
     USER_APPROVAL_STATUSES,
     sql_string_values,
 )
+from app.core.locales import KNOWN_UI_LOCALES
 from app.models.base import Base, SubscriptionTier
 
 
@@ -34,6 +35,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Nullable means the user has never explicitly selected an interface locale.
+    ui_locale: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
     # Company Profile Fields (for PDF generation)
     company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -131,6 +134,11 @@ class User(Base):
         CheckConstraint(
             f"platform_role IN ({sql_string_values(PLATFORM_ROLES)})",
             name="ck_users_platform_role_allowed",
+        ),
+        CheckConstraint(
+            "ui_locale IS NULL OR ui_locale IN "
+            f"({', '.join(repr(locale) for locale in KNOWN_UI_LOCALES)})",
+            name="ck_users_ui_locale_allowed",
         ),
         Index("ix_users_google_id", "google_id"),
         Index("ix_users_email", "email"),

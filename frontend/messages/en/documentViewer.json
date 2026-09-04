@@ -1,0 +1,5 @@
+{
+  "sourceDocument": "Source document",
+  "lineCount": "{count, plural, one {# line} other {# lines}}",
+  "plainTextEncoding": "UTF-8 · Plain text"
+}

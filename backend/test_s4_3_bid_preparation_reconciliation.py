@@ -97,11 +97,14 @@ def test_no_passive_frontend_proposal_creation_remains():
 
 def test_navigation_and_copy_use_bid_preparation():
     layout = frontend("app/dashboard/layout.tsx")
+    navigation = frontend("messages/en/navigation.json")
     listing = frontend("app/dashboard/bid-preparation/page.tsx")
-    assert "name: 'Bid Preparation'" in layout
-    assert "name: 'My Bids'" not in layout
+    assert "nameKey: 'bidPreparation'" in layout
+    assert '"bidPreparation": "Bid Preparation"' in navigation
+    assert "My Bids" not in navigation
     assert "Completed preparation" in frontend("types/bid-preparation.ts")
-    assert "Bid Preparation" in listing
+    assert 'useTranslations("bidPreparation")' in listing
+    assert 't("title")' in listing
 
 
 def test_preflight_reports_reconciliation_without_repair():

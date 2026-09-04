@@ -1,0 +1,5 @@
+{
+  "sourceDocument": "Исходный документ",
+  "lineCount": "{count, plural, one {# строка} few {# строки} many {# строк} other {# строки}}",
+  "plainTextEncoding": "UTF-8 · Обычный текст"
+}

@@ -104,9 +104,11 @@ class TenderDocumentStatusStaticTests(unittest.TestCase):
         # Sprint 5.3 consumes the bounded details DTO, whose coarse document
         # availability contract is deliberately source-neutral and does not
         # expose format/parser-specific preparation state.
-        self.assertIn("return { label: 'Available'", tender_detail_page)
-        self.assertIn("return { label: 'Unavailable'", tender_detail_page)
-        self.assertIn("return { label: 'Metadata only'", tender_detail_page)
+        self.assertIn('item.availability === "AVAILABLE"', tender_detail_page)
+        self.assertIn('item.availability === "UNAVAILABLE"', tender_detail_page)
+        self.assertIn('t("sectionState.available")', tender_detail_page)
+        self.assertIn('t("sectionState.unavailable")', tender_detail_page)
+        self.assertIn('t("metadataOnly")', tender_detail_page)
         self.assertNotIn("Unsupported format", tender_detail_page)
         self.assertIn("return 'Documents unavailable'", tender_types)
 

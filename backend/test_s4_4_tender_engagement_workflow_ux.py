@@ -26,7 +26,7 @@ from app.services.tender_engagements import (
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
-HEAD = "20260901_0001_sr2_3_connector_metrics"
+HEAD = "20260902_0001_s7_2_user_ui_locale"
 
 
 def source(relative: str) -> str:
@@ -93,14 +93,19 @@ def test_submission_and_outcome_writes_are_explicit_only() -> None:
 
 def test_shared_customer_workflow_copy_is_truthful() -> None:
     workflow = source("frontend/components/tenders/EngagementWorkflowActions.tsx")
-    assert "Mark as Submitted" in workflow
-    assert "You are recording that this bid was submitted." in workflow
-    assert "Plasma does not transmit the bid" in workflow
-    assert "Record as Won" in workflow
-    assert "Record as Lost" in workflow
-    assert "This records the outcome in Plasma." in workflow
-    assert "Correct status to Preparing" in workflow
-    assert "Any Bid Preparation work is preserved." in workflow
+    messages = source("frontend/messages/en/myTenders.json")
+    for key in (
+        "markSubmitted",
+        "submittedConfirm",
+        "recordWon",
+        "recordLost",
+        "correctPreparing",
+        "correctSubmissionConfirm",
+    ):
+        assert f't("{key}")' in workflow
+    assert "Plasma does not transmit the bid" in messages
+    assert "This records the outcome in Plasma." in messages
+    assert "Any Bid Preparation work is preserved." in messages
     assert "Submit Bid" not in workflow
     assert "Submit Tender" not in workflow
 

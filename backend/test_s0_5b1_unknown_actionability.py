@@ -294,7 +294,7 @@ class FrontendContractTests(unittest.TestCase):
 
     def test_29_explorer_defaults_status_filter_to_open(self) -> None:
         explorer = read_frontend("app/dashboard/tenders/page.tsx")
-        self.assertIn("params.get('status') || 'OPEN'", explorer)
+        self.assertIn('params.get("status") || "OPEN"', explorer)
         self.assertIn("status: query.lifecycleStatus.toLowerCase()", explorer)
 
     def test_30_explorer_unknown_ctas_use_actionability(self) -> None:
@@ -304,7 +304,8 @@ class FrontendContractTests(unittest.TestCase):
 
     def test_31_details_remain_visible_with_explicit_status_badge(self) -> None:
         details = read_frontend("app/dashboard/tenders/[tenderId]/page.tsx")
-        self.assertIn("tenderStatusLabel(tender.status)", details)
+        self.assertIn('tExplorer("status.open")', details)
+        self.assertIn('t("status", { status: tenderStatus })', details)
         self.assertIn("const actionable = isTenderActionable(tender)", details)
         self.assertIn("canStartNew={actionable}", details)
 
@@ -323,7 +324,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("<TenderEngagementPanel tenderId={proposal.tender_id} proposalContext />", bid)
         prepare = read_frontend("components/bid-preparation/PrepareBidButton.tsx")
         self.assertIn("onClick={prepare}", prepare)
-        self.assertIn("'/proposals/prepare'", prepare)
+        self.assertIn('"/proposals/prepare"', prepare)
 
 
 class AdbReconciliationTests(unittest.IsolatedAsyncioTestCase):

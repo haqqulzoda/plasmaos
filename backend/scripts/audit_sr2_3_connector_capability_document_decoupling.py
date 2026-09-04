@@ -32,7 +32,7 @@ from app.services.tender_sources.base import (
 )
 from scripts import bootstrap_database as bootstrap
 
-HEAD = "20260901_0001_sr2_3_connector_metrics"
+HEAD = "20260902_0001_s7_2_user_ui_locale"
 PREVIOUS_HEAD = "20260831_0001_sr2_2_refresh_leases"
 PREFIX = "plasma_sr23_"
 METRICS = (

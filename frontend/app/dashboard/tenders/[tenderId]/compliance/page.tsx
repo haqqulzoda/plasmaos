@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, use, useMemo } from 'react';
+import { useState, useEffect, use, useMemo, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import DocumentViewer from '@/components/workspace/DocumentViewer';
 import type {
     DynamicRequirements,
@@ -12,11 +13,7 @@ import type {
     OverrideResponse,
 } from '@/types/compliance';
 import type { Tender, TenderDocument } from '@/types/tender';
-import {
-    complianceUnavailableMessage,
-    isTenderActionable,
-    tenderActionabilityMessage,
-} from '@/types/tender';
+import { isTenderActionable } from '@/types/tender';
 import { extractHybridCompliance } from '@/lib/useHybridCompliance';
 import { api } from '@/lib/api';
 import {
@@ -67,7 +64,7 @@ type VerdictTone = 'success' | 'review' | 'danger' | 'pending';
 
 type UiVerdict = {
     status: ComplianceVerdictStatus | 'PENDING';
-    label: string;
+    labelKey: 'verdict.notEligible' | 'verdict.withReview' | 'verdict.needsReview' | 'verdict.compliant' | 'verdict.pending';
     tone: VerdictTone;
 };
 
@@ -151,55 +148,21 @@ function filenameFromContentDisposition(value: string | null): string | null {
     return asciiMatch?.[1] ?? null;
 }
 
-async function complianceExportErrorMessage(error: unknown): Promise<string> {
+async function complianceExportErrorKey(error: unknown): Promise<'exportSignIn' | 'exportUnavailable' | 'exportFailed'> {
     const response = (error as { response?: { data?: unknown; status?: number } })?.response;
     const status = response?.status;
 
-    if (response?.data instanceof Blob) {
-        try {
-            const text = await response.data.text();
-            if (text.trim()) {
-                const payload = JSON.parse(text) as { detail?: unknown };
-                if (typeof payload.detail === 'string' && payload.detail.trim()) {
-                    return payload.detail;
-                }
-            }
-        } catch {
-            // Fall through to status-based copy.
-        }
-    } else {
-        const detail = (response?.data as { detail?: unknown } | undefined)?.detail;
-        if (typeof detail === 'string' && detail.trim()) {
-            return detail;
-        }
-    }
-
-    if (status === 401) return 'Sign in again to download the compliance report.';
-    if (status === 403 || status === 404) return 'Compliance report is unavailable for this tender.';
-    return 'Compliance PDF export failed. Please try again later.';
+    if (response?.data instanceof Blob) await response.data.text().catch(() => '');
+    if (status === 401) return 'exportSignIn';
+    if (status === 403 || status === 404) return 'exportUnavailable';
+    return 'exportFailed';
 }
 
-async function errorDetailFromResponse(response: Response): Promise<string> {
-    try {
-        const text = await response.text();
-        if (text.trim()) {
-            try {
-                const payload = JSON.parse(text) as { detail?: unknown };
-                if (typeof payload.detail === 'string' && payload.detail.trim()) {
-                    return payload.detail;
-                }
-            } catch {
-                return text.trim();
-            }
-        }
-    } catch {
-        // Fall through to status-based copy.
-    }
-
-    if (response.status === 401) return 'Sign in again to open this source document.';
-    if (response.status === 403) return 'You do not have access to this source document.';
-    if (response.status === 404) return 'Source document file is unavailable. Re-sync documents for this tender.';
-    return 'Source document could not be opened. Please try again or re-sync documents for this tender.';
+function documentErrorKey(response: Response): 'documentSignIn' | 'documentForbidden' | 'documentUnavailable' | 'documentOpenFailed' {
+    if (response.status === 401) return 'documentSignIn';
+    if (response.status === 403) return 'documentForbidden';
+    if (response.status === 404) return 'documentUnavailable';
+    return 'documentOpenFailed';
 }
 
 function getDocumentDisplayName(doc: TenderDocument): string {
@@ -308,15 +271,15 @@ function deriveHybridVerdict(hybridCompliance: HybridCompliancePayload | null): 
                         : 'NEEDS_REVIEW');
 
     if (status === 'NOT_ELIGIBLE') {
-        return { status, label: 'Non-Compliant', tone: 'danger' };
+        return { status, labelKey: 'verdict.notEligible', tone: 'danger' };
     }
     if (status === 'ELIGIBLE_WITH_REVIEW') {
-        return { status, label: 'Eligible With Review', tone: 'review' };
+        return { status, labelKey: 'verdict.withReview', tone: 'review' };
     }
     if (status === 'NEEDS_REVIEW') {
-        return { status, label: 'Needs Review', tone: 'review' };
+        return { status, labelKey: 'verdict.needsReview', tone: 'review' };
     }
-    return { status, label: 'Fully Compliant', tone: 'success' };
+    return { status, labelKey: 'verdict.compliant', tone: 'success' };
 }
 
 function deriveUiVerdict(
@@ -326,16 +289,16 @@ function deriveUiVerdict(
     const hybridVerdict = deriveHybridVerdict(hybridCompliance);
     if (hybridVerdict) return hybridVerdict;
 
-    if (!evaluation) return { status: 'PENDING', label: 'Pending', tone: 'pending' };
+    if (!evaluation) return { status: 'PENDING', labelKey: 'verdict.pending', tone: 'pending' };
     return evaluation.is_compliant
-        ? { status: 'COMPLIANT', label: 'Compliant', tone: 'success' }
-        : { status: 'NOT_ELIGIBLE', label: 'Non-Compliant', tone: 'danger' };
+        ? { status: 'COMPLIANT', labelKey: 'verdict.compliant', tone: 'success' }
+        : { status: 'NOT_ELIGIBLE', labelKey: 'verdict.notEligible', tone: 'danger' };
 }
 
 function deriveStatusMessage(
     hybridCompliance: HybridCompliancePayload | null,
     evaluation: DynamicEvaluation,
-): string {
+): string | null {
     if (hybridCompliance) {
         const manualOnly =
             hybridCompliance.failed_dealbreakers.length === 0
@@ -347,7 +310,7 @@ function deriveStatusMessage(
             );
 
         if (manualOnly) {
-            return 'No verified requirements yet — manual review required.';
+            return null;
         }
 
         return hybridCompliance.status_message;
@@ -397,6 +360,9 @@ const verdictIconClasses: Record<VerdictTone, string> = {
 // ═══════════════════════════════════════════════════════════════
 
 export default function CompliancePage({ params }: { params: Promise<{ tenderId: string }> }) {
+    const t = useTranslations('compliance');
+    const translateRef = useRef(t);
+    useEffect(() => { translateRef.current = t; }, [t]);
     const { tenderId } = use(params);
 
     // ── State ──
@@ -432,18 +398,18 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                 const { data: tenderData } = await api.get<Tender>(`/tenders/${resolvedId}`);
 
                 setResolvedTenderId(resolvedId);
-                setTenderTitle(tenderData?.title || `Tender ${resolvedId.slice(0, 8)}`);
+                setTenderTitle(tenderData?.title || translateRef.current('fallbackTender', { id: resolvedId.slice(0, 8) }));
 
                 if (tenderData && !isTenderActionable(tenderData)) {
                     setRawText('');
-                    setComplianceGuardMessage(tenderActionabilityMessage(tenderData.status));
+                    setComplianceGuardMessage(tenderData.status === 'CLOSED' ? translateRef.current('guardClosed') : translateRef.current('guardCancelled'));
                     setTextAccessReadyVersion((version) => version + 1);
                     return;
                 }
 
                 if (tenderData && !tenderData.compliance_analysis_available) {
                     setRawText('');
-                    setComplianceGuardMessage(complianceUnavailableMessage(tenderData));
+                    setComplianceGuardMessage(translateRef.current('guardUnavailable'));
                     setTextAccessReadyVersion((version) => version + 1);
                     return;
                 }
@@ -452,9 +418,8 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
 
                 setRawText(textResponse.data.compiled_master_text || '');
                 setTextAccessReadyVersion((version) => version + 1);
-            } catch (err: unknown) {
-                const message = err instanceof Error ? err.message : 'Failed to load tender text';
-                setError(message);
+            } catch {
+                setError(translateRef.current('loadTextFailed'));
             } finally {
                 setIsLoadingText(false);
             }
@@ -474,13 +439,9 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
             try {
                 const { data } = await api.get<TenderDocument[]>(`/tenders/${resolvedTenderId}/documents`);
                 setDocuments(Array.isArray(data) ? data : []);
-            } catch (err: unknown) {
-                const axiosErr = err as { response?: { data?: { detail?: string }; status?: number } };
+            } catch {
                 setDocuments([]);
-                setDocumentFetchError(
-                    axiosErr?.response?.data?.detail ||
-                    (err instanceof Error ? err.message : 'Source documents could not be loaded')
-                );
+                setDocumentFetchError(translateRef.current('loadDocumentsFailed'));
             } finally {
                 setIsLoadingDocuments(false);
             }
@@ -561,12 +522,8 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
             setContentHash(data.content_hash);
             setOverrideSeal(data.override_seal ?? null);
             setElapsedTime(parseFloat(elapsed));
-        } catch (err: unknown) {
-            const axiosErr = err as { response?: { data?: { detail?: string }; status?: number } };
-            const message =
-                axiosErr?.response?.data?.detail ||
-                (err instanceof Error ? err.message : 'An unexpected error occurred');
-            setError(message);
+        } catch {
+            setError(t('analysisFailed'));
         } finally {
             setIsLoading(false);
         }
@@ -600,7 +557,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
 
             window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
         } catch (err: unknown) {
-            setError(await complianceExportErrorMessage(err));
+            setError(t(await complianceExportErrorKey(err)));
         } finally {
             setIsDownloadingPdf(false);
         }
@@ -611,7 +568,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     const hasText = rawText.length > 0;
     const canStartAnalysis = hasText && !complianceGuardMessage;
     const uiVerdict = deriveUiVerdict(hybridCompliance, evaluation);
-    const complianceLabel = hasAnalysis ? uiVerdict.label : 'Pending';
+    const complianceLabel = t(hasAnalysis ? uiVerdict.labelKey : 'verdict.pending');
     const documentIndex = useMemo(() => buildDocumentFilenameIndex(documents), [documents]);
     const selectedDocument = useMemo(
         () => resolveDocumentForRequirement(selectedRequirement, documentIndex),
@@ -619,32 +576,32 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     );
 
     return (
-        <div className="flex flex-col h-screen bg-gray-950">
+        <div className="flex min-h-full flex-col bg-gray-950 lg:h-[calc(100vh-8rem)]">
             {/* ── Command Bar ── */}
-            <header className="flex items-center justify-between px-5 py-3 border-b border-gray-800 bg-gray-950/90 backdrop-blur-sm shrink-0">
+            <header className="flex flex-col gap-3 border-b border-gray-800 bg-gray-950/90 px-4 py-3 backdrop-blur-sm sm:px-5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-center gap-4">
                     <Link
                         href={`/dashboard/tenders/${tenderId}`}
                         className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 transition-colors text-[13px]"
                     >
                         <ArrowLeft className="w-4 h-4" />
-                        <span>Back to Tender Details</span>
+                        <span>{t('back')}</span>
                     </Link>
                     <div className="w-px h-5 bg-gray-800" />
                     <div>
                         <h1 className="text-[15px] font-semibold text-gray-100">
-                            {tenderTitle || 'Sovereign Compliance Engine'}
+                            {tenderTitle || t('engineTitle')}
                         </h1>
                         <p className="text-[11px] text-gray-500 mt-0.5">
                             {hasAnalysis
-                                ? 'Compliance scan complete · Review risk radar below'
+                                ? t('completeSubtitle')
                                 : isLoading
-                                    ? 'AI is analyzing taxonomy requirements...'
-                                    : 'Initialize a compliance scan to identify gaps'}
+                                    ? t('analyzingSubtitle')
+                                    : t('readySubtitle')}
                         </p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                     {/* Status Badge */}
                     {hasAnalysis && (
                         <button
@@ -658,7 +615,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                             ) : (
                                 <Download className="w-3.5 h-3.5" />
                             )}
-                            {isDownloadingPdf ? 'Preparing PDF' : 'Download Compliance PDF'}
+                            {isDownloadingPdf ? t('preparingPdf') : t('downloadPdf')}
                         </button>
                     )}
 
@@ -689,23 +646,23 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                     {isLoading && (
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
                             <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
-                            <span className="text-[11px] font-semibold text-indigo-400">Analyzing</span>
+                            <span className="text-[11px] font-semibold text-indigo-400">{t('analyzing')}</span>
                         </div>
                     )}
 
                     {elapsedTime !== null && (
                         <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
                             <Clock className="w-3.5 h-3.5" />
-                            <span>{elapsedTime}s</span>
+                            <span>{t('elapsedSeconds', { seconds: elapsedTime })}</span>
                         </div>
                     )}
                 </div>
             </header>
 
             {/* ── Split Hemispheres ── */}
-            <div className="flex-1 grid grid-cols-2 min-h-0">
+            <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-2 lg:overflow-hidden">
                 {/* ══ Left: Document Pane ══ */}
-                <div className="border-r border-gray-800 min-h-0">
+                <div className="min-h-[32rem] border-b border-gray-800 lg:min-h-0 lg:border-b-0 lg:border-r">
                     {selectedRequirement ? (
                         <EvidenceDocumentPane
                             requirement={selectedRequirement}
@@ -720,14 +677,14 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                 <div className="text-center space-y-4">
                                     <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mx-auto" />
                                     <p className="text-sm text-gray-400">
-                                        Loading tender document...
+                                        {t('loadingDocument')}
                                     </p>
                                 </div>
                             </div>
                         </div>
                     ) : hasText ? (
                         <DocumentViewer
-                            title={tenderTitle || 'Tender Document'}
+                            title={tenderTitle || t('tenderDocument')}
                             content={rawText}
                         />
                     ) : (
@@ -739,10 +696,10 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-gray-200">
-                                            No Document Text Available
+                                            {t('noTextTitle')}
                                         </p>
                                         <p className="text-[12px] text-gray-500 mt-1">
-                                            This tender has no compiled master text yet. Documents may not have been scraped or parsed.
+                                            {t('noTextHelp')}
                                         </p>
                                     </div>
                                 </div>
@@ -756,11 +713,12 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                             <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 backdrop-blur-sm">
                                 <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
                                 <div>
-                                    <p className="text-[13px] font-semibold text-red-400">Error</p>
+                                    <p className="text-[13px] font-semibold text-red-400">{t('error')}</p>
                                     <p className="text-[12px] text-gray-400 mt-0.5">{error}</p>
                                 </div>
                                 <button
                                     onClick={() => setError(null)}
+                                    aria-label={t('dismissError')}
                                     className="ml-auto text-gray-500 hover:text-gray-300 transition-colors"
                                 >
                                     <X className="w-3.5 h-3.5" />
@@ -802,9 +760,9 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                     </div>
                                     <div>
                                         <p className="text-[11px] font-medium uppercase tracking-widest text-gray-500">
-                                            Processing
+                                            {t('processing')}
                                         </p>
-                                        <h3 className="text-sm font-semibold text-gray-200">Running Analysis...</h3>
+                                        <h3 className="text-sm font-semibold text-gray-200">{t('running')}</h3>
                                     </div>
                                 </div>
                             </div>
@@ -818,11 +776,10 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-gray-200">
-                                            Plasma AI is mapping taxonomy requirements...
+                                            {t('mapping')}
                                         </p>
                                         <p className="text-[12px] text-gray-500 mt-2">
-                                            Classifying against the compliance ontology and evaluating
-                                            your credentials. This may take 15–45 seconds.
+                                            {t('mappingHelp')}
                                         </p>
                                     </div>
                                     <div className="space-y-3 pt-4">
@@ -845,9 +802,9 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                     </div>
                                     <div>
                                         <p className="text-[11px] font-medium uppercase tracking-widest text-gray-500">
-                                            Compliance Analysis
+                                            {t('title')}
                                         </p>
-                                        <h3 className="text-sm font-semibold text-gray-400">Ready to Scan</h3>
+                                        <h3 className="text-sm font-semibold text-gray-400">{t('ready')}</h3>
                                     </div>
                                 </div>
                             </div>
@@ -858,12 +815,10 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-gray-200">
-                                            Sovereign Compliance Engine
+                                            {t('introTitle')}
                                         </p>
                                         <p className="text-[12px] text-gray-500 mt-2 leading-relaxed">
-                                            Run an AI-powered compliance scan against this tender&apos;s full
-                                            document text. The engine maps requirements to the taxonomy ontology
-                                            and evaluates your credentials for disqualification risks.
+                                            {t('introHelp')}
                                         </p>
                                     </div>
                                     <button
@@ -877,7 +832,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                         )}
                                     >
                                         <Sparkles className="w-5 h-5" />
-                                        Initialize Plasma AI Compliance Scan
+                                        {t('start')}
                                     </button>
                                     {complianceGuardMessage && !isLoadingText && (
                                         <p className="text-[11px] text-amber-400/80">
@@ -886,7 +841,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                     )}
                                     {!complianceGuardMessage && !hasText && !isLoadingText && (
                                         <p className="text-[11px] text-amber-400/80">
-                                            No document text found. Scan cannot proceed.
+                                            {t('noTextGuard')}
                                         </p>
                                     )}
                                 </div>
@@ -912,9 +867,10 @@ function EvidenceDocumentPane({
     documentFetchError: string | null;
     onClearSelection: () => void;
 }) {
+    const t = useTranslations('compliance');
     const sourcePage = requirement.source_page || 1;
     const quote = requirement.exact_quote || requirement.raw_text_snippet;
-    const sourceFilename = requirement.source_filename || 'source document';
+    const sourceFilename = requirement.source_filename || t('sourceDocument');
     const matchedName = matchedDocument ? getDocumentDisplayName(matchedDocument) : sourceFilename;
     const documentUrl = matchedDocument ? `/document-preview/${matchedDocument.id}` : null;
     const iframeSrc = documentUrl ? `${documentUrl}#page=${sourcePage}` : null;
@@ -924,8 +880,8 @@ function EvidenceDocumentPane({
     const isArchive = isArchiveDocument(matchedDocument);
     const isArchiveInner = isArchiveInnerSource(requirement, matchedDocument);
     const pageLabel = isDocx
-        ? 'Document-level provenance'
-        : `Page ${sourcePage}`;
+        ? t('documentLevel')
+        : t('page', { page: sourcePage });
 
     return (
         <div className="flex flex-col h-full bg-gray-950">
@@ -935,7 +891,7 @@ function EvidenceDocumentPane({
                 </div>
                 <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-medium uppercase tracking-widest text-gray-500">
-                        Source Evidence
+                        {t('sourceEvidence')}
                     </p>
                     <h3 className="text-sm font-semibold text-gray-200 truncate max-w-md">
                         {matchedName}
@@ -947,7 +903,7 @@ function EvidenceDocumentPane({
                     className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-[12px] font-semibold text-gray-200 transition hover:border-indigo-400/50 hover:text-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                 >
                     <ArrowLeft className="w-3.5 h-3.5" />
-                    Back to source document
+                    {t('backToDocument')}
                 </button>
             </div>
 
@@ -960,13 +916,13 @@ function EvidenceDocumentPane({
                     <span className="rounded bg-gray-800/80 px-2 py-1">{pageLabel}</span>
                     {isPdf && (
                         <span className="rounded bg-indigo-500/10 px-2 py-1 text-indigo-300">
-                            PDF page jump is best-effort
+                            {t('pdfBestEffort')}
                         </span>
                     )}
                 </div>
                 <div className="rounded-lg border border-indigo-500/15 bg-indigo-500/8 px-3 py-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-300">
-                        Evidence Quote
+                        {t('evidenceQuote')}
                     </p>
                     <p className="text-[12px] text-gray-200 leading-relaxed mt-1">
                         &quot;{quote}&quot;
@@ -978,7 +934,7 @@ function EvidenceDocumentPane({
                 <div className="flex-1 min-h-0 bg-gray-900">
                     <iframe
                         key={iframeSrc}
-                        title={`Source evidence: ${matchedName}`}
+                        title={t('evidenceFrame', { name: matchedName })}
                         src={iframeSrc}
                         className="h-full w-full border-0 bg-gray-900"
                     />
@@ -1021,22 +977,23 @@ function EvidenceFallbackPanel({
     isArchive: boolean;
     isArchiveInner: boolean;
 }) {
+    const t = useTranslations('compliance');
     const [openError, setOpenError] = useState<string | null>(null);
     const [isOpening, setIsOpening] = useState(false);
-    let message = 'This source file is not a PDF, so inline page navigation is unavailable.';
+    let message = t('fallbackDefault');
 
     if (isLoadingDocuments) {
-        message = 'Resolving the source document from synchronized tender files.';
+        message = t('fallbackResolving');
     } else if (documentFetchError) {
         message = documentFetchError;
     } else if (isArchiveInner) {
-        message = 'Source file is inside an archive. Preview is not available yet, but the quote and filename are preserved.';
+        message = t('fallbackArchiveInner');
     } else if (!matchedDocument) {
-        message = 'Document not matched. The filename may differ from the synchronized source file.';
+        message = t('fallbackUnmatched');
     } else if (isDocx) {
-        message = 'DOCX provenance is document-level. Page 1 is not a true rendered page.';
+        message = t('fallbackDocx');
     } else if (isArchive) {
-        message = 'Archive contents cannot be previewed inline here. Open or download the source archive.';
+        message = t('fallbackArchive');
     }
 
     const handleOpenDocument = async () => {
@@ -1048,7 +1005,7 @@ function EvidenceFallbackPanel({
         try {
             const response = await fetch(documentUrl, { cache: 'no-store' });
             if (!response.ok) {
-                setOpenError(await errorDetailFromResponse(response));
+                setOpenError(t(documentErrorKey(response)));
                 return;
             }
 
@@ -1074,7 +1031,7 @@ function EvidenceFallbackPanel({
             link.remove();
             window.setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
         } catch {
-            setOpenError('Source document could not be opened. Please try again or re-sync documents for this tender.');
+            setOpenError(t('documentOpenFailed'));
         } finally {
             setIsOpening(false);
         }
@@ -1087,7 +1044,7 @@ function EvidenceFallbackPanel({
                     <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <div className="min-w-0">
                         <p className="text-[13px] font-semibold text-amber-300">
-                            Source Preview Fallback
+                            {t('fallbackTitle')}
                         </p>
                         <p className="text-[12px] text-gray-400 leading-relaxed mt-1">
                             {message}
@@ -1097,11 +1054,11 @@ function EvidenceFallbackPanel({
 
                 <div className="grid grid-cols-1 gap-2 text-[12px]">
                     <div className="rounded border border-gray-800 bg-gray-900/70 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-wider text-gray-500">Source Filename</p>
+                        <p className="text-[10px] uppercase tracking-wider text-gray-500">{t('sourceFilename')}</p>
                         <p className="text-gray-200 break-all mt-0.5">{sourceFilename}</p>
                     </div>
                     <div className="rounded border border-gray-800 bg-gray-900/70 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-wider text-gray-500">Source Position</p>
+                        <p className="text-[10px] uppercase tracking-wider text-gray-500">{t('sourcePosition')}</p>
                         <p className="text-gray-200 mt-0.5">{pageLabel}</p>
                     </div>
                 </div>
@@ -1125,7 +1082,7 @@ function EvidenceFallbackPanel({
                         ) : (
                             <Download className="w-3.5 h-3.5" />
                         )}
-                        {isOpening ? 'Opening Source...' : 'Open or Download Source'}
+                        {isOpening ? t('openingSource') : t('openSource')}
                     </button>
                 )}
             </div>
@@ -1161,6 +1118,7 @@ function ComplianceResults({
     selectedRequirementKey: string | null;
     onSelectRequirement: (detail: RequirementMatchDetail) => void;
 }) {
+    const t = useTranslations('compliance');
     // Use hybrid result for the verdict when available, fall back to legacy
     const uiVerdict = deriveUiVerdict(hybridCompliance, evaluation);
     const statusMessage = deriveStatusMessage(hybridCompliance, evaluation);
@@ -1218,15 +1176,15 @@ function ComplianceResults({
                                     verdictTextClasses[uiVerdict.tone]
                                 )}
                             >
-                                {uiVerdict.label}
+                                {t(uiVerdict.labelKey)}
                             </h2>
                         </div>
                         <p className="text-[12px] text-gray-400 mt-1 leading-relaxed">
-                            {statusMessage}
+                            {statusMessage ?? t('manualOnly')}
                         </p>
                         {analysisId && (
                             <p className="text-[10px] text-gray-600 mt-2 font-mono">
-                                Analysis ID: {analysisId}
+                                {t('analysisId', { id: analysisId })}
                             </p>
                         )}
                     </div>
@@ -1240,22 +1198,22 @@ function ComplianceResults({
                         <div className="grid grid-cols-4 gap-2">
                             <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/15 px-3 py-2 text-center">
                                 <p className="text-[18px] font-bold text-emerald-400">{hybridCompliance.satisfied_count}</p>
-                                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Satisfied</p>
+                                <p className="text-[10px] text-gray-500 uppercase tracking-wider">{t('satisfied')}</p>
                             </div>
                             <div className="rounded-lg bg-red-500/10 border border-red-500/15 px-3 py-2 text-center">
                                 <p className="text-[18px] font-bold text-red-400">{hybridCompliance.failed_count}</p>
-                                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Failed</p>
+                                <p className="text-[10px] text-gray-500 uppercase tracking-wider">{t('failed')}</p>
                             </div>
                             <div className="rounded-lg bg-amber-500/10 border border-amber-500/15 px-3 py-2 text-center">
                                 <p className="text-[18px] font-bold text-amber-400">{hybridCompliance.manual_review_count}</p>
-                                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Manual</p>
+                                <p className="text-[10px] text-gray-500 uppercase tracking-wider">{t('manual')}</p>
                             </div>
                             <div className="rounded-lg bg-gray-500/10 border border-gray-500/15 px-3 py-2 text-center">
                                 <p className="text-[18px] font-bold text-gray-400">
                                     {recordedObligationCount || hybridCompliance.skipped_optional_count}
                                 </p>
                                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">
-                                    {recordedObligationCount ? 'Recorded' : 'Skipped'}
+                                    {recordedObligationCount ? t('recorded') : t('skipped')}
                                 </p>
                             </div>
                         </div>
@@ -1267,7 +1225,7 @@ function ComplianceResults({
                         {hybridCompliance.failed_dealbreakers.length > 0 && (
                             <div>
                                 <p className="text-[11px] font-semibold uppercase tracking-wider text-red-400 mb-2">
-                                    Dealbreaker Failures ({hybridCompliance.failed_dealbreakers.length})
+                                    {t('dealbreakerFailures', { count: hybridCompliance.failed_dealbreakers.length })}
                                 </p>
                                 <div className="space-y-2">
                                     {hybridCompliance.failed_dealbreakers.map((d, i) => (
@@ -1292,7 +1250,7 @@ function ComplianceResults({
                         {hybridCompliance.manual_reviews_required.length > 0 && (
                             <div>
                                 <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-400 mb-2">
-                                    Manual Review Required ({hybridCompliance.manual_reviews_required.length})
+                                    {t('manualReviewRequired', { count: hybridCompliance.manual_reviews_required.length })}
                                 </p>
                                 <div className="space-y-2">
                                     {hybridCompliance.manual_reviews_required.map((d, i) => (
@@ -1320,7 +1278,7 @@ function ComplianceResults({
 
                         {recordedObligations.length > 0 && (
                             <SatisfiedSection
-                                title="Recorded Obligations"
+                                title={t('recordedObligations')}
                                 items={recordedObligations}
                                 variant="recorded"
                                 selectedRequirementKey={selectedRequirementKey}
@@ -1334,16 +1292,16 @@ function ComplianceResults({
                         <div className="px-5 py-2.5 border-t border-gray-800/60 bg-gray-900/40 shrink-0 space-y-1.5">
                             <p className="text-[11px] text-gray-300 flex items-center gap-1.5">
                                 <Lock className="w-3 h-3 text-indigo-400 shrink-0" />
-                                <span>Content Seal: SHA-256</span>{' '}
+                                <span>{t('contentSeal')}</span>{' '}
                                 <span className="font-mono text-indigo-300 break-all">{contentHash}</span>
                             </p>
                             {overrideSeal && (
                                 <p className="text-[11px] text-amber-300 flex items-center gap-1.5">
                                     <ShieldOff className="w-3 h-3 text-amber-400 shrink-0" />
-                                    <span>Override Seal: SHA-256</span>{' '}
+                                    <span>{t('overrideSeal')}</span>{' '}
                                     <span className="font-mono text-amber-300 break-all">{overrideSeal}</span>
                                     <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold uppercase">
-                                        {acceptedNodeIds.length} override{acceptedNodeIds.length !== 1 ? 's' : ''}
+                                        {t('overrideCount', { count: acceptedNodeIds.length })}
                                     </span>
                                 </p>
                             )}
@@ -1355,10 +1313,10 @@ function ComplianceResults({
                     <div className="rounded-xl border border-gray-700/50 bg-gray-900/40 p-6 text-center">
                         <Cpu className="w-8 h-8 text-gray-600 mx-auto mb-2" />
                         <p className="text-[13px] text-gray-400">
-                            Eligibility Audit data unavailable for this analysis.
+                            {t('auditUnavailable')}
                         </p>
                         <p className="text-[11px] text-gray-600 mt-1">
-                            Re-run the analysis to generate the full eligibility audit report.
+                            {t('auditUnavailableHelp')}
                         </p>
                     </div>
                 </div>
@@ -1389,6 +1347,7 @@ function MatchDetailCard({
     isSelected?: boolean;
     onSelect?: (detail: RequirementMatchDetail) => void;
 }) {
+    const t = useTranslations('compliance');
     const [showModal, setShowModal] = useState(false);
     // Compute a deterministic node ID — use taxonomy UUID when present,
     // otherwise generate a synthetic ID from the requirement text so
@@ -1431,9 +1390,9 @@ function MatchDetailCard({
                 <p className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 font-medium">
                     <span className="inline-flex items-center gap-1">
                         <FileSearch className="w-3 h-3 text-gray-600 shrink-0" />
-                        <span>{detail.source_filename || 'source document'}</span>
+                        <span>{detail.source_filename || t('sourceDocument')}</span>
                     </span>
-                    <span>Page {detail.source_page || 1}</span>
+                    <span>{t('page', { page: detail.source_page || 1 })}</span>
                     <span className="px-1.5 py-0.5 rounded bg-gray-800/70 text-gray-400 uppercase">
                         {detail.category || detail.requirement_type}
                     </span>
@@ -1442,25 +1401,25 @@ function MatchDetailCard({
                     {detail.headline || detail.raw_text_snippet}
                 </p>
                 <p className="text-[11px] text-gray-500 leading-relaxed">
-                    Quote: <span>&quot;{quote}&quot;</span>
+                    {t('quote')} <span>&quot;{quote}&quot;</span>
                 </p>
                 <div className="flex flex-wrap items-center gap-2 text-[10px]">
                     {isOverridden ? (
                         <span className="px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400">
-                            Overridden
+                            {t('overridden')}
                         </span>
                     ) : (
                         <span className={clsx('px-1.5 py-0.5 rounded font-bold uppercase tracking-wider', verdictBg(detail.verdict), verdictColor(detail.verdict))}>
-                            {detail.verdict}
+                            {detail.verdict === 'SATISFIED' ? t('verdictLabels.satisfied') : detail.verdict === 'FAILED' ? t('verdictLabels.failed') : detail.verdict === 'NEEDS_MANUAL_REVIEW' ? t('verdictLabels.manualReview') : t('verdictLabels.unknown')}
                         </span>
                     )}
                     {detail.is_dealbreaker && !isOverridden && (
-                        <span className="text-red-500 font-bold uppercase">Fatal</span>
+                        <span className="text-red-500 font-bold uppercase">{t('fatal')}</span>
                     )}
                     {isOverridden && (
                         <span className="flex items-center gap-1 text-amber-400">
                             <Fingerprint className="w-3 h-3" />
-                            Override Sealed
+                            {t('overrideSealed')}
                         </span>
                     )}
                 </div>
@@ -1477,10 +1436,10 @@ function MatchDetailCard({
                     >
                         <ShieldOff className="w-3.5 h-3.5 text-amber-400 group-hover:text-amber-300 group-hover:scale-110 transition-all" />
                         <span className="text-[11px] font-semibold text-amber-400 group-hover:text-amber-300 transition-colors">
-                            Override System Flag
+                            {t('overrideFlag')}
                         </span>
                         <span className="ml-auto text-[9px] text-gray-500 group-hover:text-gray-400 transition-colors">
-                            Permanent audit record
+                            {t('permanentAudit')}
                         </span>
                     </button>
                 )}
@@ -1490,7 +1449,7 @@ function MatchDetailCard({
                     <div className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 mt-1.5">
                         <Fingerprint className="w-3.5 h-3.5 text-amber-400" />
                         <span className="text-[11px] font-semibold text-amber-400">
-                            Override Sealed in Audit Trail
+                            {t('overrideTrail')}
                         </span>
                     </div>
                 )}
@@ -1534,6 +1493,7 @@ function OverrideChallengeModal({
     onClose: () => void;
     onOverrideComplete: (seal: string | null, nodeIds: string[]) => void;
 }) {
+    const t = useTranslations('compliance');
     const [justification, setJustification] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -1553,12 +1513,8 @@ function OverrideChallengeModal({
                 justification: justification.trim(),
             });
             onOverrideComplete(data.override_seal, data.overridden_node_ids);
-        } catch (err: unknown) {
-            const axiosErr = err as { response?: { data?: { detail?: string } } };
-            setError(
-                axiosErr?.response?.data?.detail ||
-                (err instanceof Error ? err.message : 'Override failed')
-            );
+        } catch {
+            setError(t('overrideFailed'));
         } finally {
             setIsSubmitting(false);
         }
@@ -1573,7 +1529,7 @@ function OverrideChallengeModal({
             />
 
             {/* Modal */}
-            <div className="relative w-full max-w-lg rounded-2xl border border-red-500/20 bg-gray-950/95 backdrop-blur-xl shadow-2xl shadow-red-500/5 overflow-hidden">
+            <div role="dialog" aria-modal="true" aria-labelledby="override-dialog-title" className="relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-red-500/20 bg-gray-950/95 shadow-2xl shadow-red-500/5 backdrop-blur-xl">
                 {/* Header */}
                 <div className="px-6 pt-6 pb-4 border-b border-red-500/15 bg-red-500/5">
                     <div className="flex items-start gap-3">
@@ -1581,16 +1537,16 @@ function OverrideChallengeModal({
                             <ShieldOff className="w-5 h-5 text-red-400" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h3 className="text-[15px] font-bold text-red-300 uppercase tracking-wide">
-                                Override System Flag
+                            <h3 id="override-dialog-title" className="text-[15px] font-bold text-red-300 uppercase tracking-wide">
+                                {t('overrideTitle')}
                             </h3>
                             <p className="text-[12px] text-gray-400 mt-1 leading-relaxed">
-                                You are about to override a <span className="text-red-400 font-bold">FATAL</span> compliance requirement.
-                                This action will be <span className="text-amber-400 font-semibold">permanently sealed</span> in the cryptographic audit trail and cannot be undone.
+                                {t('overrideExplanation')}
                             </p>
                         </div>
                         <button
                             onClick={onClose}
+                            aria-label={t('cancel')}
                             className="text-gray-500 hover:text-gray-300 transition-colors p-1"
                         >
                             <X className="w-4 h-4" />
@@ -1601,7 +1557,7 @@ function OverrideChallengeModal({
                 {/* Requirement being overridden */}
                 <div className="px-6 py-3 bg-gray-900/60 border-b border-gray-800/50">
                     <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">
-                        Requirement Being Overridden
+                        {t('requirementOverridden')}
                     </p>
                     <p className="text-[12px] text-gray-300 leading-relaxed line-clamp-3">
                         {requirementSnippet}
@@ -1614,12 +1570,8 @@ function OverrideChallengeModal({
                     <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg border border-amber-500/20 bg-amber-500/5">
                         <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                         <div className="text-[11px] text-gray-300 leading-relaxed space-y-1">
-                            <p className="font-semibold text-amber-300">Liability Transfer Warning</p>
-                            <p>
-                                By overriding this flag, you certify that you possess offline context
-                                (e.g., a physical waiver, verbal authorization, or supplementary documentation)
-                                that the AI system cannot access. Full liability transfers to you.
-                            </p>
+                            <p className="font-semibold text-amber-300">{t('responsibilityTitle')}</p>
+                            <p>{t('responsibilityHelp')}</p>
                         </div>
                     </div>
 
@@ -1629,13 +1581,13 @@ function OverrideChallengeModal({
                             htmlFor="override-justification"
                             className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5"
                         >
-                            Justification <span className="text-red-400">*</span>
+                            {t('justification')} <span className="text-red-400">*</span>
                         </label>
                         <textarea
                             id="override-justification"
                             value={justification}
                             onChange={(e) => setJustification(e.target.value)}
-                            placeholder="State why you are overriding this requirement (min. 10 characters)..."
+                            placeholder={t('justificationPlaceholder')}
                             rows={3}
                             className={clsx(
                                 'w-full rounded-lg border bg-gray-900/80 px-3.5 py-2.5 text-[13px] text-gray-200 placeholder-gray-600',
@@ -1650,11 +1602,11 @@ function OverrideChallengeModal({
                                 'text-[10px]',
                                 justification.length > 0 && !isValid ? 'text-red-400' : 'text-gray-600'
                             )}>
-                                {justification.trim().length}/10 minimum characters
+                                {t('minimumCharacters', { count: justification.trim().length })}
                             </p>
                             {justification.trim().length >= 10 && (
                                 <p className="text-[10px] text-emerald-400 flex items-center gap-1">
-                                    <CheckCircle2 className="w-3 h-3" /> Valid
+                                    <CheckCircle2 className="w-3 h-3" /> {t('valid')}
                                 </p>
                             )}
                         </div>
@@ -1676,7 +1628,7 @@ function OverrideChallengeModal({
                         disabled={isSubmitting}
                         className="flex-1 px-4 py-2.5 rounded-lg border border-gray-700 bg-gray-800/60 text-[13px] font-medium text-gray-300 hover:bg-gray-700/60 hover:text-gray-100 transition-all disabled:opacity-50"
                     >
-                        Cancel
+                        {t('cancel')}
                     </button>
                     <button
                         onClick={handleSubmit}
@@ -1691,12 +1643,12 @@ function OverrideChallengeModal({
                         {isSubmitting ? (
                             <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                Sealing Override...
+                                {t('sealing')}
                             </>
                         ) : (
                             <>
                                 <Fingerprint className="w-4 h-4" />
-                                Seal Override
+                                {t('seal')}
                             </>
                         )}
                     </button>
@@ -1705,7 +1657,7 @@ function OverrideChallengeModal({
                 {/* Seal Notice */}
                 <div className="px-6 py-2 bg-gray-950/80 border-t border-gray-800/30">
                     <p className="text-[9px] text-gray-600 text-center">
-                        This override will be cryptographically sealed with SHA-256 and permanently recorded in the audit ledger.
+                        {t('sealNotice')}
                     </p>
                 </div>
             </div>
@@ -1715,7 +1667,7 @@ function OverrideChallengeModal({
 
 
 function SatisfiedSection({
-    title = 'Satisfied Requirements',
+    title,
     items,
     variant = 'satisfied',
     selectedRequirementKey,
@@ -1727,6 +1679,7 @@ function SatisfiedSection({
     selectedRequirementKey: string | null;
     onSelectRequirement: (detail: RequirementMatchDetail) => void;
 }) {
+    const t = useTranslations('compliance');
     const [showSatisfied, setShowSatisfied] = useState(false);
     const isRecorded = variant === 'recorded';
     const Icon = isRecorded ? ClipboardList : CheckCircle2;
@@ -1748,9 +1701,9 @@ function SatisfiedSection({
                 )}
             >
                 <Icon className="w-3.5 h-3.5" />
-                {title} ({items.length})
+                {title ?? t('satisfiedRequirements')} ({items.length})
                 <span className="text-gray-600 normal-case font-normal ml-1">
-                    {showSatisfied ? '▾ hide' : '▸ show'}
+                    {showSatisfied ? `▾ ${t('hide')}` : `▸ ${t('show')}`}
                 </span>
             </button>
             {showSatisfied && (
@@ -1788,15 +1741,15 @@ function SatisfiedSection({
                                     )}
                                     <p className="flex flex-wrap items-center gap-1.5 text-[9px] text-gray-500 font-medium mb-0.5">
                                         <FileSearch className="w-2.5 h-2.5 text-gray-600 shrink-0" />
-                                        <span className="truncate">{d.source_filename || 'source document'}</span>
-                                        <span>Page {d.source_page || 1}</span>
+                                        <span className="truncate">{d.source_filename || t('sourceDocument')}</span>
+                                        <span>{t('page', { page: d.source_page || 1 })}</span>
                                         <span className="uppercase">{d.category || d.requirement_type}</span>
                                     </p>
                                     <p className="text-[11px] text-gray-300 leading-relaxed truncate">
                                         {d.headline || d.raw_text_snippet}
                                     </p>
                                     <p className="text-[10px] text-gray-500 mt-0.5 truncate">
-                                        Quote: <span>&quot;{d.exact_quote || d.raw_text_snippet}&quot;</span>
+                                        {t('quote')} <span>&quot;{d.exact_quote || d.raw_text_snippet}&quot;</span>
                                     </p>
                                     {d.matched_credential && (
                                         <p className="text-[10px] text-cyan-400/60 mt-0.5">

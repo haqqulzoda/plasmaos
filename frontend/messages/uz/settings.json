@@ -1,0 +1,40 @@
+{
+  "language": {
+    "title": "Interfeys tili",
+    "onboardingHelp": "Avval tilni tanlang. Ro‘yxatdan o‘tishning qolgan qismi darhol shu tilda ko‘rsatiladi.",
+    "settingsHelp": "Mahsulot navigatsiyasi, yorliqlar va amallar uchun tilni tanlang. Kompaniya va tender ma’lumotlari tarjima qilinmaydi.",
+    "optionsLabel": "Mavjud interfeys tillari",
+    "optionLabel": "{language} tilidan foydalanish",
+    "saving": "Interfeys tili saqlanmoqda…",
+    "saveFailed": "Interfeys tilini saqlab bo‘lmadi. Avvalgi til faol holda qoldi. Qayta urinib ko‘ring."
+  },
+  "title": "Kompaniya profili",
+  "pilotStatus": "Pilot holati: {status}",
+  "approvalStatus": "Tasdiqlash: {status}",
+  "company": "Kompaniya",
+  "companyName": "Kompaniya nomi",
+  "industry": "Soha",
+  "registrationNumber": "STIR / ro‘yxatdan o‘tish raqami",
+  "website": "Veb-sayt",
+  "phone": "Telefon",
+  "address": "Manzil",
+  "marketsServices": "Bozorlar va xizmatlar",
+  "targetRegions": "Maqsadli hududlar",
+  "targetCountries": "Maqsadli mamlakatlar",
+  "centralAsiaCountries": "Markaziy Osiyo mamlakatlari",
+  "targetServices": "Maqsadli xizmatlar",
+  "clearCentralAsia": "Markaziy Osiyoni tozalash",
+  "selectCentralAsia": "Barcha Markaziy Osiyoni tanlash",
+  "noneSelected": "Hech narsa tanlanmagan",
+  "saveProfile": "Profilni saqlash",
+  "profileSaved": "Profil saqlandi",
+  "loadFailed": "Kompaniya profilini yuklab bo‘lmadi.",
+  "saveFailed": "Kompaniya profilini saqlab bo‘lmadi.",
+  "status": {
+    "approved": "Tasdiqlangan",
+    "pending": "Kutilmoqda",
+    "rejected": "Rad etilgan",
+    "disabled": "O‘chirilgan",
+    "unknown": "Noma’lum"
+  }
+}

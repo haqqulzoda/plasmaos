@@ -1,0 +1,63 @@
+{
+  "runtimeReady": "Система локализации готова",
+  "tenderCount": "{count, plural, =0 {Нет тендеров} one {# тендер} few {# тендера} many {# тендеров} other {# тендера}}",
+  "newTendersFromSource": "Из источника {source}: {count, plural, =0 {нет новых тендеров} one {# новый тендер} few {# новых тендера} many {# новых тендеров} other {# нового тендера}}",
+  "richReview": "Безопасно просмотрите источник <strong>{source}</strong>.",
+  "actions": {
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "close": "Закрыть",
+    "retry": "Повторить",
+    "back": "Назад",
+    "continue": "Продолжить",
+    "search": "Найти",
+    "clear": "Очистить",
+    "apply": "Применить",
+    "open": "Открыть",
+    "download": "Скачать",
+    "view": "Посмотреть",
+    "previous": "Назад",
+    "next": "Далее"
+  },
+  "states": {
+    "loading": "Загрузка…",
+    "error": "Ошибка",
+    "noResults": "Нет результатов",
+    "unavailable": "Недоступно",
+    "available": "Доступно",
+    "notAvailable": "Нет данных",
+    "unknown": "Неизвестно",
+    "saved": "Сохранено",
+    "processing": "Обработка",
+    "failed": "Ошибка"
+  },
+  "pagination": "Страница {page} из {totalPages}",
+  "paginationResults": "Страница {page} из {totalPages} · {count, plural, one {# результат} few {# результата} many {# результатов} other {# результата}}",
+  "notFound": {"title": "Страница не найдена", "help": "Запрошенная пользовательская страница не существует или больше недоступна.", "back": "Вернуться на панель управления"},
+  "taxonomy": {
+    "regions": {
+      "centralAsia": "Центральная Азия",
+      "asia": "Азия",
+      "europe": "Европа",
+      "africa": "Африка",
+      "northAmerica": "Северная Америка",
+      "latinAmerica": "Латинская Америка"
+    },
+    "countries": {
+      "uzbekistan": "Узбекистан",
+      "kazakhstan": "Казахстан",
+      "kyrgyzstan": "Кыргызстан",
+      "tajikistan": "Таджикистан",
+      "turkmenistan": "Туркменистан"
+    },
+    "services": {
+      "construction": "Строительство",
+      "medical": "Медицина",
+      "it": "IT",
+      "industrialServices": "Промышленные услуги",
+      "consulting": "Консалтинг",
+      "equipmentSupply": "Поставка оборудования",
+      "other": "Другое"
+    }
+  }
+}

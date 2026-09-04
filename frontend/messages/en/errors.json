@@ -1,0 +1,5 @@
+{
+  "generic": "Something went wrong. Please try again.",
+  "localeSaveFailed": "Your interface language could not be saved.",
+  "unsupportedUiLocale": "That interface language is not available."
+}
