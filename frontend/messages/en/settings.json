@@ -8,6 +8,16 @@
     "saving": "Saving interface language…",
     "saveFailed": "Your interface language could not be saved. Your previous language is still active. Try again."
   },
+  "analysisLanguage": {
+    "title": "Default analysis language",
+    "help": "Choose the language used for newly generated Compliance analysis narratives. This is independent from the interface language.",
+    "label": "Analysis language",
+    "save": "Save analysis language",
+    "saved": "Analysis language saved",
+    "loadFailed": "Your analysis-language preference could not be loaded. English is shown as the safe fallback.",
+    "saveFailed": "Your analysis-language preference could not be saved.",
+    "arabicGate": "Arabic generation is reserved behind a quality gate and is not currently customer-selectable."
+  },
   "title": "Company profile",
   "pilotStatus": "Pilot: {status}",
   "approvalStatus": "Approval: {status}",

@@ -193,6 +193,7 @@ export default function OnboardingPage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("companyName")}</span>
               <input
+                dir="auto"
                 className={inputClass}
                 value={form.company_name}
                 onChange={(event) =>
@@ -204,6 +205,7 @@ export default function OnboardingPage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("industry")}</span>
               <input
+                dir="auto"
                 className={inputClass}
                 value={form.industry}
                 onChange={(event) =>
@@ -215,6 +217,7 @@ export default function OnboardingPage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("website")}</span>
               <input
+                dir="ltr"
                 className={inputClass}
                 value={form.website}
                 onChange={(event) => updateField("website", event.target.value)}
@@ -225,6 +228,7 @@ export default function OnboardingPage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("registrationNumber")}</span>
               <input
+                dir="ltr"
                 className={inputClass}
                 value={form.inn}
                 onChange={(event) => updateField("inn", event.target.value)}
@@ -235,6 +239,7 @@ export default function OnboardingPage() {
           <label className="space-y-2 block">
             <span className={labelClass}>{t("address")}</span>
             <input
+              dir="auto"
               className={inputClass}
               value={form.address}
               onChange={(event) => updateField("address", event.target.value)}
@@ -380,6 +385,7 @@ export default function OnboardingPage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("directorName")}</span>
               <input
+                dir="auto"
                 className={inputClass}
                 value={form.director_name}
                 onChange={(event) =>
@@ -391,9 +397,10 @@ export default function OnboardingPage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("phone")}</span>
               <div className="relative">
-                <Phone className="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                <Phone className="w-4 h-4 text-gray-500 absolute start-4 top-1/2 -translate-y-1/2" />
                 <input
-                  className={`${inputClass} pl-11`}
+                  dir="ltr"
+                  className={`${inputClass} ps-11`}
                   value={form.phone_contact}
                   onChange={(event) =>
                     updateField("phone_contact", event.target.value)
@@ -406,6 +413,7 @@ export default function OnboardingPage() {
           <label className="space-y-2 block">
             <span className={labelClass}>{t("notes")}</span>
             <textarea
+              dir="auto"
               className={`${inputClass} min-h-28 resize-y`}
               value={form.notes}
               onChange={(event) => updateField("notes", event.target.value)}

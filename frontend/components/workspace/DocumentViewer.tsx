@@ -23,7 +23,7 @@ export default function DocumentViewer({ title, content }: DocumentViewerProps) 
                     <p className="text-[11px] font-medium uppercase tracking-widest text-zinc-500">
                         {t('sourceDocument')}
                     </p>
-                    <h3 className="text-sm font-semibold text-zinc-200 truncate max-w-md">
+                    <h3 dir="auto" className="bidi-auto text-sm font-semibold text-zinc-200 truncate max-w-md">
                         {title}
                     </h3>
                 </div>
@@ -31,13 +31,13 @@ export default function DocumentViewer({ title, content }: DocumentViewerProps) 
 
             {/* ── Document Body ── */}
             <div className="flex-1 overflow-y-auto">
-                <div className="flex font-mono text-[13px] leading-relaxed">
+                <div dir="ltr" className="flex font-mono text-[13px] leading-relaxed">
                     {/* Line Numbers Gutter */}
-                    <div className="shrink-0 select-none border-r border-zinc-800/60 bg-zinc-950">
+                    <div className="shrink-0 select-none border-e border-zinc-800/60 bg-zinc-950">
                         {lines.map((_, i) => (
                             <div
                                 key={i}
-                                className="px-3 py-[1px] text-right text-zinc-600 tabular-nums"
+                                className="px-3 py-[1px] text-end text-zinc-600 tabular-nums"
                                 style={{ minWidth: '3rem' }}
                             >
                                 {i + 1}
@@ -50,7 +50,8 @@ export default function DocumentViewer({ title, content }: DocumentViewerProps) 
                         {lines.map((line, i) => (
                             <div
                                 key={i}
-                                className="py-[1px] text-zinc-300 hover:bg-zinc-800/30 transition-colors duration-75"
+                                dir="auto"
+                                className="bidi-auto py-[1px] text-start text-zinc-300 hover:bg-zinc-800/30 transition-colors duration-75"
                             >
                                 {line || '\u00A0'}
                             </div>

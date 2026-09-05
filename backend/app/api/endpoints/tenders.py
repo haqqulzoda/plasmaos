@@ -43,6 +43,7 @@ from app.core.agents.requirement_extractor import (
     EXTRACTOR_SCHEMA_VERSION,
     MAX_PAYLOAD_CHARS,
     MODEL_NAME as REQUIREMENT_MODEL_NAME,
+    PROMPT_TEMPLATE_VERSION as REQUIREMENT_PROMPT_TEMPLATE_VERSION,
     SYSTEM_PROMPT as REQUIREMENT_SYSTEM_PROMPT,
     ScopeReviewStatus,
     build_failed_extraction_artifacts_metadata,
@@ -54,6 +55,7 @@ from app.core.agents.requirement_extractor import (
 )
 from app.core.agents.strategy_extractor import (
     MODEL_NAME as STRATEGY_MODEL_NAME,
+    PROMPT_TEMPLATE_VERSION as STRATEGY_PROMPT_TEMPLATE_VERSION,
     SYSTEM_PROMPT as STRATEGY_SYSTEM_PROMPT,
     TenderStrategyIntelligence,
     extract_strategy_intelligence,
@@ -127,6 +129,12 @@ from app.schemas.tender_details import (
     ProcurementContactsSummary,
     TenderDetailsResponse,
 )
+from app.core.analysis_languages import (
+    AnalysisLanguage,
+    analysis_direction,
+    analysis_language_prompt_instruction,
+    resolve_analysis_language,
+)
 from app.schemas.source_refresh import (
     SourceCatalogItem,
     SourceRefreshActivityResponse,
@@ -197,6 +205,14 @@ from app.services.source_registry import (
     adapt_execution_result,
     execute_source_refresh,
     get_source_definition,
+)
+from app.services.analysis_language_content import (
+    analysis_text,
+    generated_headlines_follow_language,
+    generated_texts_follow_language,
+    localize_analysis_warnings,
+    localize_compliance_result,
+    localize_validated_requirements,
 )
 from app.services.source_refresh_activity import (
     source_catalog,
@@ -467,6 +483,9 @@ class AnalyzeTenderResponse(BaseModel):
     """
 
     analysis_id: str
+    version_number: int
+    analysis_language: AnalysisLanguage
+    analysis_direction: str
     requirements: ExtractedTenderRequirements
     evaluation: DynamicComplianceResult
     hybrid_compliance: HybridComplianceResult | None = None
@@ -3713,24 +3732,36 @@ def _merge_giz_document_coverage(
 
 def _failed_analysis_evaluation_payload(
     evaluation: dict[str, Any] | None,
+    *,
+    analysis_language: str | None = None,
 ) -> dict[str, Any] | None:
     if evaluation is None:
         return None
     payload = dict(evaluation)
     payload["is_compliant"] = False
-    payload["status_message"] = FAILED_EXTRACTION_STATUS_MESSAGE
+    payload["status_message"] = (
+        analysis_text(analysis_language, "extraction_failed")
+        if analysis_language
+        else FAILED_EXTRACTION_STATUS_MESSAGE
+    )
     return payload
 
 
 def _failed_analysis_hybrid_payload(
     hybrid_compliance: dict[str, Any] | None,
+    *,
+    analysis_language: str | None = None,
 ) -> dict[str, Any] | None:
     if hybrid_compliance is None:
         return None
     payload = dict(hybrid_compliance)
     payload["is_eligible"] = False
     payload["verdict_status"] = ComplianceVerdictStatus.NEEDS_REVIEW.value
-    payload["status_message"] = FAILED_EXTRACTION_STATUS_MESSAGE
+    payload["status_message"] = (
+        analysis_text(analysis_language, "extraction_failed")
+        if analysis_language
+        else FAILED_EXTRACTION_STATUS_MESSAGE
+    )
     return payload
 
 
@@ -3793,10 +3824,15 @@ def _serialize_cached_analysis_response(
             pass
 
     if analysis_status == "failed":
+        cached_failure_message = (
+            analysis_text(version.analysis_language, "extraction_failed")
+            if version.analysis_language
+            else FAILED_EXTRACTION_STATUS_MESSAGE
+        )
         cached_eval = cached_eval.model_copy(
             update={
                 "is_compliant": False,
-                "status_message": FAILED_EXTRACTION_STATUS_MESSAGE,
+                "status_message": cached_failure_message,
             }
         )
         if cached_hybrid is not None:
@@ -3804,7 +3840,7 @@ def _serialize_cached_analysis_response(
                 update={
                     "is_eligible": False,
                     "verdict_status": ComplianceVerdictStatus.NEEDS_REVIEW,
-                    "status_message": FAILED_EXTRACTION_STATUS_MESSAGE,
+                    "status_message": cached_failure_message,
                 }
             )
 
@@ -3823,6 +3859,9 @@ def _serialize_cached_analysis_response(
 
     return {
         "analysis_id": str(parent.id),
+        "version_number": version.version_number,
+        "analysis_language": version.analysis_language,
+        "analysis_direction": analysis_direction(version.analysis_language).value,
         "requirements": cached_reqs,
         "evaluation": cached_eval,
         "hybrid_compliance": cached_hybrid,
@@ -3847,6 +3886,7 @@ def _serialize_cached_analysis_response(
 async def analyze_tender(
     tender_id: UUID,
     force: bool = False,
+    analysis_language: AnalysisLanguage | None = Query(default=None),
     current_user: User = Depends(require_approved_pilot_access),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -3862,6 +3902,29 @@ async def analyze_tender(
 
     Returns cached analysis when content hash matches, unless ``force=True``.
     """
+    analysis_started = monotonic()
+    try:
+        explicit_analysis_language = (
+            analysis_language
+            if isinstance(analysis_language, (AnalysisLanguage, str))
+            else None
+        )
+        resolved_analysis_language = resolve_analysis_language(
+            explicit_analysis_language,
+            getattr(current_user, "default_analysis_language", None),
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported customer analysis language",
+        ) from exc
+
+    failed_analysis_message = (
+        FAILED_EXTRACTION_STATUS_MESSAGE
+        if resolved_analysis_language == AnalysisLanguage.ENGLISH
+        else analysis_text(resolved_analysis_language, "extraction_failed")
+    )
+
     await _ensure_tender_access(
         db=session,
         tender_id=tender_id,
@@ -3968,7 +4031,8 @@ async def analyze_tender(
         hash_input = (
             f"{EXTRACTOR_SCHEMA_VERSION}|{tender_text}|"
             f"{sorted_cred_str}|{sorted_tax_str}|{vault_cache_str}|"
-            f"{source_coverage_cache_str}"
+            f"{source_coverage_cache_str}|"
+            f"analysis_language:{resolved_analysis_language.value}"
         )
         current_content_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
 
@@ -3998,12 +4062,21 @@ async def analyze_tender(
                 latest_cached is not None
                 and latest_cached_version is not None
                 and latest_cached_version.input_hash == current_content_hash
+                and latest_cached_version.analysis_language
+                == resolved_analysis_language.value
             ):
                 try:
                     logger.info(
-                        "Returning cached analysis %s for tender %s (hash match)",
+                        "compliance_analysis_completed analysis_version_id=%s "
+                        "analysis_id=%s analysis_language=%s outcome=%s duration_ms=%s "
+                        "provider=%s model=%s",
+                        latest_cached_version.id,
                         latest_cached.id,
-                        tender_id,
+                        resolved_analysis_language.value,
+                        "cache_reuse",
+                        int((monotonic() - analysis_started) * 1000),
+                        latest_cached_version.model_provider,
+                        latest_cached_version.model_name,
                     )
                     return _serialize_cached_analysis_response(
                         latest_cached,
@@ -4022,7 +4095,10 @@ async def analyze_tender(
         # must never block the compliance result.
         async def _safe_strategy_extraction() -> TenderStrategyIntelligence | None:
             try:
-                return await extract_strategy_intelligence(tender_text)
+                return await extract_strategy_intelligence(
+                    tender_text,
+                    analysis_language=resolved_analysis_language,
+                )
             except Exception as strategy_exc:
                 logger.warning(
                     "Strategy extraction failed (non-fatal, compliance unaffected): %s",
@@ -4038,7 +4114,8 @@ async def analyze_tender(
         ]:
             try:
                 extraction_result = await extract_requirements_with_coverage(
-                    tender_text
+                    tender_text,
+                    analysis_language=resolved_analysis_language,
                 )
                 coverage_metadata = extraction_result.coverage_metadata.model_dump(
                     mode="json"
@@ -4078,7 +4155,7 @@ async def analyze_tender(
                         item.model_dump(mode="json")
                         for item in failed_artifacts
                     ],
-                    str(extraction_exc),
+                    analysis_text(resolved_analysis_language, "extraction_failed"),
                 )
 
         (
@@ -4088,6 +4165,41 @@ async def analyze_tender(
             _safe_requirement_extraction(),
             _safe_strategy_extraction(),
         )
+        if not generated_headlines_follow_language(
+            extracted_reqs,
+            resolved_analysis_language,
+        ):
+            extracted_reqs = []
+            extraction_error = analysis_text(
+                resolved_analysis_language,
+                "language_failed",
+            )
+            coverage_metadata = {
+                **coverage_metadata,
+                "coverage_status": "failed",
+            }
+        if strategy_result is not None and not generated_texts_follow_language(
+            (
+                item
+                for field_name in (
+                    "evaluation_criteria",
+                    "bidding_mechanics",
+                    "contract_and_legal_framework",
+                    "pricing_strategy_hints",
+                    "timeline_and_milestones",
+                    "submission_format",
+                )
+                for item in getattr(strategy_result, field_name)
+            ),
+            resolved_analysis_language,
+        ):
+            logger.warning(
+                "Strategy extraction failed requested-language script guard "
+                "for tender %s (language=%s)",
+                tender_id,
+                resolved_analysis_language.value,
+            )
+            strategy_result = None
         analysis_warnings = build_extraction_warnings(
             tender_text,
             coverage_metadata=coverage_metadata,
@@ -4097,38 +4209,20 @@ async def analyze_tender(
             tender=tender,
             analysis_warnings=analysis_warnings,
         )
+        analysis_warnings = localize_analysis_warnings(
+            analysis_warnings,
+            resolved_analysis_language,
+        )
 
-        if (
-            extraction_error
-            and latest_cached is not None
-            and latest_cached_version is not None
-        ):
-            cached_data = latest_cached_version.result_snapshot or {}
-            if cached_data.get("analysis_status") != "failed":
-                try:
-                    return _serialize_cached_analysis_response(
-                        latest_cached,
-                        latest_cached_version,
-                        include_debug=current_user.is_admin,
-                        extra_warnings=[
-                            (
-                                "Fresh compliance extraction failed; returning the "
-                                f"previous analysis. Error: {extraction_error}"
-                            )
-                        ],
-                    )
-                except (ValidationError, KeyError):
-                    logger.warning(
-                        "Previous analysis %s could not be reused after extraction failure",
-                        latest_cached.id,
-                    )
-
-        validated_reqs = classify_requirements_scope(
+        validated_reqs = localize_validated_requirements(
+            classify_requirements_scope(
             validate_requirements_evidence(
                 extracted_reqs,
                 tender_text,
             ),
             tender_text,
+            ),
+            resolved_analysis_language,
         )
         accepted_reqs, needs_review_reqs, rejected_reqs = _split_validated_requirements(
             validated_reqs,
@@ -4155,7 +4249,7 @@ async def analyze_tender(
         if extraction_error or coverage_status == "failed":
             analysis_status = "failed"
             analysis_warnings.append(
-                "Requirement extraction failed; no new compliance requirements were confirmed."
+                analysis_text(resolved_analysis_language, "extraction_failed")
             )
         elif (
             coverage_status == "partial"
@@ -4182,7 +4276,10 @@ async def analyze_tender(
                 failed_dealbreakers=[],
                 manual_reviews_required=[],
                 satisfied_requirements=[],
-                status_message=FAILED_EXTRACTION_STATUS_MESSAGE,
+                status_message=analysis_text(
+                    resolved_analysis_language,
+                    "extraction_failed",
+                ),
             )
         else:
             hybrid_result = evaluate_tender_compliance(
@@ -4248,6 +4345,20 @@ async def analyze_tender(
                         ),
                     }
                 )
+
+        hybrid_result = localize_compliance_result(
+            hybrid_result,
+            resolved_analysis_language,
+        )
+        if analysis_status == "failed":
+            hybrid_result = hybrid_result.model_copy(
+                update={
+                    "status_message": analysis_text(
+                        resolved_analysis_language,
+                        "extraction_failed",
+                    )
+                }
+            )
 
         source_chunk_index_by_fingerprint = _source_chunk_index_by_fingerprint(
             validated_reqs
@@ -4387,6 +4498,8 @@ async def analyze_tender(
         if (
             concurrent_version is not None
             and concurrent_version.input_hash == current_content_hash
+            and concurrent_version.analysis_language
+            == resolved_analysis_language.value
         ):
             try:
                 cached_response = _serialize_cached_analysis_response(
@@ -4395,6 +4508,18 @@ async def analyze_tender(
                     include_debug=current_user.is_admin,
                 )
                 await session.rollback()
+                logger.info(
+                    "compliance_analysis_completed analysis_version_id=%s "
+                    "analysis_id=%s analysis_language=%s outcome=%s duration_ms=%s "
+                    "provider=%s model=%s",
+                    concurrent_version.id,
+                    analysis.id,
+                    resolved_analysis_language.value,
+                    "concurrent_cache_reuse",
+                    int((monotonic() - analysis_started) * 1000),
+                    concurrent_version.model_provider,
+                    concurrent_version.model_name,
+                )
                 return cached_response
             except (ValidationError, KeyError):
                 logger.warning(
@@ -4403,13 +4528,24 @@ async def analyze_tender(
                     analysis.id,
                 )
 
-        requirement_prompt_hash = sha256_text(REQUIREMENT_SYSTEM_PROMPT)
+        requirement_prompt_hash = sha256_text(
+            "|".join(
+                (
+                    REQUIREMENT_SYSTEM_PROMPT,
+                    REQUIREMENT_PROMPT_TEMPLATE_VERSION,
+                    analysis_language_prompt_instruction(
+                        resolved_analysis_language
+                    ),
+                )
+            )
+        )
         provenance_snapshot = {
             "analysis_pipeline": {
                 "pipeline_version": ANALYSIS_PIPELINE_VERSION,
                 "engine_metadata": reproducibility_snapshot.get("engine_metadata"),
             },
             "analysis_inputs": {
+                "analysis_language": resolved_analysis_language.value,
                 "taxonomy_nodes": _taxonomy_fingerprint_payload(taxonomy_nodes),
                 "source_coverage": _giz_document_coverage_payload(tender),
             },
@@ -4417,7 +4553,7 @@ async def analyze_tender(
                 "model_provider": "google",
                 "model_name": REQUIREMENT_MODEL_NAME,
                 "model_version": None,
-                "prompt_template_version": EXTRACTOR_SCHEMA_VERSION,
+                "prompt_template_version": REQUIREMENT_PROMPT_TEMPLATE_VERSION,
                 "prompt_template_hash": requirement_prompt_hash,
                 "temperature": 0.0,
             },
@@ -4425,13 +4561,23 @@ async def analyze_tender(
                 "model_provider": "google",
                 "model_name": STRATEGY_MODEL_NAME,
                 "model_version": None,
-                "prompt_template_version": None,
-                "prompt_template_hash": sha256_text(STRATEGY_SYSTEM_PROMPT),
-                "temperature": 0.0,
+                "prompt_template_version": STRATEGY_PROMPT_TEMPLATE_VERSION,
+                "prompt_template_hash": sha256_text(
+                    "|".join(
+                        (
+                            STRATEGY_SYSTEM_PROMPT,
+                            STRATEGY_PROMPT_TEMPLATE_VERSION,
+                            analysis_language_prompt_instruction(
+                                resolved_analysis_language
+                            ),
+                        )
+                    )
+                ),
+                "temperature": 0.2,
                 "result_available": strategy_result is not None,
             },
         }
-        await append_analysis_version(
+        created_version = await append_analysis_version(
             session,
             analysis_id=analysis.id,
             requested_by_user_id=current_user.id,
@@ -4441,7 +4587,7 @@ async def analyze_tender(
             model_provider="google",
             model_name=REQUIREMENT_MODEL_NAME,
             model_version=None,
-            prompt_template_version=EXTRACTOR_SCHEMA_VERSION,
+            prompt_template_version=REQUIREMENT_PROMPT_TEMPLATE_VERSION,
             prompt_template_hash=requirement_prompt_hash,
             provenance_snapshot=provenance_snapshot,
             tender_snapshot=build_tender_snapshot(tender),
@@ -4458,6 +4604,7 @@ async def analyze_tender(
                 document_snapshot_input(document, source_system=tender.source_system)
                 for document in tender_documents
             ],
+            analysis_language=resolved_analysis_language,
         )
 
         # Compatibility-only mirrors for older integrations. Customer reads
@@ -4469,6 +4616,18 @@ async def analyze_tender(
         analysis.content_hash = current_content_hash
         await session.commit()
         await session.refresh(analysis)
+        logger.info(
+            "compliance_analysis_completed analysis_version_id=%s "
+            "analysis_id=%s analysis_language=%s outcome=%s duration_ms=%s "
+            "provider=%s model=%s",
+            created_version.id,
+            analysis.id,
+            resolved_analysis_language.value,
+            analysis_status,
+            int((monotonic() - analysis_started) * 1000),
+            "google",
+            REQUIREMENT_MODEL_NAME,
+        )
     except HTTPException:
         raise
     except SQLAlchemyError as exc:
@@ -4488,6 +4647,9 @@ async def analyze_tender(
 
     return {
         "analysis_id": str(analysis.id),
+        "version_number": created_version.version_number,
+        "analysis_language": resolved_analysis_language,
+        "analysis_direction": analysis_direction(resolved_analysis_language).value,
         "requirements": legacy_requirements,
         "evaluation": legacy_evaluation,
         "hybrid_compliance": hybrid_result,
@@ -8209,6 +8371,9 @@ async def get_latest_analysis(
     if profile is None or profile.user_id != current_user.id:
         return {
             "analysis_id": None,
+            "version_number": None,
+            "analysis_language": None,
+            "analysis_direction": "auto",
             "requirements": None,
             "evaluation": None,
             "hybrid_compliance": None,
@@ -8232,6 +8397,9 @@ async def get_latest_analysis(
     if analysis is None:
         return {
             "analysis_id": None,
+            "version_number": None,
+            "analysis_language": None,
+            "analysis_direction": "auto",
             "requirements": None,
             "evaluation": None,
             "hybrid_compliance": None,
@@ -8265,11 +8433,20 @@ async def get_latest_analysis(
         analysis_data.get("hybrid_compliance")
     )
     if analysis_status == "failed":
-        evaluation_payload = _failed_analysis_evaluation_payload(evaluation_payload)
-        hybrid_payload = _failed_analysis_hybrid_payload(hybrid_payload)
+        evaluation_payload = _failed_analysis_evaluation_payload(
+            evaluation_payload,
+            analysis_language=version.analysis_language,
+        )
+        hybrid_payload = _failed_analysis_hybrid_payload(
+            hybrid_payload,
+            analysis_language=version.analysis_language,
+        )
 
     return {
         "analysis_id": str(analysis.id),
+        "version_number": version.version_number,
+        "analysis_language": version.analysis_language,
+        "analysis_direction": analysis_direction(version.analysis_language).value,
         "requirements": analysis_data.get("requirements"),
         "evaluation": evaluation_payload,
         "hybrid_compliance": hybrid_payload,
@@ -8353,6 +8530,7 @@ def _safe_version_provenance(version: AnalysisVersion) -> dict[str, Any]:
         "prompt_template_version": version.prompt_template_version,
         "prompt_template_hash": version.prompt_template_hash,
         "snapshot_completeness": version.snapshot_completeness,
+        "analysis_language": version.analysis_language,
         "created_at": version.created_at.isoformat(),
         "completed_at": (
             version.completed_at.isoformat() if version.completed_at else None
@@ -8654,6 +8832,14 @@ async def export_compliance_pdf(
             )
 
     analysis_data = version.result_snapshot or {}
+    if version.analysis_language == AnalysisLanguage.ARABIC.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Arabic PDF export is not available until Arabic shaping and "
+                "right-to-left report rendering pass the release quality gate."
+            ),
+        )
     hybrid_compliance = sanitize_internal_requirement_diagnostics(
         analysis_data.get("hybrid_compliance")
     )
@@ -8713,6 +8899,7 @@ async def export_compliance_pdf(
             analysis_warnings=[str(warning) for warning in analysis_warnings],
             analysis_version=version.version_number,
             snapshot_completeness=version.snapshot_completeness,
+            analysis_language=version.analysis_language or AnalysisLanguage.ENGLISH.value,
         )
     except Exception as exc:
         logger.exception("Compliance PDF export failed for tender %s", tender_id)
@@ -8730,6 +8917,8 @@ async def export_compliance_pdf(
         media_type="application/pdf",
         headers={
             "Content-Disposition": _safe_content_disposition("attachment", filename),
+            "X-Analysis-Language": version.analysis_language or "not-recorded",
+            "X-Analysis-Version": str(version.version_number),
         },
     )
 

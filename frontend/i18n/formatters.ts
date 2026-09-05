@@ -6,6 +6,7 @@ const INTL_LOCALES: Record<CustomerSelectableLocale, string> = {
     en: 'en-US',
     uz: 'uz-Latn-UZ',
     ru: 'ru-RU',
+    ar: 'ar',
 };
 
 type DateInput = Date | string | number | null | undefined;

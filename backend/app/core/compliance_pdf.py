@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import re
 from datetime import datetime
+from functools import partial
 from pathlib import Path, PurePosixPath
 from typing import Any
 from xml.sax.saxutils import escape
@@ -46,6 +47,93 @@ WARN_SOFT = colors.HexColor("#FFFBEB")
 BAD_SOFT = colors.HexColor("#FEF2F2")
 GOOD_SOFT = colors.HexColor("#ECFDF5")
 
+REPORT_TEXT = {
+    "en": {
+        "report": "Compliance Analysis Report", "footer": "Plasma AI Compliance Analysis Report",
+        "page": "Page {value}", "untitled": "Untitled tender", "external_id": "Tender external ID",
+        "company": "Company", "generated": "Generated", "analysis_id": "Analysis ID",
+        "analysis_version": "Analysis version", "analysis_language": "Analysis language",
+        "snapshot": "Snapshot completeness", "unknown": "Unknown", "executive": "Executive Summary",
+        "verdict": "Verdict", "manual_required": "Manual review required.", "satisfied": "Satisfied",
+        "failed": "Failed", "manual_review": "Manual review", "recorded": "Recorded",
+        "skipped_optional": "Skipped optional", "evidence_summary": "Evidence validation summary: {accepted} accepted, {review} requiring review, {bid} bid-affecting detected requirements.",
+        "warnings": "Warnings", "omitted": "{value} additional warning(s) omitted.",
+        "failed_section": "Failed / Missing Requirements", "no_failed": "No failed bid-stage requirements were detected in this analysis.",
+        "satisfied_section": "Satisfied Requirements", "no_satisfied": "No satisfied requirements were recorded in this analysis.",
+        "manual_section": "Manual Review Required", "no_manual": "No manual review items were recorded in this analysis.",
+        "recorded_section": "Recorded Obligations", "no_recorded": "No non-bid obligations were recorded in this analysis.",
+        "source_evidence": "Source evidence: {source}, page {page}", "detected": "Detected requirement: {value}",
+        "recorded_note": "Recorded as a non-bid obligation", "detected_fallback": "Detected requirement",
+        "assessment": "Assessment", "review_note": "Review note", "vault_gap": "Company Vault gap",
+        "credential": "Credential", "type": "Type", "source": "Source", "confidence": "Confidence",
+        "vault_match": "Company Vault match", "quote": "Quote", "audit": "Audit Trail",
+        "content_hash": "Content hash", "override_seal": "Override seal", "no_override": "No override seal recorded",
+        "generated_timestamp": "Generated timestamp", "warning_count": "Analysis warnings count",
+        "disclaimer": "This report summarizes detected tender requirements and source evidence. It is intended to support business review and does not replace legal or procurement advice.",
+        "status_not_eligible": "Not eligible", "status_needs_review": "Needs review",
+        "status_eligible_review": "Eligible with review", "status_compliant": "No failed bid-stage requirements detected",
+    },
+    "uz": {
+        "report": "Muvofiqlik tahlili hisoboti", "footer": "Plasma AI muvofiqlik tahlili hisoboti",
+        "page": "Sahifa {value}", "untitled": "Nomsiz tender", "external_id": "Tender tashqi ID-si",
+        "company": "Kompaniya", "generated": "Yaratilgan vaqt", "analysis_id": "Tahlil ID-si",
+        "analysis_version": "Tahlil versiyasi", "analysis_language": "Tahlil tili",
+        "snapshot": "Surat to'liqligi", "unknown": "Noma'lum", "executive": "Qisqacha xulosa",
+        "verdict": "Natija", "manual_required": "Qo'lda ko'rib chiqish talab etiladi.", "satisfied": "Bajarilgan",
+        "failed": "Bajarilmagan", "manual_review": "Qo'lda ko'rib chiqish", "recorded": "Qayd etilgan",
+        "skipped_optional": "Ixtiyoriy, o'tkazib yuborilgan", "evidence_summary": "Dalillarni tekshirish xulosasi: {accepted} qabul qilindi, {review} ko'rib chiqishni talab qiladi, {bid} tenderga ta'sir qiluvchi talab aniqlandi.",
+        "warnings": "Ogohlantirishlar", "omitted": "Yana {value} ta ogohlantirish ko'rsatilmagan.",
+        "failed_section": "Bajarilmagan / yetishmayotgan talablar", "no_failed": "Bu tahlilda bajarilmagan tender talablari aniqlanmadi.",
+        "satisfied_section": "Bajarilgan talablar", "no_satisfied": "Bu tahlilda bajarilgan talablar qayd etilmadi.",
+        "manual_section": "Qo'lda ko'rib chiqish talab etiladi", "no_manual": "Qo'lda ko'rib chiqiladigan bandlar qayd etilmadi.",
+        "recorded_section": "Qayd etilgan majburiyatlar", "no_recorded": "Tenderdan tashqari majburiyatlar qayd etilmadi.",
+        "source_evidence": "Manba dalili: {source}, {page}-sahifa", "detected": "Aniqlangan talab: {value}",
+        "recorded_note": "Tenderdan tashqari majburiyat sifatida qayd etildi", "detected_fallback": "Aniqlangan talab",
+        "assessment": "Baholash", "review_note": "Ko'rib chiqish izohi", "vault_gap": "Kompaniya omboridagi kamchilik",
+        "credential": "Hujjat", "type": "Tur", "source": "Manba", "confidence": "Ishonchlilik",
+        "vault_match": "Kompaniya omboridagi moslik", "quote": "Iqtibos", "audit": "Audit izi",
+        "content_hash": "Kontent xeshi", "override_seal": "Bekor qilish muhri", "no_override": "Bekor qilish muhri qayd etilmagan",
+        "generated_timestamp": "Yaratilgan vaqt belgisi", "warning_count": "Tahlil ogohlantirishlari soni",
+        "disclaimer": "Ushbu hisobot aniqlangan tender talablari va manba dalillarini umumlashtiradi. U biznes ko'rib chiqishini qo'llab-quvvatlaydi va yuridik yoki xarid bo'yicha maslahat o'rnini bosmaydi.",
+        "status_not_eligible": "Muvofiq emas", "status_needs_review": "Ko'rib chiqish kerak",
+        "status_eligible_review": "Ko'rib chiqish sharti bilan muvofiq", "status_compliant": "Bajarilmagan tender talablari aniqlanmadi",
+    },
+    "ru": {
+        "report": "Отчёт по анализу соответствия", "footer": "Отчёт Plasma AI по анализу соответствия",
+        "page": "Страница {value}", "untitled": "Тендер без названия", "external_id": "Внешний ID тендера",
+        "company": "Компания", "generated": "Сформирован", "analysis_id": "ID анализа",
+        "analysis_version": "Версия анализа", "analysis_language": "Язык анализа",
+        "snapshot": "Полнота снимка", "unknown": "Неизвестно", "executive": "Краткое резюме",
+        "verdict": "Результат", "manual_required": "Требуется ручная проверка.", "satisfied": "Выполнено",
+        "failed": "Не выполнено", "manual_review": "Ручная проверка", "recorded": "Зафиксировано",
+        "skipped_optional": "Пропущено необязательных", "evidence_summary": "Итог проверки доказательств: принято — {accepted}, требует проверки — {review}, влияющих на заявку требований — {bid}.",
+        "warnings": "Предупреждения", "omitted": "Ещё предупреждений не показано: {value}.",
+        "failed_section": "Невыполненные / отсутствующие требования", "no_failed": "В этом анализе невыполненные требования к заявке не обнаружены.",
+        "satisfied_section": "Выполненные требования", "no_satisfied": "В этом анализе выполненные требования не зафиксированы.",
+        "manual_section": "Требуется ручная проверка", "no_manual": "Пункты для ручной проверки не зафиксированы.",
+        "recorded_section": "Зафиксированные обязательства", "no_recorded": "Обязательства вне этапа подачи заявки не зафиксированы.",
+        "source_evidence": "Источник доказательства: {source}, страница {page}", "detected": "Выявленное требование: {value}",
+        "recorded_note": "Зафиксировано как обязательство вне этапа подачи заявки", "detected_fallback": "Выявленное требование",
+        "assessment": "Оценка", "review_note": "Примечание к проверке", "vault_gap": "Недостаток в хранилище компании",
+        "credential": "Документ", "type": "Тип", "source": "Источник", "confidence": "Уверенность",
+        "vault_match": "Совпадение в хранилище компании", "quote": "Цитата", "audit": "Аудиторский след",
+        "content_hash": "Хеш содержимого", "override_seal": "Печать переопределения", "no_override": "Печать переопределения не зафиксирована",
+        "generated_timestamp": "Временная метка формирования", "warning_count": "Количество предупреждений анализа",
+        "disclaimer": "Этот отчёт обобщает выявленные требования тендера и исходные доказательства. Он предназначен для деловой проверки и не заменяет юридическую или закупочную консультацию.",
+        "status_not_eligible": "Не соответствует", "status_needs_review": "Требует проверки",
+        "status_eligible_review": "Соответствует при условии проверки", "status_compliant": "Невыполненные требования к заявке не обнаружены",
+    },
+}
+
+
+def _report_language(value: object) -> str:
+    code = _text(value, "en").lower()
+    return code if code in REPORT_TEXT else "en"
+
+
+def _tr(language: str, key: str, **values: object) -> str:
+    return REPORT_TEXT[language][key].format(**values)
+
 
 def _text(value: object, fallback: str = "") -> str:
     if value is None:
@@ -74,13 +162,13 @@ def _source_filename(value: object) -> str:
     return name or "source document"
 
 
-def _display_status(value: object) -> str:
+def _display_status(value: object, language: str) -> str:
     status = _text(value, "NEEDS_REVIEW")
     labels = {
-        "NOT_ELIGIBLE": "Not eligible",
-        "NEEDS_REVIEW": "Needs review",
-        "ELIGIBLE_WITH_REVIEW": "Eligible with review",
-        "COMPLIANT": "No failed bid-stage requirements detected",
+        "NOT_ELIGIBLE": _tr(language, "status_not_eligible"),
+        "NEEDS_REVIEW": _tr(language, "status_needs_review"),
+        "ELIGIBLE_WITH_REVIEW": _tr(language, "status_eligible_review"),
+        "COMPLIANT": _tr(language, "status_compliant"),
     }
     return labels.get(status, status.replace("_", " ").title())
 
@@ -204,12 +292,12 @@ def _make_styles() -> dict[str, ParagraphStyle]:
     }
 
 
-def _footer(canvas, doc) -> None:
+def _footer(canvas, doc, *, language: str) -> None:
     canvas.saveState()
     canvas.setFont("DejaVu", 7)
     canvas.setFillColor(MUTED)
-    canvas.drawString(2 * cm, 1 * cm, "Plasma AI Compliance Analysis Report")
-    canvas.drawRightString(19 * cm, 1 * cm, f"Page {doc.page}")
+    canvas.drawString(2 * cm, 1 * cm, _tr(language, "footer"))
+    canvas.drawRightString(19 * cm, 1 * cm, _tr(language, "page", value=doc.page))
     canvas.restoreState()
 
 
@@ -242,13 +330,14 @@ def _meta_table(rows: list[tuple[str, object]], styles: dict[str, ParagraphStyle
 def _counts_table(
     hybrid: dict[str, Any],
     styles: dict[str, ParagraphStyle],
+    language: str,
 ) -> Table:
     values = [
-        ("Satisfied", hybrid.get("satisfied_count", 0)),
-        ("Failed", hybrid.get("failed_count", 0)),
-        ("Manual review", hybrid.get("manual_review_count", 0)),
-        ("Recorded", hybrid.get("recorded_obligations_count", 0)),
-        ("Skipped optional", hybrid.get("skipped_optional_count", 0)),
+        (_tr(language, "satisfied"), hybrid.get("satisfied_count", 0)),
+        (_tr(language, "failed"), hybrid.get("failed_count", 0)),
+        (_tr(language, "manual_review"), hybrid.get("manual_review_count", 0)),
+        (_tr(language, "recorded"), hybrid.get("recorded_obligations_count", 0)),
+        (_tr(language, "skipped_optional"), hybrid.get("skipped_optional_count", 0)),
     ]
     data = [
         [Paragraph(f"<b>{_xml(label)}</b>", styles["small"]) for label, _ in values],
@@ -294,6 +383,7 @@ def _append_requirement(
     detail: dict[str, Any],
     styles: dict[str, ParagraphStyle],
     *,
+    language: str,
     tone: str,
     include_match: bool = False,
     recorded: bool = False,
@@ -306,19 +396,19 @@ def _append_requirement(
     quote = _truncate(_detail_value(detail, "exact_quote", "raw_text_snippet"), limit=620)
 
     meta_parts = [
-        f"Source evidence: {source}, page {source_page}",
-        f"Detected requirement: {_text(detail.get('category') or detail.get('requirement_type'), 'requirement')}",
+        _tr(language, "source_evidence", source=source, page=source_page),
+        _tr(language, "detected", value=_text(detail.get('category') or detail.get('requirement_type'), "requirement")),
     ]
     if recorded:
-        meta_parts.append("Recorded as a non-bid obligation")
+        meta_parts.append(_tr(language, "recorded_note"))
 
     paragraphs: list[Paragraph] = [
-        Paragraph(f"<b>{_xml(title, 'Detected requirement')}</b>", styles["body"]),
+        Paragraph(f"<b>{_xml(title, _tr(language, 'detected_fallback'))}</b>", styles["body"]),
         Paragraph(_xml(" | ".join(meta_parts)), styles["small"]),
     ]
 
     if reason:
-        paragraphs.append(Paragraph(f"<b>Assessment:</b> {_xml(reason)}", styles["body"]))
+        paragraphs.append(Paragraph(f"<b>{_xml(_tr(language, 'assessment'))}:</b> {_xml(reason)}", styles["body"]))
 
     validation_reason = _customer_text(
         _detail_value(detail, "validation_reason", "eligibility_reason"),
@@ -326,36 +416,36 @@ def _append_requirement(
     )
     if validation_reason:
         paragraphs.append(
-            Paragraph(f"<b>Review note:</b> {_xml(validation_reason)}", styles["small"])
+            Paragraph(f"<b>{_xml(_tr(language, 'review_note'))}:</b> {_xml(validation_reason)}", styles["small"])
         )
 
     vault_missing_reason = _customer_text(_detail_value(detail, "vault_missing_reason"), limit=420)
     if vault_missing_reason:
         paragraphs.append(
-            Paragraph(f"<b>Company Vault gap:</b> {_xml(vault_missing_reason)}", styles["body"])
+            Paragraph(f"<b>{_xml(_tr(language, 'vault_gap'))}:</b> {_xml(vault_missing_reason)}", styles["body"])
         )
 
     if include_match:
         match_parts = []
         matched_credential = _customer_text(_detail_value(detail, "matched_credential"), limit=180)
         if matched_credential:
-            match_parts.append(f"Credential: {matched_credential}")
+            match_parts.append(f"{_tr(language, 'credential')}: {matched_credential}")
         vault_type = _detail_value(detail, "vault_match_type")
         if vault_type:
-            match_parts.append(f"Type: {vault_type}")
+            match_parts.append(f"{_tr(language, 'type')}: {vault_type}")
         vault_source = _detail_value(detail, "vault_match_source")
         if vault_source:
-            match_parts.append(f"Source: {vault_source.replace('_', ' ')}")
+            match_parts.append(f"{_tr(language, 'source')}: {vault_source.replace('_', ' ')}")
         confidence = _format_confidence(detail.get("vault_match_confidence"))
         if confidence:
-            match_parts.append(f"Confidence: {confidence}")
+            match_parts.append(f"{_tr(language, 'confidence')}: {confidence}")
         if match_parts:
             paragraphs.append(
-                Paragraph(f"<b>Company Vault match:</b> {_xml('; '.join(match_parts))}", styles["body"])
+                Paragraph(f"<b>{_xml(_tr(language, 'vault_match'))}:</b> {_xml('; '.join(match_parts))}", styles["body"])
             )
 
     if quote:
-        paragraphs.append(Paragraph(f"<b>Quote:</b> &quot;{_xml(quote)}&quot;", styles["quote"]))
+        paragraphs.append(Paragraph(f"<b>{_xml(_tr(language, 'quote'))}:</b> &quot;{_xml(quote)}&quot;", styles["quote"]))
 
     table = Table([[paragraphs]], colWidths=[16.8 * cm], hAlign="LEFT")
     table.setStyle(
@@ -381,6 +471,7 @@ def _append_requirement_section(
     items: list[dict[str, Any]],
     styles: dict[str, ParagraphStyle],
     *,
+    language: str,
     empty_message: str,
     tone: str,
     include_match: bool = False,
@@ -395,6 +486,7 @@ def _append_requirement_section(
             elements,
             detail,
             styles,
+            language=language,
             tone=tone,
             include_match=include_match,
             recorded=recorded,
@@ -415,7 +507,9 @@ def build_compliance_report_pdf(
     analysis_warnings: list[str],
     analysis_version: object | None = None,
     snapshot_completeness: object | None = None,
+    analysis_language: object | None = None,
 ) -> bytes:
+    language = _report_language(analysis_language)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -428,11 +522,11 @@ def build_compliance_report_pdf(
     styles = _make_styles()
     elements: list[Any] = []
 
-    status = _display_status(hybrid_compliance.get("verdict_status"))
+    status = _display_status(hybrid_compliance.get("verdict_status"), language)
     status_message = _customer_text(
         hybrid_compliance.get("status_message"),
         limit=620,
-    ) or "Manual review required."
+    ) or _tr(language, "manual_required")
     warnings = [
         _customer_text(warning, limit=260)
         for warning in analysis_warnings
@@ -441,19 +535,20 @@ def build_compliance_report_pdf(
     validation_summary = (evidence_validation or {}).get("summary") or {}
 
     elements.append(Paragraph("Plasma AI", styles["brand"]))
-    elements.append(Paragraph("Compliance Analysis Report", styles["title"]))
-    elements.append(Paragraph(_xml(tender_title, "Untitled tender"), styles["subtitle"]))
+    elements.append(Paragraph(_tr(language, "report"), styles["title"]))
+    elements.append(Paragraph(_xml(tender_title, _tr(language, "untitled")), styles["subtitle"]))
     elements.append(
         _meta_table(
             [
-                ("Tender external ID", _text(tender_external_id, "-")),
-                ("Company", _text(company_name, "-")),
-                ("Generated", generated_at.strftime("%Y-%m-%d %H:%M UTC")),
-                ("Analysis ID", _text(analysis_id, "-")),
-                ("Analysis version", _text(analysis_version, "-")),
+                (_tr(language, "external_id"), _text(tender_external_id, "-")),
+                (_tr(language, "company"), _text(company_name, "-")),
+                (_tr(language, "generated"), generated_at.strftime("%Y-%m-%d %H:%M UTC")),
+                (_tr(language, "analysis_id"), _text(analysis_id, "-")),
+                (_tr(language, "analysis_version"), _text(analysis_version, "-")),
+                (_tr(language, "analysis_language"), language),
                 (
-                    "Snapshot completeness",
-                    _text(snapshot_completeness, "Unknown"),
+                    _tr(language, "snapshot"),
+                    _text(snapshot_completeness, _tr(language, "unknown")),
                 ),
             ],
             styles,
@@ -461,81 +556,80 @@ def build_compliance_report_pdf(
     )
     elements.append(Spacer(1, 12))
 
-    _section_title(elements, "Executive Summary", styles)
-    elements.append(Paragraph(f"<b>Verdict:</b> {_xml(status)}", styles["body"]))
+    _section_title(elements, _tr(language, "executive"), styles)
+    elements.append(Paragraph(f"<b>{_xml(_tr(language, 'verdict'))}:</b> {_xml(status)}", styles["body"]))
     elements.append(Paragraph(_xml(status_message), styles["body"]))
     elements.append(Spacer(1, 5))
-    elements.append(_counts_table(hybrid_compliance, styles))
+    elements.append(_counts_table(hybrid_compliance, styles, language))
 
     if validation_summary:
         elements.append(Spacer(1, 6))
-        validation_text = (
-            "Evidence validation summary: "
-            f"{validation_summary.get('accepted', 0)} accepted, "
-            f"{validation_summary.get('needs_review', 0)} requiring review, "
-            f"{validation_summary.get('bid_affecting', 0)} bid-affecting detected requirements."
+        validation_text = _tr(
+            language, "evidence_summary", accepted=validation_summary.get("accepted", 0),
+            review=validation_summary.get("needs_review", 0), bid=validation_summary.get("bid_affecting", 0),
         )
         elements.append(Paragraph(_xml(validation_text), styles["small"]))
 
     if warnings:
         elements.append(Spacer(1, 6))
-        elements.append(Paragraph(f"<b>Warnings:</b> {len(warnings)}", styles["body"]))
+        elements.append(Paragraph(f"<b>{_xml(_tr(language, 'warnings'))}:</b> {len(warnings)}", styles["body"]))
         for warning in warnings[:6]:
             elements.append(Paragraph(f"- {_xml(warning)}", styles["small"]))
         if len(warnings) > 6:
             elements.append(
-                Paragraph(f"- {_xml(len(warnings) - 6)} additional warning(s) omitted.", styles["small"])
+                Paragraph(f"- {_xml(_tr(language, 'omitted', value=len(warnings) - 6))}", styles["small"])
             )
 
     _append_requirement_section(
         elements,
-        "Failed / Missing Requirements",
+        _tr(language, "failed_section"),
         list(hybrid_compliance.get("failed_dealbreakers") or []),
         styles,
-        empty_message="No failed bid-stage requirements were detected in this analysis.",
+        empty_message=_tr(language, "no_failed"), language=language,
         tone="bad",
     )
     _append_requirement_section(
         elements,
-        "Satisfied Requirements",
+        _tr(language, "satisfied_section"),
         list(hybrid_compliance.get("satisfied_requirements") or []),
         styles,
-        empty_message="No satisfied requirements were recorded in this analysis.",
+        empty_message=_tr(language, "no_satisfied"), language=language,
         tone="good",
         include_match=True,
     )
     _append_requirement_section(
         elements,
-        "Manual Review Required",
+        _tr(language, "manual_section"),
         list(hybrid_compliance.get("manual_reviews_required") or []),
         styles,
-        empty_message="No manual review items were recorded in this analysis.",
+        empty_message=_tr(language, "no_manual"), language=language,
         tone="warn",
     )
     _append_requirement_section(
         elements,
-        "Recorded Obligations",
+        _tr(language, "recorded_section"),
         list(hybrid_compliance.get("recorded_obligations") or []),
         styles,
-        empty_message="No non-bid obligations were recorded in this analysis.",
+        empty_message=_tr(language, "no_recorded"), language=language,
         tone="warn",
         recorded=True,
     )
 
-    _section_title(elements, "Audit Trail", styles)
+    _section_title(elements, _tr(language, "audit"), styles)
     elements.append(
         _meta_table(
             [
-                ("Analysis ID", _text(analysis_id, "-")),
-                ("Analysis version", _text(analysis_version, "-")),
+                (_tr(language, "analysis_id"), _text(analysis_id, "-")),
+                (_tr(language, "analysis_version"), _text(analysis_version, "-")),
+                (_tr(language, "analysis_language"), language),
                 (
-                    "Snapshot completeness",
-                    _text(snapshot_completeness, "Unknown"),
+                    _tr(language, "snapshot"),
+                    _text(snapshot_completeness, _tr(language, "unknown")),
                 ),
-                ("Content hash", _text(content_hash, "-")),
-                ("Override seal", _text(override_seal, "No override seal recorded")),
-                ("Generated timestamp", generated_at.isoformat()),
-                ("Analysis warnings count", len(warnings)),
+                (_tr(language, "content_hash"), _text(content_hash, "-")),
+                (_tr(language, "override_seal"), _text(override_seal, _tr(language, "no_override"))),
+                (_tr(language, "generated_timestamp"), generated_at.isoformat()),
+                (_tr(language, "warning_count"), len(warnings)),
             ],
             styles,
         )
@@ -543,12 +637,12 @@ def build_compliance_report_pdf(
     elements.append(Spacer(1, 8))
     elements.append(
         Paragraph(
-            "This report summarizes detected tender requirements and source evidence. "
-            "It is intended to support business review and does not replace legal or procurement advice.",
+            _tr(language, "disclaimer"),
             styles["small"],
         )
     )
 
-    doc.build(elements, onFirstPage=_footer, onLaterPages=_footer)
+    footer = partial(_footer, language=language)
+    doc.build(elements, onFirstPage=footer, onLaterPages=footer)
     buffer.seek(0)
     return buffer.getvalue()

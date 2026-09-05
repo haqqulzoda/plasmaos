@@ -117,7 +117,7 @@ class TenderRecommendationMigrationContractTests(unittest.TestCase):
         script = ScriptDirectory.from_config(config)
         self.assertEqual(
             script.get_current_head(),
-            "20260902_0001_s7_2_user_ui_locale",
+            "20260904_0001_s8_2_analysis_language",
         )
         self.assertEqual(self.migration.down_revision, "20260824_0002_s0_4c")
 

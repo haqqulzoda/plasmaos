@@ -10,8 +10,8 @@ const token = {
   sub: `72000000-0000-4000-8000-00000000000${label === 'b' ? '2' : '1'}`,
   accessToken,
   approval_status: 'approved',
-  platform_role: 'pilot_user',
-  is_admin: false,
+  platform_role: process.env.S72_PLATFORM_ROLE ?? 'pilot_user',
+  is_admin: process.env.S72_IS_ADMIN === '1',
 };
 
 console.log(await encode({token, secret, salt, maxAge: 60 * 60}));

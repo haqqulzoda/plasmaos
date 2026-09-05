@@ -38,6 +38,20 @@ export interface AnalyzeTenderResponse {
     evaluation: DynamicEvaluation;
     content_hash: string;
     override_seal: string | null;
+    version_number: number;
+    analysis_language: 'en' | 'uz' | 'ru' | 'ar';
+    analysis_direction: 'ltr' | 'rtl';
+}
+
+export interface AnalysisVersionMetadata {
+    analysis_id: string;
+    version_number: number;
+    origin: string;
+    status: string;
+    analysis_language: 'en' | 'uz' | 'ru' | 'ar' | null;
+    snapshot_completeness: string;
+    created_at: string;
+    completed_at: string | null;
 }
 
 // ── Hybrid Compliance Engine Types ──────────────────────────────

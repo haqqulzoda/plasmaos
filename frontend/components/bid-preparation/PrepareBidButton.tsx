@@ -74,7 +74,7 @@ export function PrepareBidButton({
         {submitting ? t("loading") : (label ?? t("prepare"))}
       </button>
       {error && (
-        <span role="alert" className="max-w-64 text-right text-xs text-red-300">
+        <span role="alert" className="max-w-64 text-end text-xs text-red-300">
           {error}
         </span>
       )}

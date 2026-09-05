@@ -7,6 +7,7 @@ import type {
     DynamicRequirements,
     DynamicEvaluation,
     AnalyzeTenderResponse,
+    AnalysisVersionMetadata,
     ComplianceVerdictStatus,
     HybridCompliancePayload,
     RequirementMatchDetail,
@@ -16,6 +17,15 @@ import type { Tender, TenderDocument } from '@/types/tender';
 import { isTenderActionable } from '@/types/tender';
 import { extractHybridCompliance } from '@/lib/useHybridCompliance';
 import { api } from '@/lib/api';
+import {
+    CUSTOMER_ANALYSIS_LANGUAGES,
+    DEFAULT_ANALYSIS_LANGUAGE,
+    analysisContentDirection,
+    analysisLanguageLabel,
+    normalizeCustomerAnalysisLanguage,
+    type AnalysisLanguage,
+    type CustomerAnalysisLanguage,
+} from '@/i18n/analysisLanguages';
 import {
     Cpu,
     Clock,
@@ -387,6 +397,22 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     const [documentFetchError, setDocumentFetchError] = useState<string | null>(null);
     const [selectedRequirement, setSelectedRequirement] = useState<RequirementMatchDetail | null>(null);
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+    const [selectedAnalysisLanguage, setSelectedAnalysisLanguage] = useState<CustomerAnalysisLanguage>(DEFAULT_ANALYSIS_LANGUAGE);
+    const [resultAnalysisLanguage, setResultAnalysisLanguage] = useState<AnalysisLanguage | null>(null);
+    const [analysisVersion, setAnalysisVersion] = useState<number | null>(null);
+    const [analysisHistory, setAnalysisHistory] = useState<AnalysisVersionMetadata[]>([]);
+
+    useEffect(() => {
+        let active = true;
+        api.get<{ default_analysis_language?: string | null }>('/users/me')
+            .then(({ data }) => {
+                if (active) setSelectedAnalysisLanguage(normalizeCustomerAnalysisLanguage(data.default_analysis_language));
+            })
+            .catch(() => {
+                // English is the contractual fallback; UI locale is intentionally not consulted.
+            });
+        return () => { active = false; };
+    }, []);
 
     // ── Fetch compiled source text on mount ──
     useEffect(() => {
@@ -464,6 +490,8 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                     setHybridCompliance(extractHybridCompliance(data));
                     setContentHash(extractContentHash(data));
                     setOverrideSeal((data as Record<string, unknown>).override_seal as string | null ?? null);
+                    setResultAnalysisLanguage((data.analysis_language as AnalysisLanguage | null) ?? null);
+                    setAnalysisVersion(typeof data.version_number === 'number' ? data.version_number : null);
                 }
             } catch {
                 // No cached analysis — user will see "Ready to Scan" state
@@ -472,6 +500,22 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
 
         fetchCachedAnalysis();
     }, [resolvedTenderId, textAccessReadyVersion]);
+
+    useEffect(() => {
+        if (!resolvedTenderId || !analysisId) {
+            setAnalysisHistory([]);
+            return;
+        }
+        let active = true;
+        api.get<AnalysisVersionMetadata[]>(`/tenders/${resolvedTenderId}/analyses/${analysisId}/versions`)
+            .then(({ data }) => {
+                if (active) setAnalysisHistory(Array.isArray(data) ? data : []);
+            })
+            .catch(() => {
+                if (active) setAnalysisHistory([]);
+            });
+        return () => { active = false; };
+    }, [resolvedTenderId, analysisId, analysisVersion]);
 
     // ── Load persisted risk overrides scoped to current analysis ──
     useEffect(() => {
@@ -498,6 +542,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
         }
         setIsLoading(true);
         setError(null);
+        const force = evaluation !== null;
         setRequirements(null);
         setEvaluation(null);
         setAnalysisId(null);
@@ -509,10 +554,11 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
         const startTime = performance.now();
 
         // Use force=true when re-scanning (cached results already shown)
-        const forceParam = evaluation !== null ? '?force=true' : '';
+        const query = new URLSearchParams({ analysis_language: selectedAnalysisLanguage });
+        if (force) query.set('force', 'true');
 
         try {
-            const { data } = await api.post<AnalyzeTenderResponse>(`/tenders/${resolvedTenderId}/analyze${forceParam}`);
+            const { data } = await api.post<AnalyzeTenderResponse>(`/tenders/${resolvedTenderId}/analyze?${query.toString()}`);
             const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
 
             setAnalysisId(data.analysis_id ?? null);
@@ -521,6 +567,8 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
             setHybridCompliance(extractHybridCompliance(data as unknown as Record<string, unknown>));
             setContentHash(data.content_hash);
             setOverrideSeal(data.override_seal ?? null);
+            setResultAnalysisLanguage(data.analysis_language);
+            setAnalysisVersion(data.version_number);
             setElapsedTime(parseFloat(elapsed));
         } catch {
             setError(t('analysisFailed'));
@@ -536,7 +584,10 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
         setError(null);
 
         try {
-            const query = analysisId ? `?analysis_id=${encodeURIComponent(analysisId)}` : '';
+            const exportQuery = new URLSearchParams();
+            if (analysisId) exportQuery.set('analysis_id', analysisId);
+            if (analysisVersion) exportQuery.set('version_number', String(analysisVersion));
+            const query = exportQuery.size ? `?${exportQuery.toString()}` : '';
             const response = await api.get(
                 `/tenders/${resolvedTenderId}/compliance/export/pdf${query}`,
                 { responseType: 'blob' },
@@ -584,12 +635,12 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                         href={`/dashboard/tenders/${tenderId}`}
                         className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 transition-colors text-[13px]"
                     >
-                        <ArrowLeft className="w-4 h-4" />
+                        <ArrowLeft className="rtl-mirror w-4 h-4" />
                         <span>{t('back')}</span>
                     </Link>
                     <div className="w-px h-5 bg-gray-800" />
                     <div>
-                        <h1 className="text-[15px] font-semibold text-gray-100">
+                        <h1 dir="auto" className="bidi-auto text-[15px] font-semibold text-gray-100">
                             {tenderTitle || t('engineTitle')}
                         </h1>
                         <p className="text-[11px] text-gray-500 mt-0.5">
@@ -602,6 +653,29 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                     </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-2 text-[11px] text-gray-400">
+                        <span>{t('analysisLanguage')}</span>
+                        <select
+                            aria-label={t('analysisLanguage')}
+                            value={selectedAnalysisLanguage}
+                            disabled={isLoading}
+                            onChange={(event) => setSelectedAnalysisLanguage(event.target.value as CustomerAnalysisLanguage)}
+                            className="rounded-lg border border-gray-700 bg-gray-900 px-2.5 py-1.5 text-[12px] text-gray-100 outline-none focus:border-indigo-400"
+                        >
+                            {CUSTOMER_ANALYSIS_LANGUAGES.map((language) => (
+                                <option key={language.code} value={language.code}>{language.nativeLabel}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <button
+                        type="button"
+                        onClick={handleAnalyzeTender}
+                        disabled={isLoading || !canStartAnalysis}
+                        className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-500"
+                    >
+                        {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                        {hasAnalysis ? t('analyzeAgain') : t('start')}
+                    </button>
                     {/* Status Badge */}
                     {hasAnalysis && (
                         <button
@@ -662,7 +736,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
             {/* ── Split Hemispheres ── */}
             <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-2 lg:overflow-hidden">
                 {/* ══ Left: Document Pane ══ */}
-                <div className="min-h-[32rem] border-b border-gray-800 lg:min-h-0 lg:border-b-0 lg:border-r">
+                <div className="min-h-[32rem] border-b border-gray-800 lg:min-h-0 lg:border-b-0 lg:border-e">
                     {selectedRequirement ? (
                         <EvidenceDocumentPane
                             requirement={selectedRequirement}
@@ -709,7 +783,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
 
                     {/* Error Banner */}
                     {error && !isLoading && (
-                        <div className="absolute bottom-4 left-4 right-[50%] mr-4">
+                        <div className="absolute bottom-4 start-4 end-[50%] me-4">
                             <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 backdrop-blur-sm">
                                 <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
                                 <div>
@@ -719,7 +793,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                 <button
                                     onClick={() => setError(null)}
                                     aria-label={t('dismissError')}
-                                    className="ml-auto text-gray-500 hover:text-gray-300 transition-colors"
+                                    className="ms-auto text-gray-500 hover:text-gray-300 transition-colors"
                                 >
                                     <X className="w-3.5 h-3.5" />
                                 </button>
@@ -749,6 +823,9 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                             overrideSeal={overrideSeal}
                             selectedRequirementKey={selectedRequirement ? getRequirementKey(selectedRequirement) : null}
                             onSelectRequirement={setSelectedRequirement}
+                            analysisLanguage={resultAnalysisLanguage}
+                            analysisVersion={analysisVersion}
+                            analysisHistory={analysisHistory}
                         />
                     ) : isLoading ? (
                         /* Loading Skeleton */
@@ -821,19 +898,9 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                                             {t('introHelp')}
                                         </p>
                                     </div>
-                                    <button
-                                        onClick={handleAnalyzeTender}
-                                        disabled={isLoading || !canStartAnalysis}
-                                        className={clsx(
-                                            'flex items-center justify-center gap-2.5 w-full px-6 py-4 rounded-lg text-[14px] font-medium shadow-md transition-colors',
-                                            canStartAnalysis
-                                                ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                                                : 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                                        )}
-                                    >
-                                        <Sparkles className="w-5 h-5" />
-                                        {t('start')}
-                                    </button>
+                                    <p className="rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3 text-[12px] text-gray-400">
+                                        {t('chooseLanguageHelp')}
+                                    </p>
                                     {complianceGuardMessage && !isLoadingText && (
                                         <p className="text-[11px] text-amber-400/80">
                                             {complianceGuardMessage}
@@ -893,7 +960,7 @@ function EvidenceDocumentPane({
                     <p className="text-[11px] font-medium uppercase tracking-widest text-gray-500">
                         {t('sourceEvidence')}
                     </p>
-                    <h3 className="text-sm font-semibold text-gray-200 truncate max-w-md">
+                    <h3 dir="auto" className="bidi-auto text-sm font-semibold text-gray-200 truncate max-w-md">
                         {matchedName}
                     </h3>
                 </div>
@@ -902,7 +969,7 @@ function EvidenceDocumentPane({
                     onClick={onClearSelection}
                     className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-[12px] font-semibold text-gray-200 transition hover:border-indigo-400/50 hover:text-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                 >
-                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <ArrowLeft className="rtl-mirror w-3.5 h-3.5" />
                     {t('backToDocument')}
                 </button>
             </div>
@@ -911,7 +978,7 @@ function EvidenceDocumentPane({
                 <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
                     <span className="inline-flex items-center gap-1 rounded bg-gray-800/80 px-2 py-1">
                         <FileSearch className="w-3 h-3 text-gray-500" />
-                        <span className="max-w-[20rem] truncate">{sourceFilename}</span>
+                        <span dir="auto" className="bidi-auto max-w-[20rem] truncate">{sourceFilename}</span>
                     </span>
                     <span className="rounded bg-gray-800/80 px-2 py-1">{pageLabel}</span>
                     {isPdf && (
@@ -924,7 +991,7 @@ function EvidenceDocumentPane({
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-300">
                         {t('evidenceQuote')}
                     </p>
-                    <p className="text-[12px] text-gray-200 leading-relaxed mt-1">
+                    <p dir="auto" className="text-[12px] text-gray-200 leading-relaxed mt-1">
                         &quot;{quote}&quot;
                     </p>
                 </div>
@@ -1055,7 +1122,7 @@ function EvidenceFallbackPanel({
                 <div className="grid grid-cols-1 gap-2 text-[12px]">
                     <div className="rounded border border-gray-800 bg-gray-900/70 px-3 py-2">
                         <p className="text-[10px] uppercase tracking-wider text-gray-500">{t('sourceFilename')}</p>
-                        <p className="text-gray-200 break-all mt-0.5">{sourceFilename}</p>
+                        <p dir="auto" className="bidi-auto text-gray-200 break-all mt-0.5">{sourceFilename}</p>
                     </div>
                     <div className="rounded border border-gray-800 bg-gray-900/70 px-3 py-2">
                         <p className="text-[10px] uppercase tracking-wider text-gray-500">{t('sourcePosition')}</p>
@@ -1106,6 +1173,9 @@ function ComplianceResults({
     overrideSeal,
     selectedRequirementKey,
     onSelectRequirement,
+    analysisLanguage,
+    analysisVersion,
+    analysisHistory,
 }: {
     evaluation: DynamicEvaluation;
     analysisId: string | null;
@@ -1117,6 +1187,9 @@ function ComplianceResults({
     overrideSeal: string | null;
     selectedRequirementKey: string | null;
     onSelectRequirement: (detail: RequirementMatchDetail) => void;
+    analysisLanguage: AnalysisLanguage | null;
+    analysisVersion: number | null;
+    analysisHistory: AnalysisVersionMetadata[];
 }) {
     const t = useTranslations('compliance');
     // Use hybrid result for the verdict when available, fall back to legacy
@@ -1179,11 +1252,15 @@ function ComplianceResults({
                                 {t(uiVerdict.labelKey)}
                             </h2>
                         </div>
-                        <p className="text-[12px] text-gray-400 mt-1 leading-relaxed">
+                        <p dir={analysisContentDirection(analysisLanguage)} className="text-[12px] text-gray-400 mt-1 leading-relaxed">
                             {statusMessage ?? t('manualOnly')}
                         </p>
+                        <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-gray-500">
+                            <span>{t('resultLanguage')}: {analysisLanguage ? analysisLanguageLabel(analysisLanguage) : t('notRecorded')}</span>
+                            {analysisVersion && <span>{t('version', { version: analysisVersion })}</span>}
+                        </div>
                         {analysisId && (
-                            <p className="text-[10px] text-gray-600 mt-2 font-mono">
+                            <p dir="ltr" className="technical-ltr text-[10px] text-gray-600 mt-2 font-mono">
                                 {t('analysisId', { id: analysisId })}
                             </p>
                         )}
@@ -1240,6 +1317,7 @@ function ComplianceResults({
                                             onOverrideSealUpdated={onOverrideSealUpdated}
                                             isSelected={selectedRequirementKey === getRequirementKey(d)}
                                             onSelect={onSelectRequirement}
+                                            analysisLanguage={analysisLanguage}
                                         />
                                     ))}
                                 </div>
@@ -1261,6 +1339,7 @@ function ComplianceResults({
                                             verdictBg={verdictBg}
                                             isSelected={selectedRequirementKey === getRequirementKey(d)}
                                             onSelect={onSelectRequirement}
+                                            analysisLanguage={analysisLanguage}
                                         />
                                     ))}
                                 </div>
@@ -1273,6 +1352,7 @@ function ComplianceResults({
                                 items={hybridCompliance.satisfied_requirements}
                                 selectedRequirementKey={selectedRequirementKey}
                                 onSelectRequirement={onSelectRequirement}
+                                analysisLanguage={analysisLanguage}
                             />
                         )}
 
@@ -1283,9 +1363,31 @@ function ComplianceResults({
                                 variant="recorded"
                                 selectedRequirementKey={selectedRequirementKey}
                                 onSelectRequirement={onSelectRequirement}
+                                analysisLanguage={analysisLanguage}
                             />
                         )}
                     </div>
+
+                    {analysisHistory.length > 0 && (
+                        <div className="border-t border-gray-800 px-5 py-3">
+                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">{t('versionHistory')}</p>
+                            <div className="flex flex-wrap gap-2">
+                                {analysisHistory.map((version) => (
+                                    <span key={`${version.analysis_id}-${version.version_number}`} className={clsx(
+                                        'rounded border px-2 py-1 text-[10px]',
+                                        version.version_number === analysisVersion
+                                            ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200'
+                                            : 'border-gray-800 bg-gray-900 text-gray-400',
+                                    )}>
+                                        v{version.version_number} · {version.analysis_language ? analysisLanguageLabel(version.analysis_language) : t('notRecorded')}
+                                    </span>
+                                ))}
+                            </div>
+                            {new Set(analysisHistory.map((version) => version.analysis_language).filter(Boolean)).size > 1 && (
+                                <p className="mt-2 text-[10px] text-amber-300">{t('crossLanguageNotice')}</p>
+                            )}
+                        </div>
+                    )}
 
                     {/* ── Cryptographic Audit Seal ── */}
                     {contentHash && (
@@ -1293,14 +1395,14 @@ function ComplianceResults({
                             <p className="text-[11px] text-gray-300 flex items-center gap-1.5">
                                 <Lock className="w-3 h-3 text-indigo-400 shrink-0" />
                                 <span>{t('contentSeal')}</span>{' '}
-                                <span className="font-mono text-indigo-300 break-all">{contentHash}</span>
+                                <span dir="ltr" className="technical-ltr font-mono text-indigo-300 break-all">{contentHash}</span>
                             </p>
                             {overrideSeal && (
                                 <p className="text-[11px] text-amber-300 flex items-center gap-1.5">
                                     <ShieldOff className="w-3 h-3 text-amber-400 shrink-0" />
                                     <span>{t('overrideSeal')}</span>{' '}
                                     <span className="font-mono text-amber-300 break-all">{overrideSeal}</span>
-                                    <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold uppercase">
+                                    <span className="ms-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold uppercase">
                                         {t('overrideCount', { count: acceptedNodeIds.length })}
                                     </span>
                                 </p>
@@ -1336,6 +1438,7 @@ function MatchDetailCard({
     onOverrideSealUpdated,
     isSelected = false,
     onSelect,
+    analysisLanguage,
 }: {
     detail: RequirementMatchDetail;
     verdictColor: (v: string) => string;
@@ -1346,6 +1449,7 @@ function MatchDetailCard({
     onOverrideSealUpdated?: (seal: string | null, nodeIds: string[]) => void;
     isSelected?: boolean;
     onSelect?: (detail: RequirementMatchDetail) => void;
+    analysisLanguage: AnalysisLanguage | null;
 }) {
     const t = useTranslations('compliance');
     const [showModal, setShowModal] = useState(false);
@@ -1371,37 +1475,42 @@ function MatchDetailCard({
                     }
                 }}
                 className={clsx(
-                    'rounded-lg border px-3 py-2.5 space-y-1.5 border-l-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40',
+                    'rounded-lg border px-3 py-2.5 space-y-1.5 border-s-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40',
                     isSelected
-                        ? 'border-indigo-400/60 border-l-indigo-400 bg-indigo-500/10 shadow-sm shadow-indigo-500/10'
+                        ? 'border-indigo-400/60 border-s-indigo-400 bg-indigo-500/10 shadow-sm shadow-indigo-500/10'
                         : isOverridden
-                            ? 'border-amber-500/20 border-l-amber-500/60 bg-amber-500/5 hover:border-amber-400/30'
+                            ? 'border-amber-500/20 border-s-amber-500/60 bg-amber-500/5 hover:border-amber-400/30'
                             : detail.verdict === 'FAILED'
-                                ? 'border-gray-700/50 border-l-red-500/60 bg-gray-900/70 hover:border-red-400/30'
-                                : 'border-gray-700/50 border-l-amber-500/50 bg-gray-900/70 hover:border-amber-400/30'
+                                ? 'border-gray-700/50 border-s-red-500/60 bg-gray-900/70 hover:border-red-400/30'
+                                : 'border-gray-700/50 border-s-amber-500/50 bg-gray-900/70 hover:border-amber-400/30'
                 )}
             >
                 {detail.parent_section_header && (
                     <p className="flex items-center gap-1.5 text-[10px] text-gray-500 font-medium tracking-wide">
                         <FolderTree className="w-3 h-3 text-gray-600 shrink-0" />
-                        <span className="truncate">{detail.parent_section_header}</span>
+                        <span dir="auto" className="bidi-auto truncate">{detail.parent_section_header}</span>
                     </p>
                 )}
                 <p className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 font-medium">
                     <span className="inline-flex items-center gap-1">
                         <FileSearch className="w-3 h-3 text-gray-600 shrink-0" />
-                        <span>{detail.source_filename || t('sourceDocument')}</span>
+                        <span dir="auto" className="bidi-auto">{detail.source_filename || t('sourceDocument')}</span>
                     </span>
                     <span>{t('page', { page: detail.source_page || 1 })}</span>
                     <span className="px-1.5 py-0.5 rounded bg-gray-800/70 text-gray-400 uppercase">
                         {detail.category || detail.requirement_type}
                     </span>
                 </p>
-                <p className="text-[12px] text-gray-300 leading-relaxed">
+                <p dir={analysisContentDirection(analysisLanguage)} className="text-[12px] text-gray-300 leading-relaxed">
                     {detail.headline || detail.raw_text_snippet}
                 </p>
+                {detail.reason && (
+                    <p dir={analysisContentDirection(analysisLanguage)} className="text-[11px] text-gray-400 leading-relaxed">
+                        {detail.reason}
+                    </p>
+                )}
                 <p className="text-[11px] text-gray-500 leading-relaxed">
-                    {t('quote')} <span>&quot;{quote}&quot;</span>
+                    {t('quote')} <span dir="auto">&quot;{quote}&quot;</span>
                 </p>
                 <div className="flex flex-wrap items-center gap-2 text-[10px]">
                     {isOverridden ? (
@@ -1438,7 +1547,7 @@ function MatchDetailCard({
                         <span className="text-[11px] font-semibold text-amber-400 group-hover:text-amber-300 transition-colors">
                             {t('overrideFlag')}
                         </span>
-                        <span className="ml-auto text-[9px] text-gray-500 group-hover:text-gray-400 transition-colors">
+                        <span className="ms-auto text-[9px] text-gray-500 group-hover:text-gray-400 transition-colors">
                             {t('permanentAudit')}
                         </span>
                     </button>
@@ -1559,7 +1668,7 @@ function OverrideChallengeModal({
                     <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">
                         {t('requirementOverridden')}
                     </p>
-                    <p className="text-[12px] text-gray-300 leading-relaxed line-clamp-3">
+                    <p dir="auto" className="bidi-auto text-[12px] text-gray-300 leading-relaxed line-clamp-3">
                         {requirementSnippet}
                     </p>
                 </div>
@@ -1584,6 +1693,7 @@ function OverrideChallengeModal({
                             {t('justification')} <span className="text-red-400">*</span>
                         </label>
                         <textarea
+                            dir="auto"
                             id="override-justification"
                             value={justification}
                             onChange={(e) => setJustification(e.target.value)}
@@ -1672,12 +1782,14 @@ function SatisfiedSection({
     variant = 'satisfied',
     selectedRequirementKey,
     onSelectRequirement,
+    analysisLanguage,
 }: {
     title?: string;
     items: RequirementMatchDetail[];
     variant?: 'satisfied' | 'recorded';
     selectedRequirementKey: string | null;
     onSelectRequirement: (detail: RequirementMatchDetail) => void;
+    analysisLanguage: AnalysisLanguage | null;
 }) {
     const t = useTranslations('compliance');
     const [showSatisfied, setShowSatisfied] = useState(false);
@@ -1702,7 +1814,7 @@ function SatisfiedSection({
             >
                 <Icon className="w-3.5 h-3.5" />
                 {title ?? t('satisfiedRequirements')} ({items.length})
-                <span className="text-gray-600 normal-case font-normal ml-1">
+                <span className="text-gray-600 normal-case font-normal ms-1">
                     {showSatisfied ? `▾ ${t('hide')}` : `▸ ${t('show')}`}
                 </span>
             </button>
@@ -1736,23 +1848,23 @@ function SatisfiedSection({
                                     {d.parent_section_header && (
                                         <p className="flex items-center gap-1 text-[9px] text-gray-500 font-medium tracking-wide mb-0.5">
                                             <FolderTree className="w-2.5 h-2.5 text-gray-600 shrink-0" />
-                                            <span className="truncate">{d.parent_section_header}</span>
+                                            <span dir="auto" className="bidi-auto truncate">{d.parent_section_header}</span>
                                         </p>
                                     )}
                                     <p className="flex flex-wrap items-center gap-1.5 text-[9px] text-gray-500 font-medium mb-0.5">
                                         <FileSearch className="w-2.5 h-2.5 text-gray-600 shrink-0" />
-                                        <span className="truncate">{d.source_filename || t('sourceDocument')}</span>
+                                        <span dir="auto" className="bidi-auto truncate">{d.source_filename || t('sourceDocument')}</span>
                                         <span>{t('page', { page: d.source_page || 1 })}</span>
                                         <span className="uppercase">{d.category || d.requirement_type}</span>
                                     </p>
-                                    <p className="text-[11px] text-gray-300 leading-relaxed truncate">
+                                    <p dir={analysisContentDirection(analysisLanguage)} className="text-[11px] text-gray-300 leading-relaxed truncate">
                                         {d.headline || d.raw_text_snippet}
                                     </p>
                                     <p className="text-[10px] text-gray-500 mt-0.5 truncate">
-                                        {t('quote')} <span>&quot;{d.exact_quote || d.raw_text_snippet}&quot;</span>
+                                        {t('quote')} <span dir="auto">&quot;{d.exact_quote || d.raw_text_snippet}&quot;</span>
                                     </p>
                                     {d.matched_credential && (
-                                        <p className="text-[10px] text-cyan-400/60 mt-0.5">
+                                        <p dir="auto" className="bidi-auto text-[10px] text-cyan-400/60 mt-0.5">
                                             {d.matched_credential}
                                         </p>
                                     )}

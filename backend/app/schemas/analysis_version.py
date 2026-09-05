@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.core.analysis_languages import AnalysisLanguage
+
 
 class AnalysisVersionIntegrityResponse(BaseModel):
     overall_status: Literal["VERIFIED", "PARTIAL", "MISMATCH"]
@@ -25,6 +27,7 @@ class AnalysisVersionMetadataResponse(BaseModel):
     supersedes_version_id: UUID | None = None
     origin: str
     status: str
+    analysis_language: AnalysisLanguage | None = None
     snapshot_completeness: str
     analysis_schema_version: str | None = None
     pipeline_version: str | None = None

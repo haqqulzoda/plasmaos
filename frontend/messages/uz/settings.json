@@ -8,6 +8,16 @@
     "saving": "Interfeys tili saqlanmoqda…",
     "saveFailed": "Interfeys tilini saqlab bo‘lmadi. Avvalgi til faol holda qoldi. Qayta urinib ko‘ring."
   },
+  "analysisLanguage": {
+    "title": "Standart tahlil tili",
+    "help": "Yangi Muvofiqlik tahlili izohlari uchun tilni tanlang. Bu sozlama interfeys tilidan mustaqil.",
+    "label": "Tahlil tili",
+    "save": "Tahlil tilini saqlash",
+    "saved": "Tahlil tili saqlandi",
+    "loadFailed": "Tahlil tili sozlamasini yuklab bo‘lmadi. Xavfsiz zaxira sifatida ingliz tili ko‘rsatildi.",
+    "saveFailed": "Tahlil tili sozlamasini saqlab bo‘lmadi.",
+    "arabicGate": "Arab tilida yaratish sifat nazorati ortida va hozircha mijozlar uchun tanlanmaydi."
+  },
   "title": "Kompaniya profili",
   "pilotStatus": "Pilot holati: {status}",
   "approvalStatus": "Tasdiqlash: {status}",

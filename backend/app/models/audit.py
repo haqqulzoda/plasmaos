@@ -31,6 +31,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.models.all_models import Base
+from app.core.analysis_languages import ANALYSIS_LANGUAGE_VALUES
 
 
 ANALYSIS_OWNERSHIP_OWNED = "OWNED"
@@ -171,6 +172,8 @@ class AnalysisVersion(Base):
     )
     origin: Mapped[str] = mapped_column(String(30), nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False)
+    # Historical versions remain NULL; every S8.2 runtime version is explicit.
+    analysis_language: Mapped[str | None] = mapped_column(String(8), nullable=True)
     analysis_schema_version: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
@@ -254,6 +257,11 @@ class AnalysisVersion(Base):
             "snapshot_completeness IN ('COMPLETE', 'PARTIAL', 'LEGACY_BACKFILL')",
             name="ck_analysis_versions_snapshot_completeness_allowed",
         ),
+        CheckConstraint(
+            "analysis_language IS NULL OR analysis_language IN "
+            f"({', '.join(repr(language) for language in ANALYSIS_LANGUAGE_VALUES)})",
+            name="ck_analysis_versions_analysis_language_allowed",
+        ),
         Index(
             "ix_analysis_versions_analysis_created",
             "analysis_id",
@@ -273,6 +281,7 @@ class AnalysisVersion(Base):
         "evidence_hash",
         "document_set_hash",
         "version_hash",
+        "analysis_language",
     )
     def _reject_persisted_history_mutation(self, key: str, value: Any) -> Any:
         state = inspect(self)

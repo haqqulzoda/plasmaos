@@ -440,6 +440,7 @@ async def _private_sections(
                 data=ComplianceSummary(
                     analysis_id=analysis.id,
                     version_number=version.version_number,
+                    analysis_language=version.analysis_language,
                     execution_state=version.status,
                     compliance_completeness=version.snapshot_completeness,
                     decision_label=decision,

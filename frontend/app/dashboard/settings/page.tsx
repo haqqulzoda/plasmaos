@@ -4,6 +4,12 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Building2, Check, Globe2, Loader2, Phone, Save } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { LanguageSelector } from "@/components/i18n/LanguageSelector";
+import {
+  CUSTOMER_ANALYSIS_LANGUAGES,
+  DEFAULT_ANALYSIS_LANGUAGE,
+  normalizeCustomerAnalysisLanguage,
+  type CustomerAnalysisLanguage,
+} from "@/i18n/analysisLanguages";
 import { localizeTaxonomyValue } from "@/i18n/taxonomy";
 import { api } from "@/lib/api";
 import { CENTRAL_ASIA_REGION, useGeographyMeta } from "@/lib/geography";
@@ -94,6 +100,12 @@ export default function CompanyProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [analysisLanguage, setAnalysisLanguage] = useState<CustomerAnalysisLanguage>(DEFAULT_ANALYSIS_LANGUAGE);
+  const [savedAnalysisLanguage, setSavedAnalysisLanguage] = useState<CustomerAnalysisLanguage>(DEFAULT_ANALYSIS_LANGUAGE);
+  const [isLoadingAnalysisLanguage, setIsLoadingAnalysisLanguage] = useState(true);
+  const [isSavingAnalysisLanguage, setIsSavingAnalysisLanguage] = useState(false);
+  const [analysisLanguageSaved, setAnalysisLanguageSaved] = useState(false);
+  const [analysisLanguageError, setAnalysisLanguageError] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -113,6 +125,47 @@ export default function CompanyProfilePage() {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  useEffect(() => {
+    let active = true;
+    api.get<{ default_analysis_language?: string | null }>("/users/me")
+      .then(({ data }) => {
+        if (active) {
+          const loadedLanguage = normalizeCustomerAnalysisLanguage(data.default_analysis_language);
+          setAnalysisLanguage(loadedLanguage);
+          setSavedAnalysisLanguage(loadedLanguage);
+        }
+      })
+      .catch(() => {
+        if (active) setAnalysisLanguageError(t("analysisLanguage.loadFailed"));
+      })
+      .finally(() => {
+        if (active) setIsLoadingAnalysisLanguage(false);
+      });
+    return () => { active = false; };
+  }, [t]);
+
+  const saveAnalysisLanguage = async () => {
+    setIsSavingAnalysisLanguage(true);
+    setAnalysisLanguageSaved(false);
+    setAnalysisLanguageError(null);
+    try {
+      const { data } = await api.patch<{ default_analysis_language: string | null }>(
+        "/users/me/preferences",
+        { default_analysis_language: analysisLanguage },
+      );
+      const persistedLanguage = normalizeCustomerAnalysisLanguage(data.default_analysis_language);
+      setAnalysisLanguage(persistedLanguage);
+      setSavedAnalysisLanguage(persistedLanguage);
+      setAnalysisLanguageSaved(true);
+      window.setTimeout(() => setAnalysisLanguageSaved(false), 2500);
+    } catch {
+      setAnalysisLanguage(savedAnalysisLanguage);
+      setAnalysisLanguageError(t("analysisLanguage.saveFailed"));
+    } finally {
+      setIsSavingAnalysisLanguage(false);
+    }
+  };
 
   const updateField = (field: keyof CompanyProfile, value: string) => {
     setProfile((current) => ({ ...current, [field]: value }));
@@ -222,6 +275,44 @@ export default function CompanyProfilePage() {
 
       <LanguageSelector surface="settings" />
 
+      <section className="space-y-4 rounded-lg border border-gray-800 bg-gray-950 p-6" aria-labelledby="analysis-language-title">
+        <div className="flex items-center gap-2 text-gray-200">
+          <Globe2 className="h-4 w-4 text-indigo-300" />
+          <h2 id="analysis-language-title" className="text-base font-semibold">
+            {t("analysisLanguage.title")}
+          </h2>
+        </div>
+        <p className="max-w-2xl text-sm leading-relaxed text-gray-400">
+          {t("analysisLanguage.help")}
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="w-full max-w-sm space-y-2">
+            <span className={labelClass}>{t("analysisLanguage.label")}</span>
+            <select
+              className={inputClass}
+              value={analysisLanguage}
+              disabled={isLoadingAnalysisLanguage || isSavingAnalysisLanguage}
+              onChange={(event) => setAnalysisLanguage(event.target.value as CustomerAnalysisLanguage)}
+            >
+              {CUSTOMER_ANALYSIS_LANGUAGES.map((language) => (
+                <option key={language.code} value={language.code}>{language.nativeLabel}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={saveAnalysisLanguage}
+            disabled={isLoadingAnalysisLanguage || isSavingAnalysisLanguage}
+            className="inline-flex h-[46px] items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+          >
+            {isSavingAnalysisLanguage ? <Loader2 className="h-4 w-4 animate-spin" /> : analysisLanguageSaved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+            {analysisLanguageSaved ? t("analysisLanguage.saved") : t("analysisLanguage.save")}
+          </button>
+        </div>
+        {analysisLanguageError && <p className="text-sm text-red-300">{analysisLanguageError}</p>}
+        <p className="text-xs text-gray-500">{t("analysisLanguage.arabicGate")}</p>
+      </section>
+
       {error && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {error}
@@ -246,6 +337,7 @@ export default function CompanyProfilePage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("companyName")}</span>
               <input
+                dir="auto"
                 className={inputClass}
                 value={profile.company_name}
                 onChange={(event) =>
@@ -256,6 +348,7 @@ export default function CompanyProfilePage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("industry")}</span>
               <input
+                dir="auto"
                 className={inputClass}
                 value={profile.industry}
                 onChange={(event) =>
@@ -266,6 +359,7 @@ export default function CompanyProfilePage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("registrationNumber")}</span>
               <input
+                dir="ltr"
                 className={inputClass}
                 value={profile.inn}
                 onChange={(event) => updateField("inn", event.target.value)}
@@ -274,6 +368,7 @@ export default function CompanyProfilePage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("website")}</span>
               <input
+                dir="ltr"
                 className={inputClass}
                 value={profile.website}
                 onChange={(event) => updateField("website", event.target.value)}
@@ -284,9 +379,10 @@ export default function CompanyProfilePage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("phone")}</span>
               <div className="relative">
-                <Phone className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                <Phone className="absolute start-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
                 <input
-                  className={`${inputClass} pl-11`}
+                  dir="ltr"
+                  className={`${inputClass} ps-11`}
                   value={profile.phone_contact}
                   onChange={(event) =>
                     updateField("phone_contact", event.target.value)
@@ -297,6 +393,7 @@ export default function CompanyProfilePage() {
             <label className="space-y-2">
               <span className={labelClass}>{t("address")}</span>
               <input
+                dir="auto"
                 className={inputClass}
                 value={profile.address}
                 onChange={(event) => updateField("address", event.target.value)}
@@ -469,7 +566,7 @@ function OptionGrid({
               key={option.value}
               type="button"
               onClick={() => onToggle(option.value)}
-              className={`flex min-h-12 items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
+              className={`flex min-h-12 items-center justify-between rounded-lg border px-4 py-3 text-start text-sm transition-colors ${
                 selected
                   ? isCentralAsia
                     ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
@@ -480,7 +577,7 @@ function OptionGrid({
               }`}
             >
               <span className="break-words">{option.label}</span>
-              {selected && <Check className="ml-3 h-4 w-4 shrink-0" />}
+              {selected && <Check className="ms-3 h-4 w-4 shrink-0" />}
             </button>
           );
         })}

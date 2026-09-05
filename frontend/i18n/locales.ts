@@ -8,7 +8,7 @@
 export const PRODUCT_LOCALE_CODES = ['en', 'uz', 'ru', 'ar'] as const;
 
 export type ProductLocale = (typeof PRODUCT_LOCALE_CODES)[number];
-export type CustomerSelectableLocale = Exclude<ProductLocale, 'ar'>;
+export type CustomerSelectableLocale = ProductLocale;
 export type LocaleDirection = 'ltr' | 'rtl';
 
 export type LocaleDefinition = Readonly<{
@@ -51,8 +51,8 @@ export const LOCALE_REGISTRY = {
         code: 'ar',
         displayNameNative: 'العربية',
         displayNameEnglish: 'Arabic',
-        enabled: false,
-        customerSelectable: false,
+        enabled: true,
+        customerSelectable: true,
         direction: 'rtl',
     },
 } as const satisfies Record<ProductLocale, LocaleDefinition>;
@@ -98,6 +98,10 @@ export function isCustomerSelectableLocale(
     return typeof value === 'string' && CUSTOMER_SELECTABLE_LOCALES.some(
         (locale) => locale === value,
     );
+}
+
+export function directionForLocale(value: string | null | undefined): LocaleDirection {
+    return toProductLocale(value) === 'ar' ? 'rtl' : 'ltr';
 }
 
 /**

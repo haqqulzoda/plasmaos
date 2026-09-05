@@ -27,6 +27,7 @@ import { labelForService, useServiceMeta } from '@/lib/services';
 import { formatDate as formatLocaleDate } from '@/i18n/formatters';
 import type { CustomerSelectableLocale } from '@/i18n/locales';
 import { translateServiceLabel } from '@/i18n/taxonomy';
+import { BidiText } from '@/components/i18n/BidiText';
 import type { Tender } from '@/types/tender';
 import {
     documentAggregateLabel,
@@ -535,7 +536,7 @@ export default function DashboardPage() {
                     className="inline-flex items-center gap-2 rounded-md border border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500"
                 >
                     {t('openExplorer')}
-                    <ArrowRight className="h-4 w-4" />
+                    <ArrowRight className="rtl-mirror h-4 w-4" />
                 </Link>
             </header>
 
@@ -568,12 +569,12 @@ export default function DashboardPage() {
                                 className="grid gap-3 px-4 py-3 text-sm hover:bg-zinc-900/60 md:grid-cols-[1.1fr_1.4fr_180px_90px] md:items-center"
                             >
                                 <div className="font-medium text-zinc-100">{item.issue}</div>
-                                <div className="min-w-0 truncate text-zinc-400">{item.subject}</div>
+                                <BidiText className="min-w-0 truncate text-zinc-400">{item.subject}</BidiText>
                                 <span className={`w-fit rounded border px-2 py-1 text-xs font-semibold ${statusClasses(item.tone)}`}>
                                     {item.status}
                                 </span>
                                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-300 md:justify-end">
-                                    {t('open')} <ArrowRight className="h-3.5 w-3.5" />
+                                    {t('open')} <ArrowRight className="rtl-mirror h-3.5 w-3.5" />
                                 </span>
                             </Link>
                         ))}
@@ -608,14 +609,14 @@ export default function DashboardPage() {
                                     href={`/dashboard/tenders/${tender.id}`}
                                     className="grid gap-3 px-4 py-3 hover:bg-zinc-900/60 lg:grid-cols-[92px_minmax(0,1fr)_120px_118px_150px]"
                                 >
-                                    <span className="text-xs font-semibold uppercase text-zinc-500">{displayNameForSource(tender.source_system)}</span>
+                                    <BidiText className="text-xs font-semibold uppercase text-zinc-500">{displayNameForSource(tender.source_system)}</BidiText>
                                     <div className="min-w-0">
-                                        <p className="truncate text-sm font-medium text-zinc-100">{tender.title}</p>
+                                        <BidiText className="block truncate text-sm font-medium text-zinc-100">{tender.title}</BidiText>
                                         <p className="mt-1 truncate text-xs text-zinc-500">
                                             {matchReason(tender, state.profile, serviceOptions, t, tCommon)}
                                         </p>
                                     </div>
-                                    <span className="text-sm text-zinc-300">{tender.country || t('unknown')}</span>
+                                    <BidiText className="text-sm text-zinc-300">{tender.country || t('unknown')}</BidiText>
                                     <span className="text-sm text-zinc-400">{deadlineState(tender.deadline, t)}</span>
                                     <span className={`w-fit rounded border px-2 py-1 text-xs font-semibold ${tender.compliance_analysis_available ? statusClasses('success') : statusClasses('warning')}`}>
                                         {t(documentAggregateMessageKey(documentAggregateLabel(tender)))}
@@ -693,8 +694,8 @@ export default function DashboardPage() {
                                         className="grid gap-3 px-4 py-3 text-sm hover:bg-zinc-900/60 lg:grid-cols-[minmax(0,1fr)_90px_132px_110px_124px_82px]"
                                     >
                                         <div className="min-w-0">
-                                            <p className="truncate font-medium text-zinc-100">{tender.title}</p>
-                                            <p className="mt-1 text-xs text-zinc-500">{displayNameForSource(tender.source_system)}</p>
+                                            <BidiText className="block truncate font-medium text-zinc-100">{tender.title}</BidiText>
+                                            <BidiText className="mt-1 block text-xs text-zinc-500">{displayNameForSource(tender.source_system)}</BidiText>
                                         </div>
                                         <span className={`w-fit rounded border px-2 py-1 text-xs font-semibold ${statusClasses(tone)}`}>
                                             {t(analysisStatusMessageKey(status))}
@@ -703,7 +704,7 @@ export default function DashboardPage() {
                                         <span className="text-zinc-400">{t('requirementCount', { count: analysisRequirementCount(analysis) })}</span>
                                         <span className="text-zinc-500">{customerDate(analysis.created_at, locale, t)}</span>
                                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-300 lg:justify-end">
-                                            {t('open')} <ArrowRight className="h-3.5 w-3.5" />
+                                            {t('open')} <ArrowRight className="rtl-mirror h-3.5 w-3.5" />
                                         </span>
                                     </Link>
                                 );
@@ -798,7 +799,7 @@ function EmptySection({
                     className="mt-4 inline-flex items-center gap-2 rounded-md border border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500"
                 >
                     {actionLabel}
-                    <ArrowRight className="h-4 w-4" />
+                    <ArrowRight className="rtl-mirror h-4 w-4" />
                 </Link>
             )}
         </div>

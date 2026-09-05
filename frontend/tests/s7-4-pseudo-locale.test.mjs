@@ -40,6 +40,6 @@ test('pseudo locale is gated away from production and is not a customer locale',
   assert.equal(isPseudoLocaleEnabled({NODE_ENV: 'test', PLASMA_ENABLE_PSEUDO_LOCALE: '1'}), true);
   assert.equal(isPseudoLocaleEnabled({NODE_ENV: 'production', PLASMA_ENABLE_PSEUDO_LOCALE: '1'}), false);
   const {CUSTOMER_SELECTABLE_LOCALES} = await import('../i18n/locales.ts');
-  assert.deepEqual(CUSTOMER_SELECTABLE_LOCALES, ['en', 'uz', 'ru']);
+  assert.deepEqual(CUSTOMER_SELECTABLE_LOCALES, ['en', 'uz', 'ru', 'ar']);
   assert.ok(!CUSTOMER_SELECTABLE_LOCALES.includes(PSEUDO_LOCALE_CODE));
 });

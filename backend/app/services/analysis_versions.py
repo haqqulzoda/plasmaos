@@ -19,6 +19,10 @@ from app.core.reproducibility import (
     sha256_text,
     stable_json_sha256,
 )
+from app.core.analysis_languages import (
+    AnalysisLanguage,
+    analysis_language_definition,
+)
 from app.models.all_models import Tender, TenderDocument
 from app.models.audit import (
     ANALYSIS_OWNERSHIP_OWNED,
@@ -33,7 +37,7 @@ from app.models.audit import (
 )
 
 
-ANALYSIS_PIPELINE_VERSION = "hybrid_compliance_s2_2_v1"
+ANALYSIS_PIPELINE_VERSION = "hybrid_compliance_s8_2_language_v1"
 logger = logging.getLogger(__name__)
 
 
@@ -251,8 +255,9 @@ def _version_hash_payload(
     document_set_hash_value: str,
     snapshot_completeness: str,
     requested_by_user_id: UUID | None,
+    analysis_language: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "analysis_id": str(analysis_id),
         "version_number": version_number,
         "supersedes_version_id": str(supersedes_version_id)
@@ -281,6 +286,11 @@ def _version_hash_payload(
         if requested_by_user_id
         else None,
     }
+    # Historical hashes predate language metadata. Omitting NULL preserves
+    # their exact hash envelope; all S8.2 runtime versions include a code.
+    if analysis_language is not None:
+        payload["analysis_language"] = analysis_language
+    return payload
 
 
 async def append_analysis_version(
@@ -303,6 +313,7 @@ async def append_analysis_version(
     evidence_snapshot: dict[str, Any],
     input_hash: str | None,
     documents: Sequence[DocumentSnapshotInput],
+    analysis_language: AnalysisLanguage | str = AnalysisLanguage.ENGLISH,
     completed_at: datetime | None = None,
 ) -> AnalysisVersion:
     """Lock the parent, allocate N+1, and stage one immutable version."""
@@ -335,6 +346,7 @@ async def append_analysis_version(
     )
     supersedes_version_id = previous.id if previous else None
 
+    language = analysis_language_definition(analysis_language).code.value
     result_copy = deepcopy(result_snapshot)
     evidence_copy = deepcopy(evidence_snapshot)
     provenance_copy = deepcopy(provenance_snapshot)
@@ -374,6 +386,7 @@ async def append_analysis_version(
             document_set_hash_value=document_hash,
             snapshot_completeness=completeness,
             requested_by_user_id=requested_by_user_id,
+            analysis_language=language,
         )
     )
 
@@ -383,6 +396,7 @@ async def append_analysis_version(
         supersedes_version_id=supersedes_version_id,
         origin=origin,
         status=status,
+        analysis_language=language,
         analysis_schema_version=analysis_schema_version,
         pipeline_version=ANALYSIS_PIPELINE_VERSION,
         model_provider=model_provider,
@@ -426,6 +440,16 @@ async def append_analysis_version(
             )
         )
     await db.flush()
+    logger.info(
+        "analysis_version_created analysis_version_id=%s analysis_id=%s version_number=%s "
+        "analysis_language=%s status=%s model=%s",
+        version.id,
+        analysis_id,
+        version_number,
+        language,
+        status,
+        model_name,
+    )
     return version
 
 
@@ -560,6 +584,7 @@ def get_versioned_analysis_payload(version: AnalysisVersion) -> dict[str, Any]:
         "version_number": version.version_number,
         "origin": version.origin,
         "status": version.status,
+        "analysis_language": getattr(version, "analysis_language", None),
         "snapshot_completeness": version.snapshot_completeness,
         "result_snapshot": deepcopy(version.result_snapshot),
         "evidence_snapshot": deepcopy(version.evidence_snapshot),
@@ -639,6 +664,7 @@ def verify_analysis_version_integrity(
             document_set_hash_value=recomputed_documents,
             snapshot_completeness=version.snapshot_completeness,
             requested_by_user_id=version.requested_by_user_id,
+            analysis_language=getattr(version, "analysis_language", None),
         )
     )
     legacy_backfill = version.snapshot_completeness == "LEGACY_BACKFILL"

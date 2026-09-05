@@ -48,6 +48,8 @@ from tenacity import (
     wait_exponential,
 )
 
+from app.core.analysis_languages import AnalysisLanguage, analysis_language_prompt_instruction
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -56,6 +58,7 @@ logger = logging.getLogger(__name__)
 
 MODEL_NAME: str = "gemini-2.5-flash"
 MAX_PAYLOAD_CHARS: int = 60_000
+PROMPT_TEMPLATE_VERSION: str = "strategy_extractor_s8_2_language_v1"
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +338,10 @@ Output strict JSON only. No markdown, no commentary.\
 """
 
 
-def _build_strategy_prompt(text_payload: str) -> str:
+def _build_strategy_prompt(
+    text_payload: str,
+    analysis_language: AnalysisLanguage | str = AnalysisLanguage.ENGLISH,
+) -> str:
     """Build the user-turn prompt with the tender text payload."""
     truncated = text_payload[:MAX_PAYLOAD_CHARS]
     if len(text_payload) > MAX_PAYLOAD_CHARS:
@@ -344,7 +350,13 @@ def _build_strategy_prompt(text_payload: str) -> str:
             len(text_payload),
             MAX_PAYLOAD_CHARS,
         )
-    return f"Tender document text:\n\n{truncated}"
+    return (
+        f"Analysis language contract:\n"
+        f"{analysis_language_prompt_instruction(analysis_language)}\n"
+        "Apply that language to generated summaries and faithful paraphrases. "
+        "Keep direct source quotations verbatim.\n\n"
+        f"Tender document text:\n\n{truncated}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -463,6 +475,7 @@ def _log_strategy_retry(retry_state: RetryCallState) -> None:
 def _extract_strategy_sync(
     text_payload: str,
     api_key: str,
+    analysis_language: AnalysisLanguage | str = AnalysisLanguage.ENGLISH,
 ) -> TenderStrategyIntelligence:
     """
     Synchronous Gemini call with native structured output enforcement.
@@ -475,7 +488,7 @@ def _extract_strategy_sync(
         return TenderStrategyIntelligence()
 
     client = genai.Client(api_key=api_key)
-    user_prompt = _build_strategy_prompt(text_payload)
+    user_prompt = _build_strategy_prompt(text_payload, analysis_language)
 
     response = client.models.generate_content(
         model=MODEL_NAME,
@@ -497,6 +510,7 @@ def _extract_strategy_sync(
 
 async def extract_strategy_intelligence(
     text_payload: str,
+    analysis_language: AnalysisLanguage | str = AnalysisLanguage.ENGLISH,
 ) -> TenderStrategyIntelligence:
     """
     Extract strategic bidding intelligence from a government tender document.
@@ -537,4 +551,5 @@ async def extract_strategy_intelligence(
         _extract_strategy_sync,
         text_payload,
         api_key,
+        analysis_language,
     )

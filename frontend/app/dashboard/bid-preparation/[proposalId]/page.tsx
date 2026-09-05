@@ -26,6 +26,7 @@ import {
   formatNumber,
 } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
+import { BidiText } from "@/components/i18n/BidiText";
 import { TenderEngagementPanel } from "@/components/tenders/TenderEngagementPanel";
 import {
   engagementStatusClasses,
@@ -632,7 +633,7 @@ export default function BidPreparationWorkspacePage({
           href="/dashboard/tenders"
           className="inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-white"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="rtl-mirror h-4 w-4" />
           {t("backExplorer")}
         </Link>
         <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
@@ -652,11 +653,11 @@ export default function BidPreparationWorkspacePage({
             href={`/dashboard/tenders/${proposal.tender_id}`}
             className="mb-2 inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-white"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="rtl-mirror h-4 w-4" />
             {t("backDetails")}
           </Link>
           <h1 className="text-2xl font-bold text-white">
-            {proposal.tender_title}
+            <BidiText>{proposal.tender_title}</BidiText>
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
             {t("summaryLine", {
@@ -779,6 +780,7 @@ export default function BidPreparationWorkspacePage({
               </button>
             </div>
             <textarea
+              dir="auto"
               value={strategicSummary}
               onChange={(e) => setStrategicSummary(e.target.value)}
               rows={14}
@@ -797,11 +799,11 @@ export default function BidPreparationWorkspacePage({
             <div className="overflow-x-auto">
               <table className="w-full min-w-[620px] text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-left text-zinc-400">
+                  <tr className="border-b border-zinc-800 text-start text-zinc-400">
                     <th className="px-3 py-2">{t("item")}</th>
-                    <th className="px-3 py-2 text-right">{t("quantity")}</th>
-                    <th className="px-3 py-2 text-right">{t("unitPrice")}</th>
-                    <th className="px-3 py-2 text-right">{t("total")}</th>
+                    <th className="px-3 py-2 text-end">{t("quantity")}</th>
+                    <th className="px-3 py-2 text-end">{t("unitPrice")}</th>
+                    <th className="px-3 py-2 text-end">{t("total")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -810,14 +812,14 @@ export default function BidPreparationWorkspacePage({
                       key={`${item.name}-${index}`}
                       className="border-b border-zinc-900"
                     >
-                      <td className="px-3 py-2 text-zinc-200">{item.name}</td>
-                      <td className="px-3 py-2 text-right text-zinc-300">
+                      <td className="px-3 py-2 text-zinc-200"><BidiText>{item.name}</BidiText></td>
+                      <td className="px-3 py-2 text-end text-zinc-300">
                         {item.quantity} {item.unit}
                       </td>
-                      <td className="px-3 py-2 text-right text-zinc-300">
+                      <td className="px-3 py-2 text-end text-zinc-300">
                         {formatNumber(item.unit_price, locale)}
                       </td>
-                      <td className="px-3 py-2 text-right font-medium text-emerald-300">
+                      <td className="px-3 py-2 text-end font-medium text-emerald-300">
                         {formatNumber(item.total, locale)}
                       </td>
                     </tr>
@@ -829,7 +831,7 @@ export default function BidPreparationWorkspacePage({
               <p className="text-sm text-zinc-500">{t("noLineItems")}</p>
             )}
             {lineItems.length > 0 && (
-              <p className="mt-4 text-right text-sm font-semibold text-zinc-200">
+              <p className="mt-4 text-end text-sm font-semibold text-zinc-200">
                 {t("computedTotal", {
                   value: formatLocaleCurrency(
                     computedTotal,
@@ -853,6 +855,7 @@ export default function BidPreparationWorkspacePage({
                   {t("companyName")}
                 </label>
                 <input
+                  dir="auto"
                   type="text"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
@@ -864,6 +867,7 @@ export default function BidPreparationWorkspacePage({
                   {t("suggestedPrice", { currency: proposal.tender_currency })}
                 </label>
                 <input
+                  dir="ltr"
                   type="text"
                   inputMode="numeric"
                   value={formatPriceDisplay(suggestedPrice, locale)}
@@ -879,6 +883,7 @@ export default function BidPreparationWorkspacePage({
                   {t("deliveryWindow")}
                 </label>
                 <input
+                  dir="auto"
                   type="text"
                   value={deliveryDays}
                   onChange={(e) => setDeliveryDays(e.target.value)}
@@ -993,7 +998,7 @@ export default function BidPreparationWorkspacePage({
                         ? handleDocumentPreview(doc.id)
                         : handleDocumentDownload(doc.id, filename)
                     }
-                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-zinc-700 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-start text-sm text-zinc-200 transition hover:border-zinc-700 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <span className="flex min-w-0 items-center gap-2 truncate">
                       {isBusy ? (
@@ -1011,7 +1016,7 @@ export default function BidPreparationWorkspacePage({
                     </span>
                     <span className="inline-flex items-center gap-1 text-zinc-400">
                       {!isAvailable ? (
-                        <span className="max-w-[180px] text-right text-xs font-medium text-amber-300">
+                        <span className="max-w-[180px] text-end text-xs font-medium text-amber-300">
                           {statusLabel}
                         </span>
                       ) : isBusy ? (

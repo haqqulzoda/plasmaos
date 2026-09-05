@@ -79,7 +79,7 @@ export function LanguageSelector({ surface }: LanguageSelectorProps) {
               })}
               disabled={pendingLocale !== null}
               onClick={() => void selectLocale(locale)}
-              className={`flex min-h-12 items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-wait disabled:opacity-70 ${
+              className={`flex min-h-12 items-center justify-between gap-3 rounded-lg border px-4 py-3 text-start text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-wait disabled:opacity-70 ${
                 selected
                   ? "border-cyan-400 bg-cyan-500/15 text-cyan-100"
                   : "border-zinc-700 bg-zinc-950 text-zinc-200 hover:border-zinc-500"

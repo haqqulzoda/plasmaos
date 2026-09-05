@@ -11,6 +11,7 @@ const localeLoaders: Record<
     en: () => import('../messages/en'),
     uz: () => import('../messages/uz'),
     ru: () => import('../messages/ru'),
+    ar: () => import('../messages/ar'),
 };
 
 function mergeWithEnglishFallback(
@@ -36,7 +37,11 @@ function mergeWithEnglishFallback(
 export async function loadMessages(
     locale: CustomerSelectableLocale,
 ): Promise<AbstractIntlMessages> {
-    if (locale === 'en') return (await localeLoaders.en()).default;
+    // Released catalogs are complete contracts. Arabic deliberately has no
+    // English merge path so missing copy cannot silently ship in an RTL UI.
+    if (locale === 'en' || locale === 'ar') {
+        return (await localeLoaders[locale]()).default;
+    }
 
     const [english, localized] = await Promise.all([
         localeLoaders.en(),

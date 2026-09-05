@@ -1,0 +1,67 @@
+{
+  "runtimeReady": "جاهزية وقت تشغيل التوطين",
+  "tenderCount": "{count, plural, =0 {لا توجد مناقصات} one {# مناقصة} other {# مناقصات}}",
+  "newTendersFromSource": "{count, plural, =0 {لا توجد مناقصات جديدة} one {# مناقصة جديدة} other {# مناقصات جديدة}} من {source}",
+  "richReview": "مراجعة <strong>{source}</strong> بأمان.",
+  "actions": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "close": "إغلاق",
+    "retry": "إعادة المحاولة",
+    "back": "رجوع",
+    "continue": "متابعة",
+    "search": "بحث",
+    "clear": "مسح",
+    "apply": "تطبيق",
+    "open": "فتح",
+    "download": "تنزيل",
+    "view": "عرض",
+    "previous": "السابق",
+    "next": "التالي"
+  },
+  "states": {
+    "loading": "جارٍ التحميل…",
+    "error": "خطأ",
+    "noResults": "لا توجد نتائج",
+    "unavailable": "غير متاح",
+    "available": "متاح",
+    "notAvailable": "غير متاح",
+    "unknown": "غير معروف",
+    "saved": "تم الحفظ",
+    "processing": "جارٍ المعالجة",
+    "failed": "فشل"
+  },
+  "pagination": "صفحة {page} من {totalPages}",
+  "paginationResults": "صفحة {page} من {totalPages} · {count, plural, one {# نتيجة} other {# نتائج}}",
+  "notFound": {
+    "title": "الصفحة غير موجودة",
+    "help": "الصفحة المطلوبة غير موجودة أو لم تعد متاحة.",
+    "back": "العودة إلى لوحة التحكم"
+  },
+  "taxonomy": {
+    "regions": {
+      "centralAsia": "آسيا الوسطى",
+      "asia": "آسيا",
+      "europe": "أوروبا",
+      "africa": "أفريقيا",
+      "northAmerica": "أمريكا الشمالية",
+      "latinAmerica": "أمريكا اللاتينية"
+    },
+    "countries": {
+      "uzbekistan": "أوزبكستان",
+      "kazakhstan": "كازاخستان",
+      "kyrgyzstan": "قيرغيزستان",
+      "tajikistan": "طاجيكستان",
+      "turkmenistan": "تركمانستان"
+    },
+    "services": {
+      "construction": "الإنشاءات",
+      "medical": "الخدمات الطبية",
+      "it": "تكنولوجيا المعلومات",
+      "industrialServices": "الخدمات الصناعية",
+      "consulting": "الاستشارات",
+      "equipmentSupply": "توريد المعدات",
+      "other": "أخرى"
+    }
+  }
+}

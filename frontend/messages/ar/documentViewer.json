@@ -1,0 +1,5 @@
+{
+  "sourceDocument": "المستند المصدر",
+  "lineCount": "{count, plural, one {# سطر} other {# أسطر}}",
+  "plainTextEncoding": "UTF-8 · نص عادي"
+}

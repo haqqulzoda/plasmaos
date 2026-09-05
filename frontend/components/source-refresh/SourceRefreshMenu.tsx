@@ -4,6 +4,7 @@ import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
+import { BidiText } from "@/components/i18n/BidiText";
 
 export function SourceRefreshMenu() {
   const t = useTranslations("refresh");
@@ -27,7 +28,7 @@ export function SourceRefreshMenu() {
         <RefreshCw className="h-4 w-4" aria-hidden="true" />
         {t("sourceRefresh")}
       </summary>
-      <div className="absolute right-0 z-40 mt-2 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-zinc-700 bg-zinc-950 p-2 shadow-2xl">
+      <div className="absolute end-0 z-40 mt-2 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-zinc-700 bg-zinc-950 p-2 shadow-2xl">
         {catalogLoading ? (
           <p
             role="status"
@@ -84,11 +85,11 @@ export function SourceRefreshMenu() {
                 state,
                 source: source.display_name,
               })}
-              className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-zinc-200 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-start text-xs text-zinc-200 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span className="truncate font-medium">
+              <BidiText className="truncate font-medium">
                 {source.display_name}
-              </span>
+              </BidiText>
               <span className="inline-flex shrink-0 items-center gap-1 text-zinc-400">
                 {pending ? (
                   <Loader2

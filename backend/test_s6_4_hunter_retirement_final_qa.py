@@ -7,7 +7,7 @@ from alembic.script import ScriptDirectory
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD = "20260902_0001_s7_2_user_ui_locale"
+HEAD = "20260904_0001_s8_2_analysis_language"
 
 
 def source(relative: str) -> str:

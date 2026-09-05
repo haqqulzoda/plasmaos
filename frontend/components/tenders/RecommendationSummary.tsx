@@ -33,7 +33,7 @@ export function RecommendationSummary({
         </span>
         <span className="mt-0.5 block text-xl font-bold leading-none">
           {recommendation.match_score}
-          <span className="ml-0.5 text-xs font-medium text-indigo-300">
+          <span className="ms-0.5 text-xs font-medium text-indigo-300">
             /100
           </span>
         </span>

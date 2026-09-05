@@ -26,6 +26,7 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 
 import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
+import { BidiText, TechnicalText } from "@/components/i18n/BidiText";
 import { SourceRefreshMenu } from "@/components/source-refresh/SourceRefreshMenu";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
 import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";
@@ -481,7 +482,7 @@ function TendersPageContent() {
             <span className="font-semibold">
               {t("newArrivals", { count: newArrival.total_created })}
             </span>
-            <span className="ml-2 text-cyan-100/70">{t("resultsStable")}</span>
+            <span className="ms-2 text-cyan-100/70">{t("resultsStable")}</span>
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -519,7 +520,7 @@ function TendersPageContent() {
           >
             {label}{" "}
             <span
-              className="ml-1 tabular-nums"
+              className="ms-1 tabular-nums"
               aria-label={t("itemCount", { count })}
             >
               {count}
@@ -535,12 +536,13 @@ function TendersPageContent() {
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <label className="relative xl:col-span-2">
             <span className="sr-only">{t("search")}</span>
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+            <Search className="pointer-events-none absolute start-3 top-2.5 h-4 w-4 text-zinc-500" />
             <input
+              dir="auto"
               value={searchDraft}
               onChange={(event) => setSearchDraft(event.target.value)}
               placeholder={t("search")}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-400"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 ps-9 pe-3 text-sm text-white focus:border-indigo-400"
             />
           </label>
           <select
@@ -553,10 +555,10 @@ function TendersPageContent() {
             <option value="">{t("allSources")}</option>
             {query.source &&
             !catalog.some((source) => source.source_system === query.source) ? (
-              <option value={query.source}>{query.source}</option>
+              <option dir="auto" value={query.source}>{query.source}</option>
             ) : null}
             {catalog.map((source) => (
-              <option key={source.source_system} value={source.source_system}>
+              <option dir="auto" key={source.source_system} value={source.source_system}>
                 {source.display_name}
               </option>
             ))}
@@ -636,6 +638,7 @@ function TendersPageContent() {
                 ))}
               </select>
               <input
+                dir="auto"
                 aria-label={t("category")}
                 value={categoryDraft}
                 onChange={(event) => setCategoryDraft(event.target.value)}
@@ -832,7 +835,7 @@ function TendersPageContent() {
               onClick={() => navigate({ page: query.page - 1 }, false)}
               className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="rtl-mirror h-4 w-4" />
               {t("previous")}
             </button>
             <span className="text-sm text-zinc-400">
@@ -845,7 +848,7 @@ function TendersPageContent() {
               className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40"
             >
               {t("next")}
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="rtl-mirror h-4 w-4" />
             </button>
           </nav>
         </section>
@@ -950,7 +953,7 @@ function ExplorerCard({
             <span
               className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${sourceBadgeClasses(tender.source_system)}`}
             >
-              {sourceDisplayName}
+              <BidiText>{sourceDisplayName}</BidiText>
             </span>
             <span
               className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${tenderStatusClasses(tender.status)}`}
@@ -971,18 +974,18 @@ function ExplorerCard({
             href={`/dashboard/tenders/${tender.id}`}
             className="mt-3 block text-base font-semibold text-white hover:text-indigo-300"
           >
-            {tender.title}
+            <BidiText>{tender.title}</BidiText>
           </Link>
           <p className="mt-1 text-xs text-zinc-500">
-            {tender.buyer || t("buyerMissing")} · {tender.external_id}
+            <BidiText>{tender.buyer || t("buyerMissing")}</BidiText>{" · "}<TechnicalText>{tender.external_id}</TechnicalText>
           </p>
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-400">
             <span className="inline-flex gap-1">
               <MapPin className="h-3.5 w-3.5" />
-              {tender.country || tender.region || t("locationMissing")}
+              <BidiText>{tender.country || tender.region || t("locationMissing")}</BidiText>
             </span>
             <span>
-              {tender.sector || tender.category || t("uncategorized")}
+              <BidiText>{tender.sector || tender.category || t("uncategorized")}</BidiText>
             </span>
           </div>
         </div>

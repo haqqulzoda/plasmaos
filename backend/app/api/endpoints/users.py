@@ -7,7 +7,7 @@ Protected endpoints for user operations.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,10 @@ from app.core.access import (
     USER_APPROVAL_APPROVED,
 )
 from app.core.geography import normalize_target_countries, normalize_target_regions
+from app.core.analysis_languages import (
+    AnalysisLanguage,
+    is_customer_selectable_analysis_language,
+)
 from app.core.locales import UiLocale, is_customer_selectable_ui_locale
 from app.core.services import normalize_target_services
 from app.db.session import get_db
@@ -50,6 +54,7 @@ class UserResponse(BaseModel):
     approval_status: str
     platform_role: str
     ui_locale: UiLocale | None = None
+    default_analysis_language: AnalysisLanguage | None = None
     
     model_config = {"from_attributes": True}
 
@@ -57,7 +62,8 @@ class UserResponse(BaseModel):
 class UserPreferencesUpdate(BaseModel):
     """Authenticated self-service presentation preferences."""
 
-    ui_locale: UiLocale
+    ui_locale: UiLocale | None = None
+    default_analysis_language: AnalysisLanguage | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -78,9 +84,41 @@ class UserPreferencesUpdate(BaseModel):
             )
         return locale
 
+    @field_validator("default_analysis_language", mode="before")
+    @classmethod
+    def _validate_default_analysis_language(
+        cls,
+        value: object,
+    ) -> AnalysisLanguage | None:
+        if value is None:
+            return None
+        try:
+            language = AnalysisLanguage(value)
+        except (TypeError, ValueError) as exc:
+            raise PydanticCustomError(
+                "unsupported_analysis_language",
+                "Unsupported customer analysis language",
+            ) from exc
+        if not is_customer_selectable_analysis_language(language):
+            raise PydanticCustomError(
+                "unsupported_analysis_language",
+                "Unsupported customer analysis language",
+            )
+        return language
+
+    @model_validator(mode="after")
+    def _require_at_least_one_preference(self) -> "UserPreferencesUpdate":
+        if not self.model_fields_set:
+            raise PydanticCustomError(
+                "preference_required",
+                "At least one supported preference must be supplied",
+            )
+        return self
+
 
 class UserPreferencesResponse(BaseModel):
-    ui_locale: UiLocale
+    ui_locale: UiLocale | None = None
+    default_analysis_language: AnalysisLanguage | None = None
 
 
 class AccessStatusResponse(BaseModel):
@@ -121,11 +159,26 @@ async def update_current_user_preferences(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserPreferencesResponse:
-    """Persist the authenticated user's non-security presentation preference."""
-    current_user.ui_locale = payload.ui_locale.value
+    """Persist only supplied authenticated self-service preferences."""
+    if "ui_locale" in payload.model_fields_set:
+        assert payload.ui_locale is not None
+        current_user.ui_locale = payload.ui_locale.value
+    if "default_analysis_language" in payload.model_fields_set:
+        current_user.default_analysis_language = (
+            payload.default_analysis_language.value
+            if payload.default_analysis_language is not None
+            else None
+        )
     await db.commit()
     await db.refresh(current_user)
-    return UserPreferencesResponse(ui_locale=payload.ui_locale)
+    return UserPreferencesResponse(
+        ui_locale=(UiLocale(current_user.ui_locale) if current_user.ui_locale else None),
+        default_analysis_language=(
+            AnalysisLanguage(current_user.default_analysis_language)
+            if current_user.default_analysis_language
+            else None
+        ),
+    )
 
 
 @router.get("/me/access-status", response_model=AccessStatusResponse)

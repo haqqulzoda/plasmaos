@@ -171,7 +171,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     const dashboardShell = (
         <div className="flex h-screen bg-gray-900 text-white">
             {/* Sidebar */}
-            <aside className="w-16 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col sm:w-64">
+            <aside className="w-16 shrink-0 bg-gray-950 border-e border-gray-800 flex flex-col sm:w-64">
                 {/* Logo */}
                 <div className="border-b border-gray-800 p-3 sm:p-6">
                     <Link href="/dashboard" aria-label={t('dashboardLabel')} className="flex items-center justify-center gap-3 sm:justify-start">
@@ -194,7 +194,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                                 className={clsx(
                                     'flex items-center justify-center gap-3 rounded-lg px-2 py-3 transition-all duration-200 sm:justify-start sm:px-4',
                                     isActive
-                                        ? 'bg-indigo-900/20 text-indigo-400 border-l-2 border-indigo-500'
+                                        ? 'bg-indigo-900/20 text-indigo-400 border-s-2 border-indigo-500'
                                         : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
                                 )}
                             >

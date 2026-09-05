@@ -21,6 +21,7 @@ import {
   preparationStatusClasses,
   type BidPreparationArtifact,
 } from "@/types/bid-preparation";
+import { BidiText } from "@/components/i18n/BidiText";
 
 export default function BidPreparationPage() {
   const t = useTranslations("bidPreparation");
@@ -140,7 +141,7 @@ export default function BidPreparationPage() {
             className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors"
           >
             {t("browse")}
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="rtl-mirror w-4 h-4" />
           </Link>
         </motion.div>
       ) : (
@@ -152,8 +153,8 @@ export default function BidPreparationPage() {
           {proposals.map((proposal, index) => (
             <motion.div
               key={proposal.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
             >
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-indigo-500/50 transition-colors group">
@@ -161,7 +162,7 @@ export default function BidPreparationPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-lg font-semibold text-white truncate group-hover:text-indigo-400 transition-colors">
-                        {proposal.tender_title}
+                        <BidiText>{proposal.tender_title}</BidiText>
                       </h3>
                       <span
                         className={`rounded-full border px-3 py-1 text-xs font-medium ${preparationStatusClasses(proposal.status)}`}
@@ -204,7 +205,7 @@ export default function BidPreparationPage() {
                       {proposal.tender_region && (
                         <span className="flex items-center gap-1">
                           <MapPin className="w-4 h-4" />
-                          {proposal.tender_region}
+                          <BidiText>{proposal.tender_region}</BidiText>
                         </span>
                       )}
 
@@ -232,11 +233,11 @@ export default function BidPreparationPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 ml-4">
+                  <div className="flex items-center gap-2 ms-4">
                     {!proposal.engagement_status && (
                       <PrepareBidButton proposalId={proposal.id} />
                     )}
-                    <div className="text-right">
+                    <div className="text-end">
                       <div className="text-zinc-500 text-xs mb-1">
                         {t("aiConfidence")}
                       </div>
@@ -249,7 +250,7 @@ export default function BidPreparationPage() {
                       className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:border-indigo-500 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
                       {t("open")}
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="rtl-mirror w-4 h-4" />
                     </Link>
                   </div>
                 </div>

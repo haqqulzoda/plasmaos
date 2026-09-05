@@ -13,6 +13,7 @@ import {
 } from "react";
 import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { BidiText } from "@/components/i18n/BidiText";
 
 import {
   ACTIVITY_DRAIN_PAGE_LIMIT,
@@ -576,7 +577,7 @@ export function SourceRefreshProvider({
         aria-label={translateRefresh("notifications")}
         aria-live="polite"
         aria-relevant="additions"
-        className="pointer-events-none fixed inset-x-3 bottom-3 z-[100] flex flex-col items-end gap-2 sm:left-auto sm:right-5 sm:w-[25rem]"
+        className="pointer-events-none fixed inset-x-3 bottom-3 z-[100] flex flex-col items-end gap-2 sm:start-auto sm:end-5 sm:w-[25rem]"
       >
         {notices.map((notice) => (
           <article
@@ -587,9 +588,9 @@ export function SourceRefreshProvider({
             <div className="flex items-start gap-3">
               <NoticeIcon notice={notice} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{notice.title}</p>
+                <BidiText className="block text-sm font-semibold">{notice.title}</BidiText>
                 {notice.detail ? (
-                  <p className="mt-1 text-xs opacity-80">{notice.detail}</p>
+                  <BidiText className="mt-1 block text-xs opacity-80">{notice.detail}</BidiText>
                 ) : null}
               </div>
               <button
@@ -656,13 +657,13 @@ export function GlobalRefreshIndicator() {
         />
         {label}
       </summary>
-      <div className="absolute right-0 z-40 mt-2 w-64 rounded-xl border border-zinc-700 bg-zinc-950 p-3 shadow-2xl">
+      <div className="absolute end-0 z-40 mt-2 w-64 rounded-xl border border-zinc-700 bg-zinc-950 p-3 shadow-2xl">
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
           {t("sourceRefreshes")}
         </p>
         {activeSources.map((item) => (
           <p key={item.source_system} className="py-1 text-xs text-zinc-200">
-            {item.display_name} ·{" "}
+            <BidiText>{item.display_name}</BidiText> ·{" "}
             {item.active_job?.status === "queued"
               ? t("queued")
               : t("refreshing")}

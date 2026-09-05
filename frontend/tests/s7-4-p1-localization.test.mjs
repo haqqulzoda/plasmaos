@@ -13,8 +13,8 @@ const catalog = (locale) => Object.fromEntries(MESSAGE_NAMESPACES.map((namespace
 ]));
 const catalogs = Object.fromEntries(CUSTOMER_SELECTABLE_LOCALES.map((locale) => [locale, catalog(locale)]));
 
-test('final Sprint 7 catalogs have exact EN/UZ/RU key, ICU, and rich-message parity', () => {
-  assert.deepEqual(validateMessageCatalogs(catalogs.en, {uz: catalogs.uz, ru: catalogs.ru}), []);
+test('current catalogs preserve the Sprint 7 contract with EN/UZ/RU/AR parity', () => {
+  assert.deepEqual(validateMessageCatalogs(catalogs.en, {uz: catalogs.uz, ru: catalogs.ru, ar: catalogs.ar}), []);
   const expected = flattenMessageTree(catalogs.en).size;
   assert.ok(expected >= 780, expected);
   for (const locale of CUSTOMER_SELECTABLE_LOCALES) assert.equal(flattenMessageTree(catalogs[locale]).size, expected);
@@ -31,7 +31,10 @@ test('Compliance localizes chrome while preserving analysis, evidence, and requi
     assert.match(source, new RegExp(expression.replaceAll('.', '\\.')));
   }
   assert.doesNotMatch(source, /(?:^|[^A-Za-z])t\((?:hybridCompliance\.status_message|requirementSnippet|detail\.(?:raw_text_snippet|exact_quote)|d\.matched_credential)/m);
-  assert.doesNotMatch(source, /api\.post[^\n]*(?:locale|language)|analysis_language|report_language/);
+  // Sprint 8.2 adds an explicit analysis_language authority. The Sprint 7
+  // regression invariant is that UI locale and report-language guesses are
+  // never sent as analysis inputs.
+  assert.doesNotMatch(source, /api\.post[^\n]*(?:ui_locale|locale=|report_language)/);
 });
 
 test('Readiness enum mappings are exhaustive and canonical values are unchanged', async () => {
@@ -56,12 +59,13 @@ test('customer formatting is centralized and invalid values are safe', async () 
   assert.doesNotMatch(customer, /\.toLocale(?:String|DateString|TimeString)\(|new Intl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat)/);
 });
 
-test('Arabic, RTL, localStorage, and analysis/report language remain outside Sprint 7', () => {
-  assert.deepEqual(CUSTOMER_SELECTABLE_LOCALES, ['en', 'uz', 'ru']);
-  assert.equal(LOCALE_REGISTRY.ar.customerSelectable, false);
+test('released Arabic UI remains independent from analysis/report language', () => {
+  assert.deepEqual(CUSTOMER_SELECTABLE_LOCALES, ['en', 'uz', 'ru', 'ar']);
+  assert.equal(LOCALE_REGISTRY.ar.customerSelectable, true);
+  assert.equal(LOCALE_REGISTRY.ar.direction, 'rtl');
   const selector = read('components/i18n/LanguageSelector.tsx');
   const customer = CUSTOMER_SELECTABLE_LOCALES.map((locale) => JSON.stringify(catalogs[locale])).join('\n');
-  assert.doesNotMatch(selector, /العربية|dir=|localStorage/);
+  assert.doesNotMatch(selector, /dir=|localStorage/);
   assert.doesNotMatch(customer, /analysis_language|report_language/);
 });
 

@@ -39,17 +39,18 @@ def make_user(*, locale: str | None = None, approval_status: str = "approved"):
         platform_role="pilot_user",
         auth_version=17,
         ui_locale=locale,
+        default_analysis_language=None,
     )
 
 
 class LocaleContractTests(TestCase):
-    def test_registry_knows_arabic_but_customer_api_only_accepts_en_uz_ru(self):
+    def test_registry_accepts_all_released_customer_ui_locales(self):
         self.assertEqual(KNOWN_UI_LOCALES, ("en", "uz", "ru", "ar"))
-        self.assertEqual(CUSTOMER_SELECTABLE_UI_LOCALE_VALUES, ("en", "uz", "ru"))
+        self.assertEqual(CUSTOMER_SELECTABLE_UI_LOCALE_VALUES, ("en", "uz", "ru", "ar"))
         for locale in CUSTOMER_SELECTABLE_UI_LOCALE_VALUES:
             self.assertEqual(UserPreferencesUpdate(ui_locale=locale).ui_locale.value, locale)
 
-        for locale in ("ar", "fr", "uz-Cyrl-UZ", "", None, 7):
+        for locale in ("fr", "uz-Cyrl-UZ", "", None, 7):
             with self.subTest(locale=locale), self.assertRaises(ValidationError) as raised:
                 UserPreferencesUpdate(ui_locale=locale)
             self.assertEqual(raised.exception.errors()[0]["type"], "unsupported_ui_locale")
@@ -65,6 +66,7 @@ class LocaleContractTests(TestCase):
             "en": UiLocale.ENGLISH,
             "uz": UiLocale.UZBEK,
             "ru": UiLocale.RUSSIAN,
+            "ar": UiLocale.ARABIC,
         }
         for raw, locale in expected.items():
             with self.subTest(locale=raw):

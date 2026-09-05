@@ -102,7 +102,11 @@ def main() -> int:
         chrome = r"C:\Users\acer\AppData\Local\ms-playwright\chromium-1208\chrome-win64\chrome.exe"
         profile_name = f"s74-browser-profile-{os.getpid()}"
         profile = rf"C:\Users\acer\AppData\Local\Temp\{profile_name}"
-        profile_path = Path("/mnt/c/Users/acer/AppData/Local/Temp") / profile_name
+        profile_path = (
+            Path(os.environ["LOCALAPPDATA"]) / "Temp" / profile_name
+            if os.name == "nt"
+            else Path("/mnt/c/Users/acer/AppData/Local/Temp") / profile_name
+        )
         launch = (
             f"Start-Process -FilePath '{chrome}' -ArgumentList '--headless=new',"
             f"'--disable-gpu','--no-first-run','--remote-debugging-port=0',"
@@ -110,7 +114,7 @@ def main() -> int:
         )
         subprocess.run([s72.POWERSHELL, "-NoProfile", "-Command", launch], check=True)
         port_file = profile_path / "DevToolsActivePort"
-        deadline = time.time() + 20
+        deadline = time.time() + 60
         while time.time() < deadline and not port_file.exists(): time.sleep(0.2)
         if not port_file.exists(): raise RuntimeError("Chromium did not publish DevToolsActivePort")
         cdp_port = int(port_file.read_text(encoding="utf-8").splitlines()[0])
@@ -159,7 +163,7 @@ def main() -> int:
                 page.goto(f"{s72.BASE_URL}/dashboard/settings", wait_until="networkidle")
                 selector = page.locator('[data-language-selector="settings"]')
                 check(selector.get_by_role("radiogroup").count() == 1, f"{locale} language radiogroup named")
-                check(selector.get_by_role("radio").count() == 3, f"{locale} three keyboard radios")
+                check(selector.get_by_role("radio").count() == 4, f"{locale} four keyboard radios")
                 active = selector.get_by_role("radio", name=re.compile(re.escape(native[locale])))
                 check(active.get_attribute("aria-checked") == "true", f"{locale} active radio announced")
                 active.focus()

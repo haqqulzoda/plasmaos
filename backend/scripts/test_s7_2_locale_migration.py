@@ -20,7 +20,7 @@ if str(BACKEND_DIR) not in sys.path:
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20260902_0001_s7_2_user_ui_locale"
+HEAD = "20260904_0001_s8_2_analysis_language"
 PARENT = "20260901_0001_sr2_3_connector_metrics"
 
 

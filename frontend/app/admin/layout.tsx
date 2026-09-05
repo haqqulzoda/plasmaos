@@ -92,7 +92,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     }
 
     return (
-        <div className="flex h-screen bg-gray-900 text-white">
+        <div lang="en" dir="ltr" data-admin-ltr-island className="flex h-screen bg-gray-900 text-white">
             <aside className="w-64 bg-gray-950 border-r border-cyan-500/20 flex flex-col">
                 <div className="p-6 border-b border-gray-800">
                     <Link href="/admin" className="flex items-center gap-3">

@@ -71,7 +71,7 @@ def test_migration_is_single_additive_head_and_never_guesses_names() -> None:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20260902_0001_s7_2_user_ui_locale"]
+    assert script.get_heads() == ["20260904_0001_s8_2_analysis_language"]
     migration = source(
         "alembic/versions/20260827_0001_s2_1_compliance_ownership.py"
     )

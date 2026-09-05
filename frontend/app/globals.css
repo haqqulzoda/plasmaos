@@ -105,3 +105,28 @@ body {
   cursor: not-allowed;
   transform: none;
 }
+
+/* Sprint 8.3 direction primitives. Application direction belongs to <html>;
+   these classes isolate mixed source/user/technical content within that shell. */
+.bidi-auto {
+  unicode-bidi: plaintext;
+}
+
+.bidi-isolate {
+  unicode-bidi: isolate;
+}
+
+.technical-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+[dir="rtl"] .rtl-mirror {
+  transform: scaleX(-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rtl-mirror {
+    transition: none !important;
+  }
+}

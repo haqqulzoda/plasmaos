@@ -449,7 +449,7 @@ export default function TenderDetailPage({
           href={returnHref}
           className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          <ArrowLeft className="rtl-mirror h-4 w-4" aria-hidden="true" />
           {t("back")}
         </Link>
         <div
@@ -469,7 +469,7 @@ export default function TenderDetailPage({
           href={returnHref}
           className="inline-flex w-fit items-center gap-2 text-sm text-zinc-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          <ArrowLeft className="rtl-mirror h-4 w-4" aria-hidden="true" />
           {t("back")}
         </Link>
         <div className="flex flex-wrap gap-2">
@@ -497,7 +497,7 @@ export default function TenderDetailPage({
       <header className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
         <div className="border-b border-zinc-800 bg-gradient-to-r from-indigo-500/10 via-transparent to-sky-500/5 p-5 sm:p-6">
           <div className="flex flex-wrap items-center gap-2">
-            <span
+            <span dir="auto"
               className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${sourceBadgeClasses(tender.source_system)}`}
             >
               {t("source", {
@@ -509,14 +509,14 @@ export default function TenderDetailPage({
             >
               {t("status", { status: tenderStatus })}
             </span>
-            <span className="inline-flex rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs font-medium text-zinc-400">
+            <span dir="ltr" className="technical-ltr inline-flex rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs font-medium text-zinc-400">
               {t("reference", { reference: tender.external_id })}
             </span>
           </div>
-          <h1 className="mt-4 max-w-5xl text-2xl font-bold leading-tight text-white sm:text-3xl">
+          <h1 dir="auto" className="bidi-auto mt-4 max-w-5xl text-2xl font-bold leading-tight text-white sm:text-3xl">
             {tender.title}
           </h1>
-          <p className="mt-3 max-w-5xl text-sm leading-6 text-zinc-400">
+          <p dir="auto" className="bidi-auto mt-3 max-w-5xl text-sm leading-6 text-zinc-400">
             {tender.description || t("descriptionMissing")}
           </p>
         </div>
@@ -550,7 +550,7 @@ export default function TenderDetailPage({
                 {item.icon}
                 {item.label}
               </dt>
-              <dd className="mt-2 break-words text-sm font-medium text-zinc-100">
+              <dd dir="auto" className="bidi-auto mt-2 break-words text-sm font-medium text-zinc-100">
                 {item.value}
               </dd>
             </div>
@@ -650,15 +650,15 @@ export default function TenderDetailPage({
                 ) : null}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h3 className="font-semibold text-zinc-100">
+                    <h3 dir="auto" className="bidi-auto font-semibold text-zinc-100">
                       {project.name ||
                         t("projectName", {
                           source: displayNameForSource(project.source_system),
                         })}
                     </h3>
                     <p className="mt-1 text-sm text-zinc-500">
-                      {displayNameForSource(project.source_system)} ·{" "}
-                      {project.external_project_id}
+                      <span dir="auto" className="bidi-auto">{displayNameForSource(project.source_system)}</span> ·{" "}
+                      <span dir="ltr" className="technical-ltr">{project.external_project_id}</span>
                     </p>
                   </div>
                   <span className="w-fit rounded-md border border-sky-500/25 bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">
@@ -675,7 +675,7 @@ export default function TenderDetailPage({
                     <dt className="text-xs uppercase tracking-wide text-zinc-500">
                       {t("countryRegion")}
                     </dt>
-                    <dd className="mt-1 text-zinc-200">
+                    <dd dir="auto" className="bidi-auto mt-1 text-zinc-200">
                       {[project.country, project.region]
                         .filter(Boolean)
                         .join(" / ") || t("notReported")}
@@ -729,7 +729,7 @@ export default function TenderDetailPage({
                           key={role.role_id}
                           className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3"
                         >
-                          <p className="font-medium text-zinc-100">
+                          <p dir="auto" className="bidi-auto font-medium text-zinc-100">
                             {role.display_name}
                           </p>
                           <p className="mt-1 text-xs text-zinc-400">
@@ -765,7 +765,7 @@ export default function TenderDetailPage({
                             key={role.role_id}
                             className="rounded-lg border border-zinc-800 p-3 text-sm text-zinc-300"
                           >
-                            <p>{role.display_name}</p>
+                            <p dir="auto" className="bidi-auto">{role.display_name}</p>
                             <p className="mt-1 text-xs text-zinc-500">
                               {leadershipRoleLabel(
                                 role,
@@ -825,14 +825,14 @@ export default function TenderDetailPage({
                         <div className="flex items-start gap-2">
                           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" />
                           <div>
-                            <p className="text-sm text-zinc-100">
+                            <p dir="auto" className="bidi-auto text-sm text-zinc-100">
                               {item.label}
                             </p>
                             <p className="mt-1 text-xs font-medium text-violet-300">
                               {t("aiRequirement")}
                             </p>
                             {item.document_name || item.page || item.section ? (
-                              <p className="mt-1 text-xs text-zinc-500">
+                              <p dir="auto" className="bidi-auto mt-1 text-xs text-zinc-500">
                                 {[item.document_name, item.section, item.page]
                                   .filter(Boolean)
                                   .join(" · ")}
@@ -891,10 +891,10 @@ export default function TenderDetailPage({
                             className="grid gap-3 p-3 text-sm sm:grid-cols-[minmax(0,1fr)_130px_auto] sm:items-center"
                           >
                             <div className="min-w-0">
-                              <p className="truncate font-medium text-zinc-100">
+                              <p dir="auto" className="bidi-auto truncate font-medium text-zinc-100">
                                 {item.display_name}
                               </p>
-                              <p className="mt-1 text-xs text-zinc-500">
+                              <p dir="auto" className="bidi-auto mt-1 text-xs text-zinc-500">
                                 {item.document_type} ·{" "}
                                 {displayNameForSource(item.source_system)} ·{" "}
                                 {presentFileSize(item.file_size)}
@@ -1209,7 +1209,7 @@ export default function TenderDetailPage({
                     <dt className="text-xs uppercase tracking-wide text-zinc-500">
                       {t("procuringEntity")}
                     </dt>
-                    <dd className="mt-1 text-zinc-200">
+                    <dd dir="auto" className="bidi-auto mt-1 text-zinc-200">
                       {safeText(contacts.buyer_agency, t("notProvided"))}
                     </dd>
                   </div>
@@ -1217,7 +1217,7 @@ export default function TenderDetailPage({
                     <dt className="text-xs uppercase tracking-wide text-zinc-500">
                       {t("procurementContact")}
                     </dt>
-                    <dd className="mt-1 text-zinc-200">
+                    <dd dir="auto" className="bidi-auto mt-1 text-zinc-200">
                       {safeText(contacts.contact_person, t("notProvided"))}
                     </dd>
                   </div>
@@ -1226,7 +1226,7 @@ export default function TenderDetailPage({
                       <Mail className="h-3.5 w-3.5" />
                       {t("email")}
                     </dt>
-                    <dd className="mt-1 break-all text-zinc-200">
+                    <dd dir="ltr" className="technical-ltr mt-1 break-all text-zinc-200">
                       {safeText(contacts.email, t("notProvided"))}
                     </dd>
                   </div>
@@ -1235,7 +1235,7 @@ export default function TenderDetailPage({
                       <Phone className="h-3.5 w-3.5" />
                       {t("phone")}
                     </dt>
-                    <dd className="mt-1 text-zinc-200">
+                    <dd dir="ltr" className="technical-ltr mt-1 text-zinc-200">
                       {safeText(contacts.phone, t("notProvided"))}
                     </dd>
                   </div>
@@ -1245,7 +1245,7 @@ export default function TenderDetailPage({
                     <dt className="text-xs uppercase tracking-wide text-zinc-500">
                       {t("submissionMethod")}
                     </dt>
-                    <dd className="mt-1 text-zinc-200">
+                    <dd dir="auto" className="bidi-auto mt-1 text-zinc-200">
                       {safeText(contacts.submission_method, t("notProvided"))}
                     </dd>
                   </div>

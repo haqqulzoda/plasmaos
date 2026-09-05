@@ -55,21 +55,21 @@ test("P0 catalogs have complete EN/UZ/RU key and placeholder coverage", () => {
   }
 });
 
-test("the only customer selector is registry-driven, accessible, and Arabic-gated", () => {
+test("the only customer selector is registry-driven, accessible, and includes released Arabic", () => {
   const selector = read("components/i18n/LanguageSelector.tsx");
-  assert.deepEqual(CUSTOMER_SELECTABLE_LOCALES, ["en", "uz", "ru"]);
+  assert.deepEqual(CUSTOMER_SELECTABLE_LOCALES, ["en", "uz", "ru", "ar"]);
   assert.deepEqual(
     CUSTOMER_SELECTABLE_LOCALES.map(
       (locale) => LOCALE_REGISTRY[locale].displayNameNative,
     ),
-    ["English", "O‘zbekcha", "Русский"],
+    ["English", "O‘zbekcha", "Русский", "العربية"],
   );
-  assert.equal(LOCALE_REGISTRY.ar.customerSelectable, false);
+  assert.equal(LOCALE_REGISTRY.ar.customerSelectable, true);
   assert.match(selector, /CUSTOMER_SELECTABLE_LOCALES\.map/);
   assert.match(selector, /role="radiogroup"/);
   assert.match(selector, /role="radio"/);
   assert.match(selector, /aria-checked=\{selected\}/);
-  assert.doesNotMatch(selector, /flag|emoji|العربية|LOCALE_REGISTRY\.ar/i);
+  assert.doesNotMatch(selector, /flag|emoji|LOCALE_REGISTRY\.ar/i);
 });
 
 test("onboarding and settings expose one selector before editable form content", () => {
@@ -184,6 +184,7 @@ test("claim-safe terminology renders natively in all P0 locales", () => {
     en: ["Tender Explorer", "Match score", "Compliance"],
     uz: ["Tenderlar katalogi", "Moslik bali", "Muvofiqlik tahlili"],
     ru: ["Каталог тендеров", "Оценка соответствия", "Анализ соответствия"],
+    ar: ["مستكشف المناقصات", "درجة المطابقة", "الامتثال"],
   };
   for (const locale of CUSTOMER_SELECTABLE_LOCALES) {
     const t = createTranslator({ locale, messages: catalogs[locale] });

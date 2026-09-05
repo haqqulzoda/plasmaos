@@ -67,7 +67,7 @@ const catalog = (locale) =>
       readJson(`../messages/${locale}/${namespace}.json`),
     ]),
   );
-const catalogs = { en: catalog("en"), uz: catalog("uz"), ru: catalog("ru") };
+const catalogs = { en: catalog("en"), uz: catalog("uz"), ru: catalog("ru"), ar: catalog("ar") };
 
 test("locale registry has one complete definition for every canonical product locale", () => {
   assert.deepEqual(PRODUCT_LOCALE_CODES, ["en", "uz", "ru", "ar"]);
@@ -79,14 +79,14 @@ test("locale registry has one complete definition for every canonical product lo
   }
 });
 
-test("English, Uzbek Latin, and Russian are selectable while Arabic remains gated", () => {
+test("all four UI locales are selectable and Arabic owns RTL direction", () => {
   assert.equal(DEFAULT_PRODUCT_LOCALE, "en");
-  assert.deepEqual(CUSTOMER_SELECTABLE_LOCALES, ["en", "uz", "ru"]);
+  assert.deepEqual(CUSTOMER_SELECTABLE_LOCALES, ["en", "uz", "ru", "ar"]);
   assert.equal(LOCALE_REGISTRY.uz.displayNameNative, "O‘zbekcha");
   assert.equal(LOCALE_REGISTRY.ar.direction, "rtl");
-  assert.equal(LOCALE_REGISTRY.ar.enabled, false);
-  assert.equal(LOCALE_REGISTRY.ar.customerSelectable, false);
-  assert.equal(isCustomerSelectableLocale("ar"), false);
+  assert.equal(LOCALE_REGISTRY.ar.enabled, true);
+  assert.equal(LOCALE_REGISTRY.ar.customerSelectable, true);
+  assert.equal(isCustomerSelectableLocale("ar"), true);
   assert.equal(isCustomerSelectableLocale("ru"), true);
 });
 
@@ -126,7 +126,7 @@ test("request precedence is persisted user, cookie, request, then English", () =
   );
   assert.equal(
     resolveRequestLocale({ presentationCookie: "ar", acceptLanguage: "de" }),
-    "en",
+    "ar",
   );
 });
 
@@ -137,7 +137,7 @@ test("browser BCP-47 variants map to stable product identifiers", () => {
   assert.equal(toProductLocale("RU-ru"), "ru");
   assert.equal(toProductLocale("ar-EG"), "ar");
   assert.equal(toProductLocale("de-DE"), null);
-  assert.equal(toCustomerSelectableLocale("ar-EG"), null);
+  assert.equal(toCustomerSelectableLocale("ar-EG"), "ar");
 });
 
 test("customer locale resolution is deterministic and saved preference wins", () => {
@@ -165,7 +165,7 @@ test("customer locale resolution is deterministic and saved preference wins", ()
   );
   assert.equal(
     resolveCustomerLocale({ browserLocales: ["ar-EG", "ru-RU"] }),
-    "ru",
+    "ar",
   );
   assert.equal(resolveCustomerLocale({ browserLocales: ["de-DE"] }), "en");
 });
@@ -252,9 +252,9 @@ test("message validation detects missing, extra, and placeholder-mismatched keys
   ]);
 });
 
-test("committed English, Uzbek, and Russian catalogs have exact key and ICU parity", () => {
+test("committed English, Uzbek, Russian, and Arabic catalogs have exact key and ICU parity", () => {
   assert.deepEqual(
-    validateMessageCatalogs(catalogs.en, { uz: catalogs.uz, ru: catalogs.ru }),
+    validateMessageCatalogs(catalogs.en, { uz: catalogs.uz, ru: catalogs.ru, ar: catalogs.ar }),
     [],
   );
 });
@@ -263,6 +263,7 @@ test("next-intl executes plural rules and named interpolation for all active loc
   const en = createTranslator({ locale: "en", messages: catalogs.en });
   const uz = createTranslator({ locale: "uz", messages: catalogs.uz });
   const ru = createTranslator({ locale: "ru", messages: catalogs.ru });
+  const ar = createTranslator({ locale: "ar", messages: catalogs.ar });
 
   assert.equal(en("common.tenderCount", { count: 1 }), "1 tender");
   assert.equal(en("common.tenderCount", { count: 2 }), "2 tenders");
@@ -270,6 +271,7 @@ test("next-intl executes plural rules and named interpolation for all active loc
   assert.equal(ru("common.tenderCount", { count: 1 }), "1 тендер");
   assert.equal(ru("common.tenderCount", { count: 2 }), "2 тендера");
   assert.equal(ru("common.tenderCount", { count: 5 }), "5 тендеров");
+  assert.match(ar("common.tenderCount", { count: 1 }), /مناقصة/);
   assert.equal(
     uz("common.newTendersFromSource", { count: 3, source: "World Bank" }),
     "World Bank: 3 ta yangi tender",
@@ -298,20 +300,21 @@ test("rich messages keep dynamic source values as escaped text", () => {
 
 test("formatters localize representation while preserving UTC and economic inputs", () => {
   const timestamp = "2026-09-02T12:34:00Z";
-  const dates = ["en", "uz", "ru"].map((locale) =>
+  const dates = ["en", "uz", "ru", "ar"].map((locale) =>
     formatDate(timestamp, locale),
   );
   assert.equal(new Set(dates).size >= 2, true);
   assert.match(formatDateTime(timestamp, "en"), /12:34/);
   assert.notEqual(formatNumber(12345.67, "en"), formatNumber(12345.67, "ru"));
+  assert.notEqual(formatNumber(12345.67, "ar"), INVALID_FORMAT_VALUE);
   assert.equal(formatNumber(0, "uz").includes("0"), true);
   assert.equal(formatNumber(-1000, "ru").includes("1"), true);
 
   for (const currency of ["USD", "UZS", "EUR"]) {
-    const formatted = ["en", "uz", "ru"].map((locale) =>
+    const formatted = ["en", "uz", "ru", "ar"].map((locale) =>
       formatCurrency(1234.5, currency, locale),
     );
-    assert.ok(formatted.every((value) => value.includes("1")));
+    assert.ok(formatted.every((value) => /[1١]/.test(value)));
   }
   assert.match(
     formatRelativeTime("2026-09-02T12:29:00Z", timestamp, "en"),
@@ -359,7 +362,7 @@ test("runtime integration is locale-neutral, request-scoped, and bundle-consciou
     "../components/source-refresh/SourceRefreshProvider.tsx",
   );
 
-  assert.match(layout, /<html lang=\{locale\}>/);
+  assert.match(layout, /<html lang=\{locale\} dir=\{directionForLocale\(locale\)\}>/);
   assert.doesNotMatch(layout, /suppressHydrationWarning/);
   assert.match(
     layout,
@@ -371,7 +374,7 @@ test("runtime integration is locale-neutral, request-scoped, and bundle-consciou
     request,
     /persistedUserLocale.*presentationCookie.*acceptLanguage/s,
   );
-  assert.equal((loader.match(/import\('\.\.\/messages\//g) ?? []).length, 3);
+  assert.equal((loader.match(/import\('\.\.\/messages\//g) ?? []).length, 4);
   assert.doesNotMatch(localeAction, /localStorage|window\.location/);
   assert.match(localeAction, /router\.refresh\(\)/);
   assert.match(

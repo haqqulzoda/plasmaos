@@ -277,7 +277,11 @@ original_resolve_key = extractor._resolve_gemini_api_key
 original_extract_sync = extractor._extract_requirements_sync
 
 
-def fake_extract_sync(text_payload: str, api_key: str) -> list[TenderRequirement]:
+def fake_extract_sync(
+    text_payload: str,
+    api_key: str,
+    analysis_language: object = "en",
+) -> list[TenderRequirement]:
     assert len(text_payload) <= MAX_PAYLOAD_CHARS
     if "late requirement license" not in text_payload:
         return []

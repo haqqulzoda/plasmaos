@@ -13,7 +13,7 @@ from app.services.my_tenders import MyTendersQuery, _base_list_statement, _order
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT = BACKEND_DIR.parent
-HEAD = "20260902_0001_s7_2_user_ui_locale"
+HEAD = "20260904_0001_s8_2_analysis_language"
 
 
 def source(relative: str) -> str:

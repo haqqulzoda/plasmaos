@@ -110,6 +110,7 @@ class TenderDocumentsSummary(BaseModel):
 class ComplianceSummary(BaseModel):
     analysis_id: UUID
     version_number: int
+    analysis_language: str | None = None
     execution_state: str
     compliance_completeness: str
     decision_label: str | None = None

@@ -17,6 +17,7 @@ CUSTOMER_SELECTABLE_UI_LOCALES = (
     UiLocale.ENGLISH,
     UiLocale.UZBEK,
     UiLocale.RUSSIAN,
+    UiLocale.ARABIC,
 )
 CUSTOMER_SELECTABLE_UI_LOCALE_VALUES = tuple(
     locale.value for locale in CUSTOMER_SELECTABLE_UI_LOCALES
@@ -25,4 +26,3 @@ CUSTOMER_SELECTABLE_UI_LOCALE_VALUES = tuple(
 
 def is_customer_selectable_ui_locale(locale: UiLocale) -> bool:
     return locale in CUSTOMER_SELECTABLE_UI_LOCALES
-

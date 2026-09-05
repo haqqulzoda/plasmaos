@@ -37,6 +37,11 @@ from tenacity import (
     wait_exponential,
 )
 
+from app.core.analysis_languages import (
+    AnalysisLanguage,
+    analysis_language_prompt_instruction,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,6 +59,7 @@ def _env_int(name: str, default: int) -> int:
 
 MODEL_NAME: str = os.getenv("GEMINI_REQUIREMENT_MODEL", "gemini-3.1-pro-preview")
 EXTRACTOR_SCHEMA_VERSION: str = "requirement_extractor_scope_v5"
+PROMPT_TEMPLATE_VERSION: str = "requirement_extractor_s8_2_language_v1"
 MAX_PAYLOAD_CHARS: int = _env_int("GEMINI_REQUIREMENT_MAX_PAYLOAD_CHARS", 120_000)
 CHUNK_OVERLAP_CHARS: int = _env_int("GEMINI_REQUIREMENT_CHUNK_OVERLAP_CHARS", 1_000)
 MAX_CHUNK_CONCURRENCY: int = max(
@@ -423,7 +429,8 @@ Extraction filters:
 Multilingual handling:
 - Tender text may be Uzbek Latin, Uzbek Cyrillic, Russian, English, or mixed.
 - Preserve source_filename exactly; do not translate exact_quote.
-- headline may be concise English, but exact_quote must remain verbatim.
+- headline must follow the trusted analysis-language instruction supplied with
+  the request, but exact_quote must remain verbatim.
 
 Final instruction:
 Return a JSON array only. For non-empty tender text, extract the strongest
@@ -467,7 +474,10 @@ def _ensure_trace_markers(text_payload: str) -> str:
     return f"[[FILE: {source_filename}]]\n[[PAGE 1]]\n{normalized}"
 
 
-def _build_extraction_prompt(text_payload: str) -> str:
+def _build_extraction_prompt(
+    text_payload: str,
+    analysis_language: AnalysisLanguage | str = AnalysisLanguage.ENGLISH,
+) -> str:
     """Build the user-turn prompt with the tender text payload."""
     traceable_payload = _ensure_trace_markers(text_payload)
     if len(traceable_payload) > MAX_PAYLOAD_CHARS:
@@ -476,7 +486,11 @@ def _build_extraction_prompt(text_payload: str) -> str:
             len(traceable_payload),
             MAX_PAYLOAD_CHARS,
         )
-    return f"Tender document text:\n\n{traceable_payload}"
+    language_instruction = analysis_language_prompt_instruction(analysis_language)
+    return (
+        f"Analysis language contract:\n{language_instruction}\n\n"
+        f"Tender document text:\n\n{traceable_payload}"
+    )
 
 
 def build_extraction_warnings(
@@ -1672,13 +1686,14 @@ def _log_extraction_retry(retry_state: RetryCallState) -> None:
 def _extract_requirements_sync(
     text_payload: str,
     api_key: str,
+    analysis_language: AnalysisLanguage | str = AnalysisLanguage.ENGLISH,
 ) -> list[TenderRequirement]:
     """Synchronous Gemini Pro call with native structured output enforcement."""
     if not text_payload.strip():
         return []
 
     client = genai.Client(api_key=api_key)
-    user_prompt = _build_extraction_prompt(text_payload)
+    user_prompt = _build_extraction_prompt(text_payload, analysis_language)
 
     response = client.models.generate_content(
         model=MODEL_NAME,
@@ -1801,6 +1816,7 @@ def build_failed_extraction_artifacts_metadata(
 def _extract_requirements_full_coverage_sync(
     text_payload: str,
     api_key: str,
+    analysis_language: AnalysisLanguage | str = AnalysisLanguage.ENGLISH,
 ) -> RequirementExtractionResult:
     """Extract requirements from all traceable chunks and report coverage."""
     traceable_payload = _ensure_trace_markers(text_payload)
@@ -1882,7 +1898,11 @@ def _extract_requirements_full_coverage_sync(
             try:
                 _record_chunk_success(
                     chunk,
-                    _extract_requirements_sync(chunk.text, api_key),
+                    _extract_requirements_sync(
+                        chunk.text,
+                        api_key,
+                        analysis_language,
+                    ),
                 )
             except Exception as exc:
                 _record_chunk_failure(chunk, exc)
@@ -1895,7 +1915,12 @@ def _extract_requirements_full_coverage_sync(
         )
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_chunk = {
-                executor.submit(_extract_requirements_sync, chunk.text, api_key): chunk
+                executor.submit(
+                    _extract_requirements_sync,
+                    chunk.text,
+                    api_key,
+                    analysis_language,
+                ): chunk
                 for chunk in chunks
             }
             for future in concurrent.futures.as_completed(future_to_chunk):
@@ -1933,6 +1958,7 @@ def _extract_requirements_full_coverage_sync(
 
 async def extract_requirements(
     text_payload: str,
+    analysis_language: AnalysisLanguage | str = AnalysisLanguage.ENGLISH,
 ) -> list[TenderRequirement]:
     """
     Extract forensic requirement/evidence items from tender text.
@@ -1955,12 +1981,14 @@ async def extract_requirements(
         _extract_requirements_full_coverage_sync,
         text_payload,
         api_key,
+        analysis_language,
     )
     return result.requirements
 
 
 async def extract_requirements_with_coverage(
     text_payload: str,
+    analysis_language: AnalysisLanguage | str = AnalysisLanguage.ENGLISH,
 ) -> RequirementExtractionResult:
     """
     Extract requirements from the full tender text and return coverage metadata.
@@ -1992,4 +2020,5 @@ async def extract_requirements_with_coverage(
         _extract_requirements_full_coverage_sync,
         text_payload,
         api_key,
+        analysis_language,
     )

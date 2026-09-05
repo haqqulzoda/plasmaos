@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { api } from "@/lib/api";
+import { BidiText } from "@/components/i18n/BidiText";
 import { formatCurrency, formatDate } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
@@ -110,16 +111,16 @@ function MyTenderCard({
             <span
               className={`rounded-md border px-2 py-1 text-xs font-semibold ${sourceBadgeClasses(item.source_system)}`}
             >
-              {sourceDisplayName}
+              <BidiText>{sourceDisplayName}</BidiText>
             </span>
           </div>
           <div>
             <h2 className="text-lg font-semibold text-white">
-              {item.tender_title}
+              <BidiText>{item.tender_title}</BidiText>
             </h2>
             <p className="mt-1 flex items-center gap-2 text-sm text-zinc-400">
               <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {item.buyer || t("buyerMissing")}
+              <BidiText>{item.buyer || t("buyerMissing")}</BidiText>
             </p>
           </div>
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-400">
@@ -131,16 +132,16 @@ function MyTenderCard({
             {(item.country || item.region) && (
               <span className="inline-flex items-center gap-2">
                 <MapPin className="h-4 w-4" aria-hidden="true" />
-                {[item.country, item.region].filter(Boolean).join(" · ")}
+                <BidiText>{[item.country, item.region].filter(Boolean).join(" · ")}</BidiText>
               </span>
             )}
           </div>
           {item.project_external_id && (
             <div className="inline-flex items-center gap-2 text-sm text-sky-200">
               <FolderKanban className="h-4 w-4" aria-hidden="true" />
-              {t("project", {
+              <BidiText>{t("project", {
                 project: item.project_name || item.project_external_id,
-              })}
+              })}</BidiText>
             </div>
           )}
         </div>
@@ -155,7 +156,7 @@ function MyTenderCard({
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:border-indigo-500 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             {t("openTender")}
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            <ArrowRight className="rtl-mirror h-4 w-4" aria-hidden="true" />
           </Link>
         </div>
       </div>
@@ -324,15 +325,16 @@ function MyTendersContent() {
           </label>
           <div className="relative min-w-0 flex-1">
             <Search
-              className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-500"
+              className="pointer-events-none absolute start-3 top-2.5 h-4 w-4 text-zinc-500"
               aria-hidden="true"
             />
             <input
+              dir="auto"
               id="my-tenders-search"
               value={searchDraft}
               onChange={(event) => setSearchDraft(event.target.value)}
               placeholder={t("searchLabel")}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 pl-9 pr-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 ps-9 pe-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
             />
           </div>
           <button
@@ -356,10 +358,10 @@ function MyTendersContent() {
         >
           <option value="">{t("allSources")}</option>
           {source && !catalog.some((item) => item.source_system === source) ? (
-            <option value={source}>{source}</option>
+              <option dir="auto" value={source}>{source}</option>
           ) : null}
           {catalog.map((item) => (
-            <option key={item.source_system} value={item.source_system}>
+            <option dir="auto" key={item.source_system} value={item.source_system}>
               {item.display_name}
             </option>
           ))}
@@ -432,7 +434,7 @@ function MyTendersContent() {
             href="/dashboard/tenders"
             className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
           >
-            {t("explore")} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            {t("explore")} <ArrowRight className="rtl-mirror h-4 w-4" aria-hidden="true" />
           </Link>
         </div>
       ) : (

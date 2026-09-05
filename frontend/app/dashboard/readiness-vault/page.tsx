@@ -26,6 +26,7 @@ import { formatDate } from '@/i18n/formatters';
 import type { CustomerSelectableLocale } from '@/i18n/locales';
 import { translateServiceLabel } from '@/i18n/taxonomy';
 import { labelForService, serviceValueSet, useServiceMeta } from '@/lib/services';
+import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
 
 type ReadinessDocument = {
     id: string;
@@ -395,6 +396,7 @@ export default function ReadinessVaultPage() {
                         </FormField>
                         <FormField label={t('documentName')}>
                             <input
+                                dir="auto"
                                 className={inputClass}
                                 value={form.document_name}
                                 onChange={(event) => updateField('document_name', event.target.value)}
@@ -403,6 +405,7 @@ export default function ReadinessVaultPage() {
                         </FormField>
                         <FormField label={t('documentNumber')}>
                             <input
+                                dir="ltr"
                                 className={inputClass}
                                 value={form.document_number}
                                 onChange={(event) => updateField('document_number', event.target.value)}
@@ -410,6 +413,7 @@ export default function ReadinessVaultPage() {
                         </FormField>
                         <FormField label={t('issuer')}>
                             <input
+                                dir="auto"
                                 className={inputClass}
                                 value={form.issuer}
                                 onChange={(event) => updateField('issuer', event.target.value)}
@@ -417,6 +421,7 @@ export default function ReadinessVaultPage() {
                         </FormField>
                         <FormField label={t('issueDate')}>
                             <input
+                                dir="ltr"
                                 className={inputClass}
                                 value={form.issue_date}
                                 onChange={(event) => updateField('issue_date', event.target.value)}
@@ -425,6 +430,7 @@ export default function ReadinessVaultPage() {
                         </FormField>
                         <FormField label={t('expiryDate')}>
                             <input
+                                dir="ltr"
                                 className={inputClass}
                                 value={form.expiry_date}
                                 onChange={(event) => updateField('expiry_date', event.target.value)}
@@ -460,6 +466,7 @@ export default function ReadinessVaultPage() {
                         </FormField>
                         <FormField label={t('fileReference')}>
                             <input
+                                dir="ltr"
                                 className={inputClass}
                                 value={form.optional_file_url}
                                 onChange={(event) => updateField('optional_file_url', event.target.value)}
@@ -470,6 +477,7 @@ export default function ReadinessVaultPage() {
 
                     <FormField label={t('notes')}>
                         <textarea
+                            dir="auto"
                             className={`${inputClass} min-h-24 resize-y`}
                             value={form.notes}
                             onChange={(event) => updateField('notes', event.target.value)}
@@ -557,8 +565,8 @@ export default function ReadinessVaultPage() {
                         <table className="min-w-[1100px] w-full text-sm">
                             <thead className="bg-gray-900 text-gray-400">
                                 <tr>
-                                    {(['type', 'name', 'number', 'issuer', 'issue', 'expiry', 'status', 'service', 'file'] as const).map((key) => <th key={key} className="px-4 py-3 text-left font-medium">{t(`table.${key}`)}</th>)}
-                                    <th className="px-4 py-3 text-right font-medium">{t('table.actions')}</th>
+                                    {(['type', 'name', 'number', 'issuer', 'issue', 'expiry', 'status', 'service', 'file'] as const).map((key) => <th key={key} className="px-4 py-3 text-start font-medium">{t(`table.${key}`)}</th>)}
+                                    <th className="px-4 py-3 text-end font-medium">{t('table.actions')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-800">
@@ -567,9 +575,9 @@ export default function ReadinessVaultPage() {
                                     return (
                                     <tr key={document.id} className="text-gray-300">
                                         <td className="px-4 py-3">{t(documentTypeMessageKey(document.document_type))}</td>
-                                        <td className="px-4 py-3 text-white">{document.document_name}</td>
-                                        <td className="px-4 py-3">{displayValue(document.document_number)}</td>
-                                        <td className="px-4 py-3">{displayValue(document.issuer)}</td>
+                                        <td className="px-4 py-3 text-white"><BidiText>{document.document_name}</BidiText></td>
+                                        <td className="px-4 py-3"><TechnicalText>{displayValue(document.document_number)}</TechnicalText></td>
+                                        <td className="px-4 py-3"><BidiText>{displayValue(document.issuer)}</BidiText></td>
                                         <td className="px-4 py-3">{document.issue_date ? formatDate(document.issue_date, locale) : displayValue(null)}</td>
                                         <td className="px-4 py-3">
                                             <div>{document.expiry_date ? formatDate(document.expiry_date, locale) : displayValue(null)}</div>
@@ -590,7 +598,7 @@ export default function ReadinessVaultPage() {
                                                 : displayValue(null)}
                                         </td>
                                         <td className="max-w-48 truncate px-4 py-3">
-                                            {displayValue(document.optional_file_url)}
+                                            <TechnicalText>{displayValue(document.optional_file_url)}</TechnicalText>
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="flex justify-end gap-2">
