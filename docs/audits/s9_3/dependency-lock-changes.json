@@ -1,0 +1,548 @@
+{
+  "before_packages": 500,
+  "after_packages": 504,
+  "before_lock_bytes": 251553,
+  "after_lock_bytes": 256277,
+  "version_changes": [
+    {
+      "package_path": "node_modules/@auth/core",
+      "before": "0.41.0",
+      "after": "0.41.3",
+      "license": "ISC"
+    },
+    {
+      "package_path": "node_modules/@babel/code-frame",
+      "before": "7.29.0",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/compat-data",
+      "before": "7.29.0",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/core",
+      "before": "7.29.0",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/generator",
+      "before": "7.29.1",
+      "after": "7.29.8",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/helper-compilation-targets",
+      "before": "7.28.6",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/helper-globals",
+      "before": "7.28.0",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/helper-module-imports",
+      "before": "7.28.6",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/helper-module-transforms",
+      "before": "7.28.6",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/helper-string-parser",
+      "before": "7.27.1",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/helper-validator-identifier",
+      "before": "7.28.5",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/helper-validator-option",
+      "before": "7.27.1",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/helpers",
+      "before": "7.28.6",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/parser",
+      "before": "7.29.0",
+      "after": "7.29.8",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/template",
+      "before": "7.28.6",
+      "after": "7.29.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/traverse",
+      "before": "7.29.0",
+      "after": "7.29.8",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@babel/types",
+      "before": "7.29.0",
+      "after": "7.29.8",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@emnapi/runtime",
+      "before": "1.8.1",
+      "after": "1.11.3",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@humanfs/core",
+      "before": "0.19.1",
+      "after": "0.19.2",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@humanfs/node",
+      "before": "0.16.7",
+      "after": "0.16.8",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@humanfs/types",
+      "before": null,
+      "after": "0.15.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/colour",
+      "before": "1.0.0",
+      "after": "1.1.0",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-darwin-arm64",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-darwin-x64",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-freebsd-wasm32",
+      "before": null,
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-libvips-darwin-arm64",
+      "before": "1.2.4",
+      "after": "1.3.0",
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-libvips-darwin-x64",
+      "before": "1.2.4",
+      "after": "1.3.0",
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-libvips-linux-arm",
+      "before": "1.2.4",
+      "after": "1.3.0",
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-libvips-linux-arm64",
+      "before": "1.2.4",
+      "after": "1.3.0",
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-libvips-linux-ppc64",
+      "before": "1.2.4",
+      "after": "1.3.0",
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-libvips-linux-riscv64",
+      "before": "1.2.4",
+      "after": "1.3.0",
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-libvips-linux-s390x",
+      "before": "1.2.4",
+      "after": "1.3.0",
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-libvips-linux-x64",
+      "before": "1.2.4",
+      "after": "1.3.0",
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-libvips-linuxmusl-arm64",
+      "before": "1.2.4",
+      "after": "1.3.0",
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-libvips-linuxmusl-x64",
+      "before": "1.2.4",
+      "after": "1.3.0",
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-linux-arm",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-linux-arm64",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-linux-ppc64",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-linux-riscv64",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-linux-s390x",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-linux-x64",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-linuxmusl-arm64",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-linuxmusl-x64",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-wasm32",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0 AND LGPL-3.0-or-later AND MIT"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-webcontainers-wasm32",
+      "before": null,
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-win32-arm64",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0 AND LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-win32-ia32",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0 AND LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@img/sharp-win32-x64",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0 AND LGPL-3.0-or-later"
+    },
+    {
+      "package_path": "node_modules/@next/env",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@next/eslint-plugin-next",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@next/swc-darwin-arm64",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@next/swc-darwin-x64",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@next/swc-linux-arm64-gnu",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@next/swc-linux-arm64-musl",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@next/swc-linux-x64-gnu",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@next/swc-linux-x64-musl",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@next/swc-win32-arm64-msvc",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@next/swc-win32-x64-msvc",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@typescript-eslint/typescript-estree/node_modules/brace-expansion",
+      "before": "2.0.2",
+      "after": "2.1.4",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/@typescript-eslint/typescript-estree/node_modules/minimatch",
+      "before": "9.0.5",
+      "after": "9.0.9",
+      "license": "ISC"
+    },
+    {
+      "package_path": "node_modules/agent-base",
+      "before": null,
+      "after": "6.0.2",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/ajv",
+      "before": "6.12.6",
+      "after": "6.15.0",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/axios",
+      "before": "1.13.4",
+      "after": "1.18.0",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/baseline-browser-mapping",
+      "before": "2.9.19",
+      "after": "2.11.21",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/brace-expansion",
+      "before": "1.1.12",
+      "after": "1.1.18",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/browserslist",
+      "before": "4.28.1",
+      "after": "4.28.9",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/caniuse-lite",
+      "before": "1.0.30001767",
+      "after": "1.0.30001810",
+      "license": "CC-BY-4.0"
+    },
+    {
+      "package_path": "node_modules/electron-to-chromium",
+      "before": "1.5.286",
+      "after": "1.5.422",
+      "license": "ISC"
+    },
+    {
+      "package_path": "node_modules/eslint-config-next",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/fastq",
+      "before": "1.20.1",
+      "after": "1.20.3",
+      "license": "ISC"
+    },
+    {
+      "package_path": "node_modules/flatted",
+      "before": "3.3.3",
+      "after": "3.4.4",
+      "license": "ISC"
+    },
+    {
+      "package_path": "node_modules/follow-redirects",
+      "before": "1.15.11",
+      "after": "1.16.0",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/form-data",
+      "before": "4.0.5",
+      "after": "4.0.6",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/hasown",
+      "before": "2.0.2",
+      "after": "2.0.4",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/https-proxy-agent",
+      "before": null,
+      "after": "5.0.1",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/jose",
+      "before": "6.1.3",
+      "after": "6.2.12",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/js-yaml",
+      "before": "4.1.1",
+      "after": "4.3.2",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/minimatch",
+      "before": "3.1.2",
+      "after": "3.1.5",
+      "license": "ISC"
+    },
+    {
+      "package_path": "node_modules/nanoid",
+      "before": "3.3.11",
+      "after": "3.3.18",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/next",
+      "before": "16.1.6",
+      "after": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/next-auth",
+      "before": "5.0.0-beta.30",
+      "after": "5.0.0-beta.32",
+      "license": "ISC"
+    },
+    {
+      "package_path": "node_modules/node-releases",
+      "before": "2.0.27",
+      "after": "2.0.54",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/oauth4webapi",
+      "before": "3.8.5",
+      "after": "3.8.8",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/picomatch",
+      "before": "2.3.1",
+      "after": "2.3.2",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/postcss",
+      "before": "8.5.6",
+      "after": "8.5.28",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/proxy-from-env",
+      "before": "1.1.0",
+      "after": "2.1.0",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/sharp",
+      "before": "0.34.5",
+      "after": "0.35.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "package_path": "node_modules/sharp/node_modules/semver",
+      "before": "7.7.3",
+      "after": "7.8.5",
+      "license": "ISC"
+    },
+    {
+      "package_path": "node_modules/tinyglobby/node_modules/picomatch",
+      "before": "4.0.3",
+      "after": "4.0.7",
+      "license": "MIT"
+    },
+    {
+      "package_path": "node_modules/update-browserslist-db",
+      "before": "1.2.3",
+      "after": "1.3.2",
+      "license": "MIT"
+    }
+  ]
+}

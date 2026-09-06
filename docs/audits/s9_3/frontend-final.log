@@ -1,0 +1,898 @@
+npm notice This endpoint is being retired. Use the bulk advisory endpoint instead. See the following docs for more info: https://api-docs.npmjs.com/#tag/Audit
+
+added 410 packages in 59s
+
+159 packages are looking for funding
+  run `npm fund` for details
+
+> frontend@0.1.0 typecheck
+> tsc --noEmit
+
+
+> frontend@0.1.0 lint
+> eslint
+
+
+/tmp/plasma-s93-frontend/i18n/request.ts
+  26:17  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 1 problem (0 errors, 1 warning)
+
+TAP version 13
+# Subtest: canonical lifecycle language and restore consequence are truthful
+ok 1 - canonical lifecycle language and restore consequence are truthful
+  ---
+  duration_ms: 2.184729
+  ...
+# Subtest: security errors are safe and stale state always refreshes
+ok 2 - security errors are safe and stale state always refreshes
+  ---
+  duration_ms: 0.783912
+  ...
+# Subtest: audit summaries expose only semantic allowlisted state
+ok 3 - audit summaries expose only semantic allowlisted state
+  ---
+  duration_ms: 2.322663
+  ...
+# Subtest: accounts use backend capabilities, stable identity, confirmations, and bounded pages
+ok 4 - accounts use backend capabilities, stable identity, confirmations, and bounded pages
+  ---
+  duration_ms: 0.632216
+  ...
+# Subtest: audit surface is canonical, sanitized, filtered, and paginated
+ok 5 - audit surface is canonical, sanitized, filtered, and paginated
+  ---
+  duration_ms: 0.62096
+  ...
+# Subtest: canonical customer navigation is Bid Preparation
+ok 6 - canonical customer navigation is Bid Preparation
+  ---
+  duration_ms: 2.56909
+  ...
+# Subtest: legacy list is a single read-only redirect
+ok 7 - legacy list is a single read-only redirect
+  ---
+  duration_ms: 0.478817
+  ...
+# Subtest: legacy proposal list and workspace are permanent non-mutating redirects
+ok 8 - legacy proposal list and workspace are permanent non-mutating redirects
+  ---
+  duration_ms: 0.424313
+  ...
+# Subtest: canonical dynamic route is Proposal-ID-only and passive
+ok 9 - canonical dynamic route is Proposal-ID-only and passive
+  ---
+  duration_ms: 0.666676
+  ...
+# Subtest: legacy detail validates the owned Proposal then redirects without fallback
+ok 10 - legacy detail validates the owned Proposal then redirects without fallback
+  ---
+  duration_ms: 0.517943
+  ...
+# Subtest: Prepare Bid is an explicit POST with separate Tender and Proposal identifiers
+ok 11 - Prepare Bid is an explicit POST with separate Tender and Proposal identifiers
+  ---
+  duration_ms: 0.212545
+  ...
+# Subtest: Bid Preparation list remains Proposal-backed with optional engagement context
+ok 12 - Bid Preparation list remains Proposal-backed with optional engagement context
+  ---
+  duration_ms: 1.492774
+  ...
+# Subtest: Compliance page no longer creates or resolves Proposal artifacts passively
+ok 13 - Compliance page no longer creates or resolves Proposal artifacts passively
+  ---
+  duration_ms: 0.450503
+  ...
+# Subtest: canonical detail return links use their domain identifiers
+ok 14 - canonical detail return links use their domain identifiers
+  ---
+  duration_ms: 0.592947
+  ...
+# Subtest: every canonical status has concise non-color meaning
+ok 15 - every canonical status has concise non-color meaning
+  ---
+  duration_ms: 2.700111
+  ...
+# Subtest: high-significance actions use confirmation and exact semantics
+ok 16 - high-significance actions use confirmation and exact semantics
+  ---
+  duration_ms: 1.142564
+  ...
+# Subtest: commands send expected state and refresh authoritative backend truth
+ok 17 - commands send expected state and refresh authoritative backend truth
+  ---
+  duration_ms: 0.933845
+  ...
+# Subtest: Tender Details and Bid Preparation share the compact pursuit panel
+ok 18 - Tender Details and Bid Preparation share the compact pursuit panel
+  ---
+  duration_ms: 2.831854
+  ...
+# Subtest: legacy proposal is continued only by explicit click
+ok 19 - legacy proposal is continued only by explicit click
+  ---
+  duration_ms: 0.574876
+  ...
+# Subtest: source and engagement semantics remain independent
+ok 20 - source and engagement semantics remain independent
+  ---
+  duration_ms: 0.86937
+  ...
+# Subtest: legacy customer route is a passive compatibility redirect
+ok 21 - legacy customer route is a passive compatibility redirect
+  ---
+  duration_ms: 1.999803
+  ...
+# Subtest: dead Hunter frontend implementation and types are removed
+ok 22 - dead Hunter frontend implementation and types are removed
+  ---
+  duration_ms: 1.389287
+  ...
+# Subtest: unified Explorer remains canonical frontend authority
+ok 23 - unified Explorer remains canonical frontend authority
+  ---
+  duration_ms: 0.367393
+  ...
+# Subtest: primary navigation has no duplicate discovery product
+ok 24 - primary navigation has no duplicate discovery product
+  ---
+  duration_ms: 0.433064
+  ...
+# Subtest: legacy backend APIs remain compatibility-only and share mutation authority
+ok 25 - legacy backend APIs remain compatibility-only and share mutation authority
+  ---
+  duration_ms: 0.543988
+  ...
+# Subtest: generation owner and document dispatch stay internal and unchanged
+ok 26 - generation owner and document dispatch stay internal and unchanged
+  ---
+  duration_ms: 0.435467
+  ...
+# Subtest: locale registry has one complete definition for every canonical product locale
+ok 27 - locale registry has one complete definition for every canonical product locale
+  ---
+  duration_ms: 3.524467
+  ...
+# Subtest: all four UI locales are selectable and Arabic owns RTL direction
+ok 28 - all four UI locales are selectable and Arabic owns RTL direction
+  ---
+  duration_ms: 0.714173
+  ...
+# Subtest: weighted Accept-Language parsing is robust and skips malformed entries
+ok 29 - weighted Accept-Language parsing is robust and skips malformed entries
+  ---
+  duration_ms: 1.59003
+  ...
+# Subtest: request precedence is persisted user, cookie, request, then English
+ok 30 - request precedence is persisted user, cookie, request, then English
+  ---
+  duration_ms: 0.415823
+  ...
+# Subtest: browser BCP-47 variants map to stable product identifiers
+ok 31 - browser BCP-47 variants map to stable product identifiers
+  ---
+  duration_ms: 0.537514
+  ...
+# Subtest: customer locale resolution is deterministic and saved preference wins
+ok 32 - customer locale resolution is deterministic and saved preference wins
+  ---
+  duration_ms: 0.49046
+  ...
+# Subtest: UI locale ownership and required message domains are explicit
+ok 33 - UI locale ownership and required message domains are explicit
+  ---
+  duration_ms: 0.307969
+  ...
+# Subtest: content policy translates presentation without mutating domain content
+ok 34 - content policy translates presentation without mutating domain content
+  ---
+  duration_ms: 0.354718
+  ...
+# Subtest: message validation prototype flattens semantic keys and understands ICU values
+ok 35 - message validation prototype flattens semantic keys and understands ICU values
+  ---
+  duration_ms: 0.897416
+  ...
+# Subtest: message validation detects missing, extra, and placeholder-mismatched keys
+ok 36 - message validation detects missing, extra, and placeholder-mismatched keys
+  ---
+  duration_ms: 2.514629
+  ...
+# Subtest: committed English, Uzbek, Russian, and Arabic catalogs have exact key and ICU parity
+ok 37 - committed English, Uzbek, Russian, and Arabic catalogs have exact key and ICU parity
+  ---
+  duration_ms: 16.358188
+  ...
+# Subtest: next-intl executes plural rules and named interpolation for all active locales
+ok 38 - next-intl executes plural rules and named interpolation for all active locales
+  ---
+  duration_ms: 26.201218
+  ...
+# Subtest: rich messages keep dynamic source values as escaped text
+ok 39 - rich messages keep dynamic source values as escaped text
+  ---
+  duration_ms: 8.350069
+  ...
+# Subtest: formatters localize representation while preserving UTC and economic inputs
+ok 40 - formatters localize representation while preserving UTC and economic inputs
+  ---
+  duration_ms: 15.540031
+  ...
+# Subtest: formatters never expose Invalid Date or NaN
+ok 41 - formatters never expose Invalid Date or NaN
+  ---
+  duration_ms: 0.300067
+  ...
+# Subtest: enum display and stable error-code foundations preserve canonical payloads
+ok 42 - enum display and stable error-code foundations preserve canonical payloads
+  ---
+  duration_ms: 0.360481
+  ...
+# Subtest: runtime integration is locale-neutral, request-scoped, and bundle-conscious
+ok 43 - runtime integration is locale-neutral, request-scoped, and bundle-conscious
+  ---
+  duration_ms: 0.712517
+  ...
+# Subtest: successful locale action persists, reconciles cookie, then refreshes in order
+ok 44 - successful locale action persists, reconciles cookie, then refreshes in order
+  ---
+  duration_ms: 0.338695
+  ...
+# Subtest: failed locale save leaves cookie and rendered locale untouched
+ok 45 - failed locale save leaves cookie and rendered locale untouched
+  ---
+  duration_ms: 0.71992
+  ...
+# Subtest: all canonical statuses use customer language and visible text
+ok 46 - all canonical statuses use customer language and visible text
+  ---
+  duration_ms: 6.228833
+  ...
+# Subtest: My Tenders is engagement-only, bounded, and URL-driven
+ok 47 - My Tenders is engagement-only, bounded, and URL-driven
+  ---
+  duration_ms: 0.812795
+  ...
+# Subtest: engagement and source status are separately labeled and accessible
+ok 48 - engagement and source status are separately labeled and accessible
+  ---
+  duration_ms: 0.600894
+  ...
+# Subtest: empty state is truthful and never imports legacy bids
+ok 49 - empty state is truthful and never imports legacy bids
+  ---
+  duration_ms: 6.06914
+  ...
+# Subtest: save happens only in explicit click handler and represents re-engagement
+ok 50 - save happens only in explicit click handler and represents re-engagement
+  ---
+  duration_ms: 0.510794
+  ...
+# Subtest: navigation exposes My Tenders and Bid Preparation separately
+ok 51 - navigation exposes My Tenders and Bid Preparation separately
+  ---
+  duration_ms: 0.519914
+  ...
+# Subtest: no Project has an explicit consolidated empty state
+ok 52 - no Project has an explicit consolidated empty state
+  ---
+  duration_ms: 7.334706
+  ...
+# Subtest: linked not-enriched identity remains visible while details prepare
+ok 53 - linked not-enriched identity remains visible while details prepare
+  ---
+  duration_ms: 0.587617
+  ...
+# Subtest: enriched metadata renders only meaningful rows
+ok 54 - enriched metadata renders only meaningful rows
+  ---
+  duration_ms: 134.289954
+  ...
+# Subtest: missing metadata is omitted instead of rendered as placeholders
+ok 55 - missing metadata is omitted instead of rendered as placeholders
+  ---
+  duration_ms: 0.756999
+  ...
+# Subtest: current leadership is visible under the locked section label
+ok 56 - current leadership is visible under the locked section label
+  ---
+  duration_ms: 0.655851
+  ...
+# Subtest: historical leadership is separate and keyboard-accessible
+ok 57 - historical leadership is separate and keyboard-accessible
+  ---
+  duration_ms: 0.787044
+  ...
+# Subtest: Task Team Leader canonical label is exact
+ok 58 - Task Team Leader canonical label is exact
+  ---
+  duration_ms: 0.744492
+  ...
+# Subtest: Co-Task Team Leader canonical label is exact
+ok 59 - Co-Task Team Leader canonical label is exact
+  ---
+  duration_ms: 0.246957
+  ...
+# Subtest: Task Manager canonical label is exact and not TTL
+ok 60 - Task Manager canonical label is exact and not TTL
+  ---
+  duration_ms: 4.098512
+  ...
+# Subtest: teamleadname never renders as TTL
+ok 61 - teamleadname never renders as TTL
+  ---
+  duration_ms: 1.213968
+  ...
+# Subtest: no leadership email is inferred or replaced with a placeholder
+ok 62 - no leadership email is inferred or replaced with a placeholder
+  ---
+  duration_ms: 0.711379
+  ...
+# Subtest: procurement contact remains an explicitly separate Tender section
+ok 63 - procurement contact remains an explicitly separate Tender section
+  ---
+  duration_ms: 0.344227
+  ...
+# Subtest: Project dates have explicit non-deadline labels
+ok 64 - Project dates have explicit non-deadline labels
+  ---
+  duration_ms: 1.098558
+  ...
+# Subtest: Project status presentation does not use Tender actionability helpers
+ok 65 - Project status presentation does not use Tender actionability helpers
+  ---
+  duration_ms: 0.313332
+  ...
+# Subtest: stale and partial states use restrained truthful messages
+ok 66 - stale and partial states use restrained truthful messages
+  ---
+  duration_ms: 0.276065
+  ...
+# Subtest: Project API failure is isolated from the Tender load
+ok 67 - Project API failure is isolated from the Tender load
+  ---
+  duration_ms: 0.485212
+  ...
+# Subtest: Project HTTP outcomes remain semantically distinct
+ok 68 - Project HTTP outcomes remain semantically distinct
+  ---
+  duration_ms: 0.254297
+  ...
+# Subtest: source and status semantics are accessible and responsive
+ok 69 - source and status semantics are accessible and responsive
+  ---
+  duration_ms: 0.309085
+  ...
+# Subtest: P0 catalogs have complete EN/UZ/RU key and placeholder coverage
+ok 70 - P0 catalogs have complete EN/UZ/RU key and placeholder coverage
+  ---
+  duration_ms: 40.068706
+  ...
+# Subtest: the only customer selector is registry-driven, accessible, and includes released Arabic
+ok 71 - the only customer selector is registry-driven, accessible, and includes released Arabic
+  ---
+  duration_ms: 6.890702
+  ...
+# Subtest: onboarding and settings expose one selector before editable form content
+ok 72 - onboarding and settings expose one selector before editable form content
+  ---
+  duration_ms: 1.770534
+  ...
+# Subtest: locale changes are persist-first and preserve route and mounted state
+ok 73 - locale changes are persist-first and preserve route and mounted state
+  ---
+  duration_ms: 0.955256
+  ...
+# Subtest: P0 pages use translations and shared locale formatters
+ok 74 - P0 pages use translations and shared locale formatters
+  ---
+  duration_ms: 1.662034
+  ...
+# Subtest: canonical query, enum, and action codes remain untranslated
+ok 75 - canonical query, enum, and action codes remain untranslated
+  ---
+  duration_ms: 1.167375
+  ...
+# Subtest: source, user, Proposal, and AI narrative fields remain original
+ok 76 - source, user, Proposal, and AI narrative fields remain original
+  ---
+  duration_ms: 3.360262
+  ...
+# Subtest: refresh copy is translated without resetting the active poller or source names
+ok 77 - refresh copy is translated without resetting the active poller or source names
+  ---
+  duration_ms: 2.846955
+  ...
+# Subtest: new badge and high-significance actions have localized accessible copy
+ok 78 - new badge and high-significance actions have localized accessible copy
+  ---
+  duration_ms: 1.258676
+  ...
+# Subtest: claim-safe terminology renders natively in all P0 locales
+ok 79 - claim-safe terminology renders natively in all P0 locales
+  ---
+  duration_ms: 70.259186
+  ...
+# Subtest: current catalogs preserve the Sprint 7 contract with EN/UZ/RU/AR parity
+ok 80 - current catalogs preserve the Sprint 7 contract with EN/UZ/RU/AR parity
+  ---
+  duration_ms: 60.398264
+  ...
+# Subtest: P1 customer surfaces contain no unexplained literal JSX or accessibility copy
+ok 81 - P1 customer surfaces contain no unexplained literal JSX or accessibility copy
+  ---
+  duration_ms: 9.458166
+  ...
+# Subtest: Compliance localizes chrome while preserving analysis, evidence, and requirement content
+ok 82 - Compliance localizes chrome while preserving analysis, evidence, and requirement content
+  ---
+  duration_ms: 3.140516
+  ...
+# Subtest: Readiness enum mappings are exhaustive and canonical values are unchanged
+ok 83 - Readiness enum mappings are exhaustive and canonical values are unchanged
+  ---
+  duration_ms: 35.019358
+  ...
+# Subtest: customer formatting is centralized and invalid values are safe
+ok 84 - customer formatting is centralized and invalid values are safe
+  ---
+  duration_ms: 80.72386
+  ...
+# Subtest: released Arabic UI remains independent from analysis/report language
+ok 85 - released Arabic UI remains independent from analysis/report language
+  ---
+  duration_ms: 6.88469
+  ...
+# Subtest: claim-sensitive translations avoid certification and guarantee inflation
+ok 86 - claim-sensitive translations avoid certification and guarantee inflation
+  ---
+  duration_ms: 2.721686
+  ...
+# Subtest: pseudo locale expands deterministic static copy and preserves placeholders
+ok 87 - pseudo locale expands deterministic static copy and preserves placeholders
+  ---
+  duration_ms: 4.960476
+  ...
+# Subtest: pseudo catalog preserves shape, ICU blocks, and rich tags
+ok 88 - pseudo catalog preserves shape, ICU blocks, and rich tags
+  ---
+  duration_ms: 49.784169
+  ...
+# Subtest: pseudo locale is gated away from production and is not a customer locale
+ok 89 - pseudo locale is gated away from production and is not a customer locale
+  ---
+  duration_ms: 1.993498
+  ...
+# Subtest: analysis registry is independent, canonical, native-labelled, and truthfully gates Arabic
+ok 90 - analysis registry is independent, canonical, native-labelled, and truthfully gates Arabic
+  ---
+  duration_ms: 1.377703
+  ...
+# Subtest: Settings separates interface and default analysis preferences
+ok 91 - Settings separates interface and default analysis preferences
+  ---
+  duration_ms: 0.267342
+  ...
+# Subtest: Compliance captures one explicit per-run language and preserves default
+ok 92 - Compliance captures one explicit per-run language and preserves default
+  ---
+  duration_ms: 0.467748
+  ...
+# Subtest: version metadata, history, legacy NULL, and exact export version are represented
+ok 93 - version metadata, history, legacy NULL, and exact export version are represented
+  ---
+  duration_ms: 0.386187
+  ...
+# Subtest: content direction is scoped and evidence remains auto
+ok 94 - content direction is scoped and evidence remains auto
+  ---
+  duration_ms: 0.394745
+  ...
+# Subtest: all active UI catalogs contain independent analysis-language copy
+ok 95 - all active UI catalogs contain independent analysis-language copy
+  ---
+  duration_ms: 0.232335
+  ...
+# Subtest: UI locale is not execution-language authority
+ok 96 - UI locale is not execution-language authority
+  ---
+  duration_ms: 0.307603
+  ...
+# Subtest: Arabic activation is atomic across registry, loader, root direction, and selector
+ok 97 - Arabic activation is atomic across registry, loader, root direction, and selector
+  ---
+  duration_ms: 4.594108
+  ...
+# Subtest: all 15 Arabic namespaces match the complete 866-key customer contract
+ok 98 - all 15 Arabic namespaces match the complete 866-key customer contract
+  ---
+  duration_ms: 16.793596
+  ...
+# Subtest: all four catalogs retain exact key, ICU placeholder, and rich placeholder parity
+ok 99 - all four catalogs retain exact key, ICU placeholder, and rich placeholder parity
+  ---
+  duration_ms: 22.595635
+  ...
+# Subtest: Arabic released copy has no exact English fallback leaf
+ok 100 - Arabic released copy has no exact English fallback leaf
+  ---
+  duration_ms: 1.665817
+  ...
+# Subtest: Arabic copy preserves approved brands and avoids inflated claims
+ok 101 - Arabic copy preserves approved brands and avoids inflated claims
+  ---
+  duration_ms: 1.458138
+  ...
+# Subtest: Arabic variants, weighted Accept-Language, and locale precedence resolve canonically
+ok 102 - Arabic variants, weighted Accept-Language, and locale precedence resolve canonically
+  ---
+  duration_ms: 1.063723
+  ...
+# Subtest: one direction function maps Arabic to RTL and every other UI locale to LTR
+ok 103 - one direction function maps Arabic to RTL and every other UI locale to LTR
+  ---
+  duration_ms: 0.330742
+  ...
+# Subtest: Arabic number, currency, date, relative time, and file-size formatting is centralized
+ok 104 - Arabic number, currency, date, relative time, and file-size formatting is centralized
+  ---
+  duration_ms: 25.038462
+  ...
+# Subtest: Arabic ICU messages execute with Arabic plural rules and source interpolation
+ok 105 - Arabic ICU messages execute with Arabic plural rules and source interpolation
+  ---
+  duration_ms: 6.442715
+  ...
+# Subtest: Arabic UI remains independent from the gated analysis-language registry
+ok 106 - Arabic UI remains independent from the gated analysis-language registry
+  ---
+  duration_ms: 1.03259
+  ...
+# Subtest: source, user, technical, and analysis content have reusable bidi boundaries
+ok 107 - source, user, technical, and analysis content have reusable bidi boundaries
+  ---
+  duration_ms: 1.501411
+  ...
+# Subtest: analysis, evidence, identifier, and filename islands are explicit in Compliance
+ok 108 - analysis, evidence, identifier, and filename islands are explicit in Compliance
+  ---
+  duration_ms: 1.138814
+  ...
+# Subtest: profile, onboarding, search, proposal, and readiness inputs declare content direction
+ok 109 - profile, onboarding, search, proposal, and readiness inputs declare content direction
+  ---
+  duration_ms: 1.329689
+  ...
+# Subtest: customer CSS and semantic direction icons pass the zero-exception RTL guard
+ok 110 - customer CSS and semantic direction icons pass the zero-exception RTL guard
+  ---
+  duration_ms: 12.527826
+  ...
+# Subtest: dedicated Admin content is an explicit English LTR island
+ok 111 - dedicated Admin content is an explicit English LTR island
+  ---
+  duration_ms: 0.236748
+  ...
+# Subtest: document source geometry stays LTR while source lines use auto direction
+ok 112 - document source geometry stays LTR while source lines use auto direction
+  ---
+  duration_ms: 0.154333
+  ...
+# Subtest: locale switching persists only ui_locale then refreshes without route replacement
+ok 113 - locale switching persists only ui_locale then refreshes without route replacement
+  ---
+  duration_ms: 0.318757
+  ...
+# Subtest: canonical query and payload values remain locale-neutral
+ok 114 - canonical query and payload values remain locale-neutral
+  ---
+  duration_ms: 0.594281
+  ...
+# Subtest: polling cadence, grace policy, and bounded backoff are deterministic
+ok 115 - polling cadence, grace policy, and bounded backoff are deterministic
+  ---
+  duration_ms: 2.880677
+  ...
+# Subtest: exclusive-cursor defense deduplicates job ids without timestamp sorting
+ok 116 - exclusive-cursor defense deduplicates job ids without timestamp sorting
+  ---
+  duration_ms: 1.683985
+  ...
+# Subtest: single completion copy preserves exact count, source, zero, and terminal truth
+ok 117 - single completion copy preserves exact count, source, zero, and terminal truth
+  ---
+  duration_ms: 1.323435
+  ...
+# Subtest: multiple events aggregate counts while retaining mixed issue detail
+ok 118 - multiple events aggregate counts while retaining mixed issue detail
+  ---
+  duration_ms: 0.868702
+  ...
+# Subtest: single-source action links to rolling source newness, never job membership
+ok 119 - single-source action links to rolling source newness, never job membership
+  ---
+  duration_ms: 0.580648
+  ...
+# Subtest: server reference defeats positive and negative browser wall-clock skew
+ok 120 - server reference defeats positive and negative browser wall-clock skew
+  ---
+  duration_ms: 0.660529
+  ...
+# Subtest: badge expires exactly at new_until and backend false never becomes true
+ok 121 - badge expires exactly at new_until and backend false never becomes true
+  ---
+  duration_ms: 0.577968
+  ...
+# Subtest: one dashboard provider owns catalog, status, activity, session cursor, and cleanup
+ok 122 - one dashboard provider owns catalog, status, activity, session cursor, and cleanup
+  ---
+  duration_ms: 1.099956
+  ...
+# Subtest: Explorer is catalog-driven and new_only is URL and backend authoritative
+ok 123 - Explorer is catalog-driven and new_only is URL and backend authoritative
+  ---
+  duration_ms: 1.307605
+  ...
+# Subtest: badge has one shared timer and no per-card interval
+ok 124 - badge has one shared timer and no per-card interval
+  ---
+  duration_ms: 1.218265
+  ...
+# Subtest: refresh POST remains explicit and is not owned by Explorer page effects
+ok 125 - refresh POST remains explicit and is not owned by Explorer page effects
+  ---
+  duration_ms: 0.719077
+  ...
+# Subtest: SR-3 contract files use explicit types without broad any
+ok 126 - SR-3 contract files use explicit types without broad any
+  ---
+  duration_ms: 0.724895
+  ...
+# Subtest: dead workspace and duplicate Tender components are removed
+ok 127 - dead workspace and duplicate Tender components are removed
+  ---
+  duration_ms: 2.348252
+  ...
+# Subtest: legacy lists and workspace are permanent read-only redirects
+ok 128 - legacy lists and workspace are permanent read-only redirects
+  ---
+  duration_ms: 0.781551
+  ...
+# Subtest: legacy bid detail validates only an owned Proposal ID
+ok 129 - legacy bid detail validates only an owned Proposal ID
+  ---
+  duration_ms: 0.564409
+  ...
+# Subtest: Bid Preparation passive effects read persisted state and never synchronize
+ok 130 - Bid Preparation passive effects read persisted state and never synchronize
+  ---
+  duration_ms: 0.865958
+  ...
+# Subtest: Bid Preparation mutations remain explicit event handlers
+ok 131 - Bid Preparation mutations remain explicit event handlers
+  ---
+  duration_ms: 0.843992
+  ...
+# Subtest: canonical cross-surface links use the correct identifiers
+ok 132 - canonical cross-surface links use the correct identifiers
+  ---
+  duration_ms: 0.446669
+  ...
+# Subtest: canonical navigation and runtime copy omit obsolete product terminology
+ok 133 - canonical navigation and runtime copy omit obsolete product terminology
+  ---
+  duration_ms: 2.424499
+  ...
+# Subtest: dead Decision Snapshot and competitor client contracts are removed
+ok 134 - dead Decision Snapshot and competitor client contracts are removed
+  ---
+  duration_ms: 1.444857
+  ...
+# Subtest: all six canonical Tender Details anchors remain present
+ok 135 - all six canonical Tender Details anchors remain present
+  ---
+  duration_ms: 0.921575
+  ...
+# Subtest: initial render has exactly the two approved passive reads
+ok 136 - initial render has exactly the two approved passive reads
+  ---
+  duration_ms: 16.452244
+  ...
+# Subtest: document content is fetched only from an explicit user action
+ok 137 - document content is fetched only from an explicit user action
+  ---
+  duration_ms: 0.652642
+  ...
+# Subtest: base and consolidated detail loading are independent
+ok 138 - base and consolidated detail loading are independent
+  ---
+  duration_ms: 0.321497
+  ...
+# Subtest: sections and anchors follow the locked information hierarchy
+ok 139 - sections and anchors follow the locked information hierarchy
+  ---
+  duration_ms: 1.855875
+  ...
+# Subtest: Tender, Pursuit, Project Leadership, and Procurement Contacts remain distinct
+ok 140 - Tender, Pursuit, Project Leadership, and Procurement Contacts remain distinct
+  ---
+  duration_ms: 0.739841
+  ...
+# Subtest: the pursuit panel consumes consolidated state without its legacy passive GET
+ok 141 - the pursuit panel consumes consolidated state without its legacy passive GET
+  ---
+  duration_ms: 0.437709
+  ...
+# Subtest: existing mutation authorities and backend-provided allowed actions are reused
+ok 142 - existing mutation authorities and backend-provided allowed actions are reused
+  ---
+  duration_ms: 0.685934
+  ...
+# Subtest: requirements are bounded and provenance-labelled
+ok 143 - requirements are bounded and provenance-labelled
+  ---
+  duration_ms: 0.413222
+  ...
+# Subtest: compliance presentation distinguishes failed, partial, and legacy analysis
+ok 144 - compliance presentation distinguishes failed, partial, and legacy analysis
+  ---
+  duration_ms: 4.642493
+  ...
+# Subtest: readiness shows factual counts and does not invent a score
+ok 145 - readiness shows factual counts and does not invent a score
+  ---
+  duration_ms: 1.012934
+  ...
+# Subtest: bid preparation uses the proposal-backed route identifier
+ok 146 - bid preparation uses the proposal-backed route identifier
+  ---
+  duration_ms: 3.956654
+  ...
+# Subtest: DTOs are explicit and prohibit loose any or derived browser persistence
+ok 147 - DTOs are explicit and prohibit loose any or derived browser persistence
+  ---
+  duration_ms: 0.642316
+  ...
+# Subtest: responsive and keyboard-accessible controls are present
+ok 148 - responsive and keyboard-accessible controls are present
+  ---
+  duration_ms: 0.385017
+  ...
+# Subtest: canonical unified request graph
+ok 149 - canonical unified request graph
+  ---
+  duration_ms: 3.436192
+  ...
+# Subtest: explicit types and canonical recommendation commands
+ok 150 - explicit types and canonical recommendation commands
+  ---
+  duration_ms: 0.70045
+  ...
+# Subtest: URL-backed modes, filters, reset, and pagination
+ok 151 - URL-backed modes, filters, reset, and pagination
+  ---
+  duration_ms: 0.77085
+  ...
+# Subtest: filtered Explorer return state is shared with Tender Details
+ok 152 - filtered Explorer return state is shared with Tender Details
+  ---
+  duration_ms: 0.469015
+  ...
+# Subtest: filtered Explorer return state round-trips and rejects unsafe paths
+ok 153 - filtered Explorer return state round-trips and rejects unsafe paths
+  ---
+  duration_ms: 1.823706
+  ...
+# Subtest: authoritative refresh and stale-response protection
+ok 154 - authoritative refresh and stale-response protection
+  ---
+  duration_ms: 0.449955
+  ...
+# Subtest: truthful recommendation presentation
+ok 155 - truthful recommendation presentation
+  ---
+  duration_ms: 0.729895
+  ...
+# Subtest: empty and profile-required states are truthful
+ok 156 - empty and profile-required states are truthful
+  ---
+  duration_ms: 0.694357
+  ...
+# Subtest: pursuit is independent and uses shared workflow actions
+ok 157 - pursuit is independent and uses shared workflow actions
+  ---
+  duration_ms: 2.322644
+  ...
+# Subtest: canonical navigation converges while Hunter compatibility remains
+ok 158 - canonical navigation converges while Hunter compatibility remains
+  ---
+  duration_ms: 0.704009
+  ...
+# Subtest: accessibility and responsive contracts are present
+ok 159 - accessibility and responsive contracts are present
+  ---
+  duration_ms: 0.60893
+  ...
+1..159
+# tests 159
+# suites 0
+# pass 159
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 895.353245
+
+> frontend@0.1.0 audit:rtl
+> node scripts/audit-rtl.mjs
+
+{
+  "ok": true,
+  "physical": [],
+  "icons": [],
+  "authority": []
+}
+
+> frontend@0.1.0 build
+> next build
+
+▲ Next.js 16.2.11 (Turbopack)
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 5.7s
+  Running TypeScript ...
+
+  We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
+  The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
+
+  	- include was updated to add '.next-release-test/types/**/*.ts'
+  	- include was updated to add '.next-release-test/dev/types/**/*.ts'
+
+  Finished TypeScript in 8.9s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/24) ...
+  Generating static pages using 11 workers (6/24) 
+  Generating static pages using 11 workers (12/24) 
+  Generating static pages using 11 workers (18/24) 
+✓ Generating static pages using 11 workers (24/24) in 533ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /admin
+├ ƒ /admin/approvals
+├ ƒ /admin/audit
+├ ƒ /admin/companies/[companyProfileId]
+├ ƒ /api/auth/[...nextauth]
+├ ƒ /api/build
+├ ƒ /api/documents/[id]
+├ ƒ /api/ui-locale
+├ ƒ /dashboard
+├ ƒ /dashboard/access-blocked
+├ ƒ /dashboard/admin
+├ ƒ /dashboard/admin/approvals
+├ ƒ /dashboard/bid-preparation
+├ ƒ /dashboard/bid-preparation/[proposalId]
+├ ƒ /dashboard/bids
+├ ƒ /dashboard/bids/[id]
+├ ƒ /dashboard/hunter
+├ ƒ /dashboard/my-tenders
+├ ƒ /dashboard/onboarding
+├ ƒ /dashboard/pending-approval
+├ ƒ /dashboard/proposals
+├ ƒ /dashboard/readiness-vault
+├ ƒ /dashboard/settings
+├ ƒ /dashboard/tenders
+├ ƒ /dashboard/tenders/[tenderId]
+├ ƒ /dashboard/tenders/[tenderId]/compliance
+├ ƒ /dashboard/workspace
+└ ƒ /document-preview/[id]
+
+
+ƒ Proxy (Middleware)
+
+ƒ  (Dynamic)  server-rendered on demand
+

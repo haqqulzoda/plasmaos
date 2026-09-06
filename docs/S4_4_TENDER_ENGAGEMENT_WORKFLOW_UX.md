@@ -171,7 +171,7 @@ Sprint 4.4 files:
 - `backend/app/api/endpoints/proposals.py`
 - `backend/test_s4_4_tender_engagement_workflow_ux.py`
 - `backend/test_s4_4_workflow_postgresql.py`
-- `backend/scripts/test_s4_4_tender_engagement_workflow_ux.py`
+- `backend/scripts/verify_s4_4_tender_engagement_workflow_ux.py`
 - `frontend/types/engagement.ts`
 - `frontend/components/tenders/EngagementWorkflowActions.tsx`
 - `frontend/components/tenders/TenderEngagementPanel.tsx`

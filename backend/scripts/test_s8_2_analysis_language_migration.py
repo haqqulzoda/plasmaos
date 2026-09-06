@@ -18,7 +18,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from scripts import test_s0_5b4_baseline as support
-from scripts import test_s2_2_analysis_version_foundation as s22
+from scripts import verify_s2_2_analysis_version_foundation as s22
 
 
 HEAD = "20260904_0001_s8_2_analysis_language"

@@ -1,0 +1,44 @@
+
+> frontend@0.1.0 test:my-tenders
+> node --no-warnings --experimental-strip-types --test tests/my-tenders.test.mjs
+
+TAP version 13
+# Subtest: all canonical statuses use customer language and visible text
+ok 1 - all canonical statuses use customer language and visible text
+  ---
+  duration_ms: 1.962468
+  ...
+# Subtest: My Tenders is engagement-only, bounded, and URL-driven
+ok 2 - My Tenders is engagement-only, bounded, and URL-driven
+  ---
+  duration_ms: 0.639872
+  ...
+# Subtest: engagement and source status are separately labeled and accessible
+ok 3 - engagement and source status are separately labeled and accessible
+  ---
+  duration_ms: 0.498987
+  ...
+# Subtest: empty state is truthful and never imports legacy bids
+ok 4 - empty state is truthful and never imports legacy bids
+  ---
+  duration_ms: 0.292483
+  ...
+# Subtest: save happens only in explicit click handler and represents re-engagement
+ok 5 - save happens only in explicit click handler and represents re-engagement
+  ---
+  duration_ms: 0.241665
+  ...
+# Subtest: navigation exposes My Tenders and Bid Preparation separately
+ok 6 - navigation exposes My Tenders and Bid Preparation separately
+  ---
+  duration_ms: 0.341768
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 202.046905

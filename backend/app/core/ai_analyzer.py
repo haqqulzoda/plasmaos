@@ -184,7 +184,9 @@ async def _extract_tender_requirements_impl(
                 last_exc = exc
                 error_code = int(getattr(exc, "code", 0) or 0)
                 error_status = str(getattr(exc, "status", "") or "")
-                error_message = str(getattr(exc, "message", "") or "").strip()
+                if error_status not in {"RESOURCE_EXHAUSTED", "UNAVAILABLE", "INVALID_ARGUMENT", "INTERNAL"}:
+                    error_status = "UNKNOWN"
+                error_message = "AI provider unavailable"
 
                 # ── Quota exhausted → skip to next model immediately ──
                 if _is_quota_error(exc):
@@ -247,7 +249,7 @@ async def _extract_tender_requirements_impl(
                     error_type=error_type,
                 ) from exc
             except Exception as exc:
-                logger.exception("Tender requirement extraction failed")
+                logger.error("operation_failed event=ai_analyzer:250 error_type=%s", type(exc).__name__)
                 raise ExtractionError("Tender requirement extraction failed.") from exc
         else:
             # Retry loop exhausted without break → advance via outer loop

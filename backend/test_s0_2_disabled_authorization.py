@@ -83,7 +83,7 @@ def make_user(
 
 
 def fake_user_db(user: SimpleNamespace) -> SimpleNamespace:
-    result = SimpleNamespace(scalar_one_or_none=lambda: user)
+    result = SimpleNamespace(scalar_one_or_none=lambda: user, scalars=lambda: SimpleNamespace(all=lambda: [user]))
     return SimpleNamespace(execute=AsyncMock(return_value=result))
 
 
@@ -239,7 +239,9 @@ class DisabledAuthorizationUnitTests(IsolatedAsyncioTestCase):
                     db.add = lambda _value: None
                     db.commit = AsyncMock()
                     db.refresh = AsyncMock()
-                    with self.assertRaises(HTTPException) as raised:
+                    with patch("app.api.endpoints.auth.verify_bridge_assertion", AsyncMock(return_value={
+                        "sub": user.google_id, "email": email, "name": user.name,
+                    })), self.assertRaises(HTTPException) as raised:
                         await google_auth_bridge(
                             payload=GoogleAuthRequest(
                                 google_id=user.google_id,
@@ -374,14 +376,13 @@ class DisabledAuthorizationStaticTests(TestCase):
             is_disabled_account(SimpleNamespace(approval_status="approved"))
         )
 
-    def test_runtime_security_package_and_compatibility_mirror_share_guard(self) -> None:
+    def test_runtime_security_package_is_the_only_guard_implementation(self) -> None:
         self.assertEqual(Path(runtime_security.__file__).name, "__init__.py")
         package_source = (ROOT / "app/core/security/__init__.py").read_text(
             encoding="utf-8"
         )
-        mirror_source = (ROOT / "app/core/security.py").read_text(encoding="utf-8")
+        self.assertFalse((ROOT / "app/core/security.py").exists())
         self.assertIn("if is_disabled_account(user):", package_source)
-        self.assertIn("if is_disabled_account(user):", mirror_source)
 
 
 if __name__ == "__main__":

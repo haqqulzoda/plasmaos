@@ -1,0 +1,108 @@
+[
+  {
+    "check": "ci",
+    "exit_code": 0,
+    "log": "frontend-ci.log"
+  },
+  {
+    "check": "lint",
+    "exit_code": 0,
+    "log": "frontend-lint.log"
+  },
+  {
+    "check": "audit:literals",
+    "exit_code": 0,
+    "log": "frontend-audit-literals.log"
+  },
+  {
+    "check": "typecheck",
+    "exit_code": 0,
+    "log": "frontend-typecheck.log"
+  },
+  {
+    "check": "test:project-context",
+    "exit_code": 0,
+    "log": "frontend-test-project-context.log"
+  },
+  {
+    "check": "test:localization-foundation",
+    "exit_code": 0,
+    "log": "frontend-test-localization-foundation.log"
+  },
+  {
+    "check": "test:s7-3-localization",
+    "exit_code": 0,
+    "log": "frontend-test-s7-3-localization.log"
+  },
+  {
+    "check": "test:s7-4-localization",
+    "exit_code": 0,
+    "log": "frontend-test-s7-4-localization.log"
+  },
+  {
+    "check": "test:s8-2-analysis-language",
+    "exit_code": 0,
+    "log": "frontend-test-s8-2-analysis-language.log"
+  },
+  {
+    "check": "audit:rtl",
+    "exit_code": 0,
+    "log": "frontend-audit-rtl.log"
+  },
+  {
+    "check": "test:s8-3-arabic-rtl",
+    "exit_code": 0,
+    "log": "frontend-test-s8-3-arabic-rtl.log"
+  },
+  {
+    "check": "test:admin",
+    "exit_code": 0,
+    "log": "frontend-test-admin.log"
+  },
+  {
+    "check": "test:my-tenders",
+    "exit_code": 0,
+    "log": "frontend-test-my-tenders.log"
+  },
+  {
+    "check": "test:bid-preparation",
+    "exit_code": 0,
+    "log": "frontend-test-bid-preparation.log"
+  },
+  {
+    "check": "test:engagement-workflow",
+    "exit_code": 0,
+    "log": "frontend-test-engagement-workflow.log"
+  },
+  {
+    "check": "test:tender-details",
+    "exit_code": 0,
+    "log": "frontend-test-tender-details.log"
+  },
+  {
+    "check": "test:tender-cleanup",
+    "exit_code": 0,
+    "log": "frontend-test-tender-cleanup.log"
+  },
+  {
+    "check": "test:explorer",
+    "exit_code": 0,
+    "log": "frontend-test-explorer.log"
+  },
+  {
+    "check": "test:sr3",
+    "exit_code": 0,
+    "log": "frontend-test-sr3.log"
+  },
+  {
+    "check": "test:hunter-retirement",
+    "exit_code": 0,
+    "log": "frontend-test-hunter-retirement.log",
+    "initial_failure": "Temporary checkout omitted sibling backend files read by this static test; copied those unchanged sources."
+  },
+  {
+    "check": "build",
+    "exit_code": 0,
+    "log": "frontend-build.log"
+  }
+]

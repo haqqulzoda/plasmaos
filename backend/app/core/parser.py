@@ -273,7 +273,7 @@ def _parse_extracted_documents(files: list[ExtractedArchiveFile]) -> str:
             else:
                 continue
         except Exception as exc:
-            logger.error("Failed to parse '%s': %s", filename, exc, exc_info=True)
+            logger.error("operation_failed event=parser:276 error_type=%s", type(exc).__name__)
             continue
 
         normalized = text.strip()
@@ -325,7 +325,7 @@ def _extract_zip_contents_from_path(archive_path: Path) -> list[ExtractedArchive
                         shutil.copyfileobj(source, target)
                     extracted.append({"filename": target_path.name, "file_bytes": target_path.read_bytes()})
                 except Exception as exc:
-                    logger.error("Failed to extract zip member '%s': %s", member.filename, exc, exc_info=True)
+                    logger.error("operation_failed event=parser:328 error_type=%s", type(exc).__name__)
                     continue
 
     return extracted
@@ -351,7 +351,7 @@ def _extract_rar_contents_from_path(archive_path: Path) -> list[ExtractedArchive
                         shutil.copyfileobj(source, target)
                     extracted.append({"filename": target_path.name, "file_bytes": target_path.read_bytes()})
                 except Exception as exc:
-                    logger.error("Failed to extract rar member '%s': %s", member.filename, exc, exc_info=True)
+                    logger.error("operation_failed event=parser:354 error_type=%s", type(exc).__name__)
                     continue
 
     return extracted
@@ -414,10 +414,10 @@ def extract_archive_contents(archive_source: bytes | str | Path | BinaryIO) -> l
         except BadZipFile:
             return _extract_archive_contents_from_bytes(archive_bytes, ".rar")
     except (BadZipFile, rarfile.Error, FileNotFoundError, OSError) as exc:
-        logger.error("Archive extraction failed: %s", exc, exc_info=True)
+        logger.error("operation_failed event=parser:417 error_type=%s", type(exc).__name__)
         return []
     except Exception as exc:
-        logger.error("Unexpected archive extraction error: %s", exc, exc_info=True)
+        logger.error("operation_failed event=parser:420 error_type=%s", type(exc).__name__)
         return []
 
 
@@ -426,7 +426,7 @@ def parse_docx(docx_bytes: bytes, file_path: str | Path = "<bytes>") -> str:
     try:
         document = docx.Document(io.BytesIO(docx_bytes))
     except Exception as exc:
-        logger.error("DOCX open failed: %s", exc, exc_info=True)
+        logger.error("operation_failed event=parser:429 error_type=%s", type(exc).__name__)
         return ""
 
     chunks: list[str] = []
@@ -444,7 +444,7 @@ def parse_docx(docx_bytes: bytes, file_path: str | Path = "<bytes>") -> str:
                     if text:
                         chunks.append(text)
     except Exception as exc:
-        logger.error("DOCX parsing failed: %s", exc, exc_info=True)
+        logger.error("operation_failed event=parser:447 error_type=%s", type(exc).__name__)
         return ""
 
     return _format_single_page_document(
@@ -506,22 +506,11 @@ def _ocr_pdf_page(image: Image.Image) -> str:
             return (getattr(response, "text", "") or "").strip()
         except Exception as exc:
             if attempt >= GEMINI_OCR_MAX_RETRIES:
-                logger.error(
-                    "Gemini Vision OCR fallback failed after %s attempts: %s",
-                    GEMINI_OCR_MAX_RETRIES,
-                    exc,
-                    exc_info=True,
-                )
+                logger.error("operation_failed event=parser:509 error_type=%s", type(exc).__name__)
                 return ""
 
             delay_seconds = GEMINI_OCR_RETRY_BASE_SECONDS * attempt
-            logger.warning(
-                "Gemini Vision OCR transient failure, retrying attempt %s/%s in %.1fs: %s",
-                attempt + 1,
-                GEMINI_OCR_MAX_RETRIES,
-                delay_seconds,
-                exc,
-            )
+            logger.error("operation_failed event=parser:518 error_type=%s", type(exc).__name__)
             time.sleep(delay_seconds)
 
     return ""
@@ -554,7 +543,7 @@ def _ocr_pdf_page_from_pdf_bytes(pdf_bytes: bytes, page_number: int) -> str:
                     if text:
                         page_chunks.append(text)
                 except Exception as exc:
-                    logger.error("OCR image read failed (page %s): %s", page_number, exc, exc_info=True)
+                    logger.error("operation_failed event=parser:557 error_type=%s", type(exc).__name__)
                     continue
 
             return "\n".join(page_chunks).strip()
@@ -574,7 +563,7 @@ def _ocr_pdf_page_from_pdf_bytes(pdf_bytes: bytes, page_number: int) -> str:
         )
         return ""
     except Exception as exc:
-        logger.error("OCR conversion failed (page %s): %s", page_number, exc, exc_info=True)
+        logger.error("operation_failed event=parser:577 error_type=%s", type(exc).__name__)
         return ""
 
 
@@ -607,12 +596,12 @@ def _ocr_entire_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
                     if formatted:
                         page_texts.append(formatted)
                 except Exception as exc:
-                    logger.error("OCR failed (fallback page %s): %s", index, exc, exc_info=True)
+                    logger.error("operation_failed event=parser:610 error_type=%s", type(exc).__name__)
                     continue
 
             return "\n\n".join(page_texts).strip()
     except Exception as exc:
-        logger.error("Full-document OCR failed: %s", exc, exc_info=True)
+        logger.error("operation_failed event=parser:615 error_type=%s", type(exc).__name__)
         return ""
 
 
@@ -650,12 +639,7 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
                 try:
                     native_text = (page.get_text() or "").strip()
                 except Exception as exc:
-                    logger.error(
-                        "Native PDF extraction failed (page %s): %s",
-                        page_index,
-                        exc,
-                        exc_info=True,
-                    )
+                    logger.error("operation_failed event=parser:653 error_type=%s", type(exc).__name__)
 
                 if len(native_text) >= OCR_MIN_TEXT_LEN and not demo_ocr_bypass:
                     page_texts.append(_format_page_text(filename, page_index, native_text))
@@ -703,7 +687,7 @@ def parse_pdf(pdf_bytes: bytes, file_path: str = "<bytes>") -> str:
                     page_texts.append(formatted)
                     extracted_chars_so_far += len(merged)
     except Exception as e:
-        logger.error(f"[SONAR] EXTRACTION FAILED on {file_path}. Reason: {str(e)}", exc_info=True)
+        logger.error("operation_failed event=parser:706 error_type=%s", type(e).__name__)
         if _ocr_fallback_allowed(file_path=file_path, file_bytes=pdf_bytes):
             return _ocr_entire_pdf(pdf_bytes, file_path=file_path)
         logger.warning("[SONAR] OCR fallback skipped for unsupported non-PDF source: %s", file_path)
@@ -752,10 +736,10 @@ async def process_tender_document(
             logger.error("Unsupported source type for parser: %s", type(source))
             return ""
     except (httpx.HTTPError, FileNotFoundError, OSError) as exc:
-        logger.error("Failed to load source document: %s", exc, exc_info=True)
+        logger.error("operation_failed event=parser:755 error_type=%s", type(exc).__name__)
         return ""
     except Exception as exc:
-        logger.error("Unexpected source loading error: %s", exc, exc_info=True)
+        logger.error("operation_failed event=parser:758 error_type=%s", type(exc).__name__)
         return ""
 
     if not payload:
@@ -812,7 +796,7 @@ def extract_text_from_pdf(file_path: str | Path) -> str:
         logger.info(f"[SONAR] Attempting to extract: {file_path} | Size: {os.path.getsize(path)} bytes")
         return parse_pdf(path.read_bytes(), file_path=str(path))
     except Exception as e:
-        logger.error(f"[SONAR] EXTRACTION FAILED on {file_path}. Reason: {str(e)}", exc_info=True)
+        logger.error("operation_failed event=parser:815 error_type=%s", type(e).__name__)
         return ""
 
 
@@ -832,7 +816,7 @@ def extract_text_from_bytes(file_bytes: bytes, file_type: str) -> str:
             extracted = extract_archive_contents(file_bytes)
             return _parse_extracted_documents(extracted)
     except Exception as exc:
-        logger.error("extract_text_from_bytes failed for type '%s': %s", normalized, exc, exc_info=True)
+        logger.error("operation_failed event=parser:835 error_type=%s", type(exc).__name__)
         return ""
 
     logger.warning("Unsupported file type in extract_text_from_bytes: %s", file_type)
@@ -848,10 +832,10 @@ def extract_text_from_file(file_path: str | Path) -> str:
     try:
         file_bytes = path.read_bytes()
     except (FileNotFoundError, OSError) as exc:
-        logger.error("Failed to read file '%s': %s", file_path, exc, exc_info=True)
+        logger.error("operation_failed event=parser:851 error_type=%s", type(exc).__name__)
         return ""
     except Exception as exc:
-        logger.error("Unexpected file read error '%s': %s", file_path, exc, exc_info=True)
+        logger.error("operation_failed event=parser:854 error_type=%s", type(exc).__name__)
         return ""
 
     if suffix == "pdf":

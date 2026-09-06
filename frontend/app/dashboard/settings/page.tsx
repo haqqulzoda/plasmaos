@@ -114,8 +114,8 @@ export default function CompanyProfilePage() {
       const response =
         await api.get<Partial<CompanyProfile>>("/users/me/company");
       setProfile(normalizeProfile(response.data));
-    } catch (err) {
-      console.error("Failed to load company profile:", err);
+    } catch {
+      console.error("Failed to load company profile:");
       setError(t("loadFailed"));
     } finally {
       setLoading(false);
@@ -228,8 +228,8 @@ export default function CompanyProfilePage() {
       setProfile(normalizeProfile(response.data));
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2500);
-    } catch (err) {
-      console.error("Failed to save company profile:", err);
+    } catch {
+      console.error("Failed to save company profile:");
       setError(t("saveFailed"));
     } finally {
       setSaving(false);

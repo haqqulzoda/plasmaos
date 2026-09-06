@@ -1,0 +1,5 @@
+Collecting gunicorn
+  Downloading gunicorn-26.2.0-py3-none-any.whl.metadata (5.5 kB)
+Downloading gunicorn-26.2.0-py3-none-any.whl (228 kB)
+Installing collected packages: gunicorn
+Successfully installed gunicorn-26.2.0

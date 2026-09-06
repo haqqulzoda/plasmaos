@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from typing import Annotated
+from fastapi import Query, Response
+from app.core.pagination import page_rows
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -239,16 +242,33 @@ async def update_company_vault(
 async def list_readiness_documents(
     current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    response: Response = None,
+    document_type: str | None = None,
+    status: str | None = None,
+    related_service: str | None = None,
 ) -> list[ReadinessDocumentResponse]:
     profile = await _get_profile_or_404(db=db, user_id=current_user.id)
+    from sqlalchemy import func
+    conditions = [ReadinessDocument.company_profile_id == profile.id]
+    for column, value in ((ReadinessDocument.document_type, document_type),
+                          (ReadinessDocument.status, status),
+                          (ReadinessDocument.related_service, related_service)):
+        if value:
+            conditions.append(column == value)
+    if response is not None:
+        total = await db.scalar(select(func.count()).select_from(ReadinessDocument).where(*conditions))
+        response.headers["X-Total-Count"] = str(total)
     result = await db.execute(
         select(ReadinessDocument)
-        .where(ReadinessDocument.company_profile_id == profile.id)
-        .order_by(ReadinessDocument.document_type, ReadinessDocument.document_name)
+        .where(*conditions)
+        .order_by(ReadinessDocument.document_type, ReadinessDocument.document_name, ReadinessDocument.id)
+        .limit(limit + 1).offset(offset)
     )
     return [
         ReadinessDocumentResponse.model_validate(document)
-        for document in result.scalars().all()
+        for document in page_rows(list(result.scalars().all()), limit=limit, offset=offset, response=response)
     ]
 
 

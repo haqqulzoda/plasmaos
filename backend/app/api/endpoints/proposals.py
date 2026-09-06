@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Plasma AI - Proposals Endpoints
 
@@ -13,6 +14,9 @@ from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
+from typing import Annotated
+from fastapi import Query, Response
+from app.core.pagination import page_rows
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -207,7 +211,7 @@ async def create_proposal(
 ) -> ProposalResponse:
     """
     Create a new proposal draft for a tender.
-    
+
     Requires: Agent tier or higher.
     """
     # Verify tender exists
@@ -215,13 +219,13 @@ async def create_proposal(
         select(Tender).where(Tender.id == proposal_data.tender_id)
     )
     tender = result.scalar_one_or_none()
-    
+
     if not tender:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tender not found",
         )
-    
+
     try:
         resolution = await get_or_create_proposal_artifact(
             db,
@@ -311,6 +315,9 @@ async def continue_owned_bid_preparation(
 async def list_proposals(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    response: Response = None,
 ) -> list[ProposalWithTenderResponse]:
     """
     List all proposals for the current user.
@@ -318,6 +325,10 @@ async def list_proposals(
     profile_id = await _owned_profile_id(db, current_user.id)
     if profile_id is None:
         return []
+    if response is not None:
+        from sqlalchemy import func
+        total = await db.scalar(select(func.count()).select_from(Proposal).where(Proposal.user_id == current_user.id))
+        response.headers["X-Total-Count"] = str(total)
     result = await db.execute(
         select(Proposal, Tender, TenderEngagement)
         .join(Tender, Tender.id == Proposal.tender_id)
@@ -330,7 +341,8 @@ async def list_proposals(
             ),
         )
         .where(Proposal.user_id == current_user.id)
-        .order_by(Proposal.created_at.desc())
+        .order_by(Proposal.created_at.desc(), Proposal.id.asc())
+        .limit(limit + 1).offset(offset)
     )
     return [
         _proposal_with_tender_response(
@@ -338,7 +350,7 @@ async def list_proposals(
             tender,
             engagement.status if engagement else None,
         )
-        for proposal, tender, engagement in result.all()
+        for proposal, tender, engagement in page_rows(list(result.all()), limit=limit, offset=offset, response=response)
     ]
 
 
@@ -374,7 +386,7 @@ async def get_proposal(
         )
     )
     row = result.one_or_none()
-    
+
     if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -397,7 +409,7 @@ async def update_proposal(
 ) -> ProposalResponse:
     """
     Update proposal data with financial calculations.
-    
+
     Calculates:
     - unit_price = base_cost × (1 + margin_percent/100)
     - subtotal = sum of all item totals
@@ -411,41 +423,41 @@ async def update_proposal(
         )
     )
     proposal = result.scalar_one_or_none()
-    
+
     if not proposal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Proposal not found",
         )
-    
+
     # Update financial model fields
     if update_data.margin_percent is not None:
         proposal.margin_percent = update_data.margin_percent
-    
+
     if update_data.include_vat is not None:
         proposal.include_vat = update_data.include_vat
-    
+
     # Get current margin for calculations
     margin = proposal.margin_percent
     include_vat = proposal.include_vat
-    
+
     # Update structured data
     if update_data.structured_data is not None:
         proposal.structured_data = update_data.structured_data
-    
+
     current_data: dict[str, Any] = proposal.structured_data or {}
-    
+
     # Process items with financial calculations
     if update_data.items is not None:
         calculated_items = []
         subtotal = 0.0
-        
+
         for item in update_data.items:
             # Calculate unit sell price from base cost + margin
             unit_price = item.base_cost * (1 + margin / 100)
             total_item = unit_price * item.quantity
             subtotal += total_item
-            
+
             calculated_items.append({
                 "name": item.name,
                 "unit": item.unit,
@@ -454,30 +466,30 @@ async def update_proposal(
                 "unit_price": round(unit_price, 2),
                 "total": round(total_item, 2),
             })
-        
+
         # Calculate VAT and grand total
         vat_amount = subtotal * 0.12 if include_vat else 0.0
         grand_total = subtotal + vat_amount
-        
+
         # Store calculated values
         current_data["ai_items"] = calculated_items
         current_data["subtotal"] = round(subtotal, 2)
         current_data["vat_amount"] = round(vat_amount, 2)
         current_data["grand_total"] = round(grand_total, 2)
         current_data["our_price"] = round(grand_total, 2)
-    
+
     # Update individual fields
     if update_data.our_price is not None:
         current_data["our_price"] = update_data.our_price
-    
+
     if update_data.delivery_days is not None:
         current_data["delivery_days"] = update_data.delivery_days
-    
+
     proposal.structured_data = current_data
-    
+
     await db.commit()
     await db.refresh(proposal)
-    
+
     return _proposal_response(proposal)
 
 
@@ -636,9 +648,7 @@ async def ai_draft_proposal(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception(
-            "ai-draft unhandled error for proposal %s: %s", proposal_id, exc,
-        )
+        logger.error("operation_failed event=proposals:651 error_type=%s", type(exc).__name__)
         fallback_price = float(proposal.tender.budget * 0.85) if proposal.tender.budget else 0.0
         return AIDraftResponse(
             strategic_summary=(
@@ -755,16 +765,15 @@ async def upload_tender_tz(
 ) -> AIDraftResponse:
     """
     Upload a Technical Task PDF for tenders with archive (ZIP/RAR) documents.
-    
+
     1. Saves uploaded PDF to backend/uploads/{user_id}/{proposal_id}.pdf
     2. Stores extracted text inside the proposal's structured_data
     3. Runs AI analysis on the uploaded file
     4. Returns AI analysis result (same as ai-draft endpoint)
     """
     from pathlib import Path
-    
-    from app.core.parser import extract_text_from_file
-    
+
+
     # Fetch proposal with tender
     result = await db.execute(
         select(Proposal)
@@ -775,143 +784,135 @@ async def upload_tender_tz(
         )
     )
     proposal = result.scalar_one_or_none()
-    
+
     if not proposal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Proposal not found",
         )
-    
+
     if not proposal.tender:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Proposal has no associated tender",
         )
-    
-    # Validate file type
-    if not file.filename or not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only PDF files are accepted",
-        )
-    
-    # Save file to tenant-scoped uploads directory
-    uploads_dir = Path(__file__).parent.parent.parent.parent / "uploads"
-    tenant_uploads_dir = uploads_dir / str(current_user.id)
-    tenant_uploads_dir.mkdir(parents=True, exist_ok=True)
-    file_path = tenant_uploads_dir / f"{proposal.id}.pdf"
-    
-    # Write file
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
-    current_data: dict[str, Any] = proposal.structured_data or {}
-    current_data["uploaded_tz_path"] = str(file_path)
 
-    # Extract text and persist under this proposal only.
-    try:
-        extracted_text = await extract_text_from_file(str(file_path))
-        if extracted_text and extracted_text.strip():
-            current_data["uploaded_tz_text"] = extracted_text.strip()
-            logger.info(f"[UPLOAD-TZ] Stored tenant-scoped text ({len(extracted_text)} chars)")
-    except Exception as parse_exc:
-        logger.warning(f"[UPLOAD-TZ] Text extraction failed: {parse_exc}")
-    
-    # Build company context from user profile
-    company_context = {
-        "company_name": current_user.company_name or "",
-        "core_services": getattr(current_user, 'core_services', '') or "",
-        "past_experience": getattr(current_user, 'past_experience', '') or "",
-    }
-    
-    # Analyze with Gemini AI (direct file upload - handles scanned PDFs!)
-    print(f"[UPLOAD-TZ] Analyzing file with Gemini: {file_path}")
-    from app.core.ai import analyze_tender_file_async
-    ai_result = await analyze_tender_file_async(str(file_path), company_context)
-    
-    # Calculate estimates based on AI analysis
-    tender_budget = proposal.tender.budget
-    items = ai_result.get("items", [])
-    delivery_days = ai_result.get("delivery_days", 30)
-    
-    # Estimate cost (75% of budget as baseline)
-    estimated_cost = tender_budget * 0.75
-    suggested_price = tender_budget * 0.85  # 15% margin
-    
-    # Build technical summary
-    summary = ai_result.get("summary", "Analysis complete.")
-    requirements = ai_result.get("required_licenses", [])
-    risks = ai_result.get("risks", [])
-    
-    if requirements:
-        summary += f" Required: {', '.join(requirements[:3])}."
-    if risks:
-        summary += f" Risks: {risks[0]}."
-    
-    # Determine confidence score
-    confidence = 85
-    if "error" in ai_result:
-        confidence = 50
-    elif len(items) == 0:
-        confidence = 65
-    elif len(items) > 5:
-        confidence = 90
-    
-    strategic_summary = (
-        f"{summary[:420]} "
-        "This recommendation is backed by verified credentials and practical scope control."
-    ).strip()
-    delivery_days_text = f"{delivery_days} calendar days"
+    import asyncio
+    from copy import deepcopy
+    from app.core.uploads import staged_pdf, parse_uploaded_pdf, analyze_uploaded_pdf, upload_permit
 
-    item_count = max(len(items), 1)
-    unit_price = suggested_price / item_count if item_count else suggested_price
-    line_items = [
-        {
-            "name": str(item.get("name", "Line Item")),
-            "quantity": float(item.get("quantity", 1)),
-            "unit": str(item.get("unit", "lot")),
-            "unit_price": round(unit_price, 2),
-            "total": round(unit_price * float(item.get("quantity", 1)), 2),
+    uploads_dir = Path(__file__).parent.parent.parent.parent / "uploads" / str(current_user.id)
+    async with staged_pdf(file, uploads_dir) as staged_path, upload_permit(current_user.id):
+        extracted_text = await parse_uploaded_pdf(staged_path)
+        if not extracted_text or not extracted_text.strip():
+            raise HTTPException(422, detail="PDF could not be parsed")
+        company_context = {
+            "company_name": current_user.company_name or "",
+            "core_services": getattr(current_user, "core_services", "") or "",
+            "past_experience": getattr(current_user, "past_experience", "") or "",
         }
-        for item in items
-    ]
-    if not line_items:
+        try:
+            ai_result = await asyncio.wait_for(
+                analyze_uploaded_pdf(staged_path, company_context), timeout=125,
+            )
+            if not isinstance(ai_result, dict) or ai_result.get("error"):
+                raise ValueError("Analysis failed")
+        except Exception:
+            raise HTTPException(502, detail="PDF analysis failed. Please retry") from None
+        current_data = deepcopy(proposal.structured_data or {})
+        current_data["uploaded_tz_text"] = extracted_text.strip()
+        # Calculate estimates based on AI analysis
+        tender_budget = proposal.tender.budget
+        items = ai_result.get("items", [])
+        delivery_days = ai_result.get("delivery_days", 30)
+
+        # Estimate cost (75% of budget as baseline)
+        estimated_cost = tender_budget * 0.75
+        suggested_price = tender_budget * 0.85  # 15% margin
+
+        # Build technical summary
+        summary = ai_result.get("summary", "Analysis complete.")
+        requirements = ai_result.get("required_licenses", [])
+        risks = ai_result.get("risks", [])
+
+        if requirements:
+            summary += f" Required: {', '.join(requirements[:3])}."
+        if risks:
+            summary += f" Risks: {risks[0]}."
+
+        # Determine confidence score
+        confidence = 85
+        if "error" in ai_result:
+            confidence = 50
+        elif len(items) == 0:
+            confidence = 65
+        elif len(items) > 5:
+            confidence = 90
+
+        strategic_summary = (
+            f"{summary[:420]} "
+            "This recommendation is backed by verified credentials and practical scope control."
+        ).strip()
+        delivery_days_text = f"{delivery_days} calendar days"
+
+        item_count = max(len(items), 1)
+        unit_price = suggested_price / item_count if item_count else suggested_price
         line_items = [
             {
-                "name": "Delivery Scope",
-                "quantity": 1.0,
-                "unit": "lot",
-                "unit_price": round(suggested_price, 2),
-                "total": round(suggested_price, 2),
+                "name": str(item.get("name", "Line Item")),
+                "quantity": float(item.get("quantity", 1)),
+                "unit": str(item.get("unit", "lot")),
+                "unit_price": round(unit_price, 2),
+                "total": round(unit_price * float(item.get("quantity", 1)), 2),
             }
+            for item in items
         ]
+        if not line_items:
+            line_items = [
+                {
+                    "name": "Delivery Scope",
+                    "quantity": 1.0,
+                    "unit": "lot",
+                    "unit_price": round(suggested_price, 2),
+                    "total": round(suggested_price, 2),
+                }
+            ]
 
-    current_data["strategic_summary"] = strategic_summary
-    current_data["our_price"] = suggested_price
-    current_data["delivery_days"] = delivery_days_text
-    current_data["line_items"] = line_items
-    current_data["ai_items"] = line_items
-    proposal.structured_data = current_data
-    proposal.ai_confidence_score = confidence
+        current_data["strategic_summary"] = strategic_summary
+        current_data["our_price"] = suggested_price
+        current_data["delivery_days"] = delivery_days_text
+        current_data["line_items"] = line_items
+        current_data["ai_items"] = line_items
+        response_payload = AIDraftResponse(
+            strategic_summary=strategic_summary,
+            suggested_price=suggested_price,
+            delivery_days=delivery_days_text,
+            line_items=[
+                AIStrategicLineItem(
+                    name=item["name"],
+                    quantity=float(item["quantity"]),
+                    unit=item["unit"],
+                    unit_price=float(item["unit_price"]),
+                    total=float(item["total"]),
+                )
+                for item in line_items
+            ],
+        )
 
-    await db.commit()
-
-    return AIDraftResponse(
-        strategic_summary=strategic_summary,
-        suggested_price=suggested_price,
-        delivery_days=delivery_days_text,
-        line_items=[
-            AIStrategicLineItem(
-                name=item["name"],
-                quantity=float(item["quantity"]),
-                unit=item["unit"],
-                unit_price=float(item["unit_price"]),
-                total=float(item["total"]),
-            )
-            for item in line_items
-        ],
-    )
+        # A unique successful file preserves preview without overwriting a prior upload.
+        from uuid import uuid4
+        final_path = uploads_dir / f"{uuid4()}.pdf"
+        staged_path.replace(final_path)
+        current_data["uploaded_tz_path"] = str(final_path)
+        try:
+            proposal.structured_data = current_data
+            proposal.ai_confidence_score = confidence
+            await db.commit()
+        except BaseException:
+            await db.rollback()
+            final_path.unlink(missing_ok=True)
+            raise
+        return response_payload
 
 
 @router.get("/{proposal_id}/uploaded-tz")
@@ -922,12 +923,12 @@ async def get_uploaded_tz(
 ):
     """
     Serve the uploaded Technical Task PDF for preview.
-    
+
     Returns the PDF file that was uploaded via /upload-tz endpoint.
     """
     from pathlib import Path
     from fastapi.responses import Response
-    
+
     # Fetch proposal with tender
     result = await db.execute(
         select(Proposal)
@@ -938,33 +939,33 @@ async def get_uploaded_tz(
         )
     )
     proposal = result.scalar_one_or_none()
-    
+
     if not proposal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Proposal not found",
         )
-    
+
     if not proposal.tender:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Proposal has no associated tender",
         )
-    
+
     # Look for uploaded PDF
     uploads_dir = Path(__file__).parent.parent.parent.parent / "uploads"
     tenant_uploads_dir = uploads_dir / str(current_user.id)
     file_path = tenant_uploads_dir / f"{proposal.id}.pdf"
-    
+
     if not file_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No uploaded PDF found for this tender",
         )
-    
+
     # Read file and return as Response (same pattern as working document download)
     file_bytes = file_path.read_bytes()
-    
+
     return Response(
         content=file_bytes,
         media_type="application/pdf",
@@ -981,7 +982,7 @@ async def generate_proposal_pdf(
 ) -> StreamingResponse:
     """
     Generate a professional Commercial Proposal (KP) PDF.
-    
+
     Uses company details from user profile and AI-extracted items from proposal.
     Returns a downloadable PDF document suitable for tender submissions.
     """
@@ -995,44 +996,44 @@ async def generate_proposal_pdf(
         )
     )
     proposal = result.scalar_one_or_none()
-    
+
     if not proposal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Proposal not found",
         )
-    
+
     tender = proposal.tender
     if not tender:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tender not found for this proposal",
         )
-    
+
     # Get company details from user profile (fallback to pdf_data for backwards compat)
     company_name = current_user.company_name or pdf_data.company_name
     director_name = current_user.director_name or "Director"
     company_address = current_user.address or ""
-    
+
     # Get AI-extracted items from proposal structured_data
     structured_data = proposal.structured_data or {}
     ai_items = structured_data.get("ai_items", [])
     our_price = structured_data.get("our_price", pdf_data.price)
     delivery_days = structured_data.get("delivery_days", pdf_data.delivery_days)
-    
+
     # Create PDF in memory
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
-        buffer, 
-        pagesize=A4, 
-        topMargin=1.5*cm, 
+        buffer,
+        pagesize=A4,
+        topMargin=1.5*cm,
         bottomMargin=1.5*cm,
         leftMargin=2*cm,
         rightMargin=2*cm,
     )
-    
+
     styles = getSampleStyleSheet()
-    
+
     # Custom styles (Roboto for Cyrillic / Latin-Extended support)
     title_style = ParagraphStyle(
         'KPTitle',
@@ -1065,9 +1066,9 @@ async def generate_proposal_pdf(
         fontSize=9,
         textColor=colors.HexColor('#666666'),
     )
-    
+
     elements = []
-    
+
     # ========== HEADER ==========
     # Company name (left) and Date (right) on same line using table
     header_data = [[
@@ -1081,24 +1082,24 @@ async def generate_proposal_pdf(
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
     ]))
     elements.append(header_table)
-    
+
     # Company address if available
     if company_address:
         elements.append(Paragraph(company_address, small_style))
     elements.append(Spacer(1, 20))
-    
+
     # ========== TITLE ==========
     elements.append(Paragraph(
         f"TIJORAT TAKLIFI (COMMERCIAL PROPOSAL)<br/>№ KP-{str(proposal_id)[:8].upper()}",
         title_style
     ))
     elements.append(Spacer(1, 15))
-    
+
     # ========== INTRO ==========
     intro_text = f"Biz, <b>{company_name}</b>, {tender.external_id} raqamli tender bo'yicha quyidagi xizmatlarni taklif etamiz:"
     elements.append(Paragraph(intro_text, normal_style))
     elements.append(Spacer(1, 15))
-    
+
     # ========== STRATEGIC SUMMARY ==========
     strategic_summary_text = (structured_data.get("strategic_summary") or "").strip()
     if strategic_summary_text:
@@ -1145,17 +1146,17 @@ async def generate_proposal_pdf(
         ]))
         elements.append(summary_block)
         elements.append(Spacer(1, 18))
-    
+
     # ========== ITEMS TABLE ==========
     if ai_items and len(ai_items) > 0:
         # Calculate unit prices (distribute total evenly if no individual prices)
         total_qty = sum(item.get("quantity", 1) for item in ai_items)
-        
+
         # Table headers
         items_table_data = [
             ["#", "Nomi (Name)", "Birlik", "Miqdor", "Narxi", "Jami"],
         ]
-        
+
         running_total = 0
         for idx, item in enumerate(ai_items, 1):
             name = item.get("name", "Item")[:50]  # Truncate long names
@@ -1165,7 +1166,7 @@ async def generate_proposal_pdf(
             unit_price = item.get("unit_price", (our_price * qty / total_qty) / qty if total_qty > 0 else our_price / len(ai_items))
             item_total = item.get("total", unit_price * qty)
             running_total += item_total
-            
+
             items_table_data.append([
                 str(idx),
                 name,
@@ -1174,33 +1175,33 @@ async def generate_proposal_pdf(
                 f"{unit_price:,.0f}",
                 f"{item_total:,.0f}",
             ])
-        
+
         # Get calculated values from structured_data
         subtotal = structured_data.get("subtotal", running_total)
         vat_amount = structured_data.get("vat_amount", 0)
         grand_total = structured_data.get("grand_total", our_price)
-        
+
         # Subtotal row
         items_table_data.append([
-            "", "", "", "", Paragraph("<b>Jami summa:</b>", normal_style), 
+            "", "", "", "", Paragraph("<b>Jami summa:</b>", normal_style),
             Paragraph(f"<b>{subtotal:,.0f}</b>", normal_style)
         ])
-        
+
         # VAT row (only if VAT is included)
         if proposal.include_vat and vat_amount > 0:
             items_table_data.append([
-                "", "", "", "", Paragraph("QQS (12%):", normal_style), 
+                "", "", "", "", Paragraph("QQS (12%):", normal_style),
                 Paragraph(f"+{vat_amount:,.0f}", normal_style)
             ])
-        
+
         # Grand Total row
         items_table_data.append([
-            "", "", "", "", Paragraph("<b>YAKUNIY JAMI:</b>", normal_style), 
+            "", "", "", "", Paragraph("<b>YAKUNIY JAMI:</b>", normal_style),
             Paragraph(f"<b>{grand_total:,.0f} {tender.currency}</b>", normal_style)
         ])
-        
+
         items_table = Table(
-            items_table_data, 
+            items_table_data,
             colWidths=[1*cm, 7*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm]
         )
         items_table.setStyle(TableStyle([
@@ -1246,30 +1247,30 @@ async def generate_proposal_pdf(
             ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ]))
         elements.append(summary_table)
-    
+
     elements.append(Spacer(1, 20))
-    
+
     # ========== DELIVERY & TERMS ==========
     elements.append(Paragraph("<b>Yetkazib berish muddati:</b>", normal_style))
     elements.append(Paragraph(f"{delivery_days} ish kuni", normal_style))
     elements.append(Spacer(1, 10))
-    
+
     elements.append(Paragraph("<b>To'lov shartlari:</b>", normal_style))
     elements.append(Paragraph("15% oldindan to'lov, 85% yetkazib berilgandan keyin", normal_style))
     elements.append(Spacer(1, 10))
-    
+
     # VAT notice if applicable
     if proposal.include_vat:
         elements.append(Paragraph("<b>QQS:</b> Narxlar 12% QQSni o'z ichiga oladi (Prices include 12% VAT)", normal_style))
         elements.append(Spacer(1, 10))
-    
+
     elements.append(Paragraph("<b>Taklif amal qilish muddati:</b> 30 kun", normal_style))
     elements.append(Spacer(1, 30))
-    
+
     # ========== SIGNATURE ==========
     elements.append(Paragraph("<b>Direktor:</b>", normal_style))
     elements.append(Spacer(1, 20))
-    
+
     sig_data = [[
         Paragraph(f"{director_name}", normal_style),
         "_" * 25,
@@ -1281,22 +1282,22 @@ async def generate_proposal_pdf(
         ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
     ]))
     elements.append(sig_table)
-    
+
     elements.append(Spacer(1, 20))
-    
+
     # Stamp placeholder
     elements.append(Paragraph("M.O. (Muhr joyi / Stamp)", small_style))
-    
+
     # Build PDF
     doc.build(elements)
     buffer.seek(0)
-    
+
     # Update proposal status
     proposal.status = ProposalStatus.COMPLETED
     await db.commit()
-    
+
     filename = f"KP_{tender.external_id}_{datetime.now().strftime('%Y%m%d')}.pdf"
-    
+
     return StreamingResponse(
         buffer,
         media_type="application/pdf",

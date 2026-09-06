@@ -171,11 +171,10 @@ class SessionRevocationStaticTests(TestCase):
 
     def test_refresh_and_access_status_have_no_stale_version_bypass(self):
         security_package = self.backend("app/core/security/__init__.py")
-        security_mirror = self.backend("app/core/security.py")
         auth = self.backend("app/api/endpoints/auth.py")
         users = self.backend("app/api/endpoints/users.py")
 
-        combined = security_package + security_mirror + auth + users
+        combined = security_package + auth + users
         self.assertNotIn("get_current_user_allow_stale_auth_version", combined)
         self.assertIn("current_user: User = Depends(get_current_user)", auth)
         self.assertIn("current_user: User = Depends(get_current_user)", users)

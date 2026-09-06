@@ -1,0 +1,59 @@
+
+> frontend@0.1.0 test:bid-preparation
+> node --no-warnings --experimental-strip-types --test tests/bid-preparation.test.mjs
+
+TAP version 13
+# Subtest: canonical customer navigation is Bid Preparation
+ok 1 - canonical customer navigation is Bid Preparation
+  ---
+  duration_ms: 2.491239
+  ...
+# Subtest: legacy list is a single read-only redirect
+ok 2 - legacy list is a single read-only redirect
+  ---
+  duration_ms: 0.413521
+  ...
+# Subtest: legacy proposal list and workspace are permanent non-mutating redirects
+ok 3 - legacy proposal list and workspace are permanent non-mutating redirects
+  ---
+  duration_ms: 0.395358
+  ...
+# Subtest: canonical dynamic route is Proposal-ID-only and passive
+ok 4 - canonical dynamic route is Proposal-ID-only and passive
+  ---
+  duration_ms: 0.554946
+  ...
+# Subtest: legacy detail validates the owned Proposal then redirects without fallback
+ok 5 - legacy detail validates the owned Proposal then redirects without fallback
+  ---
+  duration_ms: 0.450865
+  ...
+# Subtest: Prepare Bid is an explicit POST with separate Tender and Proposal identifiers
+ok 6 - Prepare Bid is an explicit POST with separate Tender and Proposal identifiers
+  ---
+  duration_ms: 0.174215
+  ...
+# Subtest: Bid Preparation list remains Proposal-backed with optional engagement context
+ok 7 - Bid Preparation list remains Proposal-backed with optional engagement context
+  ---
+  duration_ms: 0.301276
+  ...
+# Subtest: Compliance page no longer creates or resolves Proposal artifacts passively
+ok 8 - Compliance page no longer creates or resolves Proposal artifacts passively
+  ---
+  duration_ms: 0.270213
+  ...
+# Subtest: canonical detail return links use their domain identifiers
+ok 9 - canonical detail return links use their domain identifiers
+  ---
+  duration_ms: 0.41433
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 269.695302

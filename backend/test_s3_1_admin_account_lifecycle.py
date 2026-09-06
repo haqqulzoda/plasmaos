@@ -227,7 +227,7 @@ class AccountLifecycleEndpointTests(IsolatedAsyncioTestCase):
             USER_APPROVAL_REJECTED,
             email="admin@example.com",
         )
-        user_result = SimpleNamespace(scalar_one_or_none=lambda: target)
+        user_result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [target]))
         no_profile_result = SimpleNamespace(scalar_one_or_none=lambda: None)
         db = SimpleNamespace(
             execute=AsyncMock(side_effect=(user_result, no_profile_result)),
@@ -241,7 +241,9 @@ class AccountLifecycleEndpointTests(IsolatedAsyncioTestCase):
             {"PLASMA_ADMIN_EMAILS": "admin@example.com"},
             clear=False,
         ):
-            with self.assertRaises(HTTPException) as raised:
+            with patch("app.api.endpoints.auth.verify_bridge_assertion", AsyncMock(return_value={
+                "sub": target.google_id, "email": target.email, "name": target.name,
+            })), self.assertRaises(HTTPException) as raised:
                 await google_auth_bridge(
                     GoogleAuthRequest(
                         google_id=target.google_id,

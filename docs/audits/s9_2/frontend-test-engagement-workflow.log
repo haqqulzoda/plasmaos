@@ -1,0 +1,44 @@
+
+> frontend@0.1.0 test:engagement-workflow
+> node --no-warnings --experimental-strip-types --test tests/engagement-workflow.test.mjs
+
+TAP version 13
+# Subtest: every canonical status has concise non-color meaning
+ok 1 - every canonical status has concise non-color meaning
+  ---
+  duration_ms: 3.808966
+  ...
+# Subtest: high-significance actions use confirmation and exact semantics
+ok 2 - high-significance actions use confirmation and exact semantics
+  ---
+  duration_ms: 0.913044
+  ...
+# Subtest: commands send expected state and refresh authoritative backend truth
+ok 3 - commands send expected state and refresh authoritative backend truth
+  ---
+  duration_ms: 0.633223
+  ...
+# Subtest: Tender Details and Bid Preparation share the compact pursuit panel
+ok 4 - Tender Details and Bid Preparation share the compact pursuit panel
+  ---
+  duration_ms: 1.846647
+  ...
+# Subtest: legacy proposal is continued only by explicit click
+ok 5 - legacy proposal is continued only by explicit click
+  ---
+  duration_ms: 3.211042
+  ...
+# Subtest: source and engagement semantics remain independent
+ok 6 - source and engagement semantics remain independent
+  ---
+  duration_ms: 2.344512
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 765.360841

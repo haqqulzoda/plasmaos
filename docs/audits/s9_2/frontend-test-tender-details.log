@@ -1,0 +1,79 @@
+
+> frontend@0.1.0 test:tender-details
+> node --no-warnings --experimental-strip-types --test tests/tender-details.test.mjs
+
+TAP version 13
+# Subtest: initial render has exactly the two approved passive reads
+ok 1 - initial render has exactly the two approved passive reads
+  ---
+  duration_ms: 16.582235
+  ...
+# Subtest: document content is fetched only from an explicit user action
+ok 2 - document content is fetched only from an explicit user action
+  ---
+  duration_ms: 4.867084
+  ...
+# Subtest: base and consolidated detail loading are independent
+ok 3 - base and consolidated detail loading are independent
+  ---
+  duration_ms: 10.859624
+  ...
+# Subtest: sections and anchors follow the locked information hierarchy
+ok 4 - sections and anchors follow the locked information hierarchy
+  ---
+  duration_ms: 1.423163
+  ...
+# Subtest: Tender, Pursuit, Project Leadership, and Procurement Contacts remain distinct
+ok 5 - Tender, Pursuit, Project Leadership, and Procurement Contacts remain distinct
+  ---
+  duration_ms: 1.201349
+  ...
+# Subtest: the pursuit panel consumes consolidated state without its legacy passive GET
+ok 6 - the pursuit panel consumes consolidated state without its legacy passive GET
+  ---
+  duration_ms: 0.959414
+  ...
+# Subtest: existing mutation authorities and backend-provided allowed actions are reused
+ok 7 - existing mutation authorities and backend-provided allowed actions are reused
+  ---
+  duration_ms: 1.224845
+  ...
+# Subtest: requirements are bounded and provenance-labelled
+ok 8 - requirements are bounded and provenance-labelled
+  ---
+  duration_ms: 0.576783
+  ...
+# Subtest: compliance presentation distinguishes failed, partial, and legacy analysis
+ok 9 - compliance presentation distinguishes failed, partial, and legacy analysis
+  ---
+  duration_ms: 9.050599
+  ...
+# Subtest: readiness shows factual counts and does not invent a score
+ok 10 - readiness shows factual counts and does not invent a score
+  ---
+  duration_ms: 3.583932
+  ...
+# Subtest: bid preparation uses the proposal-backed route identifier
+ok 11 - bid preparation uses the proposal-backed route identifier
+  ---
+  duration_ms: 1.273964
+  ...
+# Subtest: DTOs are explicit and prohibit loose any or derived browser persistence
+ok 12 - DTOs are explicit and prohibit loose any or derived browser persistence
+  ---
+  duration_ms: 4.43983
+  ...
+# Subtest: responsive and keyboard-accessible controls are present
+ok 13 - responsive and keyboard-accessible controls are present
+  ---
+  duration_ms: 2.145553
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 856.263374

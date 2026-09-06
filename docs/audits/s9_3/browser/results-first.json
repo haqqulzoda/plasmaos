@@ -1,0 +1,5111 @@
+{
+  "method": "Real Chromium against local production Next.js and controlled HTTP API fixtures; backend security cases execute real route/dependency code with synthetic DB and signed assertion fixtures",
+  "cases": [
+    {
+      "case": "mobile/en/320/explorer",
+      "status": "FAIL",
+      "error": "{'tag': 'BUTTON', 'left': -20.5625, 'right': 249.4375}"
+    },
+    {
+      "case": "mobile/en/320/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 320,
+          "scroll": 320,
+          "heading": "My Tenders",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 173.40625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 181.40625,
+              "right": 236.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 173.359375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 204.296875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 197.234375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 202.75
+            },
+            {
+              "tag": "BUTTON",
+              "left": 210.75,
+              "right": 279.3125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 159
+            },
+            {
+              "tag": "BUTTON",
+              "left": 167,
+              "right": 276.6875
+            },
+            {
+              "tag": "INPUT",
+              "left": 109,
+              "right": 310
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 310
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 310
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 310
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 310
+            },
+            {
+              "tag": "BUTTON",
+              "left": 113,
+              "right": 267.140625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 113,
+              "right": 271
+            },
+            {
+              "tag": "BUTTON",
+              "left": 11.421875,
+              "right": 217.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 147.609375,
+              "right": 232.78125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 240.78125,
+              "right": 299.40625
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 3,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/en/320/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 320,
+          "scroll": 320,
+          "heading": "Bid Preparation",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 76,
+              "right": 169.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 181.625,
+              "right": 244.90625
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/en/320/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/en/390/explorer",
+      "status": "FAIL",
+      "error": "{'tag': 'BUTTON', 'left': -36.5625, 'right': 249.4375}"
+    },
+    {
+      "case": "mobile/en/390/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "My Tenders",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 173.40625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 181.40625,
+              "right": 236.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 244.859375,
+              "right": 326.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 204.296875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 212.296875,
+              "right": 317.53125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 202.75
+            },
+            {
+              "tag": "BUTTON",
+              "left": 210.75,
+              "right": 279.3125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 287.3125,
+              "right": 354.3125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 201.6875
+            },
+            {
+              "tag": "INPUT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "BUTTON",
+              "left": 113,
+              "right": 267.140625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 113,
+              "right": 306.875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 11.421875,
+              "right": 217.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 210.203125,
+              "right": 295.375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 303.375,
+              "right": 362
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 3,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/en/390/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "Bid Preparation",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 76,
+              "right": 169.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 181.625,
+              "right": 244.90625
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/en/390/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/en/768/explorer",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 768,
+          "scroll": 768,
+          "heading": "Tender Explorer",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 183.4375,
+              "right": 469.4375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 317,
+              "right": 401.046875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 405.046875,
+              "right": 572.046875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 576.046875,
+              "right": 707
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 459.796875
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "BUTTON",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "INPUT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 421.28125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 429.28125,
+              "right": 524.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 532.421875,
+              "right": 624.1875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 410.578125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 418.578125,
+              "right": 525.515625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 431.40625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 439.40625,
+              "right": 511.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 519.390625,
+              "right": 556.265625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 465.703125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 473.703125,
+              "right": 563.484375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 464.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 472.859375,
+              "right": 532.9375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 463.515625,
+              "right": 591.140625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 475.25,
+              "right": 682
+            },
+            {
+              "tag": "BUTTON",
+              "left": 325,
+              "right": 430.171875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 620.375,
+              "right": 699
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/en/768/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 768,
+          "scroll": 768,
+          "heading": "My Tenders",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 312,
+              "right": 393.40625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 401.40625,
+              "right": 456.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 464.859375,
+              "right": 546.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 554.21875,
+              "right": 666.515625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 312,
+              "right": 417.234375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 425.234375,
+              "right": 535.984375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 543.984375,
+              "right": 612.546875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 620.546875,
+              "right": 687.546875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 312,
+              "right": 421.6875
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 419.796875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 427.796875,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "BUTTON",
+              "left": 333,
+              "right": 487.140625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 495.140625,
+              "right": 689.015625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 231.421875,
+              "right": 437.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 560.203125,
+              "right": 645.375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 653.375,
+              "right": 712
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 3,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/en/768/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 768,
+          "scroll": 768,
+          "heading": "Bid Preparation",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 288,
+              "right": 381.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 393.625,
+              "right": 456.90625
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/en/768/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/en/1440/explorer",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "Tender Explorer",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1089,
+              "right": 1375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 317,
+              "right": 668.328125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 672.328125,
+              "right": 1023.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1027.671875,
+              "right": 1379
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 737
+            },
+            {
+              "tag": "SELECT",
+              "left": 749,
+              "right": 947
+            },
+            {
+              "tag": "SELECT",
+              "left": 959,
+              "right": 1157
+            },
+            {
+              "tag": "SELECT",
+              "left": 1169,
+              "right": 1367
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 459.796875
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 579.5
+            },
+            {
+              "tag": "SELECT",
+              "left": 591.5,
+              "right": 842
+            },
+            {
+              "tag": "INPUT",
+              "left": 854,
+              "right": 1104.5
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1116.5,
+              "right": 1367
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 579.5
+            },
+            {
+              "tag": "INPUT",
+              "left": 591.5,
+              "right": 842
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 421.28125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 429.28125,
+              "right": 524.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 532.421875,
+              "right": 624.1875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 632.1875,
+              "right": 713.765625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 721.765625,
+              "right": 828.703125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 431.40625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 439.40625,
+              "right": 511.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 519.390625,
+              "right": 556.265625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 564.265625,
+              "right": 700.96875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 708.96875,
+              "right": 798.75
+            },
+            {
+              "tag": "BUTTON",
+              "left": 806.75,
+              "right": 942.609375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 950.609375,
+              "right": 1010.6875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1239.375,
+              "right": 1367
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1137.265625,
+              "right": 1354
+            },
+            {
+              "tag": "BUTTON",
+              "left": 325,
+              "right": 430.171875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1292.375,
+              "right": 1371
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/en/1440/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "My Tenders",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 320,
+              "right": 401.40625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 409.40625,
+              "right": 464.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 472.859375,
+              "right": 554.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 562.21875,
+              "right": 674.515625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 682.515625,
+              "right": 787.75
+            },
+            {
+              "tag": "BUTTON",
+              "left": 795.75,
+              "right": 906.5
+            },
+            {
+              "tag": "BUTTON",
+              "left": 914.5,
+              "right": 983.0625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 991.0625,
+              "right": 1058.0625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1066.0625,
+              "right": 1175.75
+            },
+            {
+              "tag": "INPUT",
+              "left": 337,
+              "right": 755.796875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 763.796875,
+              "right": 842
+            },
+            {
+              "tag": "SELECT",
+              "left": 854,
+              "right": 1359
+            },
+            {
+              "tag": "SELECT",
+              "left": 337,
+              "right": 842
+            },
+            {
+              "tag": "SELECT",
+              "left": 854,
+              "right": 1359
+            },
+            {
+              "tag": "BUTTON",
+              "left": 719.71875,
+              "right": 873.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 881.859375,
+              "right": 1075.734375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 982.15625,
+              "right": 1188.15625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1224.203125,
+              "right": 1309.375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1317.375,
+              "right": 1376
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/en/1440/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "Bid Preparation",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 288,
+              "right": 381.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 393.625,
+              "right": 456.90625
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/en/1440/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/uz/320/explorer",
+      "status": "FAIL",
+      "error": "{'tag': 'INPUT', 'left': 109, 'right': 384}"
+    },
+    {
+      "case": "mobile/uz/320/my-tenders",
+      "status": "FAIL",
+      "error": "{'tag': 'INPUT', 'left': 109, 'right': 384}"
+    },
+    {
+      "case": "mobile/uz/320/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "uz",
+          "dir": "ltr",
+          "width": 320,
+          "scroll": 320,
+          "heading": "Taklif tayyorlash",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 76,
+              "right": 158.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 170.390625,
+              "right": 254.59375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/uz/320/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/uz/390/explorer",
+      "status": "FAIL",
+      "error": "{'tag': 'BUTTON', 'left': -4.625, 'right': 281.375}"
+    },
+    {
+      "case": "mobile/uz/390/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "uz",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "Mening tenderlarim",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 157.90625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 165.90625,
+              "right": 263.96875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 190.578125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 198.578125,
+              "right": 342.203125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 245.703125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 253.703125,
+              "right": 351.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 171.96875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 179.96875,
+              "right": 284.75
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 196.09375
+            },
+            {
+              "tag": "INPUT",
+              "left": 109,
+              "right": 384
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 384
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 384
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 384
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 384
+            },
+            {
+              "tag": "BUTTON",
+              "left": 113,
+              "right": 306.6875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 113,
+              "right": 333.046875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 28.890625,
+              "right": 234.890625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 201.734375,
+              "right": 277.078125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 285.078125,
+              "right": 362
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 3,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/uz/390/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "uz",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "Taklif tayyorlash",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 76,
+              "right": 158.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 170.390625,
+              "right": 254.59375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/uz/390/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/uz/768/explorer",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "uz",
+          "dir": "ltr",
+          "width": 768,
+          "scroll": 768,
+          "heading": "Tenderlar katalogi",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 215.375,
+              "right": 501.375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 317,
+              "right": 510
+            },
+            {
+              "tag": "BUTTON",
+              "left": 514,
+              "right": 707
+            },
+            {
+              "tag": "BUTTON",
+              "left": 317,
+              "right": 707
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 518.59375
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "BUTTON",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "INPUT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 425.75
+            },
+            {
+              "tag": "BUTTON",
+              "left": 433.75,
+              "right": 530.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 538.859375,
+              "right": 632.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 410.5
+            },
+            {
+              "tag": "BUTTON",
+              "left": 418.5,
+              "right": 525.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 400.84375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 408.84375,
+              "right": 482.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 490.859375,
+              "right": 527.734375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 535.734375,
+              "right": 666.96875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 417.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 425.421875,
+              "right": 590.890625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 598.890625,
+              "right": 669.296875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 489.9375,
+              "right": 649.453125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 508.96875,
+              "right": 682
+            },
+            {
+              "tag": "BUTTON",
+              "left": 325,
+              "right": 420.34375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 602.078125,
+              "right": 699
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/uz/768/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "uz",
+          "dir": "ltr",
+          "width": 768,
+          "scroll": 768,
+          "heading": "Mening tenderlarim",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 312,
+              "right": 377.90625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 385.90625,
+              "right": 483.96875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 491.96875,
+              "right": 590.546875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 312,
+              "right": 455.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 463.625,
+              "right": 617.328125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 312,
+              "right": 409.6875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 417.6875,
+              "right": 497.65625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 505.65625,
+              "right": 610.4375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 312,
+              "right": 416.09375
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 412.46875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 420.46875,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "BUTTON",
+              "left": 333,
+              "right": 526.6875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 333,
+              "right": 553.046875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 248.890625,
+              "right": 454.890625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 551.734375,
+              "right": 627.078125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 635.078125,
+              "right": 712
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 3,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/uz/768/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "uz",
+          "dir": "ltr",
+          "width": 768,
+          "scroll": 768,
+          "heading": "Taklif tayyorlash",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 288,
+              "right": 370.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 382.390625,
+              "right": 466.59375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/uz/768/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/uz/1440/explorer",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "uz",
+          "dir": "ltr",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "Tenderlar katalogi",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1089,
+              "right": 1375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 317,
+              "right": 668.328125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 672.328125,
+              "right": 1023.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1027.671875,
+              "right": 1379
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 737
+            },
+            {
+              "tag": "SELECT",
+              "left": 749,
+              "right": 947
+            },
+            {
+              "tag": "SELECT",
+              "left": 959,
+              "right": 1157
+            },
+            {
+              "tag": "SELECT",
+              "left": 1169,
+              "right": 1367
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 518.59375
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 579.5
+            },
+            {
+              "tag": "SELECT",
+              "left": 591.5,
+              "right": 842
+            },
+            {
+              "tag": "INPUT",
+              "left": 854,
+              "right": 1104.5
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1116.5,
+              "right": 1367
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 579.5
+            },
+            {
+              "tag": "INPUT",
+              "left": 591.5,
+              "right": 842
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 425.75
+            },
+            {
+              "tag": "BUTTON",
+              "left": 433.75,
+              "right": 530.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 538.859375,
+              "right": 632.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 640.671875,
+              "right": 722.171875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 730.171875,
+              "right": 837.0625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 400.84375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 408.84375,
+              "right": 482.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 490.859375,
+              "right": 527.734375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 535.734375,
+              "right": 666.96875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 674.96875,
+              "right": 763.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 771.390625,
+              "right": 936.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 944.859375,
+              "right": 1015.265625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1207.484375,
+              "right": 1367
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1180.96875,
+              "right": 1354
+            },
+            {
+              "tag": "BUTTON",
+              "left": 325,
+              "right": 420.34375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1274.078125,
+              "right": 1371
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/uz/1440/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "uz",
+          "dir": "ltr",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "Mening tenderlarim",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 320,
+              "right": 385.90625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 393.90625,
+              "right": 491.96875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 499.96875,
+              "right": 598.546875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 606.546875,
+              "right": 750.171875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 758.171875,
+              "right": 911.875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 919.875,
+              "right": 1017.5625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1025.5625,
+              "right": 1105.53125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1113.53125,
+              "right": 1218.3125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1226.3125,
+              "right": 1330.40625
+            },
+            {
+              "tag": "INPUT",
+              "left": 337,
+              "right": 748.46875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 756.46875,
+              "right": 842
+            },
+            {
+              "tag": "SELECT",
+              "left": 854,
+              "right": 1359
+            },
+            {
+              "tag": "SELECT",
+              "left": 337,
+              "right": 842
+            },
+            {
+              "tag": "SELECT",
+              "left": 854,
+              "right": 1359
+            },
+            {
+              "tag": "BUTTON",
+              "left": 612.171875,
+              "right": 805.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 813.859375,
+              "right": 1033.90625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 957.796875,
+              "right": 1163.796875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1215.734375,
+              "right": 1291.078125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1299.078125,
+              "right": 1376
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/uz/1440/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "uz",
+          "dir": "ltr",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "Taklif tayyorlash",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 288,
+              "right": 370.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 382.390625,
+              "right": 466.59375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/uz/1440/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/ru/320/explorer",
+      "status": "FAIL",
+      "error": "{'tag': 'INPUT', 'left': 109, 'right': 418}"
+    },
+    {
+      "case": "mobile/ru/320/my-tenders",
+      "status": "FAIL",
+      "error": "{'tag': 'INPUT', 'left': 109, 'right': 418}"
+    },
+    {
+      "case": "mobile/ru/320/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ru",
+          "dir": "ltr",
+          "width": 320,
+          "scroll": 320,
+          "heading": "Подготовка заявки",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 76,
+              "right": 153.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 165.21875,
+              "right": 243.4375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/ru/320/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/ru/390/explorer",
+      "status": "FAIL",
+      "error": "{'tag': 'INPUT', 'left': 109, 'right': 418}"
+    },
+    {
+      "case": "mobile/ru/390/my-tenders",
+      "status": "FAIL",
+      "error": "{'tag': 'INPUT', 'left': 109, 'right': 418}"
+    },
+    {
+      "case": "mobile/ru/390/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ru",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "Подготовка заявки",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 76,
+              "right": 153.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 165.21875,
+              "right": 243.4375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/ru/390/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/ru/768/explorer",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ru",
+          "dir": "ltr",
+          "width": 768,
+          "scroll": 768,
+          "heading": "Каталог тендеров",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 263.34375,
+              "right": 549.34375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 317,
+              "right": 502.140625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 506.140625,
+              "right": 707
+            },
+            {
+              "tag": "BUTTON",
+              "left": 317,
+              "right": 707
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 473.125
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "BUTTON",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "INPUT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 427.3125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 435.3125,
+              "right": 526.8125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 534.8125,
+              "right": 637.375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 440.4375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 448.4375,
+              "right": 564.609375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 450.25
+            },
+            {
+              "tag": "BUTTON",
+              "left": 458.25,
+              "right": 549.25
+            },
+            {
+              "tag": "BUTTON",
+              "left": 557.25,
+              "right": 594.125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 502.484375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 510.484375,
+              "right": 610.765625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 507.53125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 515.53125,
+              "right": 586.65625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 494.28125,
+              "right": 681.03125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 507.59375,
+              "right": 682
+            },
+            {
+              "tag": "BUTTON",
+              "left": 325,
+              "right": 415.8125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 607.296875,
+              "right": 699
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 7,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/ru/768/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ru",
+          "dir": "ltr",
+          "width": 768,
+          "scroll": 768,
+          "heading": "Мои тендеры",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 312,
+              "right": 422.453125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 430.453125,
+              "right": 494.46875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 502.46875,
+              "right": 620.140625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 312,
+              "right": 405.453125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 413.453125,
+              "right": 538.25
+            },
+            {
+              "tag": "BUTTON",
+              "left": 546.25,
+              "right": 639.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 312,
+              "right": 422.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 430.390625,
+              "right": 548.109375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 556.109375,
+              "right": 674.84375
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 425.09375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 433.09375,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 506
+            },
+            {
+              "tag": "SELECT",
+              "left": 518,
+              "right": 695
+            },
+            {
+              "tag": "BUTTON",
+              "left": 333,
+              "right": 527.15625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 333,
+              "right": 575.0625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 262.109375,
+              "right": 468.109375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 561.484375,
+              "right": 632.296875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 640.296875,
+              "right": 712
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 3,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/ru/768/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ru",
+          "dir": "ltr",
+          "width": 768,
+          "scroll": 768,
+          "heading": "Подготовка заявки",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 288,
+              "right": 365.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 377.21875,
+              "right": 455.4375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/ru/768/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/ru/1440/explorer",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ru",
+          "dir": "ltr",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "Каталог тендеров",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1089,
+              "right": 1375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 317,
+              "right": 668.328125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 672.328125,
+              "right": 1023.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1027.671875,
+              "right": 1379
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 737
+            },
+            {
+              "tag": "SELECT",
+              "left": 749,
+              "right": 947
+            },
+            {
+              "tag": "SELECT",
+              "left": 959,
+              "right": 1157
+            },
+            {
+              "tag": "SELECT",
+              "left": 1169,
+              "right": 1367
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 473.125
+            },
+            {
+              "tag": "SELECT",
+              "left": 329,
+              "right": 579.5
+            },
+            {
+              "tag": "SELECT",
+              "left": 591.5,
+              "right": 842
+            },
+            {
+              "tag": "INPUT",
+              "left": 854,
+              "right": 1104.5
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1116.5,
+              "right": 1367
+            },
+            {
+              "tag": "INPUT",
+              "left": 329,
+              "right": 579.5
+            },
+            {
+              "tag": "INPUT",
+              "left": 591.5,
+              "right": 842
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 427.3125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 435.3125,
+              "right": 526.8125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 534.8125,
+              "right": 637.375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 645.375,
+              "right": 756.8125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 764.8125,
+              "right": 880.984375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329,
+              "right": 450.25
+            },
+            {
+              "tag": "BUTTON",
+              "left": 458.25,
+              "right": 549.25
+            },
+            {
+              "tag": "BUTTON",
+              "left": 557.25,
+              "right": 594.125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 602.125,
+              "right": 775.609375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 783.609375,
+              "right": 883.890625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 891.890625,
+              "right": 1070.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1078.421875,
+              "right": 1149.546875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1180.25,
+              "right": 1367
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1124.125,
+              "right": 1354
+            },
+            {
+              "tag": "BUTTON",
+              "left": 325,
+              "right": 415.8125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1279.296875,
+              "right": 1371
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/ru/1440/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ru",
+          "dir": "ltr",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "Мои тендеры",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 320,
+              "right": 430.453125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 438.453125,
+              "right": 502.46875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 510.46875,
+              "right": 628.140625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 636.140625,
+              "right": 729.59375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 737.59375,
+              "right": 862.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 870.390625,
+              "right": 963.5625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 971.5625,
+              "right": 1081.953125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1089.953125,
+              "right": 1207.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1215.671875,
+              "right": 1334.40625
+            },
+            {
+              "tag": "INPUT",
+              "left": 337,
+              "right": 761.09375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 769.09375,
+              "right": 842
+            },
+            {
+              "tag": "SELECT",
+              "left": 854,
+              "right": 1359
+            },
+            {
+              "tag": "SELECT",
+              "left": 337,
+              "right": 842
+            },
+            {
+              "tag": "SELECT",
+              "left": 854,
+              "right": 1359
+            },
+            {
+              "tag": "BUTTON",
+              "left": 568.515625,
+              "right": 762.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 770.671875,
+              "right": 1012.734375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 949.84375,
+              "right": 1155.84375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1225.484375,
+              "right": 1296.296875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1304.296875,
+              "right": 1376
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/ru/1440/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ru",
+          "dir": "ltr",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "Подготовка заявки",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 16,
+              "right": 239
+            },
+            {
+              "tag": "BUTTON",
+              "left": 288,
+              "right": 365.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 377.21875,
+              "right": 455.4375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/ru/1440/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/ar/320/explorer",
+      "status": "FAIL",
+      "error": "{'tag': 'BUTTON', 'left': 89.21875, 'right': 359.21875}"
+    },
+    {
+      "case": "mobile/ar/320/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ar",
+          "dir": "rtl",
+          "width": 320,
+          "scroll": 320,
+          "heading": "مناقصاتي",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 265,
+              "right": 312
+            },
+            {
+              "tag": "BUTTON",
+              "left": 160.21875,
+              "right": 228
+            },
+            {
+              "tag": "BUTTON",
+              "left": 87.625,
+              "right": 152.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 146.09375,
+              "right": 228
+            },
+            {
+              "tag": "BUTTON",
+              "left": 40.046875,
+              "right": 138.09375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 129.484375,
+              "right": 228
+            },
+            {
+              "tag": "BUTTON",
+              "left": 132.203125,
+              "right": 228
+            },
+            {
+              "tag": "BUTTON",
+              "left": 123.9375,
+              "right": 228
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101.6875,
+              "right": 228
+            },
+            {
+              "tag": "BUTTON",
+              "left": 128.5625,
+              "right": 228
+            },
+            {
+              "tag": "INPUT",
+              "left": 19,
+              "right": 211
+            },
+            {
+              "tag": "BUTTON",
+              "left": 19,
+              "right": 211
+            },
+            {
+              "tag": "SELECT",
+              "left": 19,
+              "right": 211
+            },
+            {
+              "tag": "SELECT",
+              "left": 19,
+              "right": 211
+            },
+            {
+              "tag": "SELECT",
+              "left": 19,
+              "right": 211
+            },
+            {
+              "tag": "BUTTON",
+              "left": 50.46875,
+              "right": 207
+            },
+            {
+              "tag": "BUTTON",
+              "left": 62,
+              "right": 207
+            },
+            {
+              "tag": "BUTTON",
+              "left": 72.265625,
+              "right": 278.265625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 94.59375,
+              "right": 161.078125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 28,
+              "right": 86.59375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 3,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/ar/320/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ar",
+          "dir": "rtl",
+          "width": 320,
+          "scroll": 320,
+          "heading": "إعداد العطاء",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 265,
+              "right": 312
+            },
+            {
+              "tag": "BUTTON",
+              "left": 171.734375,
+              "right": 244
+            },
+            {
+              "tag": "BUTTON",
+              "left": 96.5,
+              "right": 159.734375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/ar/320/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/ar/390/explorer",
+      "status": "FAIL",
+      "error": "{'tag': 'BUTTON', 'left': 159.21875, 'right': 445.21875}"
+    },
+    {
+      "case": "mobile/ar/390/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ar",
+          "dir": "rtl",
+          "width": 390,
+          "scroll": 390,
+          "heading": "مناقصاتي",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 335,
+              "right": 382
+            },
+            {
+              "tag": "BUTTON",
+              "left": 230.21875,
+              "right": 298
+            },
+            {
+              "tag": "BUTTON",
+              "left": 157.625,
+              "right": 222.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 67.71875,
+              "right": 149.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 199.953125,
+              "right": 298
+            },
+            {
+              "tag": "BUTTON",
+              "left": 93.4375,
+              "right": 191.953125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 202.203125,
+              "right": 298
+            },
+            {
+              "tag": "BUTTON",
+              "left": 90.140625,
+              "right": 194.203125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 171.6875,
+              "right": 298
+            },
+            {
+              "tag": "BUTTON",
+              "left": 64.25,
+              "right": 163.6875
+            },
+            {
+              "tag": "INPUT",
+              "left": 45,
+              "right": 281
+            },
+            {
+              "tag": "BUTTON",
+              "left": 45,
+              "right": 281
+            },
+            {
+              "tag": "SELECT",
+              "left": 45,
+              "right": 281
+            },
+            {
+              "tag": "SELECT",
+              "left": 45,
+              "right": 281
+            },
+            {
+              "tag": "SELECT",
+              "left": 45,
+              "right": 281
+            },
+            {
+              "tag": "BUTTON",
+              "left": 120.46875,
+              "right": 277
+            },
+            {
+              "tag": "BUTTON",
+              "left": 132,
+              "right": 277
+            },
+            {
+              "tag": "BUTTON",
+              "left": 142.265625,
+              "right": 348.265625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 94.59375,
+              "right": 161.078125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 28,
+              "right": 86.59375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 3,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/ar/390/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ar",
+          "dir": "rtl",
+          "width": 390,
+          "scroll": 390,
+          "heading": "إعداد العطاء",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 335,
+              "right": 382
+            },
+            {
+              "tag": "BUTTON",
+              "left": 241.734375,
+              "right": 314
+            },
+            {
+              "tag": "BUTTON",
+              "left": 166.5,
+              "right": 229.734375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/ar/390/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/ar/768/explorer",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ar",
+          "dir": "rtl",
+          "width": 768,
+          "scroll": 768,
+          "heading": "مستكشف المناقصات",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 529,
+              "right": 752
+            },
+            {
+              "tag": "BUTTON",
+              "left": 317.21875,
+              "right": 603.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 323.671875,
+              "right": 451
+            },
+            {
+              "tag": "BUTTON",
+              "left": 192.328125,
+              "right": 319.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 61,
+              "right": 188.328125
+            },
+            {
+              "tag": "INPUT",
+              "left": 262,
+              "right": 439
+            },
+            {
+              "tag": "SELECT",
+              "left": 73,
+              "right": 250
+            },
+            {
+              "tag": "SELECT",
+              "left": 262,
+              "right": 439
+            },
+            {
+              "tag": "SELECT",
+              "left": 73,
+              "right": 250
+            },
+            {
+              "tag": "BUTTON",
+              "left": 280.546875,
+              "right": 439
+            },
+            {
+              "tag": "SELECT",
+              "left": 262,
+              "right": 439
+            },
+            {
+              "tag": "SELECT",
+              "left": 73,
+              "right": 250
+            },
+            {
+              "tag": "INPUT",
+              "left": 262,
+              "right": 439
+            },
+            {
+              "tag": "BUTTON",
+              "left": 73,
+              "right": 250
+            },
+            {
+              "tag": "INPUT",
+              "left": 262,
+              "right": 439
+            },
+            {
+              "tag": "INPUT",
+              "left": 73,
+              "right": 250
+            },
+            {
+              "tag": "BUTTON",
+              "left": 361.3125,
+              "right": 439
+            },
+            {
+              "tag": "BUTTON",
+              "left": 274.59375,
+              "right": 353.3125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 181.953125,
+              "right": 266.59375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 90.28125,
+              "right": 173.953125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 356.59375,
+              "right": 439
+            },
+            {
+              "tag": "BUTTON",
+              "left": 364.84375,
+              "right": 439
+            },
+            {
+              "tag": "BUTTON",
+              "left": 254.09375,
+              "right": 356.84375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 120.671875,
+              "right": 246.09375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 324.875,
+              "right": 439
+            },
+            {
+              "tag": "BUTTON",
+              "left": 232.234375,
+              "right": 316.875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 128.796875,
+              "right": 224.234375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 386.234375,
+              "right": 439
+            },
+            {
+              "tag": "BUTTON",
+              "left": 178.5625,
+              "right": 297.984375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 86,
+              "right": 217.6875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 356.515625,
+              "right": 443
+            },
+            {
+              "tag": "BUTTON",
+              "left": 69,
+              "right": 147.59375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/ar/768/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ar",
+          "dir": "rtl",
+          "width": 768,
+          "scroll": 768,
+          "heading": "مناقصاتي",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 529,
+              "right": 752
+            },
+            {
+              "tag": "BUTTON",
+              "left": 388.21875,
+              "right": 456
+            },
+            {
+              "tag": "BUTTON",
+              "left": 315.625,
+              "right": 380.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 225.71875,
+              "right": 307.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 119.671875,
+              "right": 217.71875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 357.484375,
+              "right": 456
+            },
+            {
+              "tag": "BUTTON",
+              "left": 253.6875,
+              "right": 349.484375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 141.625,
+              "right": 245.6875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 329.6875,
+              "right": 456
+            },
+            {
+              "tag": "BUTTON",
+              "left": 222.25,
+              "right": 321.6875
+            },
+            {
+              "tag": "INPUT",
+              "left": 324.171875,
+              "right": 439
+            },
+            {
+              "tag": "BUTTON",
+              "left": 262,
+              "right": 316.171875
+            },
+            {
+              "tag": "SELECT",
+              "left": 73,
+              "right": 250
+            },
+            {
+              "tag": "SELECT",
+              "left": 262,
+              "right": 439
+            },
+            {
+              "tag": "SELECT",
+              "left": 73,
+              "right": 250
+            },
+            {
+              "tag": "BUTTON",
+              "left": 278.46875,
+              "right": 435
+            },
+            {
+              "tag": "BUTTON",
+              "left": 125.46875,
+              "right": 270.46875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 300.265625,
+              "right": 506.265625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 122.59375,
+              "right": 189.078125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 56,
+              "right": 114.59375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/ar/768/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ar",
+          "dir": "rtl",
+          "width": 768,
+          "scroll": 768,
+          "heading": "إعداد العطاء",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 529,
+              "right": 752
+            },
+            {
+              "tag": "BUTTON",
+              "left": 407.734375,
+              "right": 480
+            },
+            {
+              "tag": "BUTTON",
+              "left": 332.5,
+              "right": 395.734375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/ar/768/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "mobile/ar/1440/explorer",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ar",
+          "dir": "rtl",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "مستكشف المناقصات",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 1201,
+              "right": 1424
+            },
+            {
+              "tag": "BUTTON",
+              "left": 65,
+              "right": 351
+            },
+            {
+              "tag": "BUTTON",
+              "left": 771.671875,
+              "right": 1123
+            },
+            {
+              "tag": "BUTTON",
+              "left": 416.328125,
+              "right": 767.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 61,
+              "right": 412.328125
+            },
+            {
+              "tag": "INPUT",
+              "left": 703,
+              "right": 1111
+            },
+            {
+              "tag": "SELECT",
+              "left": 493,
+              "right": 691
+            },
+            {
+              "tag": "SELECT",
+              "left": 283,
+              "right": 481
+            },
+            {
+              "tag": "SELECT",
+              "left": 73,
+              "right": 271
+            },
+            {
+              "tag": "BUTTON",
+              "left": 952.546875,
+              "right": 1111
+            },
+            {
+              "tag": "SELECT",
+              "left": 860.5,
+              "right": 1111
+            },
+            {
+              "tag": "SELECT",
+              "left": 598,
+              "right": 848.5
+            },
+            {
+              "tag": "INPUT",
+              "left": 335.5,
+              "right": 586
+            },
+            {
+              "tag": "BUTTON",
+              "left": 73,
+              "right": 323.5
+            },
+            {
+              "tag": "INPUT",
+              "left": 860.5,
+              "right": 1111
+            },
+            {
+              "tag": "INPUT",
+              "left": 598,
+              "right": 848.5
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1033.3125,
+              "right": 1111
+            },
+            {
+              "tag": "BUTTON",
+              "left": 946.59375,
+              "right": 1025.3125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 853.953125,
+              "right": 938.59375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 762.28125,
+              "right": 845.953125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 671.875,
+              "right": 754.28125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1036.84375,
+              "right": 1111
+            },
+            {
+              "tag": "BUTTON",
+              "left": 926.09375,
+              "right": 1028.84375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 792.671875,
+              "right": 918.09375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 670.546875,
+              "right": 784.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 577.90625,
+              "right": 662.546875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 474.46875,
+              "right": 569.90625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 413.703125,
+              "right": 466.46875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 73,
+              "right": 192.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 86,
+              "right": 217.6875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1028.515625,
+              "right": 1115
+            },
+            {
+              "tag": "BUTTON",
+              "left": 69,
+              "right": 147.59375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/ar/1440/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ar",
+          "dir": "rtl",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "مناقصاتي",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 1201,
+              "right": 1424
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1052.21875,
+              "right": 1120
+            },
+            {
+              "tag": "BUTTON",
+              "left": 979.625,
+              "right": 1044.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 889.71875,
+              "right": 971.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 783.671875,
+              "right": 881.71875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 677.15625,
+              "right": 775.671875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 573.359375,
+              "right": 669.15625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 461.296875,
+              "right": 565.359375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 326.984375,
+              "right": 453.296875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 219.546875,
+              "right": 318.984375
+            },
+            {
+              "tag": "INPUT",
+              "left": 660.171875,
+              "right": 1103
+            },
+            {
+              "tag": "BUTTON",
+              "left": 598,
+              "right": 652.171875
+            },
+            {
+              "tag": "SELECT",
+              "left": 81,
+              "right": 586
+            },
+            {
+              "tag": "SELECT",
+              "left": 598,
+              "right": 1103
+            },
+            {
+              "tag": "SELECT",
+              "left": 81,
+              "right": 586
+            },
+            {
+              "tag": "BUTTON",
+              "left": 555.53125,
+              "right": 712.0625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 402.53125,
+              "right": 547.53125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 259.796875,
+              "right": 465.796875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 130.59375,
+              "right": 197.078125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 64,
+              "right": 122.59375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "mobile/ar/1440/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "ar",
+          "dir": "rtl",
+          "width": 1440,
+          "scroll": 1440,
+          "heading": "إعداد العطاء",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 1201,
+              "right": 1424
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1079.734375,
+              "right": 1152
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1004.5,
+              "right": 1067.734375
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "session/ar/1440/outage-retry",
+      "status": "PASS",
+      "evidence": {
+        "outage_status": 503,
+        "retry_url": "http://localhost:3114/dashboard/tenders?view=all"
+      }
+    },
+    {
+      "case": "production-passivity/explorer",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "Tender Explorer",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": -36.5625,
+              "right": 249.4375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 97,
+              "right": 186
+            },
+            {
+              "tag": "BUTTON",
+              "left": 190,
+              "right": 357
+            },
+            {
+              "tag": "BUTTON",
+              "left": 97,
+              "right": 357
+            },
+            {
+              "tag": "INPUT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 239.796875
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "INPUT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "INPUT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "INPUT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 201.28125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 209.28125,
+              "right": 304.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 200.765625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 208.765625,
+              "right": 290.34375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 215.9375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 211.40625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 219.40625,
+              "right": 291.390625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 299.390625,
+              "right": 336.265625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 245.703125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 253.703125,
+              "right": 343.484375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 244.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 252.859375,
+              "right": 312.9375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 236.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 122,
+              "right": 332
+            },
+            {
+              "tag": "BUTTON",
+              "left": 105,
+              "right": 210.171875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 270.375,
+              "right": 349
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "production-passivity/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "My Tenders",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 173.40625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 181.40625,
+              "right": 236.859375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 244.859375,
+              "right": 326.21875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 204.296875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 212.296875,
+              "right": 317.53125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 202.75
+            },
+            {
+              "tag": "BUTTON",
+              "left": 210.75,
+              "right": 279.3125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 287.3125,
+              "right": 354.3125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 201.6875
+            },
+            {
+              "tag": "INPUT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "BUTTON",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "SELECT",
+              "left": 109,
+              "right": 345
+            },
+            {
+              "tag": "BUTTON",
+              "left": 113,
+              "right": 267.140625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 113,
+              "right": 306.875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 11.421875,
+              "right": 217.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 210.203125,
+              "right": 295.375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 303.375,
+              "right": 362
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 3,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "production-passivity/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "Bid Preparation",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 76,
+              "right": 169.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 181.625,
+              "right": 244.90625
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 5,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "production-passivity/details",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "English tender — مناقصة عربية — Тендер",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 93,
+              "right": 247.140625
+            },
+            {
+              "tag": "BUTTON",
+              "left": -8.578125,
+              "right": 197.421875
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 7,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/tenders/s72-tender')": 1,
+          "('GET', '/api/v1/tenders/s72-tender/details')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "production-passivity/compliance",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "English tender — مناقصة عربية — Тендер",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "SELECT",
+              "left": 200.03125,
+              "right": 306.03125
+            },
+            {
+              "tag": "BUTTON",
+              "left": 92,
+              "right": 313.828125
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 6,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/tenders/s72-tender')": 1,
+          "('GET', '/api/v1/tenders/s72-tender/documents')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/s72-tender/compiled-text')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1,
+          "('GET', '/api/v1/tenders/s72-tender/latest-analysis')": 1
+        }
+      }
+    },
+    {
+      "case": "production-passivity/readiness",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "Readiness Vault",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 76,
+              "right": 378
+            },
+            {
+              "tag": "SELECT",
+              "left": 93,
+              "right": 361
+            },
+            {
+              "tag": "SELECT",
+              "left": 93,
+              "right": 361
+            },
+            {
+              "tag": "SELECT",
+              "left": 93,
+              "right": 361
+            },
+            {
+              "tag": "BUTTON",
+              "left": 93,
+              "right": 202.421875
+            },
+            {
+              "tag": "BUTTON",
+              "left": 77,
+              "right": 170.625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 182.625,
+              "right": 245.90625
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1089,
+              "right": 1121
+            },
+            {
+              "tag": "BUTTON",
+              "left": 1129,
+              "right": 1161
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 3,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/meta/services')": 1,
+          "('GET', '/api/v1/vault/readiness?limit=25&offset=0&document_type=&status=&related_service=')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "production-passivity/settings",
+      "status": "PASS",
+      "evidence": {
+        "dom": {
+          "lang": "en",
+          "dir": "ltr",
+          "width": 390,
+          "scroll": 390,
+          "heading": "Company profile",
+          "controls": [
+            {
+              "tag": "BUTTON",
+              "left": 8,
+              "right": 55
+            },
+            {
+              "tag": "BUTTON",
+              "left": 93,
+              "right": 361
+            },
+            {
+              "tag": "BUTTON",
+              "left": 93,
+              "right": 361
+            },
+            {
+              "tag": "BUTTON",
+              "left": 93,
+              "right": 361
+            },
+            {
+              "tag": "BUTTON",
+              "left": 93,
+              "right": 361
+            },
+            {
+              "tag": "SELECT",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "INPUT",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "INPUT",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "INPUT",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "INPUT",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "INPUT",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "INPUT",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 297.734375
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 101,
+              "right": 353
+            },
+            {
+              "tag": "BUTTON",
+              "left": 219.75,
+              "right": 378
+            }
+          ]
+        },
+        "requests": {
+          "('GET', '/api/v1/users/me')": 4,
+          "('POST', '/api/v1/auth/refresh')": 4,
+          "('GET', '/api/v1/users/me/access-status')": 3,
+          "('GET', '/api/v1/meta/geography')": 1,
+          "('GET', '/api/v1/meta/services')": 1,
+          "('GET', '/api/v1/users/me/company')": 1,
+          "('GET', '/api/v1/tenders/sources/catalog')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+          "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+        }
+      }
+    },
+    {
+      "case": "production-client-navigation/explorer",
+      "status": "PASS",
+      "evidence": {
+        "('GET', '/api/v1/users/me')": 4,
+        "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 2,
+        "('GET', '/api/v1/users/me/access-status')": 1
+      }
+    },
+    {
+      "case": "production-client-navigation/my-tenders",
+      "status": "PASS",
+      "evidence": {
+        "('GET', '/api/v1/users/me')": 1,
+        "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+        "('GET', '/api/v1/users/me/access-status')": 1
+      }
+    },
+    {
+      "case": "production-client-navigation/bid-preparation",
+      "status": "PASS",
+      "evidence": {
+        "('GET', '/api/v1/users/me')": 3,
+        "('GET', '/api/v1/proposals?limit=25&offset=0')": 1,
+        "('GET', '/api/v1/users/me/access-status')": 1
+      }
+    },
+    {
+      "case": "production-client-navigation/settings",
+      "status": "PASS",
+      "evidence": {
+        "('GET', '/api/v1/users/me')": 1
+      }
+    },
+    {
+      "case": "pagination/proposals",
+      "status": "PASS",
+      "evidence": {
+        "url": "http://localhost:3114/dashboard/bid-preparation?page=2"
+      }
+    },
+    {
+      "case": "pagination/readiness",
+      "status": "FAIL",
+      "error": ""
+    },
+    {
+      "case": "session/expired-real-sign-in",
+      "status": "PASS",
+      "evidence": {
+        "path": "/"
+      }
+    },
+    {
+      "case": "backend-auth/anonymous/list",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/invalid/list",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/pending/list",
+      "status": "PASS",
+      "evidence": {
+        "status": 403,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/rejected/list",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/disabled/list",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/stale/list",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/approved/list",
+      "status": "PASS",
+      "evidence": {
+        "status": 200,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/operator/list",
+      "status": "PASS",
+      "evidence": {
+        "status": 200,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/admin/list",
+      "status": "PASS",
+      "evidence": {
+        "status": 200,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/anonymous//00000000-0000-4000-8000-000000000001",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/invalid//00000000-0000-4000-8000-000000000001",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/pending//00000000-0000-4000-8000-000000000001",
+      "status": "PASS",
+      "evidence": {
+        "status": 403,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/rejected//00000000-0000-4000-8000-000000000001",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/disabled//00000000-0000-4000-8000-000000000001",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/stale//00000000-0000-4000-8000-000000000001",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/approved//00000000-0000-4000-8000-000000000001",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/operator//00000000-0000-4000-8000-000000000001",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/admin//00000000-0000-4000-8000-000000000001",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/anonymous//00000000-0000-4000-8000-000000000001/details",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/invalid//00000000-0000-4000-8000-000000000001/details",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/pending//00000000-0000-4000-8000-000000000001/details",
+      "status": "PASS",
+      "evidence": {
+        "status": 403,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/rejected//00000000-0000-4000-8000-000000000001/details",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/disabled//00000000-0000-4000-8000-000000000001/details",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/stale//00000000-0000-4000-8000-000000000001/details",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/approved//00000000-0000-4000-8000-000000000001/details",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/operator//00000000-0000-4000-8000-000000000001/details",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/admin//00000000-0000-4000-8000-000000000001/details",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/anonymous//00000000-0000-4000-8000-000000000001/documents",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/invalid//00000000-0000-4000-8000-000000000001/documents",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/pending//00000000-0000-4000-8000-000000000001/documents",
+      "status": "PASS",
+      "evidence": {
+        "status": 403,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/rejected//00000000-0000-4000-8000-000000000001/documents",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/disabled//00000000-0000-4000-8000-000000000001/documents",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/stale//00000000-0000-4000-8000-000000000001/documents",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/approved//00000000-0000-4000-8000-000000000001/documents",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/operator//00000000-0000-4000-8000-000000000001/documents",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/admin//00000000-0000-4000-8000-000000000001/documents",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/anonymous//00000000-0000-4000-8000-000000000001/decision-snapshot",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/invalid//00000000-0000-4000-8000-000000000001/decision-snapshot",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/pending//00000000-0000-4000-8000-000000000001/decision-snapshot",
+      "status": "PASS",
+      "evidence": {
+        "status": 403,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/rejected//00000000-0000-4000-8000-000000000001/decision-snapshot",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/disabled//00000000-0000-4000-8000-000000000001/decision-snapshot",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/stale//00000000-0000-4000-8000-000000000001/decision-snapshot",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/approved//00000000-0000-4000-8000-000000000001/decision-snapshot",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/operator//00000000-0000-4000-8000-000000000001/decision-snapshot",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "backend-auth/admin//00000000-0000-4000-8000-000000000001/decision-snapshot",
+      "status": "PASS",
+      "evidence": {
+        "status": 404,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "impersonation/approved-no-proof",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "impersonation/admin-no-proof",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "impersonation/operator-no-proof",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "impersonation/forged-subject",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "impersonation/wrong-audience",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "impersonation/wrong-issuer",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "impersonation/expired",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "impersonation/tampered",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "impersonation/email-injection",
+      "status": "PASS",
+      "evidence": {
+        "status": 401,
+        "domain_writes": 0
+      }
+    },
+    {
+      "case": "verified-login/approved",
+      "status": "PASS",
+      "evidence": {
+        "status": 200,
+        "role": "pilot_user"
+      }
+    },
+    {
+      "case": "verified-login/operator",
+      "status": "PASS",
+      "evidence": {
+        "status": 200,
+        "role": "operator"
+      }
+    },
+    {
+      "case": "verified-login/admin",
+      "status": "PASS",
+      "evidence": {
+        "status": 200,
+        "role": "admin"
+      }
+    },
+    {
+      "case": "session/bridge-replay-after-disable-and-restore",
+      "status": "PASS",
+      "evidence": {
+        "disabled_replay": 401,
+        "restored_replay": 401
+      }
+    }
+  ],
+  "external_requests": [],
+  "passed": 124,
+  "failed": 12
+}

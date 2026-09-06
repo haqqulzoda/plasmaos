@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from scripts.test_s4_4_tender_engagement_workflow_ux import scenario
+from scripts.verify_s4_4_tender_engagement_workflow_ux import scenario
 from scripts import test_s0_5b4_baseline as support
 
 

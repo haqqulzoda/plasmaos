@@ -29,6 +29,7 @@ from app.core.security import (
     create_access_token,
     get_current_user,
 )
+from app.core.auth_bridge import verify_bridge_assertion
 from app.db.session import get_db
 from app.models.all_models import User
 from app.models.company import CompanyProfile
@@ -48,6 +49,7 @@ router = APIRouter()
 
 
 class GoogleAuthRequest(BaseModel):
+    bridge_assertion: str | None = None
     google_id: str
     email: str
     name: str
@@ -149,15 +151,21 @@ async def google_auth_bridge(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    email = payload.email.strip().lower()
-    google_id = payload.google_id.strip()
-    name = payload.name.strip() or email
-    avatar_url = payload.avatar_url
+    identity = await verify_bridge_assertion(payload)
+    email = identity["email"].strip().lower()
+    google_id = identity["sub"]
+    name = identity["name"].strip() or email
+    avatar_url = identity.get("avatar_url")
 
     result = await db.execute(
         select(User).where(or_(User.google_id == google_id, User.email == email))
     )
-    user = result.scalar_one_or_none()
+    matches = result.scalars().all()
+    if len(matches) > 1:
+        raise HTTPException(409, detail="Account identity conflict")
+    user = matches[0] if matches else None
+    if user is not None and user.google_id and user.google_id != google_id:
+        raise HTTPException(409, detail="Account identity conflict")
 
     if user is None:
         user = User(

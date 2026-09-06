@@ -1,0 +1,590 @@
+{
+  "before": {
+    "info": 0,
+    "low": 1,
+    "moderate": 3,
+    "high": 12,
+    "critical": 2,
+    "total": 18
+  },
+  "after": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "items": [
+    {
+      "package": "@auth/core",
+      "severity": "critical",
+      "direct": false,
+      "affected_range": "<=0.41.2",
+      "advisories": [
+        {
+          "title": "Auth.js: Email normalizer validates the address before Unicode normalization, allowing a homoglyph @ bypass",
+          "url": "https://github.com/advisories/GHSA-7rqj-j65f-68wh"
+        },
+        {
+          "title": "Auth.js: getToken() throws an uncaught exception on malformed Bearer authorization headers",
+          "url": "https://github.com/advisories/GHSA-xmf8-cvqr-rfgj"
+        },
+        {
+          "title": "Auth.js: OAuth state, nonce, and PKCE check cookies are not bound to the provider that created them",
+          "url": "https://github.com/advisories/GHSA-x445-f3h2-j279"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "@babel/core",
+      "severity": "low",
+      "direct": false,
+      "affected_range": "<=7.29.0",
+      "advisories": [
+        {
+          "title": "@babel/core: Arbitrary File Read via sourceMappingURL Comment",
+          "url": "https://github.com/advisories/GHSA-4x5r-pxfx-6jf8"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "@humanfs/node",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "<0.16.8",
+      "advisories": [
+        {
+          "title": "humanfs: Recursive copy follows symlinked files and copies data from outside the source tree",
+          "url": "https://github.com/advisories/GHSA-p498-v437-472g"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "ajv",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "<6.14.0",
+      "advisories": [
+        {
+          "title": "ajv has ReDoS when using `$data` option",
+          "url": "https://github.com/advisories/GHSA-2g4f-4pwh-qvx6"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "axios",
+      "severity": "high",
+      "direct": true,
+      "affected_range": "1.0.0 - 1.17.0",
+      "advisories": [
+        {
+          "title": "Axios has a NO_PROXY Hostname Normalization Bypass that Leads to SSRF",
+          "url": "https://github.com/advisories/GHSA-3p68-rc4w-qgx5"
+        },
+        {
+          "title": "Axios: Authentication Bypass via Prototype Pollution Gadget in `validateStatus` Merge Strategy",
+          "url": "https://github.com/advisories/GHSA-w9j2-pvgh-6h63"
+        },
+        {
+          "title": "Axios: Incomplete Fix for CVE-2025-62718 \u2014 NO_PROXY Protection Bypassed via RFC 1122 Loopback Subnet (127.0.0.0/8) in Axios 1.15.0",
+          "url": "https://github.com/advisories/GHSA-pmwg-cvhr-8vh7"
+        },
+        {
+          "title": "Axios: Invisible JSON Response Tampering via Prototype Pollution Gadget in `parseReviver`",
+          "url": "https://github.com/advisories/GHSA-3w6x-2g7m-8v23"
+        },
+        {
+          "title": "Axios: Null Byte Injection via Reverse-Encoding in AxiosURLSearchParams",
+          "url": "https://github.com/advisories/GHSA-xhjh-pmcv-23jw"
+        },
+        {
+          "title": "Axios: CRLF Injection in multipart/form-data body via unsanitized blob.type in formDataToStream",
+          "url": "https://github.com/advisories/GHSA-445q-vr5w-6q77"
+        },
+        {
+          "title": "Axios: no_proxy bypass via IP alias allows SSRF",
+          "url": "https://github.com/advisories/GHSA-m7pr-hjqh-92cm"
+        },
+        {
+          "title": "Axios' HTTP adapter-streamed uploads bypass maxBodyLength when maxRedirects: 0",
+          "url": "https://github.com/advisories/GHSA-5c9x-8gcm-mpgx"
+        },
+        {
+          "title": "Axios: HTTP adapter streamed responses bypass maxContentLength",
+          "url": "https://github.com/advisories/GHSA-vf2m-468p-8v99"
+        },
+        {
+          "title": "Axios: Prototype Pollution Gadgets - Response Tampering, Data Exfiltration, and Request Hijacking",
+          "url": "https://github.com/advisories/GHSA-pf86-5x62-jrwf"
+        },
+        {
+          "title": "Axios: Header Injection via Prototype Pollution",
+          "url": "https://github.com/advisories/GHSA-6chq-wfr3-2hj9"
+        },
+        {
+          "title": "Axios: XSRF Token Cross-Origin Leakage via Prototype Pollution Gadget in `withXSRFToken` Boolean Coercion",
+          "url": "https://github.com/advisories/GHSA-xx6v-rp6x-q39c"
+        },
+        {
+          "title": "Axios is Vulnerable to Denial of Service via __proto__ Key in mergeConfig",
+          "url": "https://github.com/advisories/GHSA-43fc-jf86-j433"
+        },
+        {
+          "title": "Axios has prototype pollution read-side gadgets in HTTP adapter that allow credential injection and request hijacking",
+          "url": "https://github.com/advisories/GHSA-q8qp-cvcw-x6jj"
+        },
+        {
+          "title": "Axios has Unrestricted Cloud Metadata Exfiltration via Header Injection Chain",
+          "url": "https://github.com/advisories/GHSA-fvcv-3m26-pcqx"
+        },
+        {
+          "title": "Axios: unbounded recursion in toFormData causes DoS via deeply nested request data",
+          "url": "https://github.com/advisories/GHSA-62hf-57xw-28j9"
+        },
+        {
+          "title": "Axios: Regular Expression Denial of Service (ReDoS) via Cookie Name Injection",
+          "url": "https://github.com/advisories/GHSA-hfxv-24rg-xrqf"
+        },
+        {
+          "title": "Allocation of Resources Without Limits or Throttling in Axios",
+          "url": "https://github.com/advisories/GHSA-777c-7fjr-54vf"
+        },
+        {
+          "title": "Axios: Proxy-Authorization Credential Leak to Origin Server Across HTTP-to-HTTPS Redirect in Axios Node.js HTTP Adapter",
+          "url": "https://github.com/advisories/GHSA-p92q-9vqr-4j8v"
+        },
+        {
+          "title": "Axios: Proxy-Authorization header leaks to redirect target when proxy is re-evaluated to direct connection",
+          "url": "https://github.com/advisories/GHSA-j5f8-grm9-p9fc"
+        },
+        {
+          "title": "axios Vulnerable to Credential Theft and Response Hijacking via Prototype Pollution Gadget in Config Merge",
+          "url": "https://github.com/advisories/GHSA-3g43-6gmg-66jw"
+        },
+        {
+          "title": "axios Vulnerable to Full Man-in-the-Middle via Prototype Pollution Gadget in `config.proxy`",
+          "url": "https://github.com/advisories/GHSA-35jp-ww65-95wh"
+        },
+        {
+          "title": "axios has DoS & Header Injection via Prototype Pollution Read-Side Gadgets in axios merge functions",
+          "url": "https://github.com/advisories/GHSA-898c-q2cr-xwhg"
+        },
+        {
+          "title": "Axios: Prototype pollution gadgets can alter axios request construction",
+          "url": "https://github.com/advisories/GHSA-mmx7-hfxf-jppx"
+        },
+        {
+          "title": "Axios: Deep formToJSON Key Recursion Can Cause Denial of Service",
+          "url": "https://github.com/advisories/GHSA-pmv8-rq9r-6j72"
+        },
+        {
+          "title": "Axios: HTTP/2 streamed uploads bypass `maxBodyLength`",
+          "url": "https://github.com/advisories/GHSA-mwf2-3pr3-8698"
+        },
+        {
+          "title": "Axios: Nested axios option objects can consume polluted prototype values",
+          "url": "https://github.com/advisories/GHSA-7q8q-rj6j-mhjq"
+        },
+        {
+          "title": "Axios: Fetch adapter `ReadableStream` uploads bypass `maxBodyLength`",
+          "url": "https://github.com/advisories/GHSA-jqh4-m9w3-8hp9"
+        },
+        {
+          "title": "Axios: Excessive recursion in formDataToJSON can cause denial of service",
+          "url": "https://github.com/advisories/GHSA-42h9-826w-cgv3"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "brace-expansion",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=1.1.17 || 2.0.0 - 2.1.3",
+      "advisories": [
+        {
+          "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+          "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v"
+        },
+        {
+          "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+          "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v"
+        },
+        {
+          "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+          "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp"
+        },
+        {
+          "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+          "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp"
+        },
+        {
+          "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+          "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg"
+        },
+        {
+          "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+          "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg"
+        },
+        {
+          "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+          "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895"
+        },
+        {
+          "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+          "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "browserslist",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=4.28.6",
+      "advisories": [
+        {
+          "title": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",
+          "url": "https://github.com/advisories/GHSA-c83g-rgw3-j3cx"
+        },
+        {
+          "title": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)",
+          "url": "https://github.com/advisories/GHSA-73wf-gq98-2v4g"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "flatted",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=3.4.1",
+      "advisories": [
+        {
+          "title": "flatted vulnerable to unbounded recursion DoS in parse() revive phase",
+          "url": "https://github.com/advisories/GHSA-25h7-pfq9-p65f"
+        },
+        {
+          "title": "Prototype Pollution via parse() in NodeJS flatted",
+          "url": "https://github.com/advisories/GHSA-rf6f-7fwh-wjgh"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "follow-redirects",
+      "severity": "moderate",
+      "direct": false,
+      "affected_range": "<=1.15.11",
+      "advisories": [
+        {
+          "title": "follow-redirects leaks Custom Authentication Headers to Cross-Domain Redirect Targets",
+          "url": "https://github.com/advisories/GHSA-r4q5-vmmm-2653"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "form-data",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "4.0.0 - 4.0.5",
+      "advisories": [
+        {
+          "title": "form-data: CRLF injection in form-data via unescaped multipart field names and filenames",
+          "url": "https://github.com/advisories/GHSA-hmw2-7cc7-3qxx"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "js-yaml",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "4.0.0 - 4.3.0",
+      "advisories": [
+        {
+          "title": "JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases",
+          "url": "https://github.com/advisories/GHSA-h67p-54hq-rp68"
+        },
+        {
+          "title": "js-yaml: YAML merge-key chains can force quadratic CPU consumption",
+          "url": "https://github.com/advisories/GHSA-52cp-r559-cp3m"
+        },
+        {
+          "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) \u2014 CVE-2026-59870 fix not backported",
+          "url": "https://github.com/advisories/GHSA-5p4m-2wfm-xmqj"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "minimatch",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=3.1.3 || 9.0.0 - 9.0.6",
+      "advisories": [
+        {
+          "title": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+          "url": "https://github.com/advisories/GHSA-3ppc-4f35-3m26"
+        },
+        {
+          "title": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+          "url": "https://github.com/advisories/GHSA-3ppc-4f35-3m26"
+        },
+        {
+          "title": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+          "url": "https://github.com/advisories/GHSA-7r86-cg39-jmmj"
+        },
+        {
+          "title": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+          "url": "https://github.com/advisories/GHSA-7r86-cg39-jmmj"
+        },
+        {
+          "title": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+          "url": "https://github.com/advisories/GHSA-23c5-xmqv-rm74"
+        },
+        {
+          "title": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+          "url": "https://github.com/advisories/GHSA-23c5-xmqv-rm74"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "nanoid",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=3.3.17",
+      "advisories": [
+        {
+          "title": "nanoid: non-secure generators can loop indefinitely with negative size",
+          "url": "https://github.com/advisories/GHSA-28wg-ghj8-5hjv"
+        },
+        {
+          "title": "nanoid: custom generators can loop indefinitely when size is zero",
+          "url": "https://github.com/advisories/GHSA-2v37-7h3g-55p8"
+        },
+        {
+          "title": "nanoid: Integer Overflow or Wraparound",
+          "url": "https://github.com/advisories/GHSA-xwg4-73v4-xw9w"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "next",
+      "severity": "high",
+      "direct": true,
+      "affected_range": "9.3.4-canary.0 - 16.3.0-preview.10",
+      "advisories": [
+        {
+          "title": "Next.js: HTTP request smuggling in rewrites",
+          "url": "https://github.com/advisories/GHSA-ggv3-7p47-pfv8"
+        },
+        {
+          "title": "Next.js: Unbounded next/image disk cache growth can exhaust storage",
+          "url": "https://github.com/advisories/GHSA-3x4c-7xq6-9pq8"
+        },
+        {
+          "title": "Next.js: Unbounded postponed resume buffering can lead to DoS",
+          "url": "https://github.com/advisories/GHSA-h27x-g6w4-24gq"
+        },
+        {
+          "title": "Next.js: null origin can bypass Server Actions CSRF checks",
+          "url": "https://github.com/advisories/GHSA-mq59-m269-xvcx"
+        },
+        {
+          "title": "Next.js: null origin can bypass dev HMR websocket CSRF checks",
+          "url": "https://github.com/advisories/GHSA-jcc7-9wpm-mj36"
+        },
+        {
+          "title": "Next.js has a Denial of Service with Server Components",
+          "url": "https://github.com/advisories/GHSA-q4gf-8mx6-v5v3"
+        },
+        {
+          "title": "Next.js Vulnerable to Denial of Service with Server Components",
+          "url": "https://github.com/advisories/GHSA-8h8q-6873-q5fj"
+        },
+        {
+          "title": "Next.js has a Middleware / Proxy bypass in App Router applications via segment-prefetch routes - Incomplete Fix Follow-Up",
+          "url": "https://github.com/advisories/GHSA-26hh-7cqf-hhc6"
+        },
+        {
+          "title": "Next.js's Middleware / Proxy redirects can be cache-poisoned",
+          "url": "https://github.com/advisories/GHSA-3g8h-86w9-wvmq"
+        },
+        {
+          "title": "Next.js vulnerable to cross-site scripting in App Router applications using CSP nonces",
+          "url": "https://github.com/advisories/GHSA-ffhc-5mcf-pf4q"
+        },
+        {
+          "title": "Next.js vulnerable to cache poisoning via collisions in React Server Component cache-busting",
+          "url": "https://github.com/advisories/GHSA-vfv6-92ff-j949"
+        },
+        {
+          "title": "Next.js has cross-site scripting in beforeInteractive scripts with untrusted input",
+          "url": "https://github.com/advisories/GHSA-gx5p-jg67-6x7h"
+        },
+        {
+          "title": "Next.js vulnerable to Denial of Service via connection exhaustion in applications using Cache Components",
+          "url": "https://github.com/advisories/GHSA-mg66-mrh9-m8jx"
+        },
+        {
+          "title": "Next.js has a Denial of Service in the Image Optimization API",
+          "url": "https://github.com/advisories/GHSA-h64f-5h5j-jqjh"
+        },
+        {
+          "title": "Next.js vulnerable to server-side request forgery in applications using WebSocket upgrades",
+          "url": "https://github.com/advisories/GHSA-c4j6-fc7j-m34r"
+        },
+        {
+          "title": "Next.js has a Middleware / Proxy bypass through dynamic route parameter injection",
+          "url": "https://github.com/advisories/GHSA-492v-c6pp-mqqv"
+        },
+        {
+          "title": "Next.js vulnerable to cache poisoning in React Server Component responses",
+          "url": "https://github.com/advisories/GHSA-wfc6-r584-vfw7"
+        },
+        {
+          "title": "Next.js has a Middleware / Proxy bypass in App Router applications via segment-prefetch routes",
+          "url": "https://github.com/advisories/GHSA-267c-6grr-h53f"
+        },
+        {
+          "title": "Next.js has a Middleware / Proxy bypass in Pages Router applications using i18n",
+          "url": "https://github.com/advisories/GHSA-36qx-fr4f-26g5"
+        },
+        {
+          "title": "Next.js: Middleware / Proxy bypass in App Router applications using Turbopack and single locale",
+          "url": "https://github.com/advisories/GHSA-6gpp-xcg3-4w24"
+        },
+        {
+          "title": "Next.js: Denial of Service in App Router using Server Actions",
+          "url": "https://github.com/advisories/GHSA-m99w-x7hq-7vfj"
+        },
+        {
+          "title": "Next.js: Server-Side Request Forgery in Server Actions on custom servers",
+          "url": "https://github.com/advisories/GHSA-89xv-2m56-2m9x"
+        },
+        {
+          "title": "Next.js: Cache confusion of response bodies for requests with bodies",
+          "url": "https://github.com/advisories/GHSA-68g3-v927-f742"
+        },
+        {
+          "title": "Next.js: Cache confusion of response bodies for requests with bodies containing invalid UTF-8 byte sequences",
+          "url": "https://github.com/advisories/GHSA-4633-3j49-mh5q"
+        },
+        {
+          "title": "Next.js: Unbounded Server Action payload in Edge runtime",
+          "url": "https://github.com/advisories/GHSA-4c39-4ccg-62r3"
+        },
+        {
+          "title": "Next.js: Server-Side Request Forgery in rewrites via attacker-controlled destination hostname",
+          "url": "https://github.com/advisories/GHSA-p9j2-gv94-2wf4"
+        },
+        {
+          "title": "Next.js: Denial of Service in the Image Optimization API using SVGs",
+          "url": "https://github.com/advisories/GHSA-q8wf-6r8g-63ch"
+        },
+        {
+          "title": "Next.js: Unauthenticated disclosure of internal Server Function endpoints",
+          "url": "https://github.com/advisories/GHSA-955p-x3mx-jcvp"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "next-auth",
+      "severity": "critical",
+      "direct": true,
+      "affected_range": "<=0.0.0-pr.11562.ed0fce23 || 4.24.8 - 5.0.0-beta.31",
+      "advisories": [
+        {
+          "title": "Auth.js: Configuration errors can cause existence-based auth checks to fail open (auth object populated with an error)",
+          "url": "https://github.com/advisories/GHSA-8fpg-xm3f-6cx3"
+        },
+        {
+          "title": "Auth.js: Email normalizer validates the address before Unicode normalization, allowing a homoglyph @ bypass",
+          "url": "https://github.com/advisories/GHSA-7rqj-j65f-68wh"
+        },
+        {
+          "title": "Auth.js: getToken() throws an uncaught exception on malformed Bearer authorization headers",
+          "url": "https://github.com/advisories/GHSA-xmf8-cvqr-rfgj"
+        },
+        {
+          "title": "Auth.js: OAuth state, nonce, and PKCE check cookies are not bound to the provider that created them",
+          "url": "https://github.com/advisories/GHSA-x445-f3h2-j279"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "picomatch",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=2.3.1 || 4.0.0 - 4.0.3",
+      "advisories": [
+        {
+          "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+          "url": "https://github.com/advisories/GHSA-3v7f-55p6-f55p"
+        },
+        {
+          "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+          "url": "https://github.com/advisories/GHSA-3v7f-55p6-f55p"
+        },
+        {
+          "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+          "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj"
+        },
+        {
+          "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+          "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "postcss",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<=8.5.22",
+      "advisories": [
+        {
+          "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+          "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93"
+        },
+        {
+          "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+          "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q"
+        },
+        {
+          "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q \u2014 attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+          "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp"
+        },
+        {
+          "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    },
+    {
+      "package": "sharp",
+      "severity": "high",
+      "direct": false,
+      "affected_range": "<0.35.0",
+      "advisories": [
+        {
+          "title": "sharp inherited vulnerabilities in libvips: CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, CVE-2026-35591",
+          "url": "https://github.com/advisories/GHSA-f88m-g3jw-g9cj"
+        }
+      ],
+      "disposition": "Resolved in locked npm audit after; runtime exposure for Next/Auth/Axios/image handling, build/test exposure for toolchain dependencies"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+usage: ai_probe.py [-h] [--env-file ENV_FILE] pdf
+
+Explicit developer PDF/Gemini probe; importing this module performs no work.
+
+positional arguments:
+  pdf                  PDF to analyze; may contain sensitive text
+
+options:
+  -h, --help           show this help message and exit
+  --env-file ENV_FILE  Explicit optional development environment file
+usage: extraction_probe.py [-h] [--text-file TEXT_FILE]
+                           [--taxonomy-file TAXONOMY_FILE] [--model MODEL]
+
+Explicit developer extraction diagnostic; no model/dependency work at import.
+
+options:
+  -h, --help            show this help message and exit
+  --text-file TEXT_FILE
+                        UTF-8 tender text; defaults to synthetic procurement
+                        fixture
+  --taxonomy-file TAXONOMY_FILE
+                        JSON taxonomy list; defaults to an empty taxonomy
+  --model MODEL         Explicit model override; defaults to current
+                        extraction chain's first model
+usage: tender_api_probe.py [-h] [--base-url BASE_URL] [--timeout TIMEOUT]
+
+Explicit live Tender API inspection; not a product regression test.
+
+options:
+  -h, --help           show this help message and exit
+  --base-url BASE_URL
+  --timeout TIMEOUT
+usage: uzbek_nlp_probe.py [-h] [--base-url BASE_URL] [--timeout TIMEOUT]
+
+Explicit OpenAPI analysis/Compliance schema inspection; no network at import.
+
+options:
+  -h, --help           show this help message and exit
+  --base-url BASE_URL
+  --timeout TIMEOUT

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Plasma AI - Tenders Endpoints
 
@@ -12,7 +13,6 @@ import logging
 import os
 import re
 import xml.etree.ElementTree as ET
-import zipfile
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
@@ -23,6 +23,9 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID, uuid4
 
 import httpx
+from typing import Annotated
+from fastapi import Query, Response
+from app.core.pagination import page_rows
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, ValidationError
@@ -202,7 +205,6 @@ from app.services.source_refresh_jobs import (
 )
 from app.services.source_registry import (
     SOURCE_REGISTRY,
-    adapt_execution_result,
     execute_source_refresh,
     get_source_definition,
 )
@@ -1273,10 +1275,7 @@ async def _live_uzex_competitor_records(
             referer="https://etender.uzex.uz/",
         )
     except Exception:
-        logger.exception(
-            "uzex_competitor_deals_fetch_failed tender_id=%s",
-            getattr(target_tender, "id", None),
-        )
+        logger.error("operation_failed event=tenders:1278 error_type=%s", "unavailable")
         return []
 
     if not isinstance(payload, list):
@@ -1475,10 +1474,7 @@ async def _live_world_bank_competitor_records(
             },
         )
     except Exception:
-        logger.exception(
-            "world_bank_competitor_awards_fetch_failed tender_id=%s",
-            getattr(target_tender, "id", None),
-        )
+        logger.error("operation_failed event=tenders:1480 error_type=%s", "unavailable")
         return []
 
     rows = payload.get("procnotices") if isinstance(payload, dict) else None
@@ -1586,10 +1582,7 @@ async def _live_adb_competitor_records(
     try:
         rss_text = await _fetch_text_payload(url=ADB_CONTRACTS_AWARDED_RSS_URL)
     except Exception:
-        logger.exception(
-            "adb_competitor_awards_fetch_failed tender_id=%s",
-            getattr(target_tender, "id", None),
-        )
+        logger.error("operation_failed event=tenders:1591 error_type=%s", "unavailable")
         return []
 
     try:
@@ -1731,11 +1724,7 @@ async def _live_source_competitor_records(
         else:
             records = []
     except Exception:
-        logger.exception(
-            "competitor_live_source_dispatch_failed tender_id=%s source=%s",
-            getattr(target_tender, "id", None),
-            source_system,
-        )
+        logger.error("operation_failed event=tenders:1736 error_type=%s", "unavailable")
         return _get_live_competitor_cache(cache_key, allow_stale=True) or []
 
     if records:
@@ -1888,23 +1877,12 @@ def _document_availability_condition():
         TenderDocument.storage_path.is_not(None)
         & (func.length(func.trim(TenderDocument.storage_path)) > 0)
     )
-    file_url_present = (
-        TenderDocument.file_url.is_not(None)
-        & (func.length(func.trim(TenderDocument.file_url)) > 0)
-    )
-    available_status_condition = lowered_status.in_(tuple(AVAILABLE_DOCUMENT_STATUSES))
     unavailable_status_condition = lowered_status.in_(
-        tuple(UNAVAILABLE_LEGACY_DOCUMENT_STATUSES)
+        tuple(UNAVAILABLE_LEGACY_DOCUMENT_STATUSES) + ("missing_file",)
     )
-    legacy_uzex_available_condition = (
-        (Tender.source_system == "uzex")
-        & file_url_present
-        & (~unavailable_status_condition)
-    )
-    return (
-        (available_status_condition | storage_path_present | legacy_uzex_available_condition)
-        & (~unavailable_status_condition)
-    )
+    # A remote link or a downloaded label without a stored path is not a file.
+    return storage_path_present & (~unavailable_status_condition)
+
 
 
 def _document_status_exists(condition):
@@ -1926,9 +1904,8 @@ def _document_status_predicate(document_status: str):
     processing_exists = _document_status_exists(lowered_status == "processing")
     failed_exists = _document_status_exists(lowered_status == "failed")
     missing_file_exists = _document_status_exists(
-        TenderDocument.storage_path.is_not(None)
-        & (func.length(func.trim(TenderDocument.storage_path)) > 0)
-        & (~_document_availability_condition())
+        (lowered_status == "missing_file")
+        | (lowered_status.in_(tuple(AVAILABLE_DOCUMENT_STATUSES)) & (~_document_availability_condition()))
     )
 
     if document_status == "documents_available":
@@ -2333,44 +2310,15 @@ async def resolve_filesystem_document_filter_tender_ids(
     db: AsyncSession,
     document_status: str | None,
 ) -> tuple[UUID, ...] | None:
-    """Resolve document modes whose truth depends on application file state.
+    """Compatibility adapter: membership now uses stored SQL predicates only.
 
-    Persisted document states use correlated SQL ``EXISTS``. The established
-    availability and missing-file response semantics additionally inspect the
-    application filesystem, so these matching IDs are resolved once before
-    count/order/page and are then applied by SQL as a Tender membership
-    predicate. No bounded page is filtered after retrieval.
+    Filesystem truth is checked only for the returned page. External removal of
+    a file is reported as missing, never as a usable remote download.
     """
     normalized = (document_status or "").strip().casefold()
-    if normalized in {"", "all", "any"}:
-        return None
-    if normalized not in DOCUMENT_STATUS_FILTERS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported document_status",
-        )
-    if normalized not in {"documents_available", "files_missing"}:
-        return None
-
-    tenders = (
-        await db.execute(
-            select(Tender).where(customer_visible_tender_condition(Tender))
-        )
-    ).scalars().all()
-    summaries = await _batched_tender_summaries(
-        db=db,
-        tender_ids=[tender.id for tender in tenders],
-    )
-    matching_ids = [
-        tender.id
-        for tender in tenders
-        if _serialize_tender(
-            tender,
-            summary=summaries.get(tender.id),
-        ).document_status
-        == normalized
-    ]
-    return tuple(sorted(matching_ids, key=str))
+    if normalized not in {"", "all", "any"} and normalized not in DOCUMENT_STATUS_FILTERS:
+        raise HTTPException(400, detail="Unsupported document_status")
+    return None
 
 
 async def _single_tender_summary(
@@ -2695,10 +2643,7 @@ async def _world_bank_contact_metadata_override(tender: Tender) -> dict[str, Any
             max_retries=1,
         ).fetch_detail(tender.external_id)
     except Exception:
-        logger.exception(
-            "world_bank_contact_detail_fetch_failed external_id=%s",
-            tender.external_id,
-        )
+        logger.error("operation_failed event=tenders:2659 error_type=%s", "unavailable")
         return None
 
     if not isinstance(detail, dict) or not _has_world_bank_contact_metadata(detail):
@@ -2738,10 +2683,7 @@ async def _adb_contact_metadata_override(tender: Tender) -> dict[str, Any] | Non
             final_pdf_url=metadata.get("final_pdf_url"),
         )
     except Exception:
-        logger.exception(
-            "adb_contact_detail_fetch_failed external_id=%s",
-            tender.external_id,
-        )
+        logger.error("operation_failed event=tenders:2702 error_type=%s", "unavailable")
         return None
 
     if not isinstance(detail, dict) or not _has_adb_contact_metadata(detail):
@@ -2790,10 +2732,7 @@ async def _uzex_contact_metadata_override(tender: Tender) -> dict[str, Any] | No
             response.raise_for_status()
             payload = response.json()
     except Exception:
-        logger.exception(
-            "uzex_contact_detail_fetch_failed external_id=%s",
-            tender.external_id,
-        )
+        logger.error("operation_failed event=tenders:2754 error_type=%s", "unavailable")
         return None
 
     detail = extract_uzex_contact_info(
@@ -2843,10 +2782,7 @@ async def _giz_contact_metadata_override(tender: Tender) -> dict[str, Any] | Non
             max_retries=1,
         ).fetch_contact_metadata(project_url=project_url)
     except Exception:
-        logger.exception(
-            "giz_contact_detail_fetch_failed external_id=%s",
-            tender.external_id,
-        )
+        logger.error("operation_failed event=tenders:2807 error_type=%s", "unavailable")
         return None
     if not isinstance(detail, dict) or not _has_giz_contact_metadata(detail):
         return None
@@ -2931,7 +2867,7 @@ async def _apply_live_uzex_dates(
     try:
         date_map = await _uzex_trade_list_date_map(external_ids)
     except Exception:
-        logger.exception("Failed to enrich UzEx publication/deadline dates")
+        logger.error("operation_failed event=tenders:2895 error_type=%s", "unavailable")
         return {}
 
     live_dates: dict[UUID, tuple[datetime | None, datetime | None]] = {}
@@ -3439,6 +3375,9 @@ def _safe_content_disposition(disposition: str, filename: str) -> str:
     Uses RFC 5987 ``filename*=UTF-8''...`` for the real name and an ASCII-safe
     ``filename=`` fallback so every browser gets a usable download name.
     """
+    filename = filename.replace("\\", "/").rsplit("/", 1)[-1]
+    filename = "".join(c for c in filename if ord(c) >= 32 and ord(c) != 127).replace('"', "'")[:200] or "document"
+    disposition = "inline" if disposition == "inline" else "attachment"
     try:
         filename.encode("ascii")
         return f'{disposition}; filename="{filename}"'
@@ -3550,19 +3489,10 @@ def _document_download_status(
         return "metadata_only"
     if _document_has_storage_path(doc):
         return "available" if _document_storage_file_exists(doc) else "missing_file"
-    if raw_status in AVAILABLE_DOCUMENT_STATUSES:
-        if _legacy_uzex_document_can_use_plasma_route(
-            doc,
-            source_system=source_system,
-        ):
-            return "available"
+    if raw_status in AVAILABLE_DOCUMENT_STATUSES or raw_status == "missing_file":
         return "missing_file"
-    if _legacy_uzex_document_can_use_plasma_route(
-        doc,
-        source_system=source_system,
-    ):
-        return "available"
     return "metadata_only"
+
 
 
 def _document_response(
@@ -3692,6 +3622,10 @@ def _public_coverage_metadata_payload(
     payload = dict(coverage_metadata)
     if not include_debug:
         payload.pop("technical_warnings", None)
+    elif payload.get("technical_warnings"):
+        # Historical provider diagnostics are never a safe browser payload,
+        # including for operators. Keep the diagnostic count, not raw details.
+        payload["technical_warnings"] = ["Requirement extraction failed; inspect correlated server events."] * len(payload["technical_warnings"])
     return payload
 
 
@@ -3878,7 +3812,7 @@ def _serialize_cached_analysis_response(
             include_debug=include_debug,
         ),
         "analysis_status": analysis_status,
-        "extraction_error": cached_data.get("extraction_error"),
+        "extraction_error": _public_extraction_error(cached_data.get("extraction_error"), version.analysis_language),
     }
 
 
@@ -3937,10 +3871,10 @@ async def analyze_tender(
         result = await session.execute(select(Tender).where(Tender.id == tender_id))
         tender = result.scalar_one_or_none()
     except SQLAlchemyError as exc:
-        logger.exception("Failed to query tender record")
+        logger.error("operation_failed event=tenders:3892 error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database query failed: {exc}",
+            detail="Request could not be completed",
         ) from exc
 
     if tender is None:
@@ -4100,10 +4034,7 @@ async def analyze_tender(
                     analysis_language=resolved_analysis_language,
                 )
             except Exception as strategy_exc:
-                logger.warning(
-                    "Strategy extraction failed (non-fatal, compliance unaffected): %s",
-                    strategy_exc,
-                )
+                logger.error("operation_failed event=tenders:4055 error_type=%s", type(strategy_exc).__name__)
                 return None
 
         async def _safe_requirement_extraction() -> tuple[
@@ -4126,9 +4057,7 @@ async def analyze_tender(
                 ]
                 extraction_error = None
                 if coverage_metadata.get("coverage_status") == "failed":
-                    extraction_error = (
-                        "Requirement extraction failed for all document sections."
-                    )
+                    extraction_error = analysis_text(resolved_analysis_language, "extraction_failed")
                 return (
                     extraction_result.requirements,
                     coverage_metadata,
@@ -4136,17 +4065,14 @@ async def analyze_tender(
                     extraction_error,
                 )
             except Exception as extraction_exc:
-                logger.exception(
-                    "Requirement extraction failed for tender %s",
-                    tender_id,
-                )
+                logger.error("operation_failed event=tenders:4091 error_type=%s", type(extraction_exc).__name__)
                 failed_coverage = build_failed_extraction_coverage(
                     tender_text,
-                    error=f"{type(extraction_exc).__name__}: {extraction_exc}",
+                    error=type(extraction_exc).__name__,
                 )
                 failed_artifacts = build_failed_extraction_artifacts_metadata(
                     tender_text,
-                    error=f"{type(extraction_exc).__name__}: {extraction_exc}",
+                    error=type(extraction_exc).__name__,
                 )
                 return (
                     [],
@@ -4632,17 +4558,17 @@ async def analyze_tender(
         raise
     except SQLAlchemyError as exc:
         await session.rollback()
-        logger.exception("Database integrity/persistence failure during tender analysis")
+        logger.error("operation_failed event=tenders:4587 error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database write failed: {exc}",
+            detail="Request could not be completed",
         ) from exc
     except Exception as exc:
         await session.rollback()
-        logger.exception("AI analysis failed")
+        logger.error("operation_failed event=tenders:4594 error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI analysis failed: {exc}",
+            detail="Request could not be completed",
         ) from exc
 
     return {
@@ -4677,8 +4603,14 @@ async def test_scrape(request: TestScrapeRequest) -> TestScrapeResponse:
     
     Use this to paste a known tender URL and see what documents the scraper finds.
     """
+    import asyncio
+    from app.core.probe_urls import validate_probe_url
     try:
-        scraper = UzExScraper(headless=True)
+        await asyncio.to_thread(validate_probe_url, request.url)
+    except ValueError:
+        raise HTTPException(400, detail="Unsupported probe destination") from None
+    try:
+        scraper = UzExScraper(headless=True, safe_probe=True)
         docs = await scraper.scrape_tender_documents(request.url)
         
         return TestScrapeResponse(
@@ -4689,13 +4621,13 @@ async def test_scrape(request: TestScrapeRequest) -> TestScrapeResponse:
             message=f"Found {len(docs)} documents"
         )
     except Exception as e:
-        logger.error(f"Test scrape failed: {e}")
+        logger.error("operation_failed event=tenders:4650 error_type=%s", type(e).__name__)
         return TestScrapeResponse(
             status="error",
             url=request.url,
             documents=[],
             count=0,
-            message=f"Scraper failed: {str(e)}"
+            message="Scraper failed. Please retry."
         )
 
 
@@ -4714,8 +4646,16 @@ async def proxy_download(request: ProxyDownloadRequest):
     
     Returns the file as a downloadable response.
     """
+    if not request.file_path.startswith("/files/") or ".." in request.file_path or "\\" in request.file_path or any(ord(c) < 32 for c in request.file_path):
+        raise HTTPException(400, detail="Unsupported document path")
+    import asyncio
+    from app.core.probe_urls import validate_probe_url
     try:
-        scraper = UzExScraper(headless=True)
+        await asyncio.to_thread(validate_probe_url, request.tender_url)
+    except ValueError:
+        raise HTTPException(400, detail="Unsupported probe destination") from None
+    try:
+        scraper = UzExScraper(headless=True, safe_probe=True)
         file_bytes, filename = await scraper.download_file(request.tender_url, request.file_path)
         if not file_bytes:
             raise HTTPException(status_code=502, detail="Document download returned an empty file.")
@@ -4729,7 +4669,7 @@ async def proxy_download(request: ProxyDownloadRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Proxy download failed")
+        logger.error("operation_failed event=tenders:4698 error_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=502,
             detail="Document download failed. Please try again later.",
@@ -4745,9 +4685,7 @@ async def download_document(
     """
     Download a tender document by ID.
     
-    Looks up the document in the database, gets its tender's source URL,
-    and proxies the download through Playwright (needed because UzEx
-    requires POST with dynamic validation tokens).
+    Serves the stored document only. Missing files require explicit sync.
     
     Can be used as href in <a> tags or src in <iframe> for PDF preview.
     """
@@ -4789,8 +4727,9 @@ async def download_document(
             file_type=doc.file_type,
         )
         disposition = "inline" if content_type == "application/pdf" else "attachment"
-        return Response(
-            content=local_path.read_bytes(),
+        from fastapi.responses import FileResponse
+        return FileResponse(
+            path=local_path,
             media_type=content_type,
             headers={"Content-Disposition": _safe_content_disposition(disposition, resolved_name)},
         )
@@ -4811,55 +4750,10 @@ async def download_document(
             ),
         )
 
-    raw_download_status = (doc.download_status or "").strip().casefold()
-    if raw_download_status == "metadata_only" or tender.source_system != "uzex":
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Document metadata has been captured, but the file has not "
-                "been downloaded into Plasma storage yet."
-            ),
-        )
-
-    # ── No storage_path at all: document was never downloaded by the worker ──
-    # Attempt a live UzEx Playwright download as a last resort.
-    file_path = _extract_remote_file_path(doc.file_url)
-    if not file_path:
-        raise HTTPException(
-            status_code=404,
-            detail="Document source file path is unavailable. Please re-sync documents for this tender.",
-        )
-
-    filename = Path(file_path).name if file_path else f"document.{doc.file_type}"
-    
-    try:
-        scraper = UzExScraper(headless=True)
-        file_bytes, downloaded_name = await scraper.download_file(tender.source_url, file_path)
-        if not file_bytes:
-            raise HTTPException(
-                status_code=502,
-                detail="Document download returned an empty file. Please re-sync documents for this tender.",
-            )
-        resolved_name = downloaded_name or filename
-        content_type = _guess_download_content_type(
-            filename=resolved_name,
-            file_type=doc.file_type,
-        )
-        disposition = "inline" if content_type == "application/pdf" else "attachment"
-        
-        return Response(
-            content=file_bytes,
-            media_type=content_type,
-            headers={"Content-Disposition": _safe_content_disposition(disposition, resolved_name)}
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Document download failed for %s", doc_id)
-        raise HTTPException(
-            status_code=502,
-            detail="Document download failed. Please try again or re-sync documents for this tender.",
-        ) from e
+    raise HTTPException(
+        status_code=404,
+        detail="Document file has not been stored. Please explicitly sync documents for this tender.",
+    )
 
 @router.get("", response_model=list[TenderResponse])
 async def list_tenders(
@@ -4882,6 +4776,7 @@ async def list_tenders(
     document_status: str | None = Query(default=None),
     category: str | None = Query(default=None),
     sort: str | None = Query(default="newest"),
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> list[TenderResponse]:
     """
@@ -4955,7 +4850,7 @@ async def list_tenders(
         db=db,
         tender_ids=[tender.id for tender in tenders],
     )
-    live_dates = await _apply_live_uzex_dates(tenders)
+    live_dates = {}
 
     serialized_tenders = [
         _serialize_tender(
@@ -5038,6 +4933,7 @@ async def get_tender_details(
 @router.get("/{tender_id}", response_model=TenderResponse)
 async def get_tender(
     tender_id: UUID,
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> TenderResponse:
     """
@@ -5086,13 +4982,8 @@ async def get_tender(
         )
     
     summary = await _single_tender_summary(db=db, tender_id=tender.id)
-    live_dates = await _apply_live_uzex_dates([tender])
-    contact_metadata_override = (
-        await _world_bank_contact_metadata_override(tender)
-        or await _adb_contact_metadata_override(tender)
-        or await _uzex_contact_metadata_override(tender)
-        or await _giz_contact_metadata_override(tender)
-    )
+    live_dates = {}
+    contact_metadata_override = None
     return _serialize_tender(
         tender,
         summary=summary,
@@ -5305,13 +5196,8 @@ async def get_tender_decision_snapshot(
         )
 
     summary = await _single_tender_summary(db=db, tender_id=tender.id)
-    live_dates = await _apply_live_uzex_dates([tender])
-    contact_metadata_override = (
-        await _world_bank_contact_metadata_override(tender)
-        or await _adb_contact_metadata_override(tender)
-        or await _uzex_contact_metadata_override(tender)
-        or await _giz_contact_metadata_override(tender)
-    )
+    live_dates = {}
+    contact_metadata_override = None
     serialized_tender = _serialize_tender(
         tender,
         summary=summary,
@@ -5467,8 +5353,7 @@ async def _sync_uzex_tenders(
         
     except Exception as e:
         await db.rollback()
-        error_tb = traceback.format_exc()
-        logger.error(f"Refresh failed: {e}\n{error_tb}")
+        logger.error("operation_failed event=tenders:5382 error_type=%s", type(e).__name__)
         return RefreshResponse(
             status="source_unavailable",
             new_count=0,
@@ -5527,7 +5412,7 @@ async def sync_world_bank_tenders(
         raw_notices = await source.list_opportunities()
     except Exception as exc:
         failure = connector_failure_details(exc)
-        logger.exception("world_bank_sync_fetch_failed")
+        logger.error("operation_failed event=tenders:5441 error_type=%s", type(exc).__name__)
         return SourceSyncResponse(
             status=failure.status,
             source_system=source.source_system,
@@ -5565,12 +5450,7 @@ async def sync_world_bank_tenders(
             prepared_by_key[normalized.canonical_source_key] = (normalized, documents)
         except Exception as exc:
             failed_count += 1
-            logger.warning(
-                "world_bank_sync_notice_failed source_system=%s external_id=%s status=failed error_type=%s",
-                source.source_system,
-                external_id,
-                type(exc).__name__,
-            )
+            logger.error("operation_failed event=tenders:5479 error_type=%s", type(exc).__name__)
             if len(errors) < 10:
                 errors.append(
                     f"{external_id or 'unknown'}: {type(exc).__name__}"
@@ -5606,15 +5486,11 @@ async def sync_world_bank_tenders(
                             f"{normalized.external_id}: related_metadata: "
                             f"{type(exc).__name__}"
                         )
-                    logger.warning(
-                        "world_bank_sync_related_metadata_failed external_id=%s error_type=%s",
-                        normalized.external_id,
-                        type(exc).__name__,
-                    )
+                    logger.error("operation_failed event=tenders:5520 error_type=%s", type(exc).__name__)
         except Exception as exc:
             failed_count += 1
             errors.append(f"persistence: {type(exc).__name__}")
-            logger.exception("world_bank_batch_persistence_failed")
+            logger.error("operation_failed event=tenders:5528 error_type=%s", type(exc).__name__)
 
     try:
         lifecycle_closed_count = await reconcile_past_deadline_open_tenders(
@@ -5625,7 +5501,7 @@ async def sync_world_bank_tenders(
     except Exception as exc:
         failed_count += 1
         errors.append(f"lifecycle: {type(exc).__name__}")
-        logger.exception("world_bank_lifecycle_reconciliation_failed")
+        logger.error("operation_failed event=tenders:5539 error_type=%s", type(exc).__name__)
 
     if dry_run:
         await db.rollback()
@@ -5634,7 +5510,7 @@ async def sync_world_bank_tenders(
             await db.commit()
         except Exception as exc:
             await db.rollback()
-            logger.exception("world_bank_sync_commit_failed")
+            logger.error("operation_failed event=tenders:5548 error_type=%s", type(exc).__name__)
             return SourceSyncResponse(
                 status="failed",
                 source_system=source.source_system,
@@ -5663,9 +5539,7 @@ async def sync_world_bank_tenders(
             )
         except Exception:
             await db.rollback()
-            logger.exception(
-                "world_bank_project_enrichment_batch_failed tender_sync_preserved=true"
-            )
+            logger.error("operation_failed event=tenders:5577 error_type=%s", "unavailable")
 
     status_value = (
         "success"
@@ -5707,9 +5581,6 @@ async def sync_world_bank_tenders(
     )
 
 
-def _giz_payload_looks_like_html(file_bytes: bytes) -> bool:
-    head = file_bytes[:512].lstrip().lower()
-    return head.startswith((b"<!doctype html", b"<html", b"<head", b"<body")) or b"<html" in head[:200]
 
 
 GIZ_PARSEABLE_DOCUMENT_EXTENSIONS = {"pdf", "docx", "txt"}
@@ -5741,619 +5612,46 @@ GIZ_DANGEROUS_DOCUMENT_EXTENSIONS = {
 GIZ_MAX_COMPRESSION_RATIO = 100
 
 
-def _giz_archive_limits_payload() -> dict[str, int]:
-    return {
-        "max_compressed_archive_bytes": GIZ_MAX_ARCHIVE_COMPRESSED_BYTES,
-        "max_extracted_bytes": GIZ_MAX_ARCHIVE_EXTRACTED_BYTES,
-        "max_file_count": GIZ_MAX_ARCHIVE_FILE_COUNT,
-        "max_individual_file_bytes": GIZ_MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES,
-        "max_nesting_depth": GIZ_MAX_ARCHIVE_NESTING_DEPTH,
-        "max_compression_ratio": GIZ_MAX_COMPRESSION_RATIO,
-    }
 
 
-def _giz_official_listed_document_count(tender: Tender) -> int:
-    metadata = tender.source_metadata_json or {}
-    participation_documents = metadata.get("participation_documents")
-    if isinstance(participation_documents, list):
-        return len(participation_documents)
-    attachments = metadata.get("attachments")
-    if isinstance(attachments, list):
-        return len(attachments)
-    return 0
 
 
-def _giz_inner_source_url(archive_doc: TenderDocument, inner_path: str) -> str:
-    base_url = (archive_doc.source_document_url or archive_doc.file_url or "").split("#", 1)[0]
-    digest = hashlib.sha256(f"{base_url}|{inner_path}".encode("utf-8")).hexdigest()[:16]
-    quoted_path = quote(inner_path, safe="/")
-    candidate = f"{base_url}#giz-inner={quoted_path}"
-    if len(candidate) <= 1000:
-        return candidate
-    return f"{base_url}#giz-inner-sha={digest}"
 
 
-def _giz_file_url_for_source(source_url: str) -> str:
-    if len(source_url) <= 500:
-        return source_url
-    base_url = source_url.split("#", 1)[0]
-    digest = hashlib.sha256(source_url.encode("utf-8")).hexdigest()[:16]
-    return f"{base_url[:470]}#giz-inner-sha={digest}"
 
 
-def _giz_zip_member_name(raw_name: str) -> str | None:
-    normalized = raw_name.replace("\\", "/").strip()
-    if not normalized or normalized.endswith("/"):
-        return None
-    if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
-        return None
-    path = PurePosixPath(normalized)
-    if any(part in {"", ".", ".."} for part in path.parts):
-        return None
-    return str(path)
 
 
-def _giz_zip_member_is_symlink(info: zipfile.ZipInfo) -> bool:
-    return ((info.external_attr >> 16) & 0o170000) == 0o120000
 
 
-def _giz_archive_member_extension(member_name: str) -> str:
-    return Path(member_name).suffix.lower().lstrip(".")
 
 
-def _giz_member_storage_filename(*, archive_name: str, inner_path: str) -> str:
-    safe_inner = re.sub(r"[^A-Za-z0-9._-]+", "_", inner_path).strip("._")
-    return f"{Path(archive_name).stem}__{safe_inner or Path(inner_path).name}"
 
 
-def _giz_relabel_parsed_text(parsed_text: str, source_label: str) -> str:
-    marker = f"[[FILE: {source_label}]]"
-    relabeled = _TRACE_FILE_MARKER_RE.sub(marker, parsed_text)
-    if "[[PAGE" not in relabeled:
-        relabeled = f"{marker}\n[[PAGE 1]]\n{relabeled.strip()}"
-    return relabeled.strip()
 
 
-async def _giz_upsert_inner_document(
-    db: AsyncSession,
-    *,
-    tender: Tender,
-    archive_doc: TenderDocument,
-    inner_path: str,
-    file_type: str,
-    file_size: int | None = None,
-) -> TenderDocument:
-    source_url = _giz_inner_source_url(archive_doc, inner_path)
-    result = await db.execute(
-        select(TenderDocument).where(
-            TenderDocument.tender_id == tender.id,
-            TenderDocument.source_document_url == source_url,
-        )
-    )
-    doc = result.scalar_one_or_none()
-    if doc is None:
-        doc = TenderDocument(
-            tender_id=tender.id,
-            file_url=_giz_file_url_for_source(source_url),
-            file_type=file_type or "unknown",
-            source_document_url=source_url,
-            source_document_type=file_type or "unknown",
-            external_file_id=hashlib.sha256(source_url.encode("utf-8")).hexdigest()[:32],
-            download_status="metadata_only",
-            file_size=file_size,
-            mime_type=_guess_download_content_type(
-                filename=Path(inner_path).name,
-                file_type=file_type or None,
-            ),
-        )
-        db.add(doc)
-        await db.flush()
-    else:
-        doc.file_type = file_type or doc.file_type or "unknown"
-        doc.source_document_type = file_type or doc.source_document_type
-        if file_size is not None:
-            doc.file_size = file_size
-        if not doc.mime_type:
-            doc.mime_type = _guess_download_content_type(
-                filename=Path(inner_path).name,
-                file_type=file_type or None,
-            )
-    return doc
 
 
-async def _giz_find_duplicate_document_by_sha(
-    db: AsyncSession,
-    *,
-    tender: Tender,
-    sha256_digest: str,
-    excluding_doc_id: UUID,
-) -> TenderDocument | None:
-    result = await db.execute(
-        select(TenderDocument)
-        .where(
-            TenderDocument.tender_id == tender.id,
-            TenderDocument.id != excluding_doc_id,
-            TenderDocument.sha256 == sha256_digest,
-            TenderDocument.storage_path.is_not(None),
-        )
-        .order_by(TenderDocument.created_at.asc(), TenderDocument.id.asc())
-        .limit(1)
-    )
-    duplicate = result.scalar_one_or_none()
-    if duplicate is not None and storage_file_exists(duplicate.storage_path):
-        return duplicate
-    return None
 
 
-def _giz_mark_document_failed(doc: TenderDocument, message: str) -> None:
-    doc.download_status = "failed"
-    doc.download_error = message[:1000]
 
 
-async def _giz_parse_stored_document(
-    *,
-    doc: TenderDocument,
-    source_label: str,
-) -> bool:
-    previous_error = doc.download_error or ""
-    if (doc.download_status or "").casefold() == "failed" and (
-        previous_error.startswith("Unsupported GIZ")
-        or previous_error.startswith("GIZ document parsed to empty text")
-        or previous_error.startswith("GIZ document exceeds the individual")
-    ):
-        return False
-    extension = (doc.file_type or Path(source_label).suffix.lstrip(".")).strip().casefold()
-    if extension not in GIZ_PARSEABLE_DOCUMENT_EXTENSIONS:
-        _giz_mark_document_failed(
-            doc,
-            f"Unsupported GIZ document type for parsing: {extension or 'unknown'}.",
-        )
-        return False
-    local_path = normalize_storage_path(doc.storage_path)
-    if local_path is None or not local_path.is_file():
-        _giz_mark_document_failed(doc, "GIZ document file is missing from storage.")
-        return False
-    if local_path.stat().st_size > GIZ_MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES:
-        _giz_mark_document_failed(doc, "GIZ document exceeds the individual file parsing limit.")
-        return False
-    if doc.parsed_text and doc.parsed_text.strip():
-        doc.download_status = "downloaded"
-        doc.download_error = None
-        return False
-
-    file_bytes = await asyncio.to_thread(local_path.read_bytes)
-    parsed_text = await process_tender_document(file_bytes, filename=source_label)
-    if not parsed_text.strip():
-        _giz_mark_document_failed(doc, "GIZ document parsed to empty text.")
-        return False
-
-    doc.parsed_text = _giz_relabel_parsed_text(parsed_text, source_label)
-    doc.download_status = "downloaded"
-    doc.download_error = None
-    return True
 
 
-def _giz_zip_member_rejection_reason(
-    info: zipfile.ZipInfo,
-    *,
-    safe_name: str | None,
-    current_depth: int,
-) -> str | None:
-    if safe_name is None:
-        return "Rejected unsafe ZIP member path."
-    if _giz_zip_member_is_symlink(info):
-        return "Rejected ZIP symlink member."
-    extension = _giz_archive_member_extension(safe_name)
-    if extension in GIZ_DANGEROUS_DOCUMENT_EXTENSIONS:
-        return f"Rejected executable or script member: .{extension}."
-    if extension in GIZ_ARCHIVE_DOCUMENT_EXTENSIONS and current_depth >= GIZ_MAX_ARCHIVE_NESTING_DEPTH:
-        return "Rejected nested archive beyond the allowed GIZ nesting depth."
-    if info.file_size > GIZ_MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES:
-        return "Rejected ZIP member above the GIZ individual file size limit."
-    if info.compress_size > 0 and info.file_size / info.compress_size > GIZ_MAX_COMPRESSION_RATIO:
-        return "Rejected ZIP member with excessive compression ratio."
-    return None
 
 
-async def _giz_extract_supported_zip_members(
-    db: AsyncSession,
-    *,
-    tender: Tender,
-    archive_doc: TenderDocument,
-    current_depth: int = 0,
-) -> None:
-    archive_path = normalize_storage_path(archive_doc.storage_path)
-    if archive_path is None or not archive_path.is_file():
-        _giz_mark_document_failed(archive_doc, "GIZ ZIP archive is missing from storage.")
-        return
-    compressed_size = archive_path.stat().st_size
-    if compressed_size > GIZ_MAX_ARCHIVE_COMPRESSED_BYTES:
-        _giz_mark_document_failed(archive_doc, "GIZ ZIP archive exceeds the compressed size limit.")
-        return
-
-    archive_name = Path(archive_doc.source_document_url or archive_doc.file_url or archive_path.name).name
-    try:
-        with zipfile.ZipFile(archive_path) as archive:
-            infos = [info for info in archive.infolist() if not info.is_dir()]
-            if len(infos) > GIZ_MAX_ARCHIVE_FILE_COUNT:
-                _giz_mark_document_failed(archive_doc, "GIZ ZIP archive exceeds the file count limit.")
-                return
-            total_uncompressed = sum(max(0, info.file_size) for info in infos)
-            total_compressed = sum(max(0, info.compress_size) for info in infos)
-            if total_uncompressed > GIZ_MAX_ARCHIVE_EXTRACTED_BYTES:
-                _giz_mark_document_failed(archive_doc, "GIZ ZIP archive exceeds the extracted size limit.")
-                return
-            if total_compressed > 0 and total_uncompressed / total_compressed > GIZ_MAX_COMPRESSION_RATIO:
-                _giz_mark_document_failed(archive_doc, "GIZ ZIP archive has excessive compression ratio.")
-                return
-
-            for info in infos:
-                safe_name = _giz_zip_member_name(info.filename)
-                file_type = _giz_archive_member_extension(safe_name or info.filename) or "unknown"
-                inner_doc = await _giz_upsert_inner_document(
-                    db,
-                    tender=tender,
-                    archive_doc=archive_doc,
-                    inner_path=safe_name or info.filename,
-                    file_type=file_type,
-                    file_size=max(0, info.file_size),
-                )
-                rejection_reason = _giz_zip_member_rejection_reason(
-                    info,
-                    safe_name=safe_name,
-                    current_depth=current_depth,
-                )
-                if rejection_reason:
-                    _giz_mark_document_failed(inner_doc, rejection_reason)
-                    continue
-                if file_type not in GIZ_PARSEABLE_DOCUMENT_EXTENSIONS:
-                    _giz_mark_document_failed(
-                        inner_doc,
-                        f"Unsupported GIZ archive member type for parsing: {file_type}.",
-                    )
-                    continue
-                if storage_file_exists(inner_doc.storage_path):
-                    await _giz_parse_stored_document(
-                        doc=inner_doc,
-                        source_label=f"{archive_name}!/{safe_name}",
-                    )
-                    continue
-
-                storage_filename = _giz_member_storage_filename(
-                    archive_name=archive_name,
-                    inner_path=safe_name,
-                )
-                temp_path, final_path = _reserve_document_download_path(
-                    tender_id=tender.id,
-                    filename=storage_filename,
-                )
-                try:
-                    total_written = 0
-                    with archive.open(info) as source_handle, Path(temp_path).open("wb") as target_handle:
-                        while True:
-                            chunk = source_handle.read(1024 * 1024)
-                            if not chunk:
-                                break
-                            total_written += len(chunk)
-                            if total_written > GIZ_MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES:
-                                raise ValueError("ZIP member exceeded individual extraction limit")
-                            target_handle.write(chunk)
-                    storage_path, file_size, sha256_digest = _finalize_document_download(
-                        temp_path=temp_path,
-                        final_path=final_path,
-                    )
-                except Exception as exc:
-                    _cleanup_temp_download(temp_path)
-                    _giz_mark_document_failed(
-                        inner_doc,
-                        f"GIZ ZIP member extraction failed: {type(exc).__name__}.",
-                    )
-                    continue
-
-                duplicate = await _giz_find_duplicate_document_by_sha(
-                    db,
-                    tender=tender,
-                    sha256_digest=sha256_digest,
-                    excluding_doc_id=inner_doc.id,
-                )
-                if duplicate is not None:
-                    try:
-                        Path(storage_path).unlink(missing_ok=True)
-                    except OSError:
-                        logger.warning("Failed to remove duplicate GIZ extracted file: %s", storage_path)
-                    inner_doc.storage_path = duplicate.storage_path
-                    inner_doc.file_size = duplicate.file_size
-                    inner_doc.mime_type = duplicate.mime_type
-                    inner_doc.sha256 = duplicate.sha256
-                else:
-                    inner_doc.storage_path = storage_path
-                    inner_doc.file_size = file_size
-                    inner_doc.sha256 = sha256_digest
-                    inner_doc.mime_type = _guess_download_content_type(
-                        filename=safe_name,
-                        file_type=file_type,
-                    )
-                inner_doc.download_status = "downloaded"
-                inner_doc.download_error = None
-                await _giz_parse_stored_document(
-                    doc=inner_doc,
-                    source_label=f"{archive_name}!/{safe_name}",
-                )
-    except zipfile.BadZipFile:
-        _giz_mark_document_failed(archive_doc, "GIZ ZIP archive is corrupted or unreadable.")
-    except Exception as exc:
-        _giz_mark_document_failed(
-            archive_doc,
-            f"GIZ ZIP archive processing failed: {type(exc).__name__}.",
-        )
 
 
-async def _update_giz_document_coverage(
-    db: AsyncSession,
-    *,
-    tender: Tender,
-) -> dict[str, Any]:
-    result = await db.execute(
-        select(TenderDocument).where(TenderDocument.tender_id == tender.id)
-    )
-    docs = result.scalars().all()
-    official_count = _giz_official_listed_document_count(tender)
-    inner_docs = [
-        doc
-        for doc in docs
-        if "#giz-inner=" in (doc.source_document_url or doc.file_url or "")
-        or "#giz-inner-sha=" in (doc.source_document_url or doc.file_url or "")
-    ]
-    parsed_count = sum(1 for doc in docs if doc.parsed_text and doc.parsed_text.strip())
-    unsupported_count = sum(
-        1
-        for doc in docs
-        if "Unsupported GIZ" in (doc.download_error or "")
-        or "Rejected executable" in (doc.download_error or "")
-        or "Rejected nested archive" in (doc.download_error or "")
-    )
-    failed_count = sum(
-        1
-        for doc in docs
-        if (doc.download_status or "").casefold() == "failed"
-        and "Unsupported GIZ" not in (doc.download_error or "")
-    )
-    processed_count = parsed_count + unsupported_count + failed_count
-    missing_count = max(official_count - processed_count, 0)
-
-    if official_count == 0 and not docs:
-        coverage_status = "unavailable"
-    elif parsed_count == 0 and (failed_count or unsupported_count or docs):
-        coverage_status = "failed"
-    elif failed_count or unsupported_count or missing_count:
-        coverage_status = "partial"
-    else:
-        coverage_status = "complete"
-
-    warnings: list[str] = []
-    if unsupported_count:
-        warnings.append(f"{unsupported_count} GIZ document(s) are unsupported for parsing.")
-    if failed_count:
-        warnings.append(f"{failed_count} GIZ document(s) failed download, extraction, or parsing.")
-    if missing_count:
-        warnings.append(f"{missing_count} official GIZ document(s) are not yet parsed.")
-
-    coverage = {
-        "coverage_status": coverage_status,
-        "official_listed_document_count": official_count,
-        "extracted_file_count": len(inner_docs),
-        "parsed_file_count": parsed_count,
-        "unsupported_file_count": unsupported_count,
-        "failed_file_count": failed_count,
-        "missing_file_count": missing_count,
-        "limits": _giz_archive_limits_payload(),
-        "coverage_warnings": warnings,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    metadata = dict(tender.source_metadata_json or {})
-    metadata["giz_document_coverage"] = coverage
-    tender.source_metadata_json = metadata
-    return coverage
 
 
-def _giz_rejected_payload_content_type(content_type: str | None) -> bool:
-    normalized = (content_type or "").split(";", 1)[0].strip().casefold()
-    if not normalized:
-        return False
-    if "html" in normalized:
-        return True
-    return normalized in {"application/json", "text/json", "text/plain"}
 
 
-def _giz_valid_file_signature(
-    file_bytes: bytes,
-    extension: str,
-    content_type: str | None,
-) -> bool:
-    head = file_bytes[:16]
-    ext = extension.casefold()
-    normalized_type = (content_type or "").split(";", 1)[0].strip().casefold()
-    if ext == "pdf":
-        return file_bytes.lstrip().startswith(b"%PDF") or normalized_type == "application/pdf"
-    if ext == "zip":
-        return head.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"))
-    if ext in {"docx", "xlsx"}:
-        return head.startswith(b"PK\x03\x04")
-    if ext in {"doc", "xls"}:
-        return head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
-    if ext == "rtf":
-        return file_bytes.lstrip().startswith(b"{\\rtf")
-    return normalized_type.startswith("application/")
 
 
-async def _download_giz_document_into_storage(
-    *,
-    client: httpx.AsyncClient,
-    tender: Tender,
-    doc: TenderDocument,
-    max_bytes: int,
-) -> bool:
-    assert_source_scope("giz", tender)
-    if doc.tender_id != tender.id:
-        raise ValueError("GIZ document does not belong to the supplied tender")
-    source_url = (doc.source_document_url or doc.file_url or "").strip()
-    if "#giz-inner=" in source_url or "#giz-inner-sha=" in source_url:
-        return False
-    if (doc.download_status or "").strip().casefold() == "access_required":
-        return False
-    extension = _giz_extension_from_url(source_url)
-    if not source_url or not extension or not _safe_giz_url(source_url):
-        if not storage_file_exists(doc.storage_path):
-            doc.download_status = doc.download_status or "metadata_only"
-        return False
-    if storage_file_exists(doc.storage_path):
-        doc.download_status = "downloaded"
-        doc.download_error = None
-        return False
-
-    request_url = source_url.split("#", 1)[0]
-    filename = Path(urlparse(request_url).path).name or f"giz-document.{extension}"
-    temp_path: str | None = None
-    try:
-        async with client.stream("GET", request_url) as response:
-            response.raise_for_status()
-            content_type = (response.headers.get("content-type") or "").split(";", 1)[0].strip()
-            content_length = response.headers.get("content-length")
-            try:
-                declared_length = int(content_length) if content_length else None
-            except ValueError:
-                declared_length = None
-            if declared_length is not None and declared_length > max_bytes:
-                doc.download_status = "failed"
-                doc.download_error = "Public GIZ document exceeds configured download size limit."
-                return False
-            if _giz_rejected_payload_content_type(content_type):
-                doc.download_status = "access_required" if "html" in content_type.casefold() else "failed"
-                doc.download_error = "Public GIZ document URL returned a page or error payload, not a document file."
-                return False
-
-            temp_path, final_path = _reserve_document_download_path(
-                tender_id=tender.id,
-                filename=filename,
-            )
-            first_bytes = bytearray()
-            total_bytes = 0
-            with Path(temp_path).open("wb") as file_handle:
-                async for chunk in response.aiter_bytes():
-                    if not chunk:
-                        continue
-                    total_bytes += len(chunk)
-                    if total_bytes > max_bytes:
-                        _cleanup_temp_download(temp_path)
-                        doc.download_status = "failed"
-                        doc.download_error = "Public GIZ document exceeds configured download size limit."
-                        return False
-                    if len(first_bytes) < 2048:
-                        first_bytes.extend(chunk[: 2048 - len(first_bytes)])
-                    file_handle.write(chunk)
-    except Exception as exc:
-        if temp_path:
-            _cleanup_temp_download(temp_path)
-        doc.download_status = "failed"
-        doc.download_error = f"GIZ public document download failed: {type(exc).__name__}"
-        logger.warning(
-            "giz_document_download_failed tender_id=%s doc_id=%s error_type=%s",
-            tender.id,
-            doc.id,
-            type(exc).__name__,
-        )
-        return False
-
-    file_head = bytes(first_bytes)
-    if total_bytes < 32:
-        if temp_path:
-            _cleanup_temp_download(temp_path)
-        doc.download_status = "failed"
-        doc.download_error = "GIZ public document download returned an empty or trivial file."
-        return False
-    if _giz_payload_looks_like_html(file_head):
-        if temp_path:
-            _cleanup_temp_download(temp_path)
-        doc.download_status = "access_required"
-        doc.download_error = "GIZ public document download returned HTML instead of a document."
-        return False
-    if not _giz_valid_file_signature(file_head, extension, content_type):
-        if temp_path:
-            _cleanup_temp_download(temp_path)
-        doc.download_status = "failed"
-        doc.download_error = "GIZ public document download did not match the expected file signature."
-        return False
-
-    storage_path, file_size, sha256_digest = await asyncio.to_thread(
-        _finalize_document_download,
-        temp_path=temp_path,
-        final_path=final_path,
-    )
-    if not storage_file_exists(storage_path):
-        doc.download_status = "failed"
-        doc.download_error = "GIZ public document was written but is not present on disk."
-        return False
-    doc.storage_path = storage_path
-    doc.file_size = file_size
-    doc.mime_type = content_type or doc.mime_type or _guess_download_content_type(
-        filename=filename,
-        file_type=extension,
-    )
-    doc.sha256 = sha256_digest
-    doc.download_status = "downloaded"
-    doc.download_error = None
-    return True
 
 
-async def _process_giz_documents_for_compliance(
-    db: AsyncSession,
-    *,
-    tender: Tender,
-) -> dict[str, Any]:
-    assert_source_scope("giz", tender)
-    result = await db.execute(
-        select(TenderDocument)
-        .where(TenderDocument.tender_id == tender.id)
-        .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
-    )
-    docs = result.scalars().all()
-    for doc in docs:
-        source_url = doc.source_document_url or doc.file_url or ""
-        if "#giz-inner=" in source_url or "#giz-inner-sha=" in source_url:
-            if storage_file_exists(doc.storage_path):
-                archive_name = Path(urlparse(source_url.split("#", 1)[0]).path).name
-                if "#giz-inner=" in source_url:
-                    inner_name = unquote(source_url.split("#giz-inner=", 1)[-1])
-                    source_label = f"{archive_name}!/{inner_name}" if archive_name else inner_name
-                else:
-                    source_label = _stored_download_name(doc.storage_path or "")
-                await _giz_parse_stored_document(doc=doc, source_label=source_label)
-            continue
-        extension = (doc.file_type or _giz_extension_from_url(source_url) or "").casefold()
-        if extension in GIZ_ARCHIVE_DOCUMENT_EXTENSIONS and storage_file_exists(doc.storage_path):
-            await _giz_extract_supported_zip_members(db, tender=tender, archive_doc=doc)
-        elif storage_file_exists(doc.storage_path):
-            display_name = Path(urlparse(source_url).path).name or _stored_download_name(doc.storage_path or "")
-            await _giz_parse_stored_document(doc=doc, source_label=display_name)
-
-    coverage = await _update_giz_document_coverage(db, tender=tender)
-    await _compile_tender_text_from_documents(db=db, tender=tender)
-    return coverage
 
 
-async def _compile_tender_text_from_documents(
-    *,
-    db: AsyncSession,
-    tender: Tender,
-) -> None:
-    result = await db.execute(
-        select(TenderDocument)
-        .where(TenderDocument.tender_id == tender.id)
-        .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
-    )
-    docs = result.scalars().all()
-    parsed_parts = [doc.parsed_text.strip() for doc in docs if doc.parsed_text and doc.parsed_text.strip()]
-    tender.compiled_master_text = "\n\n".join(parsed_parts) if parsed_parts else None
 
 
 def _giz_commit_error_message(exc: Exception) -> str:
@@ -6469,7 +5767,7 @@ async def sync_giz_tenders(
         raw_notices = await source.list_opportunities()
     except Exception as exc:
         failure = connector_failure_details(exc)
-        logger.exception("giz_sync_fetch_failed")
+        logger.error("operation_failed event=tenders:5807 error_type=%s", type(exc).__name__)
         return SourceSyncResponse(
             status=failure.status,
             source_system=source.source_system,
@@ -6510,12 +5808,7 @@ async def sync_giz_tenders(
             prepared_by_key[normalized.canonical_source_key] = (normalized, documents)
         except Exception as exc:
             failed_count += 1
-            logger.warning(
-                "giz_sync_notice_failed source_system=%s external_id=%s status=failed error_type=%s",
-                source.source_system,
-                external_id,
-                type(exc).__name__,
-            )
+            logger.error("operation_failed event=tenders:5848 error_type=%s", type(exc).__name__)
             if len(errors) < 10:
                 errors.append(f"{external_id or 'unknown'}: {type(exc).__name__}")
 
@@ -6552,15 +5845,11 @@ async def sync_giz_tenders(
                             f"{normalized.external_id}: related_metadata: "
                             f"{type(exc).__name__}"
                         )
-                    logger.warning(
-                        "giz_sync_related_metadata_failed external_id=%s error_type=%s",
-                        normalized.external_id,
-                        type(exc).__name__,
-                    )
+                    logger.error("operation_failed event=tenders:5890 error_type=%s", type(exc).__name__)
         except Exception as exc:
             failed_count += 1
             errors.append(f"persistence: {type(exc).__name__}")
-            logger.exception("giz_batch_persistence_failed")
+            logger.error("operation_failed event=tenders:5898 error_type=%s", type(exc).__name__)
 
     if dry_run:
         await db.rollback()
@@ -6569,7 +5858,7 @@ async def sync_giz_tenders(
             await db.commit()
         except Exception as exc:
             await db.rollback()
-            logger.exception("giz_sync_commit_failed")
+            logger.error("operation_failed event=tenders:5907 error_type=%s", type(exc).__name__)
             return SourceSyncResponse(
                 status="failed",
                 source_system=source.source_system,
@@ -6800,10 +6089,10 @@ async def hydrate_giz_tenders(
             )
         except SQLAlchemyError as exc:
             await db.rollback()
-            logger.exception("Failed to persist GIZ hydration job before enqueue")
+            logger.error("operation_failed event=tenders:6138 error_type=%s", type(exc).__name__)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database write failed: {exc}",
+                detail="Request could not be completed",
             ) from exc
 
         try:
@@ -6843,13 +6132,7 @@ async def hydrate_giz_tenders(
             )
         except Exception as exc:
             error_type = type(exc).__name__
-            logger.exception(
-                "Failed to enqueue GIZ hydration task tender_id=%s external_id=%s job_id=%s error_type=%s",
-                tender.id,
-                external_id,
-                new_job.job_id,
-                error_type,
-            )
+            logger.error("operation_failed event=tenders:6181 error_type=%s", type(exc).__name__)
             try:
                 new_job.status = TenderSyncStatus.FAILED
                 new_job.progress = 0
@@ -6857,10 +6140,7 @@ async def hydrate_giz_tenders(
                 await db.commit()
             except SQLAlchemyError:
                 await db.rollback()
-                logger.exception(
-                    "Failed to persist GIZ hydration enqueue failure for job %s",
-                    new_job.job_id,
-                )
+                logger.error("operation_failed event=tenders:6195 error_type=%s", "unavailable")
             jobs.append(
                 GizHydrateJobResponse(
                     external_id=external_id,
@@ -6919,7 +6199,7 @@ async def sync_ebrd_tenders(
         raw_notices = await source.list_opportunities()
     except Exception as exc:
         failure = connector_failure_details(exc)
-        logger.exception("ebrd_sync_fetch_failed")
+        logger.error("operation_failed event=tenders:6257 error_type=%s", type(exc).__name__)
         return SourceSyncResponse(
             status=failure.status,
             source_system=source.source_system,
@@ -6955,12 +6235,7 @@ async def sync_ebrd_tenders(
             prepared_by_key[normalized.canonical_source_key] = (normalized, documents)
         except Exception as exc:
             failed_count += 1
-            logger.warning(
-                "ebrd_sync_notice_failed source_system=%s external_id=%s status=failed error_type=%s",
-                source.source_system,
-                external_id,
-                type(exc).__name__,
-            )
+            logger.error("operation_failed event=tenders:6293 error_type=%s", type(exc).__name__)
             if len(errors) < 10:
                 errors.append(f"{external_id or 'unknown'}: {type(exc).__name__}")
 
@@ -6988,15 +6263,11 @@ async def sync_ebrd_tenders(
                             f"{normalized.external_id}: document_metadata: "
                             f"{type(exc).__name__}"
                         )
-                    logger.warning(
-                        "ebrd_sync_document_metadata_failed external_id=%s error_type=%s",
-                        normalized.external_id,
-                        type(exc).__name__,
-                    )
+                    logger.error("operation_failed event=tenders:6326 error_type=%s", type(exc).__name__)
         except Exception as exc:
             failed_count += 1
             errors.append(f"persistence: {type(exc).__name__}")
-            logger.exception("ebrd_batch_persistence_failed")
+            logger.error("operation_failed event=tenders:6334 error_type=%s", type(exc).__name__)
 
     if dry_run:
         await db.rollback()
@@ -7005,7 +6276,7 @@ async def sync_ebrd_tenders(
             await db.commit()
         except Exception as exc:
             await db.rollback()
-            logger.exception("ebrd_sync_commit_failed")
+            logger.error("operation_failed event=tenders:6343 error_type=%s", type(exc).__name__)
             return SourceSyncResponse(
                 status="failed",
                 source_system=source.source_system,
@@ -7119,7 +6390,7 @@ async def sync_adb_tenders(
         raw_notices = await source.list_opportunities()
     except Exception as exc:
         failure = connector_failure_details(exc)
-        logger.exception("adb_sync_fetch_failed")
+        logger.error("operation_failed event=tenders:6457 error_type=%s", type(exc).__name__)
         return AdbSyncResponse(
             status=failure.status,
             fetched=0,
@@ -7159,12 +6430,7 @@ async def sync_adb_tenders(
             prepared_by_key[normalized.canonical_source_key] = (normalized, documents)
         except Exception as exc:
             failed_count += 1
-            logger.warning(
-                "adb_sync_notice_failed source_system=%s external_id=%s status=failed error_type=%s",
-                source.source_system,
-                external_id,
-                type(exc).__name__,
-            )
+            logger.error("operation_failed event=tenders:6497 error_type=%s", type(exc).__name__)
             if len(errors) < 10:
                 errors.append(f"{external_id or 'unknown'}: {type(exc).__name__}")
     normalize_elapsed_ms = int((monotonic() - normalize_started) * 1000)
@@ -7200,15 +6466,11 @@ async def sync_adb_tenders(
                             f"{normalized.external_id}: document_metadata: "
                             f"{type(exc).__name__}"
                         )
-                    logger.warning(
-                        "adb_sync_document_metadata_failed external_id=%s error_type=%s",
-                        normalized.external_id,
-                        type(exc).__name__,
-                    )
+                    logger.error("operation_failed event=tenders:6538 error_type=%s", type(exc).__name__)
         except Exception as exc:
             failed_count += 1
             errors.append(f"persistence: {type(exc).__name__}")
-            logger.exception("adb_batch_persistence_failed")
+            logger.error("operation_failed event=tenders:6546 error_type=%s", type(exc).__name__)
     persist_elapsed_ms = int((monotonic() - persist_started) * 1000)
 
     try:
@@ -7229,7 +6491,7 @@ async def sync_adb_tenders(
     except Exception as exc:
         failed_count += 1
         errors.append(f"lifecycle: {type(exc).__name__}")
-        logger.exception("adb_lifecycle_reconciliation_failed")
+        logger.error("operation_failed event=tenders:6567 error_type=%s", type(exc).__name__)
 
     if dry_run:
         await db.rollback()
@@ -7238,7 +6500,7 @@ async def sync_adb_tenders(
             await db.commit()
         except Exception as exc:
             await db.rollback()
-            logger.exception("adb_sync_commit_failed")
+            logger.error("operation_failed event=tenders:6576 error_type=%s", type(exc).__name__)
             return AdbSyncResponse(
                 status="failed",
                 fetched=fetched,
@@ -7439,19 +6701,6 @@ async def _run_source_refresh(
     return await execute_source_refresh(source_system, db, options)
 
 
-def _normalized_source_result(
-    result: RefreshResponse | SourceSyncResponse | AdbSyncResponse,
-) -> tuple[str, int, int, int, str]:
-    canonical = adapt_execution_result(
-        str(getattr(result, "source_system", "uzex")), result
-    )
-    return (
-        canonical.status,
-        canonical.created_count,
-        canonical.updated_count,
-        canonical.failed_count,
-        canonical.message,
-    )
 
 
 def _publish_source_refresh_job(job: SourceRefreshJob) -> Any:
@@ -7562,13 +6811,7 @@ async def _request_source_refresh(
         try:
             _publish_source_refresh_job(active_job)
         except Exception as exc:
-            logger.exception(
-                "source_refresh_republish_failed source_system=%s job_id=%s "
-                "failure_class=%s",
-                normalized_source,
-                active_job.id,
-                type(exc).__name__,
-            )
+            logger.error("operation_failed event=tenders:6887 error_type=%s", type(exc).__name__)
             if active_job.status == "queued":
                 await fail_queued_source_refresh_publish(
                     db,
@@ -7665,13 +6908,7 @@ async def _request_source_refresh(
     try:
         _publish_source_refresh_job(job)
     except Exception as exc:
-        logger.exception(
-            "source_refresh_enqueue_failed source_system=%s job_id=%s "
-            "stage=dispatch failure_class=%s retryable=true",
-            normalized_source,
-            job.id,
-            type(exc).__name__,
-        )
+        logger.error("operation_failed event=tenders:6990 error_type=%s", type(exc).__name__)
         await fail_queued_source_refresh_publish(
             db,
             job_id=job.id,
@@ -8166,10 +7403,10 @@ async def sync_tender_documents(
         )
     except SQLAlchemyError as exc:
         await db.rollback()
-        logger.exception("Failed to persist tender sync job before enqueue")
+        logger.error("operation_failed event=tenders:7491 error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database write failed: {exc}",
+            detail="Request could not be completed",
         ) from exc
 
     try:
@@ -8196,12 +7433,7 @@ async def sync_tender_documents(
         )
     except Exception as exc:
         error_type = type(exc).__name__
-        logger.exception(
-            "Failed to enqueue sync task for tender %s job_id=%s error_type=%s",
-            tender_id,
-            new_job.job_id,
-            error_type,
-        )
+        logger.error("operation_failed event=tenders:7521 error_type=%s", type(exc).__name__)
         try:
             new_job.status = TenderSyncStatus.FAILED
             new_job.progress = 0
@@ -8209,10 +7441,7 @@ async def sync_tender_documents(
             await db.commit()
         except SQLAlchemyError:
             await db.rollback()
-            logger.exception(
-                "Failed to persist enqueue failure for sync job %s",
-                new_job.job_id,
-            )
+            logger.error("operation_failed event=tenders:7534 error_type=%s", "unavailable")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=(
@@ -8462,7 +7691,7 @@ async def get_latest_analysis(
             include_debug=current_user.is_admin,
         ),
         "analysis_status": analysis_status,
-        "extraction_error": analysis_data.get("extraction_error"),
+        "extraction_error": _public_extraction_error(analysis_data.get("extraction_error"), version.analysis_language),
         "created_at": version.created_at.isoformat() if version.created_at else None,
     }
 
@@ -8471,6 +7700,14 @@ def _analysis_version_metadata(
     version: AnalysisVersion,
 ) -> AnalysisVersionMetadataResponse:
     return AnalysisVersionMetadataResponse.model_validate(version)
+
+
+def _public_extraction_error(value: Any, language: str) -> str | None:
+    """Old immutable snapshots may contain raw provider exceptions; redact on read."""
+    if not value:
+        return None
+    allowed = {analysis_text(language, key) for key in ("extraction_failed", "language_failed")}
+    return value if isinstance(value, str) and value in allowed else analysis_text(language, "extraction_failed")
 
 
 def _safe_version_result_snapshot(
@@ -8490,6 +7727,8 @@ def _safe_version_result_snapshot(
     ):
         if key in source:
             result[key] = source[key]
+    if "extraction_error" in result:
+        result["extraction_error"] = _public_extraction_error(result["extraction_error"], version.analysis_language)
     if "hybrid_compliance" in source:
         result["hybrid_compliance"] = sanitize_internal_requirement_diagnostics(
             source.get("hybrid_compliance")
@@ -8665,6 +7904,9 @@ async def get_analysis_versions(
     analysis_id: UUID,
     current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    response: Response = None,
 ) -> list[AnalysisVersionMetadataResponse]:
     """List immutable versions for exactly one explicitly owned parent."""
     _parent, profile = await _owned_analysis_parent_for_version_route(
@@ -8678,8 +7920,9 @@ async def get_analysis_versions(
         analysis_id=analysis_id,
         user_id=current_user.id,
         company_profile_id=profile.id,
+        limit=limit + 1, offset=offset, metadata_only=True,
     )
-    if not versions:
+    if not versions and offset == 0:
         logger.error(
             "analysis_version_zero_version_anomaly analysis_id=%s route=list",
             analysis_id,
@@ -8688,7 +7931,7 @@ async def get_analysis_versions(
             status_code=status.HTTP_409_CONFLICT,
             detail="Compliance analysis version history is unavailable.",
         )
-    return [_analysis_version_metadata(version) for version in versions]
+    return [_analysis_version_metadata(version) for version in page_rows(versions, limit=limit, offset=offset, response=response)]
 
 
 @router.get(
@@ -8902,7 +8145,7 @@ async def export_compliance_pdf(
             analysis_language=version.analysis_language or AnalysisLanguage.ENGLISH.value,
         )
     except Exception as exc:
-        logger.exception("Compliance PDF export failed for tender %s", tender_id)
+        logger.error("operation_failed event=tenders:8231 error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Compliance PDF export failed. Please try again later.",
@@ -9050,10 +8293,10 @@ async def override_risk(
         await db.commit()
     except SQLAlchemyError as exc:
         await db.rollback()
-        logger.exception("Failed to persist risk override log")
+        logger.error("operation_failed event=tenders:8379 error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database write failed: {exc}",
+            detail="Request could not be completed",
         ) from exc
 
     return {

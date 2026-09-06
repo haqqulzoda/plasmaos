@@ -1,0 +1,45 @@
+{
+  "status": "PASS_LOCAL_SPRINT_9_3",
+  "head": "b121cda5b76911c59fdab5733d70aa6883908e9c",
+  "branch": "main",
+  "backend": {
+    "passed": 732,
+    "skipped": 1,
+    "subtests": 100
+  },
+  "security": {
+    "passed": 118
+  },
+  "analysis": {
+    "passed": 50,
+    "subtests": 12
+  },
+  "connectors": {
+    "passed": 196,
+    "skipped": 1,
+    "subtests": 6
+  },
+  "frontend": {
+    "tests": 159,
+    "failures": 0,
+    "typecheck": "PASS",
+    "lint": "PASS_NO_WARNINGS",
+    "rtl": "PASS",
+    "production_build": "PASS",
+    "npm_ci": "PASS",
+    "npm_advisories": 0
+  },
+  "chromium": {
+    "passed": 145,
+    "failed": 0,
+    "external_requests": 0
+  },
+  "migration_head": "20260904_0001_s8_2_analysis_language",
+  "migration_added": false,
+  "production_access": false,
+  "deployment": false,
+  "remote_ci_executed": false,
+  "docker_build_executed": false,
+  "report_sections": 36,
+  "result_categories": 134
+}

@@ -1,0 +1,53 @@
+{
+  "method": "Real Chromium against local production Next.js and controlled HTTP API fixtures; backend security cases execute real route/dependency code with synthetic DB and signed assertion fixtures",
+  "cases": [
+    {
+      "case": "upload/browser-multipart/valid",
+      "status": "PASS",
+      "evidence": {
+        "status": 200,
+        "commits": 1,
+        "temporary_files_cleaned": true
+      }
+    },
+    {
+      "case": "upload/browser-multipart/extension",
+      "status": "PASS",
+      "evidence": {
+        "status": 415,
+        "commits": 0,
+        "temporary_files_cleaned": true
+      }
+    },
+    {
+      "case": "upload/browser-multipart/signature",
+      "status": "PASS",
+      "evidence": {
+        "status": 415,
+        "commits": 0,
+        "temporary_files_cleaned": true
+      }
+    },
+    {
+      "case": "upload/browser-multipart/parse",
+      "status": "PASS",
+      "evidence": {
+        "status": 422,
+        "commits": 0,
+        "temporary_files_cleaned": true
+      }
+    },
+    {
+      "case": "upload/browser-multipart/model",
+      "status": "PASS",
+      "evidence": {
+        "status": 502,
+        "commits": 0,
+        "temporary_files_cleaned": true
+      }
+    }
+  ],
+  "external_requests": [],
+  "passed": 5,
+  "failed": 0
+}

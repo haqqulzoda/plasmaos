@@ -222,3 +222,5 @@ single additive migration, and communicate that first restore of an unknown
 legacy disabled account yields pending rather than approved. Sprint 3.2 should
 next address session visibility and forced reauthentication without changing
 this lifecycle contract.
+
+Sprint 9.2 tooling update: the historical `scripts/test_extraction.py` diagnostic moved to `backend/scripts/probes/extraction_probe.py`; its explicit invocation uses the current extraction model chain and taxonomy argument. The historical result above is preserved.

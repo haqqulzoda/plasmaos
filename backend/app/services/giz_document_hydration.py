@@ -728,12 +728,7 @@ async def download_giz_document_into_storage(
             doc,
             f"GIZ public document download failed: {type(exc).__name__}",
         )
-        logger.warning(
-            "giz_document_download_failed tender_id=%s doc_id=%s error_type=%s",
-            tender.id,
-            doc.id,
-            type(exc).__name__,
-        )
+        logger.error("operation_failed event=giz_document_hydration:731 error_type=%s", type(exc).__name__)
         return False
 
     file_head = bytes(first_bytes)

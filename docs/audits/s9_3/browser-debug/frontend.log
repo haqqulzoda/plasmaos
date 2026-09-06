@@ -1,0 +1,8 @@
+
+> frontend@0.1.0 start
+> next start -p 3114
+
+▲ Next.js 16.2.11
+- Local:         http://localhost:3114
+- Network:       http://10.255.255.254:3114
+✓ Ready in 504ms

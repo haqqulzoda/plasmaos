@@ -124,8 +124,8 @@ export default function OnboardingPage() {
       const refreshedSession = await update();
       setApiAccessToken(refreshedSession?.accessToken ?? null);
       router.replace("/dashboard/pending-approval");
-    } catch (err) {
-      console.error("Failed to submit onboarding:", err);
+    } catch {
+      console.error("Failed to submit onboarding:");
       setError(t("submitError"));
     } finally {
       setSaving(false);

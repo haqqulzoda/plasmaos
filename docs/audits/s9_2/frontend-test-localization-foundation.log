@@ -1,0 +1,109 @@
+
+> frontend@0.1.0 test:localization-foundation
+> node --no-warnings --experimental-strip-types --test tests/localization-foundation.test.mjs
+
+TAP version 13
+# Subtest: locale registry has one complete definition for every canonical product locale
+ok 1 - locale registry has one complete definition for every canonical product locale
+  ---
+  duration_ms: 2.612001
+  ...
+# Subtest: all four UI locales are selectable and Arabic owns RTL direction
+ok 2 - all four UI locales are selectable and Arabic owns RTL direction
+  ---
+  duration_ms: 0.430129
+  ...
+# Subtest: weighted Accept-Language parsing is robust and skips malformed entries
+ok 3 - weighted Accept-Language parsing is robust and skips malformed entries
+  ---
+  duration_ms: 1.472061
+  ...
+# Subtest: request precedence is persisted user, cookie, request, then English
+ok 4 - request precedence is persisted user, cookie, request, then English
+  ---
+  duration_ms: 0.244477
+  ...
+# Subtest: browser BCP-47 variants map to stable product identifiers
+ok 5 - browser BCP-47 variants map to stable product identifiers
+  ---
+  duration_ms: 0.299283
+  ...
+# Subtest: customer locale resolution is deterministic and saved preference wins
+ok 6 - customer locale resolution is deterministic and saved preference wins
+  ---
+  duration_ms: 0.349378
+  ...
+# Subtest: UI locale ownership and required message domains are explicit
+ok 7 - UI locale ownership and required message domains are explicit
+  ---
+  duration_ms: 0.178934
+  ...
+# Subtest: content policy translates presentation without mutating domain content
+ok 8 - content policy translates presentation without mutating domain content
+  ---
+  duration_ms: 0.152029
+  ...
+# Subtest: message validation prototype flattens semantic keys and understands ICU values
+ok 9 - message validation prototype flattens semantic keys and understands ICU values
+  ---
+  duration_ms: 0.799399
+  ...
+# Subtest: message validation detects missing, extra, and placeholder-mismatched keys
+ok 10 - message validation detects missing, extra, and placeholder-mismatched keys
+  ---
+  duration_ms: 1.354749
+  ...
+# Subtest: committed English, Uzbek, Russian, and Arabic catalogs have exact key and ICU parity
+ok 11 - committed English, Uzbek, Russian, and Arabic catalogs have exact key and ICU parity
+  ---
+  duration_ms: 14.440544
+  ...
+# Subtest: next-intl executes plural rules and named interpolation for all active locales
+ok 12 - next-intl executes plural rules and named interpolation for all active locales
+  ---
+  duration_ms: 34.619019
+  ...
+# Subtest: rich messages keep dynamic source values as escaped text
+ok 13 - rich messages keep dynamic source values as escaped text
+  ---
+  duration_ms: 9.296118
+  ...
+# Subtest: formatters localize representation while preserving UTC and economic inputs
+ok 14 - formatters localize representation while preserving UTC and economic inputs
+  ---
+  duration_ms: 13.344473
+  ...
+# Subtest: formatters never expose Invalid Date or NaN
+ok 15 - formatters never expose Invalid Date or NaN
+  ---
+  duration_ms: 0.325391
+  ...
+# Subtest: enum display and stable error-code foundations preserve canonical payloads
+ok 16 - enum display and stable error-code foundations preserve canonical payloads
+  ---
+  duration_ms: 0.254216
+  ...
+# Subtest: runtime integration is locale-neutral, request-scoped, and bundle-conscious
+ok 17 - runtime integration is locale-neutral, request-scoped, and bundle-conscious
+  ---
+  duration_ms: 0.659148
+  ...
+# Subtest: successful locale action persists, reconciles cookie, then refreshes in order
+ok 18 - successful locale action persists, reconciles cookie, then refreshes in order
+  ---
+  duration_ms: 0.460951
+  ...
+# Subtest: failed locale save leaves cookie and rendered locale untouched
+ok 19 - failed locale save leaves cookie and rendered locale untouched
+  ---
+  duration_ms: 0.782446
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 407.524546

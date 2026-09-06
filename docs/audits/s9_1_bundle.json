@@ -1,0 +1,53 @@
+{
+  "js_chunks": 36,
+  "total_raw_bytes": 1219227,
+  "sum_individual_gzip_bytes": 371079,
+  "largest_chunks": [
+    {
+      "path": "static/chunks/f2f58a7e93290fbb.js",
+      "bytes": 224636
+    },
+    {
+      "path": "static/chunks/349a3209686355e5.js",
+      "bytes": 114958
+    },
+    {
+      "path": "static/chunks/6bb2f5ac6bd58b5d.js",
+      "bytes": 113558
+    },
+    {
+      "path": "static/chunks/a6dad97d9634a72d.js",
+      "bytes": 112594
+    },
+    {
+      "path": "static/chunks/5b024e2741a8dab4.js",
+      "bytes": 59637
+    },
+    {
+      "path": "static/chunks/93064171cc01708c.js",
+      "bytes": 54604
+    },
+    {
+      "path": "static/chunks/83319dbe18438f5c.js",
+      "bytes": 48709
+    },
+    {
+      "path": "static/chunks/a6fe224c81c5389e.js",
+      "bytes": 48414
+    }
+  ],
+  "note": "All routes combined; not first-load transfer size. No bundle analyzer plugin added.",
+  "resolved_direct": {
+    "axios": "1.13.4",
+    "clsx": "2.1.1",
+    "framer-motion": "12.31.0",
+    "jwt-decode": "4.0.0",
+    "lucide-react": "0.563.0",
+    "next": "16.1.6",
+    "next-auth": "5.0.0-beta.30",
+    "next-intl": "4.14.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "tailwind-merge": "3.4.0"
+  }
+}

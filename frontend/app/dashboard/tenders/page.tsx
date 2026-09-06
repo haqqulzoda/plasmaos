@@ -507,7 +507,7 @@ function TendersPageContent() {
       <div
         role="tablist"
         aria-label={t("viewsLabel")}
-        className="flex max-w-full overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-1"
+        className="flex flex-wrap max-w-full gap-1 rounded-xl border border-zinc-800 bg-zinc-950 p-1"
       >
         {modes.map(([value, label, count]) => (
           <button
@@ -533,8 +533,8 @@ function TendersPageContent() {
         aria-label={t("filtersLabel")}
         className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4"
       >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <label className="relative xl:col-span-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <label className="relative min-w-0 xl:col-span-2">
             <span className="sr-only">{t("search")}</span>
             <Search className="pointer-events-none absolute start-3 top-2.5 h-4 w-4 text-zinc-500" />
             <input
@@ -542,7 +542,7 @@ function TendersPageContent() {
               value={searchDraft}
               onChange={(event) => setSearchDraft(event.target.value)}
               placeholder={t("search")}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 ps-9 pe-3 text-sm text-white focus:border-indigo-400"
+              className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 ps-9 pe-3 text-sm text-white focus:border-indigo-400"
             />
           </label>
           <select
@@ -550,7 +550,7 @@ function TendersPageContent() {
             value={query.source}
             disabled={Boolean(catalogError)}
             onChange={(event) => navigate({ source: event.target.value })}
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+            className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white disabled:opacity-60"
           >
             <option value="">{t("allSources")}</option>
             {query.source &&
@@ -571,7 +571,7 @@ function TendersPageContent() {
                 lifecycleStatus: event.target.value as TenderStatus | "ALL",
               })
             }
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+            className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
           >
             {statuses.map(([value, label]) => (
               <option key={value} value={value}>
@@ -583,7 +583,7 @@ function TendersPageContent() {
             aria-label={t("sort")}
             value={query.sort}
             onChange={(event) => navigate({ sort: event.target.value })}
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+            className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
           >
             {(query.view === "all" ? tenderSorts : recommendationSorts).map(
               ([value, label]) => (
@@ -609,14 +609,14 @@ function TendersPageContent() {
             {t("moreFilters")}
           </summary>
           <div className="mt-3 space-y-4 border-t border-zinc-800 pt-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <select
                 aria-label={t("deadlineFilter")}
                 value={query.deadlineStatus}
                 onChange={(event) =>
                   navigate({ deadlineStatus: event.target.value })
                 }
-                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
               >
                 <option value="">{t("deadlineAny")}</option>
                 <option value="active">{t("deadlineActive")}</option>
@@ -629,7 +629,7 @@ function TendersPageContent() {
                 onChange={(event) =>
                   navigate({ documentStatus: event.target.value })
                 }
-                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
               >
                 {documents.map(([value, label]) => (
                   <option key={value} value={value}>
@@ -647,7 +647,7 @@ function TendersPageContent() {
                   if (event.key === "Enter") commitDrafts();
                 }}
                 placeholder={t("category")}
-                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
               />
               <button
                 type="button"
@@ -675,7 +675,7 @@ function TendersPageContent() {
                   if (event.key === "Enter") commitDrafts();
                 }}
                 placeholder={t("minimumValue")}
-                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
               />
               <input
                 type="number"
@@ -688,7 +688,7 @@ function TendersPageContent() {
                   if (event.key === "Enter") commitDrafts();
                 }}
                 placeholder={t("maximumValue")}
-                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
               />
             </div>
             <fieldset>
@@ -827,7 +827,7 @@ function TendersPageContent() {
           ))}
           <nav
             aria-label={t("pagesLabel")}
-            className="flex items-center justify-between rounded-xl border border-zinc-800 p-3"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 p-3"
           >
             <button
               type="button"

@@ -1,0 +1,69 @@
+
+> frontend@0.1.0 test:explorer
+> node --no-warnings --experimental-strip-types --test tests/unified-explorer.test.mjs
+
+TAP version 13
+# Subtest: canonical unified request graph
+ok 1 - canonical unified request graph
+  ---
+  duration_ms: 4.740993
+  ...
+# Subtest: explicit types and canonical recommendation commands
+ok 2 - explicit types and canonical recommendation commands
+  ---
+  duration_ms: 1.484468
+  ...
+# Subtest: URL-backed modes, filters, reset, and pagination
+ok 3 - URL-backed modes, filters, reset, and pagination
+  ---
+  duration_ms: 2.07386
+  ...
+# Subtest: filtered Explorer return state is shared with Tender Details
+ok 4 - filtered Explorer return state is shared with Tender Details
+  ---
+  duration_ms: 1.102345
+  ...
+# Subtest: filtered Explorer return state round-trips and rejects unsafe paths
+ok 5 - filtered Explorer return state round-trips and rejects unsafe paths
+  ---
+  duration_ms: 5.061858
+  ...
+# Subtest: authoritative refresh and stale-response protection
+ok 6 - authoritative refresh and stale-response protection
+  ---
+  duration_ms: 0.987991
+  ...
+# Subtest: truthful recommendation presentation
+ok 7 - truthful recommendation presentation
+  ---
+  duration_ms: 1.835971
+  ...
+# Subtest: empty and profile-required states are truthful
+ok 8 - empty and profile-required states are truthful
+  ---
+  duration_ms: 5.324375
+  ...
+# Subtest: pursuit is independent and uses shared workflow actions
+ok 9 - pursuit is independent and uses shared workflow actions
+  ---
+  duration_ms: 2.252847
+  ...
+# Subtest: canonical navigation converges while Hunter compatibility remains
+ok 10 - canonical navigation converges while Hunter compatibility remains
+  ---
+  duration_ms: 1.546406
+  ...
+# Subtest: accessibility and responsive contracts are present
+ok 11 - accessibility and responsive contracts are present
+  ---
+  duration_ms: 1.111843
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 585.348093

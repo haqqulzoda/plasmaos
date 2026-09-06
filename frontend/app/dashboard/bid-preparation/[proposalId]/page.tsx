@@ -296,11 +296,8 @@ export default function BidPreparationWorkspacePage({
             total: Number(item.total) || 0,
           })),
         );
-      } catch (requestError: unknown) {
-        const detail = (
-          requestError as { response?: { data?: { detail?: string } } }
-        ).response?.data?.detail;
-        console.error("Failed to load Bid Preparation:", requestError, detail);
+      } catch {
+        console.error("Failed to load Bid Preparation:");
         setError(translateRef.current("notAvailable"));
       } finally {
         setIsLoading(false);
@@ -332,17 +329,10 @@ export default function BidPreparationWorkspacePage({
     setIsLoadingDocs(true);
     setDocumentsError(null);
     fetchTenderDocuments(proposalTenderId)
-      .catch((requestError: unknown) => {
+      .catch(() => {
         if (!isActive) return;
         setDocuments([]);
-        const detail = (
-          requestError as { response?: { data?: { detail?: string } } }
-        ).response?.data?.detail;
-        console.error(
-          "Failed to load persisted Tender documents:",
-          requestError,
-          detail,
-        );
+        console.error("Failed to load persisted Tender documents:");
         setDocumentsError(translateRef.current("documentsFailed"));
       })
       .finally(() => {
@@ -419,7 +409,7 @@ export default function BidPreparationWorkspacePage({
         });
 
         const contentType =
-          response.headers["content-type"] || "application/octet-stream";
+          (typeof response.headers["content-type"] === "string" ? response.headers["content-type"] : undefined) || "application/octet-stream";
         const blob = new Blob([response.data], { type: contentType });
         const url = URL.createObjectURL(blob);
 
@@ -464,7 +454,7 @@ export default function BidPreparationWorkspacePage({
         });
 
         const contentType =
-          response.headers["content-type"] || "application/octet-stream";
+          (typeof response.headers["content-type"] === "string" ? response.headers["content-type"] : undefined) || "application/octet-stream";
         const blob = new Blob([response.data], { type: contentType });
         const url = URL.createObjectURL(blob);
 

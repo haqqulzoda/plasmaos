@@ -7,12 +7,14 @@ Main application setup with CORS middleware and core endpoints.
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from fastapi.exceptions import RequestValidationError
+from app.core.http_hardening import HardenedHTTPMiddleware, validation_error
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
-from app.api.endpoints import admin, auth, explorer, hunter, meta, my_tenders, proposals, tenders, users, vault
+from app.api.endpoints import operations, admin, auth, explorer, hunter, meta, my_tenders, proposals, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
 from app.core.release import VERSION, public_release_metadata, release_metadata_with_database
@@ -33,7 +35,7 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("SELECT 1"))
         print("--- DB CONNECTION SUCCESS ---")
     except Exception as e:
-        print(f"--- DB CONNECTION FAILED: {e} ---")
+        print("operation_failed event=main:38")
     
     if settings.AUTO_CREATE_TABLES:
         # Local/dev escape hatch only. Production schema changes should run via Alembic.
@@ -42,7 +44,7 @@ async def lifespan(app: FastAPI):
                 await conn.run_sync(Base.metadata.create_all)
             print("--- TABLES CREATED/VERIFIED ---")
         except Exception as e:
-            print(f"--- TABLE CREATION FAILED: {e} ---")
+            print("operation_failed event=main:47")
     else:
         print("--- AUTO TABLE CREATION DISABLED; USING ALEMBIC SCHEMA ---")
     
@@ -68,10 +70,15 @@ app.add_middleware(
     allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    expose_headers=["X-Total-Count", "X-Has-More", "X-Next-Offset", "X-Page-Limit", "X-Request-ID"],
 )
 
+app.add_middleware(HardenedHTTPMiddleware)
+app.add_exception_handler(RequestValidationError, validation_error)
+
 # Include routers
+app.include_router(operations.router, tags=["Operations"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])

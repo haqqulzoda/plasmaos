@@ -1,0 +1,74 @@
+
+> frontend@0.1.0 test:sr3
+> node --no-warnings --experimental-strip-types --test tests/source-refresh-newness.test.mjs
+
+TAP version 13
+# Subtest: polling cadence, grace policy, and bounded backoff are deterministic
+ok 1 - polling cadence, grace policy, and bounded backoff are deterministic
+  ---
+  duration_ms: 3.610371
+  ...
+# Subtest: exclusive-cursor defense deduplicates job ids without timestamp sorting
+ok 2 - exclusive-cursor defense deduplicates job ids without timestamp sorting
+  ---
+  duration_ms: 5.574039
+  ...
+# Subtest: single completion copy preserves exact count, source, zero, and terminal truth
+ok 3 - single completion copy preserves exact count, source, zero, and terminal truth
+  ---
+  duration_ms: 1.616061
+  ...
+# Subtest: multiple events aggregate counts while retaining mixed issue detail
+ok 4 - multiple events aggregate counts while retaining mixed issue detail
+  ---
+  duration_ms: 0.918313
+  ...
+# Subtest: single-source action links to rolling source newness, never job membership
+ok 5 - single-source action links to rolling source newness, never job membership
+  ---
+  duration_ms: 0.672778
+  ...
+# Subtest: server reference defeats positive and negative browser wall-clock skew
+ok 6 - server reference defeats positive and negative browser wall-clock skew
+  ---
+  duration_ms: 1.069107
+  ...
+# Subtest: badge expires exactly at new_until and backend false never becomes true
+ok 7 - badge expires exactly at new_until and backend false never becomes true
+  ---
+  duration_ms: 0.901213
+  ...
+# Subtest: one dashboard provider owns catalog, status, activity, session cursor, and cleanup
+ok 8 - one dashboard provider owns catalog, status, activity, session cursor, and cleanup
+  ---
+  duration_ms: 21.790775
+  ...
+# Subtest: Explorer is catalog-driven and new_only is URL and backend authoritative
+ok 9 - Explorer is catalog-driven and new_only is URL and backend authoritative
+  ---
+  duration_ms: 3.55908
+  ...
+# Subtest: badge has one shared timer and no per-card interval
+ok 10 - badge has one shared timer and no per-card interval
+  ---
+  duration_ms: 1.859591
+  ...
+# Subtest: refresh POST remains explicit and is not owned by Explorer page effects
+ok 11 - refresh POST remains explicit and is not owned by Explorer page effects
+  ---
+  duration_ms: 2.318769
+  ...
+# Subtest: SR-3 contract files use explicit types without broad any
+ok 12 - SR-3 contract files use explicit types without broad any
+  ---
+  duration_ms: 2.918923
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1257.06025

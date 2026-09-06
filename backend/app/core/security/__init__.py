@@ -17,9 +17,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.all_models import User
 
-# Runtime note: ``import app.core.security`` resolves to this package.  The
-# sibling ``app/core/security.py`` is retained as a compatibility mirror and
-# must keep security-critical account checks synchronized with this module.
+# Canonical JWT/account dependency implementation for app.core.security.
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8

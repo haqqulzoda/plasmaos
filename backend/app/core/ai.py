@@ -377,10 +377,7 @@ def _validate_with_schema(
         result = schema.model_validate_json(response_text)
         return result.model_dump()
     except (ValidationError, json.JSONDecodeError) as exc:
-        logger.warning(
-            "Schema validation failed (%s), falling back to raw JSON extraction: %s",
-            schema.__name__, exc,
-        )
+        logger.error("operation_failed event=ai:380 error_type=%s", type(exc).__name__)
         return _extract_json(response_text)
 
 
@@ -494,9 +491,9 @@ async def _analyze_tender_text_impl(
         return result
 
     except json.JSONDecodeError as e:
-        logger.error("Failed to parse AI response as JSON: %s", e)
+        logger.error("operation_failed event=ai:497 error_type=%s", type(e).__name__)
         return {
-            "error": f"JSON parse error: {e}",
+            "error": "Invalid model response",
             "error_type": "api_error",
             "summary": "AI response could not be parsed - please try again",
             "items": [],
@@ -506,19 +503,19 @@ async def _analyze_tender_text_impl(
 
     except Exception as e:
         error_type = _classify_error(e)
-        logger.error("Gemini API error (%s): %s", error_type, e)
+        logger.error("operation_failed event=ai:509 error_type=%s", type(e).__name__)
         import traceback
-        logger.error(traceback.format_exc())
+        logger.error("operation_failed event=ai:511 error_type=%s", type(e).__name__)
 
         if error_type == "quota_exceeded":
             summary = "Monthly AI quota reached across all models. Please try again later or contact support."
         elif error_type == "model_overloaded":
             summary = "AI models are temporarily overloaded. Please retry in a few minutes."
         else:
-            summary = f"AI analysis failed: {e}"
+            summary = "AI analysis failed"
 
         return {
-            "error": str(e),
+            "error": "AI processing failed",
             "error_type": error_type,
             "summary": summary,
             "items": [],
@@ -703,9 +700,9 @@ async def _draft_strategic_proposal_impl(
         }
 
     except json.JSONDecodeError as exc:
-        logger.error("Failed to parse strategic draft as JSON: %s", exc)
+        logger.error("operation_failed event=ai:706 error_type=%s", type(exc).__name__)
         return {
-            "error": f"JSON parse error: {exc}",
+            "error": "Invalid model response",
             "error_type": "api_error",
             "strategic_summary": "AI drafting failed due to malformed model response.",
             "suggested_price": float(tender_budget or 0.0),
@@ -714,7 +711,7 @@ async def _draft_strategic_proposal_impl(
         }
     except Exception as exc:
         error_type = _classify_error(exc)
-        logger.error("Strategic drafting error (%s): %s", error_type, exc)
+        logger.error("operation_failed event=ai:717 error_type=%s", type(exc).__name__)
 
         if error_type == "quota_exceeded":
             msg = "Monthly AI quota reached across all models. Please try again later or contact support."
@@ -724,7 +721,7 @@ async def _draft_strategic_proposal_impl(
             msg = f"AI drafting failed: {exc}"
 
         return {
-            "error": str(exc),
+            "error": "AI processing failed",
             "error_type": error_type,
             "strategic_summary": msg,
             "suggested_price": float(tender_budget or 0.0),
@@ -850,11 +847,11 @@ async def _analyze_tender_file_impl(
         )
         logger.info("[AI] File uploaded: %s", uploaded_file.name)
     except Exception as upload_exc:
-        logger.error("[AI] File upload failed: %s", upload_exc)
+        logger.error("operation_failed event=ai:853 error_type=%s", type(upload_exc).__name__)
         return {
-            "error": str(upload_exc),
+            "error": "AI processing failed",
             "error_type": "api_error",
-            "summary": f"File upload failed: {upload_exc}",
+            "summary": "File upload failed",
             "items": [],
             "delivery_days": 30,
             "required_licenses": [],
@@ -902,9 +899,9 @@ async def _analyze_tender_file_impl(
                 # fall through to safety net
 
             except json.JSONDecodeError as e:
-                logger.error("Failed to parse AI response as JSON: %s", e)
+                logger.error("operation_failed event=ai:905 error_type=%s", type(e).__name__)
                 return {
-                    "error": f"JSON parse error: {e}",
+                    "error": "Invalid model response",
                     "error_type": "api_error",
                     "summary": "AI response could not be parsed - please try again",
                     "items": [],
@@ -922,19 +919,19 @@ async def _analyze_tender_file_impl(
                     )
                     continue
 
-                logger.error("Gemini file analysis error (%s): %s", error_type, e)
+                logger.error("operation_failed event=ai:925 error_type=%s", type(e).__name__)
                 import traceback
-                logger.error(traceback.format_exc())
+                logger.error("operation_failed event=ai:927 error_type=%s", type(e).__name__)
 
                 if error_type == "quota_exceeded":
                     summary = "Monthly AI quota reached. Please try again later or contact support."
                 elif error_type == "model_overloaded":
                     summary = "AI models temporarily overloaded. Please retry in a few minutes."
                 else:
-                    summary = f"AI analysis failed: {e}"
+                    summary = "AI analysis failed"
 
                 return {
-                    "error": str(e),
+                    "error": "AI processing failed",
                     "error_type": error_type,
                     "summary": summary,
                     "items": [],
@@ -944,7 +941,7 @@ async def _analyze_tender_file_impl(
 
         # Safety net -- all models exhausted
         return {
-            "error": str(last_exc),
+            "error": "AI processing failed",
             "error_type": "quota_exceeded",
             "summary": "All AI models exhausted. Please try again later.",
             "items": [],

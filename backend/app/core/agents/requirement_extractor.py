@@ -1612,7 +1612,7 @@ def _parse_extraction_response(response: object) -> list[TenderRequirement]:
                 strict=False,
             )
         except ValidationError as exc:
-            logger.error("Requirement extraction schema validation failed: %s", exc)
+            logger.error("operation_failed event=requirement_extractor:1615 error_type=%s", type(exc).__name__)
             raise RuntimeError(
                 "Requirement Extractor: structured response validation failed."
             ) from exc
@@ -1626,7 +1626,7 @@ def _parse_extraction_response(response: object) -> list[TenderRequirement]:
                 strict=False,
             )
         except ValidationError as exc:
-            logger.error("Requirement extraction JSON validation failed: %s", exc)
+            logger.error("operation_failed event=requirement_extractor:1629 error_type=%s", type(exc).__name__)
             raise RuntimeError(
                 "Requirement Extractor: JSON response validation failed."
             ) from exc
@@ -1758,7 +1758,7 @@ def build_failed_extraction_coverage(
         chunks = []
         full_text_length = len(text_payload or "")
         technical_warnings.append(
-            f"Coverage chunking failed: {type(chunk_exc).__name__}: {chunk_exc}"
+            f"Coverage chunking failed: {type(chunk_exc).__name__}"
         )
     chunk_count = len(chunks)
     return _coverage_metadata(
@@ -1794,7 +1794,7 @@ def build_failed_extraction_artifacts_metadata(
                 requirements_count=0,
                 failure_reason=(
                     f"{error}; chunk metadata failed: "
-                    f"{type(chunk_exc).__name__}: {chunk_exc}"
+                    f"{type(chunk_exc).__name__}"
                 ),
             )
         ]
@@ -1871,7 +1871,7 @@ def _extract_requirements_full_coverage_sync(
     ) -> None:
         nonlocal chunks_failed
         chunks_failed += 1
-        failure_reason = f"{type(exc).__name__}: {exc}"
+        failure_reason = type(exc).__name__
         technical_warnings.append(
             (
                 f"Requirement extraction chunk {chunk.index + 1}/{len(chunks)} failed: "
@@ -1887,7 +1887,7 @@ def _extract_requirements_full_coverage_sync(
             requirements_count=0,
             failure_reason=failure_reason,
         )
-        logger.exception(
+        logger.error(
             "Requirement extraction chunk %d/%d failed.",
             chunk.index + 1,
             len(chunks),

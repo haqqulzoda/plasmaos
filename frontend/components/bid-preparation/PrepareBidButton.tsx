@@ -49,8 +49,8 @@ export function PrepareBidButton({
             tender_id: tenderId,
           });
       router.push(`/dashboard/bid-preparation/${response.data.proposal.id}`);
-    } catch (requestError: unknown) {
-      console.error("Failed to start Bid Preparation:", requestError);
+    } catch {
+      console.error("Failed to start Bid Preparation:");
       setError(t("notAvailable"));
     } finally {
       setSubmitting(false);

@@ -1,0 +1,63 @@
+
+> frontend@0.1.0 build
+> next build
+
+▲ Next.js 16.2.11 (Turbopack)
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 11.5s
+  Running TypeScript ...
+
+  We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
+  The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
+
+  	- include was updated to add '.next-release-test/types/**/*.ts'
+  	- include was updated to add '.next-release-test/dev/types/**/*.ts'
+
+  Finished TypeScript in 12.2s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/24) ...
+  Generating static pages using 11 workers (6/24) 
+  Generating static pages using 11 workers (12/24) 
+  Generating static pages using 11 workers (18/24) 
+✓ Generating static pages using 11 workers (24/24) in 782ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /admin
+├ ƒ /admin/approvals
+├ ƒ /admin/audit
+├ ƒ /admin/companies/[companyProfileId]
+├ ƒ /api/auth/[...nextauth]
+├ ƒ /api/build
+├ ƒ /api/documents/[id]
+├ ƒ /api/ui-locale
+├ ƒ /dashboard
+├ ƒ /dashboard/access-blocked
+├ ƒ /dashboard/admin
+├ ƒ /dashboard/admin/approvals
+├ ƒ /dashboard/bid-preparation
+├ ƒ /dashboard/bid-preparation/[proposalId]
+├ ƒ /dashboard/bids
+├ ƒ /dashboard/bids/[id]
+├ ƒ /dashboard/hunter
+├ ƒ /dashboard/my-tenders
+├ ƒ /dashboard/onboarding
+├ ƒ /dashboard/pending-approval
+├ ƒ /dashboard/proposals
+├ ƒ /dashboard/readiness-vault
+├ ƒ /dashboard/settings
+├ ƒ /dashboard/tenders
+├ ƒ /dashboard/tenders/[tenderId]
+├ ƒ /dashboard/tenders/[tenderId]/compliance
+├ ƒ /dashboard/workspace
+└ ƒ /document-preview/[id]
+
+
+ƒ Proxy (Middleware)
+
+ƒ  (Dynamic)  server-rendered on demand
+

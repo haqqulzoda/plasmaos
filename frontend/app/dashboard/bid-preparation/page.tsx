@@ -1,5 +1,7 @@
 "use client";
 
+import {CollectionPager} from "@/components/CollectionPager";
+import {useCollectionOffset} from "@/lib/useCollectionOffset";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
@@ -28,17 +30,23 @@ export default function BidPreparationPage() {
   const tExplorer = useTranslations("explorer");
   const tMy = useTranslations("myTenders");
   const locale = useLocale() as CustomerSelectableLocale;
+  const [offset, setOffset] = useCollectionOffset();
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
   const [proposals, setProposals] = useState<BidPreparationArtifact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProposals = async () => {
+      setIsLoading(true);
       try {
-        const response = await api.get("/proposals");
+        const response = await api.get("/proposals", {params: {limit: 25, offset}});
+        setHasMore(response.headers["x-has-more"] === "true");
+        setTotal(Number(response.headers["x-total-count"] ?? response.data.length));
         setProposals(response.data);
-      } catch (err) {
-        console.error("Failed to fetch proposals:", err);
+      } catch {
+        console.error("Failed to fetch proposals:");
         setError(t("loadFailed"));
       } finally {
         setIsLoading(false);
@@ -46,7 +54,7 @@ export default function BidPreparationPage() {
     };
 
     fetchProposals();
-  }, [t]);
+  }, [t, offset]);
 
   const proposalStatus = (status: string) =>
     status === "DRAFT"
@@ -95,10 +103,10 @@ export default function BidPreparationPage() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-wrap items-center justify-between gap-4"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="w-12 h-12 shrink-0 rounded-xl bg-purple-500/10 flex items-center justify-center">
             <FileText className="w-6 h-6 text-purple-500" />
           </div>
           <div>
@@ -108,7 +116,7 @@ export default function BidPreparationPage() {
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full">
           <span className="text-purple-400 text-sm font-medium">
-            {t("activeCount", { count: proposals.length })}
+            {t("activeCount", { count: total })}
           </span>
         </div>
       </motion.div>
@@ -124,6 +132,7 @@ export default function BidPreparationPage() {
         </motion.div>
       )}
 
+      <CollectionPager offset={offset} hasMore={hasMore} onChange={setOffset} busy={isLoading} />
       {/* Proposals List */}
       {proposals.length === 0 ? (
         <motion.div
@@ -158,9 +167,9 @@ export default function BidPreparationPage() {
               transition={{ delay: index * 0.05 }}
             >
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-indigo-500/50 transition-colors group">
-                <div className="flex items-start justify-between">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex flex-wrap items-center gap-3 mb-2">
                       <h3 className="text-lg font-semibold text-white truncate group-hover:text-indigo-400 transition-colors">
                         <BidiText>{proposal.tender_title}</BidiText>
                       </h3>

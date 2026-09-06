@@ -1,0 +1,64 @@
+
+> frontend@0.1.0 test:s7-3-localization
+> node --no-warnings --experimental-strip-types --test tests/s7-3-p0-localization.test.mjs
+
+TAP version 13
+# Subtest: P0 catalogs have complete EN/UZ/RU key and placeholder coverage
+ok 1 - P0 catalogs have complete EN/UZ/RU key and placeholder coverage
+  ---
+  duration_ms: 17.58598
+  ...
+# Subtest: the only customer selector is registry-driven, accessible, and includes released Arabic
+ok 2 - the only customer selector is registry-driven, accessible, and includes released Arabic
+  ---
+  duration_ms: 1.191682
+  ...
+# Subtest: onboarding and settings expose one selector before editable form content
+ok 3 - onboarding and settings expose one selector before editable form content
+  ---
+  duration_ms: 0.652233
+  ...
+# Subtest: locale changes are persist-first and preserve route and mounted state
+ok 4 - locale changes are persist-first and preserve route and mounted state
+  ---
+  duration_ms: 0.803679
+  ...
+# Subtest: P0 pages use translations and shared locale formatters
+ok 5 - P0 pages use translations and shared locale formatters
+  ---
+  duration_ms: 2.438941
+  ...
+# Subtest: canonical query, enum, and action codes remain untranslated
+ok 6 - canonical query, enum, and action codes remain untranslated
+  ---
+  duration_ms: 0.830986
+  ...
+# Subtest: source, user, Proposal, and AI narrative fields remain original
+ok 7 - source, user, Proposal, and AI narrative fields remain original
+  ---
+  duration_ms: 1.324515
+  ...
+# Subtest: refresh copy is translated without resetting the active poller or source names
+ok 8 - refresh copy is translated without resetting the active poller or source names
+  ---
+  duration_ms: 0.5133
+  ...
+# Subtest: new badge and high-significance actions have localized accessible copy
+ok 9 - new badge and high-significance actions have localized accessible copy
+  ---
+  duration_ms: 0.701452
+  ...
+# Subtest: claim-safe terminology renders natively in all P0 locales
+ok 10 - claim-safe terminology renders natively in all P0 locales
+  ---
+  duration_ms: 42.579393
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 322.055069

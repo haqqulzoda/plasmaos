@@ -1,0 +1,64 @@
+
+> frontend@0.1.0 test:s7-4-localization
+> node --no-warnings --experimental-strip-types --test tests/s7-4-p1-localization.test.mjs tests/s7-4-pseudo-locale.test.mjs
+
+TAP version 13
+# Subtest: current catalogs preserve the Sprint 7 contract with EN/UZ/RU/AR parity
+ok 1 - current catalogs preserve the Sprint 7 contract with EN/UZ/RU/AR parity
+  ---
+  duration_ms: 22.079285
+  ...
+# Subtest: P1 customer surfaces contain no unexplained literal JSX or accessibility copy
+ok 2 - P1 customer surfaces contain no unexplained literal JSX or accessibility copy
+  ---
+  duration_ms: 7.324051
+  ...
+# Subtest: Compliance localizes chrome while preserving analysis, evidence, and requirement content
+ok 3 - Compliance localizes chrome while preserving analysis, evidence, and requirement content
+  ---
+  duration_ms: 3.872094
+  ...
+# Subtest: Readiness enum mappings are exhaustive and canonical values are unchanged
+ok 4 - Readiness enum mappings are exhaustive and canonical values are unchanged
+  ---
+  duration_ms: 38.176643
+  ...
+# Subtest: customer formatting is centralized and invalid values are safe
+ok 5 - customer formatting is centralized and invalid values are safe
+  ---
+  duration_ms: 105.598809
+  ...
+# Subtest: released Arabic UI remains independent from analysis/report language
+ok 6 - released Arabic UI remains independent from analysis/report language
+  ---
+  duration_ms: 3.288433
+  ...
+# Subtest: claim-sensitive translations avoid certification and guarantee inflation
+ok 7 - claim-sensitive translations avoid certification and guarantee inflation
+  ---
+  duration_ms: 1.701801
+  ...
+# Subtest: pseudo locale expands deterministic static copy and preserves placeholders
+ok 8 - pseudo locale expands deterministic static copy and preserves placeholders
+  ---
+  duration_ms: 1.66119
+  ...
+# Subtest: pseudo catalog preserves shape, ICU blocks, and rich tags
+ok 9 - pseudo catalog preserves shape, ICU blocks, and rich tags
+  ---
+  duration_ms: 19.731545
+  ...
+# Subtest: pseudo locale is gated away from production and is not a customer locale
+ok 10 - pseudo locale is gated away from production and is not a customer locale
+  ---
+  duration_ms: 1.942656
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 621.890363

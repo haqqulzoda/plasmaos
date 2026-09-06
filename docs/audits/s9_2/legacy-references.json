@@ -1,0 +1,2552 @@
+[
+  {
+    "path": "backend/app/api/endpoints/hunter.py",
+    "line": 2,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active compatibility"
+  },
+  {
+    "path": "backend/app/api/endpoints/hunter.py",
+    "line": 37,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active compatibility"
+  },
+  {
+    "path": "backend/app/api/endpoints/hunter.py",
+    "line": 48,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active compatibility"
+  },
+  {
+    "path": "backend/app/api/endpoints/hunter.py",
+    "line": 53,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active compatibility"
+  },
+  {
+    "path": "backend/app/api/endpoints/hunter.py",
+    "line": 67,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active compatibility"
+  },
+  {
+    "path": "backend/app/api/endpoints/hunter.py",
+    "line": 68,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active compatibility"
+  },
+  {
+    "path": "backend/app/api/endpoints/hunter.py",
+    "line": 138,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active compatibility"
+  },
+  {
+    "path": "backend/app/core/agents/hunter.py",
+    "line": 118,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/core/agents/hunter.py",
+    "line": 153,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/core/agents/hunter.py",
+    "line": 157,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/core/agents/hunter.py",
+    "line": 164,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/core/agents/hunter.py",
+    "line": 192,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/core/agents/hunter.py",
+    "line": 196,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/core/agents/hunter.py",
+    "line": 207,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/core/celery_app.py",
+    "line": 37,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "backend/app/core/celery_app.py",
+    "line": 61,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "backend/app/core/celery_app.py",
+    "line": 62,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "backend/app/core/celery_app.py",
+    "line": 118,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "backend/app/main.py",
+    "line": 15,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "backend/app/main.py",
+    "line": 85,
+    "terms": [
+      "Hunter",
+      "hunter"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "backend/app/models/base.py",
+    "line": 55,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "backend/app/workers/hunter_tasks.py",
+    "line": 20,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/workers/hunter_tasks.py",
+    "line": 69,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/workers/hunter_tasks.py",
+    "line": 124,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/workers/hunter_tasks.py",
+    "line": 171,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/workers/hunter_tasks.py",
+    "line": 172,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/workers/hunter_tasks.py",
+    "line": 173,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/app/workers/hunter_tasks.py",
+    "line": 174,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "active worker/domain"
+  },
+  {
+    "path": "backend/test_s0_5b1_unknown_actionability.py",
+    "line": 24,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s0_5b1_unknown_actionability.py",
+    "line": 148,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s0_5b1_unknown_actionability.py",
+    "line": 157,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s0_5b1_unknown_actionability.py",
+    "line": 158,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s0_5b1_unknown_actionability.py",
+    "line": 165,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s0_5b1_unknown_actionability.py",
+    "line": 166,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s1_access_hardening.py",
+    "line": 70,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s1_access_hardening.py",
+    "line": 77,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s4_1_tender_engagement_foundation.py",
+    "line": 147,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s4_1_tender_engagement_foundation.py",
+    "line": 150,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s4_1_tender_engagement_foundation.py",
+    "line": 152,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s4_1_tender_engagement_foundation.py",
+    "line": 201,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s4_2_my_tenders_list_experience.py",
+    "line": 126,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s4_3_bid_preparation_reconciliation.py",
+    "line": 77,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s4_3_bid_preparation_reconciliation.py",
+    "line": 87,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s4_3_bid_preparation_reconciliation.py",
+    "line": 104,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s5_cross_source_regression.py",
+    "line": 145,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s5_cross_source_regression.py",
+    "line": 162,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 46,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 47,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 48,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 61,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 63,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 76,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 80,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 84,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 91,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 92,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 93,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 101,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 105,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 117,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 120,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 127,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 128,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 129,
+    "terms": [
+      "Hunter",
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 179,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 183,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 184,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+    "line": 185,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_2_unified_explorer_backend.py",
+    "line": 171,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_2_unified_explorer_backend.py",
+    "line": 172,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_2_unified_explorer_backend.py",
+    "line": 173,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_2_unified_explorer_backend.py",
+    "line": 176,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_2_unified_explorer_backend.py",
+    "line": 196,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_2_unified_explorer_backend.py",
+    "line": 200,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_2_unified_explorer_backend.py",
+    "line": 201,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_2_unified_explorer_backend.py",
+    "line": 202,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 1,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 17,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 18,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 20,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 24,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 25,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 28,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 31,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 32,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 40,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 45,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 53,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 62,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 66,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 67,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 77,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 78,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "backend/test_s6_4_hunter_retirement_final_qa.py",
+    "line": 108,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "docs/S1_1_CANONICAL_PROJECT_FOUNDATION.md",
+    "line": 202,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S1_2_WORLD_BANK_PROJECT_ENRICHMENT_TTL.md",
+    "line": 230,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S1_3C_RUNTIME_RECOVERY_DELTA_AUDIT.md",
+    "line": 20,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S1_3C_RUNTIME_RECOVERY_DELTA_AUDIT.md",
+    "line": 57,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S1_3C_RUNTIME_RECOVERY_DELTA_AUDIT.md",
+    "line": 150,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S1_3C_RUNTIME_RECOVERY_DELTA_AUDIT.md",
+    "line": 206,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S1_3C_RUNTIME_RECOVERY_DELTA_AUDIT.md",
+    "line": 274,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S1_3_PROJECT_CONTEXT_LEADERSHIP_UI.md",
+    "line": 178,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_1_TENDER_ENGAGEMENT_FOUNDATION.md",
+    "line": 3,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_1_TENDER_ENGAGEMENT_FOUNDATION.md",
+    "line": 8,
+    "terms": [
+      "/dashboard/bids",
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_1_TENDER_ENGAGEMENT_FOUNDATION.md",
+    "line": 9,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_1_TENDER_ENGAGEMENT_FOUNDATION.md",
+    "line": 11,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_1_TENDER_ENGAGEMENT_FOUNDATION.md",
+    "line": 19,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_1_TENDER_ENGAGEMENT_FOUNDATION.md",
+    "line": 105,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_1_TENDER_ENGAGEMENT_FOUNDATION.md",
+    "line": 150,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_1_TENDER_ENGAGEMENT_FOUNDATION.md",
+    "line": 153,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_1_TENDER_ENGAGEMENT_FOUNDATION.md",
+    "line": 242,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_2_MY_TENDERS_LIST_EXPERIENCE.md",
+    "line": 10,
+    "terms": [
+      "/dashboard/bids",
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_2_MY_TENDERS_LIST_EXPERIENCE.md",
+    "line": 11,
+    "terms": [
+      "/dashboard/bids",
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_2_MY_TENDERS_LIST_EXPERIENCE.md",
+    "line": 12,
+    "terms": [
+      "Hunter",
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_2_MY_TENDERS_LIST_EXPERIENCE.md",
+    "line": 15,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_2_MY_TENDERS_LIST_EXPERIENCE.md",
+    "line": 19,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_2_MY_TENDERS_LIST_EXPERIENCE.md",
+    "line": 96,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_2_MY_TENDERS_LIST_EXPERIENCE.md",
+    "line": 98,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_2_MY_TENDERS_LIST_EXPERIENCE.md",
+    "line": 102,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_2_MY_TENDERS_LIST_EXPERIENCE.md",
+    "line": 152,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_3_BID_PREPARATION_PROPOSAL_RECONCILIATION.md",
+    "line": 3,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_3_BID_PREPARATION_PROPOSAL_RECONCILIATION.md",
+    "line": 7,
+    "terms": [
+      "/dashboard/bids",
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_3_BID_PREPARATION_PROPOSAL_RECONCILIATION.md",
+    "line": 8,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_3_BID_PREPARATION_PROPOSAL_RECONCILIATION.md",
+    "line": 9,
+    "terms": [
+      "/dashboard/proposals"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_3_BID_PREPARATION_PROPOSAL_RECONCILIATION.md",
+    "line": 16,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_3_BID_PREPARATION_PROPOSAL_RECONCILIATION.md",
+    "line": 47,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_3_BID_PREPARATION_PROPOSAL_RECONCILIATION.md",
+    "line": 48,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_3_BID_PREPARATION_PROPOSAL_RECONCILIATION.md",
+    "line": 50,
+    "terms": [
+      "/dashboard/proposals"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_3_BID_PREPARATION_PROPOSAL_RECONCILIATION.md",
+    "line": 183,
+    "terms": [
+      "/dashboard/bids",
+      "/dashboard/proposals",
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_4_TENDER_ENGAGEMENT_WORKFLOW_UX.md",
+    "line": 139,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S4_4_TENDER_ENGAGEMENT_WORKFLOW_UX.md",
+    "line": 159,
+    "terms": [
+      "Hunter",
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 17,
+    "terms": [
+      "/dashboard/bids",
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 18,
+    "terms": [
+      "/dashboard/bids",
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 19,
+    "terms": [
+      "/dashboard/proposals"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 20,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 26,
+    "terms": [
+      "Hunter",
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 47,
+    "terms": [
+      "/dashboard/bids",
+      "/dashboard/proposals"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 48,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 56,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 218,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 242,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 243,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 244,
+    "terms": [
+      "/dashboard/proposals"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 245,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 386,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 403,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_1_CANONICAL_TENDER_DETAILS_FOUNDATION.md",
+    "line": 417,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_2_TENDER_DETAILS_READ_MODEL.md",
+    "line": 7,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_2_TENDER_DETAILS_READ_MODEL.md",
+    "line": 270,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_3_CONSOLIDATED_TENDER_DETAILS_UI.md",
+    "line": 220,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 9,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 10,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 11,
+    "terms": [
+      "/dashboard/proposals"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 12,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 13,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 15,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 37,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 41,
+    "terms": [
+      "/dashboard/proposals"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 49,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 85,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 89,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 97,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 109,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 113,
+    "terms": [
+      "/dashboard/bids",
+      "/dashboard/proposals",
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S5_4_TENDER_DETAILS_FINAL_CLEANUP.md",
+    "line": 134,
+    "terms": [
+      "Hunter",
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 1,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 3,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 22,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 24,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 26,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 64,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 66,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 74,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 98,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 128,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 146,
+    "terms": [
+      "Hunter",
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 150,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 158,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 224,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 278,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_1_HUNTER_EXPLORER_CONVERGENCE_FOUNDATION.md",
+    "line": 282,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_2_UNIFIED_EXPLORER_BACKEND.md",
+    "line": 5,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_2_UNIFIED_EXPLORER_BACKEND.md",
+    "line": 71,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_2_UNIFIED_EXPLORER_BACKEND.md",
+    "line": 73,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_2_UNIFIED_EXPLORER_BACKEND.md",
+    "line": 129,
+    "terms": [
+      "Hunter",
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_3_UNIFIED_EXPLORER_UI.md",
+    "line": 7,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_3_UNIFIED_EXPLORER_UI.md",
+    "line": 9,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_3_UNIFIED_EXPLORER_UI.md",
+    "line": 17,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_3_UNIFIED_EXPLORER_UI.md",
+    "line": 109,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_3_UNIFIED_EXPLORER_UI.md",
+    "line": 111,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_3_UNIFIED_EXPLORER_UI.md",
+    "line": 113,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_3_UNIFIED_EXPLORER_UI.md",
+    "line": 137,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 1,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 3,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 7,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 8,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 9,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 10,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 11,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 12,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 14,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 22,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 36,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 40,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 42,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 44,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 60,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 68,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 72,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 84,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 88,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 104,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 112,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S6_4_HUNTER_RETIREMENT_FINAL_QA.md",
+    "line": 120,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S7_1_LOCALIZATION_ARCHITECTURE_AUDIT.md",
+    "line": 362,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S7_1_LOCALIZATION_ARCHITECTURE_AUDIT.md",
+    "line": 471,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S7_2_LOCALE_PERSISTENCE_RUNTIME_FOUNDATION.md",
+    "line": 135,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S7_3_P0_CUSTOMER_LOCALIZATION.md",
+    "line": 49,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S7_3_P0_CUSTOMER_LOCALIZATION.md",
+    "line": 125,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/S7_4_FINAL_LOCALIZATION_QA.md",
+    "line": 146,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_1_SOURCE_REFRESH_EXECUTION_EFFICIENCY_AUDIT.md",
+    "line": 68,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_1_SOURCE_REFRESH_EXECUTION_EFFICIENCY_AUDIT.md",
+    "line": 407,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_1_SOURCE_REFRESH_EXECUTION_EFFICIENCY_AUDIT.md",
+    "line": 409,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_1_SOURCE_REFRESH_EXECUTION_EFFICIENCY_AUDIT.md",
+    "line": 423,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_1_SOURCE_REFRESH_EXECUTION_EFFICIENCY_AUDIT.md",
+    "line": 424,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_1_SOURCE_REFRESH_EXECUTION_EFFICIENCY_AUDIT.md",
+    "line": 427,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_1_SOURCE_REFRESH_EXECUTION_EFFICIENCY_AUDIT.md",
+    "line": 429,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_1_SOURCE_REFRESH_EXECUTION_EFFICIENCY_AUDIT.md",
+    "line": 761,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_1_SOURCE_REFRESH_EXECUTION_EFFICIENCY_AUDIT.md",
+    "line": 764,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_1_SOURCE_REFRESH_EXECUTION_EFFICIENCY_AUDIT.md",
+    "line": 789,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "docs/SR_3_SOURCE_REFRESH_UX_NOTIFICATIONS_NEW_BADGE.md",
+    "line": 125,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "historical evidence"
+  },
+  {
+    "path": "frontend/app/dashboard/hunter/page.tsx",
+    "line": 6,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active compatibility"
+  },
+  {
+    "path": "frontend/app/dashboard/hunter/page.tsx",
+    "line": 9,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "active compatibility"
+  },
+  {
+    "path": "frontend/app/dashboard/layout.tsx",
+    "line": 68,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "frontend/app/dashboard/layout.tsx",
+    "line": 134,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "frontend/app/dashboard/layout.tsx",
+    "line": 156,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "frontend/app/dashboard/layout.tsx",
+    "line": 227,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "frontend/app/dashboard/layout.tsx",
+    "line": 251,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "frontend/app/dashboard/tenders/[tenderId]/compliance/page.tsx",
+    "line": 5,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "active internal context/presentation naming"
+  },
+  {
+    "path": "frontend/app/page.tsx",
+    "line": 104,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "brand copy"
+  },
+  {
+    "path": "frontend/scripts/audit-customer-literals.mjs",
+    "line": 10,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/scripts/audit-customer-literals.mjs",
+    "line": 12,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation-browser-acceptance.py",
+    "line": 396,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation-browser-acceptance.py",
+    "line": 397,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation-browser-acceptance.py",
+    "line": 399,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation-browser-acceptance.py",
+    "line": 406,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation-browser-acceptance.py",
+    "line": 413,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation-browser-acceptance.py",
+    "line": 507,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation.test.mjs",
+    "line": 10,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation.test.mjs",
+    "line": 11,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation.test.mjs",
+    "line": 12,
+    "terms": [
+      "/dashboard/proposals"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation.test.mjs",
+    "line": 13,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation.test.mjs",
+    "line": 22,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/bid-preparation.test.mjs",
+    "line": 33,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 26,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 27,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 28,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 29,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 30,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 89,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 95,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 102,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 118,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 124,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 135,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement-browser-acceptance.py",
+    "line": 144,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 7,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 11,
+    "terms": [
+      "Hunter",
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 12,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 39,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 40,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 43,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 47,
+    "terms": [
+      "Hunter",
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 66,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 78,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 82,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 84,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 87,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 88,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 89,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 93,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 97,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/hunter-retirement.test.mjs",
+    "line": 98,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/my-tenders.test.mjs",
+    "line": 53,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/my-tenders.test.mjs",
+    "line": 92,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/s7-3-p0-localization.test.mjs",
+    "line": 145,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/s7-3-p0-localization.test.mjs",
+    "line": 150,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/s7-3-p0-localization.test.mjs",
+    "line": 152,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/s8-3-arabic-rtl.test.mjs",
+    "line": 146,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup-browser-acceptance.py",
+    "line": 116,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup-browser-acceptance.py",
+    "line": 121,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup-browser-acceptance.py",
+    "line": 127,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup-browser-acceptance.py",
+    "line": 132,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup-browser-acceptance.py",
+    "line": 137,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup-browser-acceptance.py",
+    "line": 142,
+    "terms": [
+      "/dashboard/proposals"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup-browser-acceptance.py",
+    "line": 146,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup-browser-acceptance.py",
+    "line": 148,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup-browser-acceptance.py",
+    "line": 200,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup-browser-acceptance.py",
+    "line": 232,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup.test.mjs",
+    "line": 12,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup.test.mjs",
+    "line": 13,
+    "terms": [
+      "/dashboard/bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup.test.mjs",
+    "line": 14,
+    "terms": [
+      "/dashboard/proposals"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup.test.mjs",
+    "line": 15,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup.test.mjs",
+    "line": 18,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup.test.mjs",
+    "line": 20,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup.test.mjs",
+    "line": 21,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup.test.mjs",
+    "line": 22,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup.test.mjs",
+    "line": 34,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-cleanup.test.mjs",
+    "line": 118,
+    "terms": [
+      "My Bids"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/tender-details-browser-acceptance.py",
+    "line": 253,
+    "terms": [
+      "workspace"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/unified-explorer.test.mjs",
+    "line": 19,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/unified-explorer.test.mjs",
+    "line": 27,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/unified-explorer.test.mjs",
+    "line": 186,
+    "terms": [
+      "Hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/unified-explorer.test.mjs",
+    "line": 189,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/unified-explorer.test.mjs",
+    "line": 190,
+    "terms": [
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  },
+  {
+    "path": "frontend/tests/unified-explorer.test.mjs",
+    "line": 191,
+    "terms": [
+      "Hunter",
+      "hunter"
+    ],
+    "classification": "regression/proof/tooling"
+  }
+]

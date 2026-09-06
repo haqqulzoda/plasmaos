@@ -76,7 +76,7 @@ test("Prepare Bid is an explicit POST with separate Tender and Proposal identifi
 });
 
 test("Bid Preparation list remains Proposal-backed with optional engagement context", () => {
-  assert.match(list, /api\.get\(\s*["']\/proposals["']\s*\)/);
+  assert.match(list, /api\.get\(\s*["']\/proposals["'],\s*\{params: \{limit: 25, offset\}\}\)/);
   assert.match(list, /proposal\.engagement_status/);
   assert.match(list, /t\("open"\)/);
   assert.doesNotMatch(list, /\/my-tenders/);

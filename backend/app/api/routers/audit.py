@@ -75,8 +75,8 @@ async def authorize_risk(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("Failed to record audit action")
+        logger.error("operation_failed event=audit:78 error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to record audit action: {exc}",
+            detail="Request could not be completed",
         ) from exc

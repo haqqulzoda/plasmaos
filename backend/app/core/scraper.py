@@ -554,7 +554,8 @@ class UzExScraper:
     BASE_URL = "https://etender.uzex.uz"
     LOTS_URL = UZEX_ENTERPRISE_LOTS_URL
     
-    def __init__(self, headless: bool = True, timeout: int = 30000):
+    def __init__(self, headless: bool = True, timeout: int = 30000, *, safe_probe: bool = False):
+        self.safe_probe = safe_probe
         self.headless = headless
         self.timeout = timeout
     
@@ -747,9 +748,12 @@ class UzExScraper:
 
         logger.info("[SCRAPER] api_get_trade_start lot_id=%s url=%s", lot_id, trade_api_url)
         try:
+            if self.safe_probe:
+                from app.core.probe_urls import validate_probe_url
+                validate_probe_url(trade_api_url)
             with httpx.Client(
                 timeout=httpx.Timeout(20.0, read=60.0),
-                follow_redirects=True,
+                follow_redirects=not self.safe_probe,
             ) as client:
                 response = client.get(
                     trade_api_url,
@@ -759,11 +763,7 @@ class UzExScraper:
                     },
                 )
         except (httpx.TimeoutException, httpx.TransportError) as exc:
-            logger.warning(
-                "[SCRAPER] api_get_trade_error lot_id=%s error=%s; falling back to DOM",
-                lot_id,
-                exc,
-            )
+            logger.error("operation_failed event=scraper:763 error_type=%s", type(exc).__name__)
             return []
 
         content_type = response.headers.get("content-type", "")
@@ -794,11 +794,7 @@ class UzExScraper:
         try:
             payload = response.json()
         except ValueError as exc:
-            logger.warning(
-                "[SCRAPER] api_get_trade_invalid_json lot_id=%s error=%s; falling back to DOM",
-                lot_id,
-                exc,
-            )
+            logger.error("operation_failed event=scraper:798 error_type=%s", type(exc).__name__)
             return []
 
         if isinstance(payload, dict):
@@ -830,6 +826,9 @@ class UzExScraper:
                 viewport={"width": 1280, "height": 720},
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
+            if self.safe_probe:
+                from app.core.probe_urls import guard_probe_context
+                guard_probe_context(context)
             page = context.new_page()
             
             try:
@@ -920,11 +919,11 @@ class UzExScraper:
                         logger.info(f"[{category}] {lot_id}: {title[:40]}...")
                         
                     except Exception as e:
-                        logger.warning(f"Failed to parse lot: {e}")
+                        logger.error("operation_failed event=scraper:927 error_type=%s", type(e).__name__)
                         continue
                     
             except Exception as e:
-                logger.error(f"Scraping error: {e}")
+                logger.error("operation_failed event=scraper:931 error_type=%s", type(e).__name__)
                 raise
             
             finally:
@@ -971,6 +970,9 @@ class UzExScraper:
                 viewport={"width": 1280, "height": 720},
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
+            if self.safe_probe:
+                from app.core.probe_urls import guard_probe_context
+                guard_probe_context(context)
             page = context.new_page()
             popup_urls: list[str] = []
             
@@ -1124,14 +1126,9 @@ class UzExScraper:
                         fallback_candidates = _extract_download_candidates_from_element(btn)
                         if fallback_candidates:
                             captured_urls.extend(fallback_candidates)
-                            logger.warning(
-                                "[BUTTON CLICKER] Button %s click failed, recovered %s URL candidate(s) from attributes: %s",
-                                i + 1,
-                                len(fallback_candidates),
-                                e,
-                            )
+                            logger.error("operation_failed event=scraper:1134 error_type=%s", type(e).__name__)
                             continue
-                        logger.warning("[BUTTON CLICKER] Button %s click failed without URL fallback: %s", i + 1, e)
+                        logger.error("operation_failed event=scraper:1141 error_type=%s", type(e).__name__)
                         continue
                 
                 # Step 3: Also extract any static links with href
@@ -1170,7 +1167,7 @@ class UzExScraper:
                     captured_urls.extend(html_candidates)
                 except Exception as exc:
                     html_candidates = []
-                    logger.debug("[SCRAPER] Could not extract candidates from page HTML: %s", exc)
+                    logger.error("operation_failed event=scraper:1180 error_type=%s", type(exc).__name__)
                 
                 # Step 4: Process captured URLs
                 logger.info(
@@ -1211,7 +1208,7 @@ class UzExScraper:
                         logger.info(f"[SCRAPER] Found: {file_type} - {url[:70]}...")
                         
                     except Exception as e:
-                        logger.debug(f"[SCRAPER] URL processing error: {e}")
+                        logger.error("operation_failed event=scraper:1221 error_type=%s", type(e).__name__)
                         continue
                 
                 # Debug dump if no documents
@@ -1232,9 +1229,9 @@ class UzExScraper:
                     )
                 
             except Exception as e:
-                logger.error(f"[SCRAPER] Failed: {e}")
+                logger.error("operation_failed event=scraper:1242 error_type=%s", type(e).__name__)
                 if debug:
-                    print(f"[ERROR] {e}")
+                    print("operation_failed event=scraper:1244")
                 raise
             
             finally:
@@ -1305,11 +1302,14 @@ class UzExScraper:
 
             logger.info("[DOWNLOAD] %s stream fallback -> %s", label, normalized_url[:160])
             try:
+                if self.safe_probe:
+                    from app.core.probe_urls import validate_probe_url
+                    validate_probe_url(normalized_url)
                 with httpx.stream(
                     "GET",
                     normalized_url,
                     timeout=httpx.Timeout(60.0, read=180.0),
-                    follow_redirects=True,
+                    follow_redirects=not self.safe_probe,
                 ) as response:
                     response_content_type = response.headers.get("content-type", "")
 
@@ -1357,12 +1357,12 @@ class UzExScraper:
             except (httpx.TimeoutException, httpx.TransportError, TransientPortalError) as exc:
                 remove_invalid_download()
                 record_strategy_error(label, exc)
-                logger.warning("[DOWNLOAD] %s stream fallback transport error: %s", label, exc)
+                logger.error("operation_failed event=scraper:1367 error_type=%s", type(exc).__name__)
                 return ""
             except Exception as exc:
                 remove_invalid_download()
                 record_strategy_error(label, exc)
-                logger.warning("[DOWNLOAD] %s stream fallback error: %s", label, exc)
+                logger.error("operation_failed event=scraper:1372 error_type=%s", type(exc).__name__)
                 return ""
 
         def api_post_to_destination() -> str:
@@ -1378,6 +1378,9 @@ class UzExScraper:
                 )
                 logger.info("[DOWNLOAD] Strategy 1 POST stream -> %s", download_api_url[:160])
                 try:
+                    if self.safe_probe:
+                        from app.core.probe_urls import validate_probe_url
+                        validate_probe_url(download_api_url)
                     with httpx.stream(
                         "POST",
                         download_api_url,
@@ -1388,7 +1391,7 @@ class UzExScraper:
                             "Content-Type": "application/json",
                         },
                         timeout=httpx.Timeout(60.0, read=180.0),
-                        follow_redirects=True,
+                        follow_redirects=not self.safe_probe,
                     ) as response:
                         response_content_type = response.headers.get("content-type", "")
 
@@ -1433,33 +1436,15 @@ class UzExScraper:
                 except (httpx.TimeoutException, httpx.TransportError) as exc:
                     remove_invalid_download()
                     record_strategy_error("downloadfile-post", f"{type(exc).__name__}: {exc}")
-                    logger.warning(
-                        "[DOWNLOAD] Strategy 1 POST stream transport error for api_path=%s variant=%s/%s: %s",
-                        api_file_path,
-                        variant_index,
-                        len(api_path_variants),
-                        exc,
-                    )
+                    logger.error("operation_failed event=scraper:1443 error_type=%s", type(exc).__name__)
                 except TransientPortalError as exc:
                     remove_invalid_download()
                     record_strategy_error("downloadfile-post", f"{type(exc).__name__}: {exc}")
-                    logger.warning(
-                        "[DOWNLOAD] Strategy 1 POST stream transient error for api_path=%s variant=%s/%s: %s",
-                        api_file_path,
-                        variant_index,
-                        len(api_path_variants),
-                        exc,
-                    )
+                    logger.error("operation_failed event=scraper:1453 error_type=%s", type(exc).__name__)
                 except Exception as exc:
                     remove_invalid_download()
                     record_strategy_error("downloadfile-post", f"{type(exc).__name__}: {exc}")
-                    logger.warning(
-                        "[DOWNLOAD] Strategy 1 POST stream error for api_path=%s variant=%s/%s: %s",
-                        api_file_path,
-                        variant_index,
-                        len(api_path_variants),
-                        exc,
-                    )
+                    logger.error("operation_failed event=scraper:1463 error_type=%s", type(exc).__name__)
 
             return ""
 
@@ -1489,11 +1474,7 @@ class UzExScraper:
                     except Exception as goto_exc:
                         if "net::ERR_ABORTED" not in str(goto_exc):
                             raise
-                        logger.info(
-                            "[DOWNLOAD] %s browser navigation aborted after download event: %s",
-                            label,
-                            goto_exc,
-                        )
+                        logger.error("operation_failed event=scraper:1499 error_type=%s", type(goto_exc).__name__)
                 download = download_info.value
                 download.save_as(str(destination))
                 suggested = download.suggested_filename or _extract_filename(normalized_url) or filename
@@ -1533,17 +1514,17 @@ class UzExScraper:
             except PlaywrightTimeout as exc:
                 remove_invalid_download()
                 record_strategy_error(label, f"timeout: {exc}")
-                logger.warning("[DOWNLOAD] %s browser navigation download timed out: %s", label, exc)
+                logger.error("operation_failed event=scraper:1543 error_type=%s", type(exc).__name__)
                 return ""
             except TransientPortalError as exc:
                 remove_invalid_download()
                 record_strategy_error(label, f"{type(exc).__name__}: {exc}")
-                logger.warning("[DOWNLOAD] %s browser navigation download transient error: %s", label, exc)
+                logger.error("operation_failed event=scraper:1548 error_type=%s", type(exc).__name__)
                 return ""
             except Exception as exc:
                 remove_invalid_download()
                 record_strategy_error(label, f"{type(exc).__name__}: {exc}")
-                logger.warning("[DOWNLOAD] %s browser navigation download error: %s", label, exc)
+                logger.error("operation_failed event=scraper:1553 error_type=%s", type(exc).__name__)
                 return ""
             finally:
                 try:
@@ -1563,6 +1544,9 @@ class UzExScraper:
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 accept_downloads=True,
             )
+            if self.safe_probe:
+                from app.core.probe_urls import guard_probe_context
+                guard_probe_context(context)
             page = context.new_page()
 
             try:
@@ -1690,19 +1674,11 @@ class UzExScraper:
                 except PlaywrightTimeout as exc:
                     remove_invalid_download()
                     record_strategy_error("dom-expect-download", f"timeout: {exc}")
-                    logger.warning(
-                        "[DOWNLOAD] DOM expect_download timed out at index %s: %s",
-                        button_index,
-                        exc,
-                    )
+                    logger.error("operation_failed event=scraper:1703 error_type=%s", type(exc).__name__)
                 except Exception as exc:
                     remove_invalid_download()
                     record_strategy_error("dom-expect-download", f"{type(exc).__name__}: {exc}")
-                    logger.warning(
-                        "[DOWNLOAD] DOM expect_download failed at index %s: %s",
-                        button_index,
-                        exc,
-                    )
+                    logger.error("operation_failed event=scraper:1711 error_type=%s", type(exc).__name__)
 
                 fallback_candidates = _extract_download_candidates_from_element(target_btn)
                 popup_urls: list[str] = []
@@ -1787,12 +1763,7 @@ class UzExScraper:
                 try:
                     target_btn.click(force=True, timeout=90000, no_wait_after=True)
                 except Exception as click_exc:
-                    logger.warning(
-                        "[DOWNLOAD] Button %s click failed, trying %s attribute fallback URL(s): %s",
-                        button_index,
-                        len(fallback_candidates),
-                        click_exc,
-                    )
+                    logger.error("operation_failed event=scraper:1800 error_type=%s", type(click_exc).__name__)
                     for candidate in fallback_candidates:
                         resolved_name = stream_url_to_destination(candidate, "button-attribute")
                         if resolved_name:
@@ -2036,11 +2007,7 @@ class UzExScraper:
                 response.raise_for_status()
                 payload = response.json()
             except Exception as exc:
-                logger.warning(
-                    "[API] Failed to fetch UzEx contact detail for lot %s: %s",
-                    lot_id,
-                    exc,
-                )
+                logger.error("operation_failed event=scraper:2049 error_type=%s", type(exc).__name__)
                 return {}
 
             return extract_uzex_contact_info(
@@ -2143,11 +2110,11 @@ class UzExScraper:
                         logger.info(f"[API] [{category}] {lot_id}: {title[:50]}...")
                         
                     except Exception as e:
-                        logger.warning(f"[API] Failed to parse lot: {e}")
+                        logger.error("operation_failed event=scraper:2156 error_type=%s", type(e).__name__)
                         continue
                     
         except Exception as e:
-            logger.error(f"[API] TradeList fetch failed: {e}")
+            logger.error("operation_failed event=scraper:2160 error_type=%s", type(e).__name__)
             raise
         
         logger.info(f"[API] Processed {len(tenders)} tenders")

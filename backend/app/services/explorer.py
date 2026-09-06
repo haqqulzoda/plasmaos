@@ -9,6 +9,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.api.endpoints.tenders import (
     _apply_tender_sort,
@@ -230,7 +231,7 @@ async def _page_rows(
 
     if query.view == ExplorerView.ALL and profile_id is None:
         statement = _filtered(
-            select(Tender).where(customer_visible_tender_condition(Tender)),
+            select(Tender).options(defer(Tender.compiled_master_text, raiseload=True)).where(customer_visible_tender_condition(Tender)),
             query,
         )
         tenders = (
@@ -253,7 +254,7 @@ async def _page_rows(
     )
     if query.view == ExplorerView.ALL:
         statement = (
-            select(Tender, TenderRecommendation, TenderEngagement)
+            select(Tender, TenderRecommendation, TenderEngagement).options(defer(Tender.compiled_master_text, raiseload=True))
             .outerjoin(TenderRecommendation, recommendation_join)
             .outerjoin(TenderEngagement, engagement_join)
             .where(customer_visible_tender_condition(Tender))
@@ -262,7 +263,7 @@ async def _page_rows(
     else:
         dismissed = query.view == ExplorerView.DISMISSED
         statement = (
-            select(Tender, TenderRecommendation, TenderEngagement)
+            select(Tender, TenderRecommendation, TenderEngagement).options(defer(Tender.compiled_master_text, raiseload=True))
             .select_from(TenderRecommendation)
             .join(Tender, Tender.id == TenderRecommendation.tender_id)
             .outerjoin(TenderEngagement, engagement_join)

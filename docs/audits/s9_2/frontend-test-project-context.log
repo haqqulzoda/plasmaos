@@ -1,0 +1,104 @@
+
+> frontend@0.1.0 test:project-context
+> node --no-warnings --experimental-strip-types --test tests/project-context.test.mjs
+
+TAP version 13
+# Subtest: no Project has an explicit consolidated empty state
+ok 1 - no Project has an explicit consolidated empty state
+  ---
+  duration_ms: 2.107763
+  ...
+# Subtest: linked not-enriched identity remains visible while details prepare
+ok 2 - linked not-enriched identity remains visible while details prepare
+  ---
+  duration_ms: 0.343527
+  ...
+# Subtest: enriched metadata renders only meaningful rows
+ok 3 - enriched metadata renders only meaningful rows
+  ---
+  duration_ms: 84.669606
+  ...
+# Subtest: missing metadata is omitted instead of rendered as placeholders
+ok 4 - missing metadata is omitted instead of rendered as placeholders
+  ---
+  duration_ms: 0.407006
+  ...
+# Subtest: current leadership is visible under the locked section label
+ok 5 - current leadership is visible under the locked section label
+  ---
+  duration_ms: 0.620943
+  ...
+# Subtest: historical leadership is separate and keyboard-accessible
+ok 6 - historical leadership is separate and keyboard-accessible
+  ---
+  duration_ms: 0.774888
+  ...
+# Subtest: Task Team Leader canonical label is exact
+ok 7 - Task Team Leader canonical label is exact
+  ---
+  duration_ms: 0.930311
+  ...
+# Subtest: Co-Task Team Leader canonical label is exact
+ok 8 - Co-Task Team Leader canonical label is exact
+  ---
+  duration_ms: 0.489308
+  ...
+# Subtest: Task Manager canonical label is exact and not TTL
+ok 9 - Task Manager canonical label is exact and not TTL
+  ---
+  duration_ms: 2.337796
+  ...
+# Subtest: teamleadname never renders as TTL
+ok 10 - teamleadname never renders as TTL
+  ---
+  duration_ms: 1.207666
+  ...
+# Subtest: no leadership email is inferred or replaced with a placeholder
+ok 11 - no leadership email is inferred or replaced with a placeholder
+  ---
+  duration_ms: 0.379702
+  ...
+# Subtest: procurement contact remains an explicitly separate Tender section
+ok 12 - procurement contact remains an explicitly separate Tender section
+  ---
+  duration_ms: 0.152957
+  ...
+# Subtest: Project dates have explicit non-deadline labels
+ok 13 - Project dates have explicit non-deadline labels
+  ---
+  duration_ms: 0.741328
+  ...
+# Subtest: Project status presentation does not use Tender actionability helpers
+ok 14 - Project status presentation does not use Tender actionability helpers
+  ---
+  duration_ms: 0.205251
+  ...
+# Subtest: stale and partial states use restrained truthful messages
+ok 15 - stale and partial states use restrained truthful messages
+  ---
+  duration_ms: 0.174159
+  ...
+# Subtest: Project API failure is isolated from the Tender load
+ok 16 - Project API failure is isolated from the Tender load
+  ---
+  duration_ms: 0.220986
+  ...
+# Subtest: Project HTTP outcomes remain semantically distinct
+ok 17 - Project HTTP outcomes remain semantically distinct
+  ---
+  duration_ms: 0.127599
+  ...
+# Subtest: source and status semantics are accessible and responsive
+ok 18 - source and status semantics are accessible and responsive
+  ---
+  duration_ms: 0.222721
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 345.481771

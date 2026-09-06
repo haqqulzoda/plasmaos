@@ -318,8 +318,8 @@ function MyTendersContent() {
         ))}
       </section>
 
-      <section className="grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4 md:grid-cols-[minmax(240px,1fr)_180px_190px_180px]">
-        <form onSubmit={submitSearch} className="flex gap-2">
+      <section className="grid grid-cols-1 gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4 md:grid-cols-2 2xl:grid-cols-[minmax(240px,1fr)_180px_190px_180px]">
+        <form onSubmit={submitSearch} className="flex min-w-0 flex-col gap-2 sm:flex-row">
           <label className="sr-only" htmlFor="my-tenders-search">
             {t("searchLabel")}
           </label>
@@ -334,7 +334,7 @@ function MyTendersContent() {
               value={searchDraft}
               onChange={(event) => setSearchDraft(event.target.value)}
               placeholder={t("searchLabel")}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 ps-9 pe-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+              className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 ps-9 pe-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
             />
           </div>
           <button
@@ -354,7 +354,7 @@ function MyTendersContent() {
           onChange={(event) =>
             updateQuery({ source: event.target.value, page: "1" })
           }
-          className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400 disabled:opacity-60"
+          className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400 disabled:opacity-60"
         >
           <option value="">{t("allSources")}</option>
           {source && !catalog.some((item) => item.source_system === source) ? (
@@ -375,7 +375,7 @@ function MyTendersContent() {
           onChange={(event) =>
             updateQuery({ tender_status: event.target.value, page: "1" })
           }
-          className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400"
+          className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400"
         >
           {SOURCE_STATUSES.map((value) => (
             <option key={value} value={value}>
@@ -392,7 +392,7 @@ function MyTendersContent() {
           onChange={(event) =>
             updateQuery({ sort: event.target.value, page: "1" })
           }
-          className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400"
+          className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400"
         >
           <option value="recently_updated">{t("sortRecentUpdated")}</option>
           <option value="recently_added">{t("sortRecentAdded")}</option>
@@ -453,12 +453,12 @@ function MyTendersContent() {
       {!loading && !error && data && data.total > 0 && (
         <nav
           aria-label={t("paginationLabel")}
-          className="flex items-center justify-between gap-4 border-t border-zinc-800 pt-4"
+          className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-800 pt-4"
         >
           <p className="text-sm text-zinc-400">
             {t("page", { page, totalPages, count: data.total })}
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               disabled={page <= 1}

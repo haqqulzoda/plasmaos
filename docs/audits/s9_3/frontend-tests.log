@@ -1,0 +1,2981 @@
+TAP version 13
+# Subtest: canonical lifecycle language and restore consequence are truthful
+ok 1 - canonical lifecycle language and restore consequence are truthful
+  ---
+  duration_ms: 3.028994
+  ...
+# Subtest: security errors are safe and stale state always refreshes
+ok 2 - security errors are safe and stale state always refreshes
+  ---
+  duration_ms: 0.843907
+  ...
+# Subtest: audit summaries expose only semantic allowlisted state
+ok 3 - audit summaries expose only semantic allowlisted state
+  ---
+  duration_ms: 3.795528
+  ...
+# Subtest: accounts use backend capabilities, stable identity, confirmations, and bounded pages
+ok 4 - accounts use backend capabilities, stable identity, confirmations, and bounded pages
+  ---
+  duration_ms: 0.882884
+  ...
+# Subtest: audit surface is canonical, sanitized, filtered, and paginated
+ok 5 - audit surface is canonical, sanitized, filtered, and paginated
+  ---
+  duration_ms: 0.594582
+  ...
+# Subtest: canonical customer navigation is Bid Preparation
+ok 6 - canonical customer navigation is Bid Preparation
+  ---
+  duration_ms: 1.631107
+  ...
+# Subtest: legacy list is a single read-only redirect
+ok 7 - legacy list is a single read-only redirect
+  ---
+  duration_ms: 0.396211
+  ...
+# Subtest: legacy proposal list and workspace are permanent non-mutating redirects
+ok 8 - legacy proposal list and workspace are permanent non-mutating redirects
+  ---
+  duration_ms: 0.527239
+  ...
+# Subtest: canonical dynamic route is Proposal-ID-only and passive
+ok 9 - canonical dynamic route is Proposal-ID-only and passive
+  ---
+  duration_ms: 0.625025
+  ...
+# Subtest: legacy detail validates the owned Proposal then redirects without fallback
+ok 10 - legacy detail validates the owned Proposal then redirects without fallback
+  ---
+  duration_ms: 0.420295
+  ...
+# Subtest: Prepare Bid is an explicit POST with separate Tender and Proposal identifiers
+ok 11 - Prepare Bid is an explicit POST with separate Tender and Proposal identifiers
+  ---
+  duration_ms: 0.203563
+  ...
+# Subtest: Bid Preparation list remains Proposal-backed with optional engagement context
+not ok 12 - Bid Preparation list remains Proposal-backed with optional engagement context
+  ---
+  duration_ms: 2.807488
+  location: '/tmp/plasma-s93-frontend/tests/bid-preparation.test.mjs:78:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /api\.get\(\s*["']\/proposals["']\s*\)/. Input:
+    
+    '"use client";\n' +
+      '\n' +
+      'import {CollectionPager} from "@/components/CollectionPager";\n' +
+      'import {useCollectionOffset} from "@/lib/useCollectionOffset";\n' +
+      'import { useState, useEffect } from "react";\n' +
+      'import { motion } from "framer-motion";\n' +
+      'import {\n' +
+      '  FileText,\n' +
+      '  Loader2,\n' +
+      '  Clock,\n' +
+      '  Banknote,\n' +
+      '  MapPin,\n' +
+      '  ArrowRight,\n' +
+      '} from "lucide-react";\n' +
+      'import { useLocale, useTranslations } from "next-intl";\n' +
+      'import { api } from "@/lib/api";\n' +
+      'import { formatCurrency, formatDate } from "@/i18n/formatters";\n' +
+      'import type { CustomerSelectableLocale } from "@/i18n/locales";\n' +
+      'import Link from "next/link";\n' +
+      'import { tenderStatusClasses } from "@/types/tender";\n' +
+      'import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";\n' +
+      'import {\n' +
+      '  preparationStatusClasses,\n' +
+      '  type BidPreparationArtifact,\n' +
+      '} from "@/types/bid-preparation";\n' +
+      'import { BidiText } from "@/components/i18n/BidiText";\n' +
+      '\n' +
+      'export default function BidPreparationPage() {\n' +
+      '  const t = useTranslations("bidPreparation");\n' +
+      '  const tExplorer = useTranslations("explorer");\n' +
+      '  const tMy = useTranslations("myTenders");\n' +
+      '  const locale = useLocale() as CustomerSelectableLocale;\n' +
+      '  const [offset, setOffset] = useCollectionOffset();\n' +
+      '  const [hasMore, setHasMore] = useState(false);\n' +
+      '  const [total, setTotal] = useState(0);\n' +
+      '  const [proposals, setProposals] = useState<BidPreparationArtifact[]>([]);\n' +
+      '  const [isLoading, setIsLoading] = useState(true);\n' +
+      '  const [error, setError] = useState<string | null>(null);\n' +
+      '\n' +
+      '  useEffect(() => {\n' +
+      '    const fetchProposals = async () => {\n' +
+      '      setIsLoading(true);\n' +
+      '      try {\n' +
+      '        const response = await api.get("/proposals", {params: {limit: 25, offset}});\n' +
+      '        setHasMore(response.headers["x-has-more"] === "true");\n' +
+      '        setTotal(Number(response.headers["x-total-count"] ?? response.data.length));\n' +
+      '        setProposals(response.data);\n' +
+      '      } catch {\n' +
+      '        console.error("Failed to fetch proposals:");\n' +
+      '        setError(t("loadFailed"));\n' +
+      '      } finally {\n' +
+      '        setIsLoading(false);\n' +
+      '      }\n' +
+      '    };\n' +
+      '\n' +
+      '    fetchProposals();\n' +
+      '  }, [t, offset]);\n' +
+      '\n' +
+      '  const proposalStatus = (status: string) =>\n' +
+      '    status === "DRAFT"\n' +
+      '      ? t("status.draft")\n' +
+      '      : status === "GENERATING"\n' +
+      '        ? t("status.generating")\n' +
+      '        : status === "COMPLETED"\n' +
+      '          ? t("status.completed")\n' +
+      '          : status === "SUBMITTED"\n' +
+      '            ? t("status.submitted")\n' +
+      '            : t("status.unknown");\n' +
+      '  const tenderStatus = (status: string) =>\n' +
+      '    status === "OPEN"\n' +
+      '      ? tExplorer("status.open")\n' +
+      '      : status === "CLOSED"\n' +
+      '        ? tExplorer("status.closed")\n' +
+      '        : status === "CANCELLED"\n' +
+      '          ? tExplorer("status.cancelled")\n' +
+      '          : tExplorer("status.unknown");\n' +
+      '  const engagementStatus = (status: string) =>\n' +
+      '    status === "SAVED"\n' +
+      '      ? tMy("statuses.saved")\n' +
+      '      : status === "EVALUATING"\n' +
+      '        ? tMy("statuses.evaluating")\n' +
+      '        : status === "PREPARING"\n' +
+      '          ? tMy("statuses.preparing")\n' +
+      '          : status === "SUBMITTED"\n' +
+      '            ? tMy("statuses.submitted")\n' +
+      '            : status === "WON"\n' +
+      '              ? tMy("statuses.won")\n' +
+      '              : status === "LOST"\n' +
+      '                ? tMy("statuses.lost")\n' +
+      '                : tMy("statuses.dismissed");\n' +
+      '\n' +
+      '  if (isLoading) {\n' +
+      '    return (\n' +
+      '      <div className="flex items-center justify-center h-64">\n' +
+      '        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />\n' +
+      '      </div>\n' +
+      '    );\n' +
+      '  }\n' +
+      '\n' +
+      '  return (\n' +
+      '    <div className="space-y-6">\n' +
+      '      {/* Header */}\n' +
+      '      <motion.div\n' +
+      '        initial={{ opacity: 0, y: -20 }}\n' +
+      '        animate={{ opacity: 1, y: 0 }}\n' +
+      '        className="flex flex-wrap items-center justify-between gap-4"\n' +
+      '      >\n' +
+      '        <div className="flex min-w-0 items-center gap-3">\n' +
+      '          <div className="w-12 h-12 shrink-0 rounded-xl bg-purple-500/10 flex items-center justify-center">\n' +
+      '            <FileText className="w-6 h-6 text-purple-500" />\n' +
+      '          </div>\n' +
+      '          <div>\n' +
+      '            <h1 className="text-3xl font-bold text-white">{t("title")}</h1>\n' +
+      '            <p className="text-zinc-400 mt-1">{t("subtitle")}</p>\n' +
+      '          </div>\n' +
+      '        </div>\n' +
+      '        <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full">\n' +
+      '          <span className="text-purple-400 text-sm font-medium">\n' +
+      '            {t("activeCount", { count: total })}\n' +
+      '          </span>\n' +
+      '        </div>\n' +
+      '      </motion.div>\n' +
+      '\n' +
+      '      {/* Error Alert */}\n' +
+      '      {error && (\n' +
+      '        <motion.div\n' +
+      '          initial={{ opacity: 0 }}\n' +
+      '          animate={{ opacity: 1 }}\n' +
+      '          className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400"\n' +
+      '        >\n' +
+      '          {error}\n' +
+      '        </motion.div>\n' +
+      '      )}\n' +
+      '\n' +
+      '      <CollectionPager offset={offset} hasMore={hasMore} onChange={setOffset} busy={isLoading} />\n' +
+      '      {/* Proposals List */}\n' +
+      '      {proposals.length === 0 ? (\n' +
+      '        <motion.div\n' +
+      '          initial={{ opacity: 0, y: 20 }}\n' +
+      '          animate={{ opacity: 1, y: 0 }}\n' +
+      '          className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center"\n' +
+      '        >\n' +
+      '          <FileText className="w-16 h-16 text-zinc-600 mx-auto mb-4" />\n' +
+      '          <h3 className="text-xl font-semibold text-white mb-2">\n' +
+      '            {t("emptyTitle")}\n' +
+      '          </h3>\n' +
+      '          <p className="text-zinc-400 mb-6">{t("emptyHelp")}</p>\n' +
+      '          <Link\n' +
+      '            href="/dashboard/tenders"\n' +
+      '            className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors"\n' +
+      '          >\n' +
+      '            {t("browse")}\n' +
+      '            <ArrowRight className="rtl-mirror w-4 h-4" />\n' +
+      '          </Link>\n' +
+      '        </motion.div>\n' +
+      '      ) : (\n' +
+      '        <motion.div\n' +
+      '          initial={{ opacity: 0, y: 20 }}\n' +
+      '          animate={{ opacity: 1, y: 0 }}\n' +
+      '          className="space-y-4"\n' +
+      '        >\n' +
+      '          {proposals.map((proposal, index) => (\n' +
+      '            <motion.div\n' +
+      '              key={proposal.id}\n' +
+      '              initial={{ opacity: 0, y: 12 }}\n' +
+      '              animate={{ opacity: 1, y: 0 }}\n' +
+      '              transition={{ delay: index * 0.05 }}\n' +
+      '            >\n' +
+      '              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-indigo-500/50 transition-colors group">\n' +
+      '                <div className="flex flex-wrap items-start justify-between gap-3">\n' +
+      '                  <div className="flex-1 min-w-0">\n' +
+      '                    <div className="flex flex-wrap items-center gap-3 mb-2">\n' +
+      '                      <h3 className="text-lg font-semibold text-white truncate group-hover:text-indigo-400 transition-colors">\n' +
+      '                        <BidiText>{proposal.tender_title}</BidiText>\n' +
+      '                      </h3>\n' +
+      '                      <span\n' +
+      '                        className={`rounded-full border px-3 py-1 text-xs font-medium ${preparationStatusClasses(proposal.status)}`}\n' +
+      '                      >\n' +
+      '                        {t("preparationStatus", {\n' +
+      '                          status: proposalStatus(proposal.status),\n' +
+      '                        })}\n' +
+      '                      </span>\n' +
+      '                      <span\n' +
+      '                        className={`rounded-full border px-3 py-1 text-xs font-medium ${tenderStatusClasses(proposal.tender_status)}`}\n' +
+      '                      >\n' +
+      '                        {t("tenderStatus", {\n' +
+      '                          status: tenderStatus(proposal.tender_status),\n' +
+      '                        })}\n' +
+      '                      </span>\n' +
+      '                      {proposal.engagement_status && (\n' +
+      '                        <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-200">\n' +
+      '                          {t("engagement", {\n' +
+      '                            status: engagementStatus(\n' +
+      '                              proposal.engagement_status,\n' +
+      '                            ),\n' +
+      '                          })}\n' +
+      '                        </span>\n' +
+      '                      )}\n' +
+      '                    </div>\n' +
+      '\n' +
+      '                    <div className="flex items-center gap-6 text-sm text-zinc-400">\n' +
+      '                      <span className="flex items-center gap-1">\n' +
+      '                        <Banknote className="w-4 h-4 text-green-400" />\n' +
+      '                        <span className="text-green-400 font-medium">\n' +
+      '                          {formatCurrency(\n' +
+      '                            proposal.tender_budget,\n' +
+      '                            proposal.tender_currency,\n' +
+      '                            locale,\n' +
+      '                            { maximumFractionDigits: 1 },\n' +
+      '                          )}\n' +
+      '                        </span>\n' +
+      '                      </span>\n' +
+      '\n' +
+      '                      {proposal.tender_region && (\n' +
+      '                        <span className="flex items-center gap-1">\n' +
+      '                          <MapPin className="w-4 h-4" />\n' +
+      '                          <BidiText>{proposal.tender_region}</BidiText>\n' +
+      '                        </span>\n' +
+      '                      )}\n' +
+      '\n' +
+      '                      <span className="flex items-center gap-1">\n' +
+      '                        <Clock className="w-4 h-4" />\n' +
+      '                        {t("created", {\n' +
+      '                          date: formatDate(proposal.created_at, locale),\n' +
+      '                        })}\n' +
+      '                      </span>\n' +
+      '                    </div>\n' +
+      '\n' +
+      '                    {proposal.structured_data?.our_price && (\n' +
+      '                      <div className="mt-3 pt-3 border-t border-zinc-800">\n' +
+      '                        <span className="text-zinc-500 text-sm">\n' +
+      '                          {t("yourPrice", {\n' +
+      '                            value: formatCurrency(\n' +
+      '                              proposal.structured_data.our_price,\n' +
+      '                              proposal.tender_currency,\n' +
+      '                              locale,\n' +
+      '                              { maximumFractionDigits: 1 },\n' +
+      '                            ),\n' +
+      '                          })}\n' +
+      '                        </span>\n' +
+      '                      </div>\n' +
+      '                    )}\n' +
+      '                  </div>\n' +
+      '\n' +
+      '                  <div className="flex items-center gap-2 ms-4">\n' +
+      '                    {!proposal.engagement_status && (\n' +
+      '                      <PrepareBidButton proposalId={proposal.id} />\n' +
+      '                    )}\n' +
+      '                    <div className="text-end">\n' +
+      '                      <div className="text-zinc-500 text-xs mb-1">\n' +
+      '                        {'... 885 more characters
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    "use client";
+    
+    import {CollectionPager} from "@/components/CollectionPager";
+    import {useCollectionOffset} from "@/lib/useCollectionOffset";
+    import { useState, useEffect } from "react";
+    import { motion } from "framer-motion";
+    import {
+      FileText,
+      Loader2,
+      Clock,
+      Banknote,
+      MapPin,
+      ArrowRight,
+    } from "lucide-react";
+    import { useLocale, useTranslations } from "next-intl";
+    import { api } from "@/lib/api";
+    import { formatCurrency, formatDate } from "@/i18n/formatters";
+    import type { CustomerSelectableLocale } from "@/i18n/locales";
+    import Link from "next/link";
+    import { tenderStatusClasses } from "@/types/tender";
+    import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
+    import {
+      preparationStatusClasses,
+      type BidPreparationArtifact,
+    } from "@/types/bid-preparation";
+    import { BidiText } from "@/components/i18n/BidiText";
+    
+    export default function BidPreparationPage() {
+      const t = useTranslations("bidPreparation");
+      const tExplorer = useTranslations("explorer");
+      const tMy = useTranslations("myTenders");
+      const locale = useLocale() as CustomerSelectableLocale;
+      const [offset, setOffset] = useCollectionOffset();
+      const [hasMore, setHasMore] = useState(false);
+      const [total, setTotal] = useState(0);
+      const [proposals, setProposals] = useState<BidPreparationArtifact[]>([]);
+      const [isLoading, setIsLoading] = useState(true);
+      const [error, setError] = useState<string | null>(null);
+    
+      useEffect(() => {
+        const fetchProposals = async () => {
+          setIsLoading(true);
+          try {
+            const response = await api.get("/proposals", {params: {limit: 25, offset}});
+            setHasMore(response.headers["x-has-more"] === "true");
+            setTotal(Number(response.headers["x-total-count"] ?? response.data.length));
+            setProposals(response.data);
+          } catch {
+            console.error("Failed to fetch proposals:");
+            setError(t("loadFailed"));
+          } finally {
+            setIsLoading(false);
+          }
+        };
+    
+        fetchProposals();
+      }, [t, offset]);
+    
+      const proposalStatus = (status: string) =>
+        status === "DRAFT"
+          ? t("status.draft")
+          : status === "GENERATING"
+            ? t("status.generating")
+            : status === "COMPLETED"
+              ? t("status.completed")
+              : status === "SUBMITTED"
+                ? t("status.submitted")
+                : t("status.unknown");
+      const tenderStatus = (status: string) =>
+        status === "OPEN"
+          ? tExplorer("status.open")
+          : status === "CLOSED"
+            ? tExplorer("status.closed")
+            : status === "CANCELLED"
+              ? tExplorer("status.cancelled")
+              : tExplorer("status.unknown");
+      const engagementStatus = (status: string) =>
+        status === "SAVED"
+          ? tMy("statuses.saved")
+          : status === "EVALUATING"
+            ? tMy("statuses.evaluating")
+            : status === "PREPARING"
+              ? tMy("statuses.preparing")
+              : status === "SUBMITTED"
+                ? tMy("statuses.submitted")
+                : status === "WON"
+                  ? tMy("statuses.won")
+                  : status === "LOST"
+                    ? tMy("statuses.lost")
+                    : tMy("statuses.dismissed");
+    
+      if (isLoading) {
+        return (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+          </div>
+        );
+      }
+    
+      return (
+        <div className="space-y-6">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-wrap items-center justify-between gap-4"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="w-12 h-12 shrink-0 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                <FileText className="w-6 h-6 text-purple-500" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
+                <p className="text-zinc-400 mt-1">{t("subtitle")}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full">
+              <span className="text-purple-400 text-sm font-medium">
+                {t("activeCount", { count: total })}
+              </span>
+            </div>
+          </motion.div>
+    
+          {/* Error Alert */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400"
+            >
+              {error}
+            </motion.div>
+          )}
+    
+          <CollectionPager offset={offset} hasMore={hasMore} onChange={setOffset} busy={isLoading} />
+          {/* Proposals List */}
+          {proposals.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center"
+            >
+              <FileText className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-white mb-2">
+                {t("emptyTitle")}
+              </h3>
+              <p className="text-zinc-400 mb-6">{t("emptyHelp")}</p>
+              <Link
+                href="/dashboard/tenders"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors"
+              >
+                {t("browse")}
+                <ArrowRight className="rtl-mirror w-4 h-4" />
+              </Link>
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              {proposals.map((proposal, index) => (
+                <motion.div
+                  key={proposal.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-indigo-500/50 transition-colors group">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-3 mb-2">
+                          <h3 className="text-lg font-semibold text-white truncate group-hover:text-indigo-400 transition-colors">
+                            <BidiText>{proposal.tender_title}</BidiText>
+                          </h3>
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-medium ${preparationStatusClasses(proposal.status)}`}
+                          >
+                            {t("preparationStatus", {
+                              status: proposalStatus(proposal.status),
+                            })}
+                          </span>
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-medium ${tenderStatusClasses(proposal.tender_status)}`}
+                          >
+                            {t("tenderStatus", {
+                              status: tenderStatus(proposal.tender_status),
+                            })}
+                          </span>
+                          {proposal.engagement_status && (
+                            <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-200">
+                              {t("engagement", {
+                                status: engagementStatus(
+                                  proposal.engagement_status,
+                                ),
+                              })}
+                            </span>
+                          )}
+                        </div>
+    
+                        <div className="flex items-center gap-6 text-sm text-zinc-400">
+                          <span className="flex items-center gap-1">
+                            <Banknote className="w-4 h-4 text-green-400" />
+                            <span className="text-green-400 font-medium">
+                              {formatCurrency(
+                                proposal.tender_budget,
+                                proposal.tender_currency,
+                                locale,
+                                { maximumFractionDigits: 1 },
+                              )}
+                            </span>
+                          </span>
+    
+                          {proposal.tender_region && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-4 h-4" />
+                              <BidiText>{proposal.tender_region}</BidiText>
+                            </span>
+                          )}
+    
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-4 h-4" />
+                            {t("created", {
+                              date: formatDate(proposal.created_at, locale),
+                            })}
+                          </span>
+                        </div>
+    
+                        {proposal.structured_data?.our_price && (
+                          <div className="mt-3 pt-3 border-t border-zinc-800">
+                            <span className="text-zinc-500 text-sm">
+                              {t("yourPrice", {
+                                value: formatCurrency(
+                                  proposal.structured_data.our_price,
+                                  proposal.tender_currency,
+                                  locale,
+                                  { maximumFractionDigits: 1 },
+                                ),
+                              })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+    
+                      <div className="flex items-center gap-2 ms-4">
+                        {!proposal.engagement_status && (
+                          <PrepareBidButton proposalId={proposal.id} />
+                        )}
+                        <div className="text-end">
+                          <div className="text-zinc-500 text-xs mb-1">
+                            {t("aiConfidence")}
+                          </div>
+                          <div className="text-white font-bold">
+                            {proposal.ai_confidence_score}%
+                          </div>
+                        </div>
+                        <Link
+                          href={`/dashboard/bid-preparation/${proposal.id}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:border-indigo-500 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        >
+                          {t("open")}
+                          <ArrowRight className="rtl-mirror w-4 h-4" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </div>
+      );
+    }
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///tmp/plasma-s93-frontend/tests/bid-preparation.test.mjs:79:10)
+    Test.runInAsyncScope (node:async_hooks:211:14)
+    Test.run (node:internal/test_runner/test:979:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:677:18)
+    Test.postRun (node:internal/test_runner/test:1090:19)
+    Test.run (node:internal/test_runner/test:1018:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:677:7)
+  ...
+# Subtest: Compliance page no longer creates or resolves Proposal artifacts passively
+ok 13 - Compliance page no longer creates or resolves Proposal artifacts passively
+  ---
+  duration_ms: 0.311029
+  ...
+# Subtest: canonical detail return links use their domain identifiers
+ok 14 - canonical detail return links use their domain identifiers
+  ---
+  duration_ms: 0.435284
+  ...
+# Subtest: every canonical status has concise non-color meaning
+ok 15 - every canonical status has concise non-color meaning
+  ---
+  duration_ms: 2.200551
+  ...
+# Subtest: high-significance actions use confirmation and exact semantics
+ok 16 - high-significance actions use confirmation and exact semantics
+  ---
+  duration_ms: 0.600567
+  ...
+# Subtest: commands send expected state and refresh authoritative backend truth
+ok 17 - commands send expected state and refresh authoritative backend truth
+  ---
+  duration_ms: 0.320138
+  ...
+# Subtest: Tender Details and Bid Preparation share the compact pursuit panel
+ok 18 - Tender Details and Bid Preparation share the compact pursuit panel
+  ---
+  duration_ms: 0.450486
+  ...
+# Subtest: legacy proposal is continued only by explicit click
+ok 19 - legacy proposal is continued only by explicit click
+  ---
+  duration_ms: 0.302216
+  ...
+# Subtest: source and engagement semantics remain independent
+ok 20 - source and engagement semantics remain independent
+  ---
+  duration_ms: 3.818408
+  ...
+# Subtest: legacy customer route is a passive compatibility redirect
+ok 21 - legacy customer route is a passive compatibility redirect
+  ---
+  duration_ms: 1.380969
+  ...
+# Subtest: dead Hunter frontend implementation and types are removed
+ok 22 - dead Hunter frontend implementation and types are removed
+  ---
+  duration_ms: 2.423628
+  ...
+# Subtest: unified Explorer remains canonical frontend authority
+ok 23 - unified Explorer remains canonical frontend authority
+  ---
+  duration_ms: 0.462368
+  ...
+# Subtest: primary navigation has no duplicate discovery product
+ok 24 - primary navigation has no duplicate discovery product
+  ---
+  duration_ms: 1.614759
+  ...
+# Subtest: legacy backend APIs remain compatibility-only and share mutation authority
+ok 25 - legacy backend APIs remain compatibility-only and share mutation authority
+  ---
+  duration_ms: 0.603696
+  ...
+# Subtest: generation owner and document dispatch stay internal and unchanged
+ok 26 - generation owner and document dispatch stay internal and unchanged
+  ---
+  duration_ms: 0.427349
+  ...
+# Subtest: locale registry has one complete definition for every canonical product locale
+ok 27 - locale registry has one complete definition for every canonical product locale
+  ---
+  duration_ms: 2.432567
+  ...
+# Subtest: all four UI locales are selectable and Arabic owns RTL direction
+ok 28 - all four UI locales are selectable and Arabic owns RTL direction
+  ---
+  duration_ms: 0.437252
+  ...
+# Subtest: weighted Accept-Language parsing is robust and skips malformed entries
+ok 29 - weighted Accept-Language parsing is robust and skips malformed entries
+  ---
+  duration_ms: 1.444767
+  ...
+# Subtest: request precedence is persisted user, cookie, request, then English
+ok 30 - request precedence is persisted user, cookie, request, then English
+  ---
+  duration_ms: 0.323988
+  ...
+# Subtest: browser BCP-47 variants map to stable product identifiers
+ok 31 - browser BCP-47 variants map to stable product identifiers
+  ---
+  duration_ms: 0.420937
+  ...
+# Subtest: customer locale resolution is deterministic and saved preference wins
+ok 32 - customer locale resolution is deterministic and saved preference wins
+  ---
+  duration_ms: 0.826336
+  ...
+# Subtest: UI locale ownership and required message domains are explicit
+ok 33 - UI locale ownership and required message domains are explicit
+  ---
+  duration_ms: 0.475189
+  ...
+# Subtest: content policy translates presentation without mutating domain content
+ok 34 - content policy translates presentation without mutating domain content
+  ---
+  duration_ms: 0.311343
+  ...
+# Subtest: message validation prototype flattens semantic keys and understands ICU values
+ok 35 - message validation prototype flattens semantic keys and understands ICU values
+  ---
+  duration_ms: 0.986362
+  ...
+# Subtest: message validation detects missing, extra, and placeholder-mismatched keys
+ok 36 - message validation detects missing, extra, and placeholder-mismatched keys
+  ---
+  duration_ms: 1.320336
+  ...
+# Subtest: committed English, Uzbek, Russian, and Arabic catalogs have exact key and ICU parity
+ok 37 - committed English, Uzbek, Russian, and Arabic catalogs have exact key and ICU parity
+  ---
+  duration_ms: 13.964392
+  ...
+# Subtest: next-intl executes plural rules and named interpolation for all active locales
+ok 38 - next-intl executes plural rules and named interpolation for all active locales
+  ---
+  duration_ms: 27.175207
+  ...
+# Subtest: rich messages keep dynamic source values as escaped text
+ok 39 - rich messages keep dynamic source values as escaped text
+  ---
+  duration_ms: 7.974278
+  ...
+# Subtest: formatters localize representation while preserving UTC and economic inputs
+ok 40 - formatters localize representation while preserving UTC and economic inputs
+  ---
+  duration_ms: 12.620009
+  ...
+# Subtest: formatters never expose Invalid Date or NaN
+ok 41 - formatters never expose Invalid Date or NaN
+  ---
+  duration_ms: 0.188567
+  ...
+# Subtest: enum display and stable error-code foundations preserve canonical payloads
+ok 42 - enum display and stable error-code foundations preserve canonical payloads
+  ---
+  duration_ms: 0.191252
+  ...
+# Subtest: runtime integration is locale-neutral, request-scoped, and bundle-conscious
+ok 43 - runtime integration is locale-neutral, request-scoped, and bundle-conscious
+  ---
+  duration_ms: 0.719402
+  ...
+# Subtest: successful locale action persists, reconciles cookie, then refreshes in order
+ok 44 - successful locale action persists, reconciles cookie, then refreshes in order
+  ---
+  duration_ms: 0.557556
+  ...
+# Subtest: failed locale save leaves cookie and rendered locale untouched
+ok 45 - failed locale save leaves cookie and rendered locale untouched
+  ---
+  duration_ms: 0.998255
+  ...
+# Subtest: all canonical statuses use customer language and visible text
+ok 46 - all canonical statuses use customer language and visible text
+  ---
+  duration_ms: 2.834841
+  ...
+# Subtest: My Tenders is engagement-only, bounded, and URL-driven
+ok 47 - My Tenders is engagement-only, bounded, and URL-driven
+  ---
+  duration_ms: 0.995287
+  ...
+# Subtest: engagement and source status are separately labeled and accessible
+ok 48 - engagement and source status are separately labeled and accessible
+  ---
+  duration_ms: 1.677365
+  ...
+# Subtest: empty state is truthful and never imports legacy bids
+ok 49 - empty state is truthful and never imports legacy bids
+  ---
+  duration_ms: 0.633666
+  ...
+# Subtest: save happens only in explicit click handler and represents re-engagement
+ok 50 - save happens only in explicit click handler and represents re-engagement
+  ---
+  duration_ms: 0.62574
+  ...
+# Subtest: navigation exposes My Tenders and Bid Preparation separately
+ok 51 - navigation exposes My Tenders and Bid Preparation separately
+  ---
+  duration_ms: 0.701261
+  ...
+# Subtest: no Project has an explicit consolidated empty state
+ok 52 - no Project has an explicit consolidated empty state
+  ---
+  duration_ms: 3.200596
+  ...
+# Subtest: linked not-enriched identity remains visible while details prepare
+ok 53 - linked not-enriched identity remains visible while details prepare
+  ---
+  duration_ms: 0.522812
+  ...
+# Subtest: enriched metadata renders only meaningful rows
+ok 54 - enriched metadata renders only meaningful rows
+  ---
+  duration_ms: 118.556759
+  ...
+# Subtest: missing metadata is omitted instead of rendered as placeholders
+ok 55 - missing metadata is omitted instead of rendered as placeholders
+  ---
+  duration_ms: 1.85165
+  ...
+# Subtest: current leadership is visible under the locked section label
+ok 56 - current leadership is visible under the locked section label
+  ---
+  duration_ms: 0.722206
+  ...
+# Subtest: historical leadership is separate and keyboard-accessible
+ok 57 - historical leadership is separate and keyboard-accessible
+  ---
+  duration_ms: 2.351505
+  ...
+# Subtest: Task Team Leader canonical label is exact
+ok 58 - Task Team Leader canonical label is exact
+  ---
+  duration_ms: 0.87021
+  ...
+# Subtest: Co-Task Team Leader canonical label is exact
+ok 59 - Co-Task Team Leader canonical label is exact
+  ---
+  duration_ms: 0.759264
+  ...
+# Subtest: Task Manager canonical label is exact and not TTL
+ok 60 - Task Manager canonical label is exact and not TTL
+  ---
+  duration_ms: 5.868299
+  ...
+# Subtest: teamleadname never renders as TTL
+ok 61 - teamleadname never renders as TTL
+  ---
+  duration_ms: 2.587279
+  ...
+# Subtest: no leadership email is inferred or replaced with a placeholder
+ok 62 - no leadership email is inferred or replaced with a placeholder
+  ---
+  duration_ms: 0.601409
+  ...
+# Subtest: procurement contact remains an explicitly separate Tender section
+ok 63 - procurement contact remains an explicitly separate Tender section
+  ---
+  duration_ms: 0.338157
+  ...
+# Subtest: Project dates have explicit non-deadline labels
+ok 64 - Project dates have explicit non-deadline labels
+  ---
+  duration_ms: 1.144032
+  ...
+# Subtest: Project status presentation does not use Tender actionability helpers
+ok 65 - Project status presentation does not use Tender actionability helpers
+  ---
+  duration_ms: 0.368484
+  ...
+# Subtest: stale and partial states use restrained truthful messages
+ok 66 - stale and partial states use restrained truthful messages
+  ---
+  duration_ms: 0.364804
+  ...
+# Subtest: Project API failure is isolated from the Tender load
+ok 67 - Project API failure is isolated from the Tender load
+  ---
+  duration_ms: 0.507209
+  ...
+# Subtest: Project HTTP outcomes remain semantically distinct
+ok 68 - Project HTTP outcomes remain semantically distinct
+  ---
+  duration_ms: 0.268003
+  ...
+# Subtest: source and status semantics are accessible and responsive
+ok 69 - source and status semantics are accessible and responsive
+  ---
+  duration_ms: 0.381514
+  ...
+# Subtest: P0 catalogs have complete EN/UZ/RU key and placeholder coverage
+ok 70 - P0 catalogs have complete EN/UZ/RU key and placeholder coverage
+  ---
+  duration_ms: 40.064262
+  ...
+# Subtest: the only customer selector is registry-driven, accessible, and includes released Arabic
+ok 71 - the only customer selector is registry-driven, accessible, and includes released Arabic
+  ---
+  duration_ms: 0.994627
+  ...
+# Subtest: onboarding and settings expose one selector before editable form content
+ok 72 - onboarding and settings expose one selector before editable form content
+  ---
+  duration_ms: 0.635805
+  ...
+# Subtest: locale changes are persist-first and preserve route and mounted state
+not ok 73 - locale changes are persist-first and preserve route and mounted state
+  ---
+  duration_ms: 10.598899
+  location: '/tmp/plasma-s93-frontend/tests/s7-3-p0-localization.test.mjs:87:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /catch \(requestError\)/. Input:
+    
+    '"use client";\n' +
+      '\n' +
+      'import { Check, Loader2 } from "lucide-react";\n' +
+      'import { useLocale, useTranslations } from "next-intl";\n' +
+      'import { useRouter } from "next/navigation";\n' +
+      'import { useState } from "react";\n' +
+      '\n' +
+      'import { applyUiLocale } from "@/i18n/userLocale";\n' +
+      'import {\n' +
+      '  CUSTOMER_SELECTABLE_LOCALES,\n' +
+      '  LOCALE_REGISTRY,\n' +
+      '  type CustomerSelectableLocale,\n' +
+      '} from "@/i18n/locales";\n' +
+      '\n' +
+      'type LanguageSelectorProps = Readonly<{\n' +
+      '  surface: "onboarding" | "settings";\n' +
+      '}>;\n' +
+      '\n' +
+      '/**\n' +
+      ' * The only visible customer locale control. It deliberately reads the active\n' +
+      ' * next-intl locale and delegates persistence to the Sprint 7.2 transaction.\n' +
+      ' * A failed write therefore cannot create an optimistic language flash.\n' +
+      ' */\n' +
+      'export function LanguageSelector({ surface }: LanguageSelectorProps) {\n' +
+      '  const router = useRouter();\n' +
+      '  const activeLocale = useLocale() as CustomerSelectableLocale;\n' +
+      '  const t = useTranslations("settings.language");\n' +
+      '  const [pendingLocale, setPendingLocale] =\n' +
+      '    useState<CustomerSelectableLocale | null>(null);\n' +
+      '  const [error, setError] = useState(false);\n' +
+      '\n' +
+      '  const selectLocale = async (locale: CustomerSelectableLocale) => {\n' +
+      '    if (locale === activeLocale || pendingLocale) return;\n' +
+      '    setError(false);\n' +
+      '    setPendingLocale(locale);\n' +
+      '    try {\n' +
+      '      await applyUiLocale(locale, router);\n' +
+      '    } catch {\n' +
+      '      console.error("Failed to persist interface language:");\n' +
+      '      setError(true);\n' +
+      '    } finally {\n' +
+      '      setPendingLocale(null);\n' +
+      '    }\n' +
+      '  };\n' +
+      '\n' +
+      '  return (\n' +
+      '    <section\n' +
+      '      aria-labelledby={`${surface}-interface-language-heading`}\n' +
+      '      className="space-y-4 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4 sm:p-5"\n' +
+      '      data-language-selector={surface}\n' +
+      '    >\n' +
+      '      <div>\n' +
+      '        <h2\n' +
+      '          id={`${surface}-interface-language-heading`}\n' +
+      '          className="text-base font-semibold text-white"\n' +
+      '        >\n' +
+      '          {t("title")}\n' +
+      '        </h2>\n' +
+      '        <p className="mt-1 text-sm leading-5 text-zinc-400">\n' +
+      '          {t(`${surface}Help`)}\n' +
+      '        </p>\n' +
+      '      </div>\n' +
+      '      <div\n' +
+      '        role="radiogroup"\n' +
+      '        aria-label={t("optionsLabel")}\n' +
+      '        className="grid grid-cols-1 gap-2 sm:grid-cols-3"\n' +
+      '      >\n' +
+      '        {CUSTOMER_SELECTABLE_LOCALES.map((locale) => {\n' +
+      '          const selected = activeLocale === locale;\n' +
+      '          const pending = pendingLocale === locale;\n' +
+      '          return (\n' +
+      '            <button\n' +
+      '              key={locale}\n' +
+      '              type="button"\n' +
+      '              role="radio"\n' +
+      '              aria-checked={selected}\n' +
+      '              aria-label={t("optionLabel", {\n' +
+      '                language: LOCALE_REGISTRY[locale].displayNameNative,\n' +
+      '              })}\n' +
+      '              disabled={pendingLocale !== null}\n' +
+      '              onClick={() => void selectLocale(locale)}\n' +
+      '              className={`flex min-h-12 items-center justify-between gap-3 rounded-lg border px-4 py-3 text-start text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-wait disabled:opacity-70 ${\n' +
+      '                selected\n' +
+      '                  ? "border-cyan-400 bg-cyan-500/15 text-cyan-100"\n' +
+      '                  : "border-zinc-700 bg-zinc-950 text-zinc-200 hover:border-zinc-500"\n' +
+      '              }`}\n' +
+      '            >\n' +
+      '              <span>{LOCALE_REGISTRY[locale].displayNameNative}</span>\n' +
+      '              {pending ? (\n' +
+      '                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />\n' +
+      '              ) : selected ? (\n' +
+      '                <Check className="h-4 w-4" aria-hidden="true" />\n' +
+      '              ) : null}\n' +
+      '            </button>\n' +
+      '          );\n' +
+      '        })}\n' +
+      '      </div>\n' +
+      '      <div className="min-h-5 text-xs" aria-live="polite">\n' +
+      '        {pendingLocale ? (\n' +
+      '          <span className="text-cyan-200">{t("saving")}</span>\n' +
+      '        ) : null}\n' +
+      '        {!pendingLocale && error ? (\n' +
+      '          <span role="alert" className="text-red-300">\n' +
+      '            {t("saveFailed")}\n' +
+      '          </span>\n' +
+      '        ) : null}\n' +
+      '      </div>\n' +
+      '    </section>\n' +
+      '  );\n' +
+      '}\n'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    "use client";
+    
+    import { Check, Loader2 } from "lucide-react";
+    import { useLocale, useTranslations } from "next-intl";
+    import { useRouter } from "next/navigation";
+    import { useState } from "react";
+    
+    import { applyUiLocale } from "@/i18n/userLocale";
+    import {
+      CUSTOMER_SELECTABLE_LOCALES,
+      LOCALE_REGISTRY,
+      type CustomerSelectableLocale,
+    } from "@/i18n/locales";
+    
+    type LanguageSelectorProps = Readonly<{
+      surface: "onboarding" | "settings";
+    }>;
+    
+    /**
+     * The only visible customer locale control. It deliberately reads the active
+     * next-intl locale and delegates persistence to the Sprint 7.2 transaction.
+     * A failed write therefore cannot create an optimistic language flash.
+     */
+    export function LanguageSelector({ surface }: LanguageSelectorProps) {
+      const router = useRouter();
+      const activeLocale = useLocale() as CustomerSelectableLocale;
+      const t = useTranslations("settings.language");
+      const [pendingLocale, setPendingLocale] =
+        useState<CustomerSelectableLocale | null>(null);
+      const [error, setError] = useState(false);
+    
+      const selectLocale = async (locale: CustomerSelectableLocale) => {
+        if (locale === activeLocale || pendingLocale) return;
+        setError(false);
+        setPendingLocale(locale);
+        try {
+          await applyUiLocale(locale, router);
+        } catch {
+          console.error("Failed to persist interface language:");
+          setError(true);
+        } finally {
+          setPendingLocale(null);
+        }
+      };
+    
+      return (
+        <section
+          aria-labelledby={`${surface}-interface-language-heading`}
+          className="space-y-4 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4 sm:p-5"
+          data-language-selector={surface}
+        >
+          <div>
+            <h2
+              id={`${surface}-interface-language-heading`}
+              className="text-base font-semibold text-white"
+            >
+              {t("title")}
+            </h2>
+            <p className="mt-1 text-sm leading-5 text-zinc-400">
+              {t(`${surface}Help`)}
+            </p>
+          </div>
+          <div
+            role="radiogroup"
+            aria-label={t("optionsLabel")}
+            className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+          >
+            {CUSTOMER_SELECTABLE_LOCALES.map((locale) => {
+              const selected = activeLocale === locale;
+              const pending = pendingLocale === locale;
+              return (
+                <button
+                  key={locale}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={t("optionLabel", {
+                    language: LOCALE_REGISTRY[locale].displayNameNative,
+                  })}
+                  disabled={pendingLocale !== null}
+                  onClick={() => void selectLocale(locale)}
+                  className={`flex min-h-12 items-center justify-between gap-3 rounded-lg border px-4 py-3 text-start text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-wait disabled:opacity-70 ${
+                    selected
+                      ? "border-cyan-400 bg-cyan-500/15 text-cyan-100"
+                      : "border-zinc-700 bg-zinc-950 text-zinc-200 hover:border-zinc-500"
+                  }`}
+                >
+                  <span>{LOCALE_REGISTRY[locale].displayNameNative}</span>
+                  {pending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : selected ? (
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="min-h-5 text-xs" aria-live="polite">
+            {pendingLocale ? (
+              <span className="text-cyan-200">{t("saving")}</span>
+            ) : null}
+            {!pendingLocale && error ? (
+              <span role="alert" className="text-red-300">
+                {t("saveFailed")}
+              </span>
+            ) : null}
+          </div>
+        </section>
+      );
+    }
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///tmp/plasma-s93-frontend/tests/s7-3-p0-localization.test.mjs:91:10)
+    Test.runInAsyncScope (node:async_hooks:211:14)
+    Test.run (node:internal/test_runner/test:979:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:677:18)
+    Test.postRun (node:internal/test_runner/test:1090:19)
+    Test.run (node:internal/test_runner/test:1018:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:677:7)
+  ...
+# Subtest: P0 pages use translations and shared locale formatters
+ok 74 - P0 pages use translations and shared locale formatters
+  ---
+  duration_ms: 1.392033
+  ...
+# Subtest: canonical query, enum, and action codes remain untranslated
+ok 75 - canonical query, enum, and action codes remain untranslated
+  ---
+  duration_ms: 3.560061
+  ...
+# Subtest: source, user, Proposal, and AI narrative fields remain original
+ok 76 - source, user, Proposal, and AI narrative fields remain original
+  ---
+  duration_ms: 1.875037
+  ...
+# Subtest: refresh copy is translated without resetting the active poller or source names
+ok 77 - refresh copy is translated without resetting the active poller or source names
+  ---
+  duration_ms: 1.199403
+  ...
+# Subtest: new badge and high-significance actions have localized accessible copy
+ok 78 - new badge and high-significance actions have localized accessible copy
+  ---
+  duration_ms: 0.924729
+  ...
+# Subtest: claim-safe terminology renders natively in all P0 locales
+ok 79 - claim-safe terminology renders natively in all P0 locales
+  ---
+  duration_ms: 49.158833
+  ...
+# Subtest: current catalogs preserve the Sprint 7 contract with EN/UZ/RU/AR parity
+ok 80 - current catalogs preserve the Sprint 7 contract with EN/UZ/RU/AR parity
+  ---
+  duration_ms: 83.695356
+  ...
+# Subtest: P1 customer surfaces contain no unexplained literal JSX or accessibility copy
+ok 81 - P1 customer surfaces contain no unexplained literal JSX or accessibility copy
+  ---
+  duration_ms: 9.085663
+  ...
+# Subtest: Compliance localizes chrome while preserving analysis, evidence, and requirement content
+ok 82 - Compliance localizes chrome while preserving analysis, evidence, and requirement content
+  ---
+  duration_ms: 2.597255
+  ...
+# Subtest: Readiness enum mappings are exhaustive and canonical values are unchanged
+ok 83 - Readiness enum mappings are exhaustive and canonical values are unchanged
+  ---
+  duration_ms: 34.573863
+  ...
+# Subtest: customer formatting is centralized and invalid values are safe
+ok 84 - customer formatting is centralized and invalid values are safe
+  ---
+  duration_ms: 108.087302
+  ...
+# Subtest: released Arabic UI remains independent from analysis/report language
+ok 85 - released Arabic UI remains independent from analysis/report language
+  ---
+  duration_ms: 1.8144
+  ...
+# Subtest: claim-sensitive translations avoid certification and guarantee inflation
+ok 86 - claim-sensitive translations avoid certification and guarantee inflation
+  ---
+  duration_ms: 0.726464
+  ...
+# Subtest: pseudo locale expands deterministic static copy and preserves placeholders
+ok 87 - pseudo locale expands deterministic static copy and preserves placeholders
+  ---
+  duration_ms: 6.35934
+  ...
+# Subtest: pseudo catalog preserves shape, ICU blocks, and rich tags
+ok 88 - pseudo catalog preserves shape, ICU blocks, and rich tags
+  ---
+  duration_ms: 68.339875
+  ...
+# Subtest: pseudo locale is gated away from production and is not a customer locale
+ok 89 - pseudo locale is gated away from production and is not a customer locale
+  ---
+  duration_ms: 1.721389
+  ...
+# Subtest: analysis registry is independent, canonical, native-labelled, and truthfully gates Arabic
+ok 90 - analysis registry is independent, canonical, native-labelled, and truthfully gates Arabic
+  ---
+  duration_ms: 3.616394
+  ...
+# Subtest: Settings separates interface and default analysis preferences
+ok 91 - Settings separates interface and default analysis preferences
+  ---
+  duration_ms: 1.016132
+  ...
+# Subtest: Compliance captures one explicit per-run language and preserves default
+ok 92 - Compliance captures one explicit per-run language and preserves default
+  ---
+  duration_ms: 0.526641
+  ...
+# Subtest: version metadata, history, legacy NULL, and exact export version are represented
+ok 93 - version metadata, history, legacy NULL, and exact export version are represented
+  ---
+  duration_ms: 0.602622
+  ...
+# Subtest: content direction is scoped and evidence remains auto
+ok 94 - content direction is scoped and evidence remains auto
+  ---
+  duration_ms: 0.829505
+  ...
+# Subtest: all active UI catalogs contain independent analysis-language copy
+ok 95 - all active UI catalogs contain independent analysis-language copy
+  ---
+  duration_ms: 0.515416
+  ...
+# Subtest: UI locale is not execution-language authority
+ok 96 - UI locale is not execution-language authority
+  ---
+  duration_ms: 0.726418
+  ...
+# Subtest: Arabic activation is atomic across registry, loader, root direction, and selector
+ok 97 - Arabic activation is atomic across registry, loader, root direction, and selector
+  ---
+  duration_ms: 2.489776
+  ...
+# Subtest: all 15 Arabic namespaces match the complete 866-key customer contract
+ok 98 - all 15 Arabic namespaces match the complete 866-key customer contract
+  ---
+  duration_ms: 15.357975
+  ...
+# Subtest: all four catalogs retain exact key, ICU placeholder, and rich placeholder parity
+ok 99 - all four catalogs retain exact key, ICU placeholder, and rich placeholder parity
+  ---
+  duration_ms: 13.842294
+  ...
+# Subtest: Arabic released copy has no exact English fallback leaf
+ok 100 - Arabic released copy has no exact English fallback leaf
+  ---
+  duration_ms: 1.517448
+  ...
+# Subtest: Arabic copy preserves approved brands and avoids inflated claims
+ok 101 - Arabic copy preserves approved brands and avoids inflated claims
+  ---
+  duration_ms: 1.09784
+  ...
+# Subtest: Arabic variants, weighted Accept-Language, and locale precedence resolve canonically
+ok 102 - Arabic variants, weighted Accept-Language, and locale precedence resolve canonically
+  ---
+  duration_ms: 1.215518
+  ...
+# Subtest: one direction function maps Arabic to RTL and every other UI locale to LTR
+ok 103 - one direction function maps Arabic to RTL and every other UI locale to LTR
+  ---
+  duration_ms: 0.473853
+  ...
+# Subtest: Arabic number, currency, date, relative time, and file-size formatting is centralized
+ok 104 - Arabic number, currency, date, relative time, and file-size formatting is centralized
+  ---
+  duration_ms: 21.750903
+  ...
+# Subtest: Arabic ICU messages execute with Arabic plural rules and source interpolation
+ok 105 - Arabic ICU messages execute with Arabic plural rules and source interpolation
+  ---
+  duration_ms: 4.595176
+  ...
+# Subtest: Arabic UI remains independent from the gated analysis-language registry
+ok 106 - Arabic UI remains independent from the gated analysis-language registry
+  ---
+  duration_ms: 0.536292
+  ...
+# Subtest: source, user, technical, and analysis content have reusable bidi boundaries
+ok 107 - source, user, technical, and analysis content have reusable bidi boundaries
+  ---
+  duration_ms: 1.059157
+  ...
+# Subtest: analysis, evidence, identifier, and filename islands are explicit in Compliance
+ok 108 - analysis, evidence, identifier, and filename islands are explicit in Compliance
+  ---
+  duration_ms: 0.64102
+  ...
+# Subtest: profile, onboarding, search, proposal, and readiness inputs declare content direction
+ok 109 - profile, onboarding, search, proposal, and readiness inputs declare content direction
+  ---
+  duration_ms: 1.014568
+  ...
+# Subtest: customer CSS and semantic direction icons pass the zero-exception RTL guard
+ok 110 - customer CSS and semantic direction icons pass the zero-exception RTL guard
+  ---
+  duration_ms: 11.101228
+  ...
+# Subtest: dedicated Admin content is an explicit English LTR island
+ok 111 - dedicated Admin content is an explicit English LTR island
+  ---
+  duration_ms: 0.664355
+  ...
+# Subtest: document source geometry stays LTR while source lines use auto direction
+ok 112 - document source geometry stays LTR while source lines use auto direction
+  ---
+  duration_ms: 0.340974
+  ...
+# Subtest: locale switching persists only ui_locale then refreshes without route replacement
+ok 113 - locale switching persists only ui_locale then refreshes without route replacement
+  ---
+  duration_ms: 0.386165
+  ...
+# Subtest: canonical query and payload values remain locale-neutral
+ok 114 - canonical query and payload values remain locale-neutral
+  ---
+  duration_ms: 0.614919
+  ...
+# Subtest: polling cadence, grace policy, and bounded backoff are deterministic
+ok 115 - polling cadence, grace policy, and bounded backoff are deterministic
+  ---
+  duration_ms: 10.042325
+  ...
+# Subtest: exclusive-cursor defense deduplicates job ids without timestamp sorting
+ok 116 - exclusive-cursor defense deduplicates job ids without timestamp sorting
+  ---
+  duration_ms: 1.791158
+  ...
+# Subtest: single completion copy preserves exact count, source, zero, and terminal truth
+ok 117 - single completion copy preserves exact count, source, zero, and terminal truth
+  ---
+  duration_ms: 1.249528
+  ...
+# Subtest: multiple events aggregate counts while retaining mixed issue detail
+ok 118 - multiple events aggregate counts while retaining mixed issue detail
+  ---
+  duration_ms: 13.654902
+  ...
+# Subtest: single-source action links to rolling source newness, never job membership
+ok 119 - single-source action links to rolling source newness, never job membership
+  ---
+  duration_ms: 0.679305
+  ...
+# Subtest: server reference defeats positive and negative browser wall-clock skew
+ok 120 - server reference defeats positive and negative browser wall-clock skew
+  ---
+  duration_ms: 0.642507
+  ...
+# Subtest: badge expires exactly at new_until and backend false never becomes true
+ok 121 - badge expires exactly at new_until and backend false never becomes true
+  ---
+  duration_ms: 0.438731
+  ...
+# Subtest: one dashboard provider owns catalog, status, activity, session cursor, and cleanup
+ok 122 - one dashboard provider owns catalog, status, activity, session cursor, and cleanup
+  ---
+  duration_ms: 3.525777
+  ...
+# Subtest: Explorer is catalog-driven and new_only is URL and backend authoritative
+ok 123 - Explorer is catalog-driven and new_only is URL and backend authoritative
+  ---
+  duration_ms: 1.637301
+  ...
+# Subtest: badge has one shared timer and no per-card interval
+ok 124 - badge has one shared timer and no per-card interval
+  ---
+  duration_ms: 1.980677
+  ...
+# Subtest: refresh POST remains explicit and is not owned by Explorer page effects
+ok 125 - refresh POST remains explicit and is not owned by Explorer page effects
+  ---
+  duration_ms: 1.616983
+  ...
+# Subtest: SR-3 contract files use explicit types without broad any
+ok 126 - SR-3 contract files use explicit types without broad any
+  ---
+  duration_ms: 3.066074
+  ...
+# Subtest: dead workspace and duplicate Tender components are removed
+ok 127 - dead workspace and duplicate Tender components are removed
+  ---
+  duration_ms: 3.329827
+  ...
+# Subtest: legacy lists and workspace are permanent read-only redirects
+ok 128 - legacy lists and workspace are permanent read-only redirects
+  ---
+  duration_ms: 1.337948
+  ...
+# Subtest: legacy bid detail validates only an owned Proposal ID
+ok 129 - legacy bid detail validates only an owned Proposal ID
+  ---
+  duration_ms: 1.962897
+  ...
+# Subtest: Bid Preparation passive effects read persisted state and never synchronize
+ok 130 - Bid Preparation passive effects read persisted state and never synchronize
+  ---
+  duration_ms: 1.0265
+  ...
+# Subtest: Bid Preparation mutations remain explicit event handlers
+ok 131 - Bid Preparation mutations remain explicit event handlers
+  ---
+  duration_ms: 2.040795
+  ...
+# Subtest: canonical cross-surface links use the correct identifiers
+ok 132 - canonical cross-surface links use the correct identifiers
+  ---
+  duration_ms: 0.730786
+  ...
+# Subtest: canonical navigation and runtime copy omit obsolete product terminology
+ok 133 - canonical navigation and runtime copy omit obsolete product terminology
+  ---
+  duration_ms: 3.091998
+  ...
+# Subtest: dead Decision Snapshot and competitor client contracts are removed
+ok 134 - dead Decision Snapshot and competitor client contracts are removed
+  ---
+  duration_ms: 1.069191
+  ...
+# Subtest: all six canonical Tender Details anchors remain present
+ok 135 - all six canonical Tender Details anchors remain present
+  ---
+  duration_ms: 2.138919
+  ...
+# Subtest: initial render has exactly the two approved passive reads
+ok 136 - initial render has exactly the two approved passive reads
+  ---
+  duration_ms: 7.236535
+  ...
+# Subtest: document content is fetched only from an explicit user action
+ok 137 - document content is fetched only from an explicit user action
+  ---
+  duration_ms: 2.179522
+  ...
+# Subtest: base and consolidated detail loading are independent
+ok 138 - base and consolidated detail loading are independent
+  ---
+  duration_ms: 0.683939
+  ...
+# Subtest: sections and anchors follow the locked information hierarchy
+ok 139 - sections and anchors follow the locked information hierarchy
+  ---
+  duration_ms: 1.248075
+  ...
+# Subtest: Tender, Pursuit, Project Leadership, and Procurement Contacts remain distinct
+ok 140 - Tender, Pursuit, Project Leadership, and Procurement Contacts remain distinct
+  ---
+  duration_ms: 1.029065
+  ...
+# Subtest: the pursuit panel consumes consolidated state without its legacy passive GET
+ok 141 - the pursuit panel consumes consolidated state without its legacy passive GET
+  ---
+  duration_ms: 0.643912
+  ...
+# Subtest: existing mutation authorities and backend-provided allowed actions are reused
+ok 142 - existing mutation authorities and backend-provided allowed actions are reused
+  ---
+  duration_ms: 0.892706
+  ...
+# Subtest: requirements are bounded and provenance-labelled
+ok 143 - requirements are bounded and provenance-labelled
+  ---
+  duration_ms: 0.575711
+  ...
+# Subtest: compliance presentation distinguishes failed, partial, and legacy analysis
+ok 144 - compliance presentation distinguishes failed, partial, and legacy analysis
+  ---
+  duration_ms: 2.140339
+  ...
+# Subtest: readiness shows factual counts and does not invent a score
+ok 145 - readiness shows factual counts and does not invent a score
+  ---
+  duration_ms: 1.437885
+  ...
+# Subtest: bid preparation uses the proposal-backed route identifier
+ok 146 - bid preparation uses the proposal-backed route identifier
+  ---
+  duration_ms: 0.673512
+  ...
+# Subtest: DTOs are explicit and prohibit loose any or derived browser persistence
+ok 147 - DTOs are explicit and prohibit loose any or derived browser persistence
+  ---
+  duration_ms: 0.59704
+  ...
+# Subtest: responsive and keyboard-accessible controls are present
+ok 148 - responsive and keyboard-accessible controls are present
+  ---
+  duration_ms: 0.327279
+  ...
+# Subtest: canonical unified request graph
+ok 149 - canonical unified request graph
+  ---
+  duration_ms: 1.194811
+  ...
+# Subtest: explicit types and canonical recommendation commands
+ok 150 - explicit types and canonical recommendation commands
+  ---
+  duration_ms: 0.325416
+  ...
+# Subtest: URL-backed modes, filters, reset, and pagination
+ok 151 - URL-backed modes, filters, reset, and pagination
+  ---
+  duration_ms: 0.499092
+  ...
+# Subtest: filtered Explorer return state is shared with Tender Details
+ok 152 - filtered Explorer return state is shared with Tender Details
+  ---
+  duration_ms: 0.31085
+  ...
+# Subtest: filtered Explorer return state round-trips and rejects unsafe paths
+ok 153 - filtered Explorer return state round-trips and rejects unsafe paths
+  ---
+  duration_ms: 1.031479
+  ...
+# Subtest: authoritative refresh and stale-response protection
+ok 154 - authoritative refresh and stale-response protection
+  ---
+  duration_ms: 0.23836
+  ...
+# Subtest: truthful recommendation presentation
+ok 155 - truthful recommendation presentation
+  ---
+  duration_ms: 0.445743
+  ...
+# Subtest: empty and profile-required states are truthful
+ok 156 - empty and profile-required states are truthful
+  ---
+  duration_ms: 1.275506
+  ...
+# Subtest: pursuit is independent and uses shared workflow actions
+ok 157 - pursuit is independent and uses shared workflow actions
+  ---
+  duration_ms: 0.794471
+  ...
+# Subtest: canonical navigation converges while Hunter compatibility remains
+ok 158 - canonical navigation converges while Hunter compatibility remains
+  ---
+  duration_ms: 0.757007
+  ...
+# Subtest: accessibility and responsive contracts are present
+not ok 159 - accessibility and responsive contracts are present
+  ---
+  duration_ms: 2.188398
+  location: '/tmp/plasma-s93-frontend/tests/unified-explorer.test.mjs:194:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /overflow-x-auto/. Input:
+    
+    '"use client";\n' +
+      '\n' +
+      'import Link from "next/link";\n' +
+      'import { useRouter, useSearchParams } from "next/navigation";\n' +
+      'import {\n' +
+      '  Suspense,\n' +
+      '  useCallback,\n' +
+      '  useEffect,\n' +
+      '  useMemo,\n' +
+      '  useRef,\n' +
+      '  useState,\n' +
+      '} from "react";\n' +
+      'import {\n' +
+      '  AlertCircle,\n' +
+      '  ChevronLeft,\n' +
+      '  ChevronRight,\n' +
+      '  Clock,\n' +
+      '  FileText,\n' +
+      '  Filter,\n' +
+      '  Loader2,\n' +
+      '  MapPin,\n' +
+      '  Search,\n' +
+      '  SlidersHorizontal,\n' +
+      '  X,\n' +
+      '} from "lucide-react";\n' +
+      'import { useLocale, useTranslations } from "next-intl";\n' +
+      '\n' +
+      'import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";\n' +
+      'import { BidiText, TechnicalText } from "@/components/i18n/BidiText";\n' +
+      'import { SourceRefreshMenu } from "@/components/source-refresh/SourceRefreshMenu";\n' +
+      'import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";\n' +
+      'import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";\n' +
+      'import { NewTenderBadge } from "@/components/tenders/NewTenderBadge";\n' +
+      'import { RecommendationSummary } from "@/components/tenders/RecommendationSummary";\n' +
+      'import {\n' +
+      '  dismissRecommendation,\n' +
+      '  listExplorer,\n' +
+      '  restoreRecommendation,\n' +
+      '} from "@/lib/explorer";\n' +
+      'import {\n' +
+      '  clearExplorerReturnState,\n' +
+      '  readExplorerReturnState,\n' +
+      '  writeExplorerReturnState,\n' +
+      '} from "@/lib/explorerReturnState";\n' +
+      'import { CENTRAL_ASIA_COUNTRIES, CENTRAL_ASIA_REGION } from "@/lib/geography";\n' +
+      'import { DEFAULT_SERVICE_OPTIONS } from "@/lib/services";\n' +
+      'import {\n' +
+      '  adjustedServerNow,\n' +
+      '  createServerClockReference,\n' +
+      '  nextBadgeTickDelay,\n' +
+      '  type ServerClockReference,\n' +
+      '} from "@/lib/tenderNewness";\n' +
+      'import {\n' +
+      '  formatCurrency,\n' +
+      '  formatDate,\n' +
+      '  formatRelativeTime,\n' +
+      '} from "@/i18n/formatters";\n' +
+      'import type { CustomerSelectableLocale } from "@/i18n/locales";\n' +
+      'import { localizeTaxonomyValue } from "@/i18n/taxonomy";\n' +
+      'import { engagementStatusClasses } from "@/types/engagement";\n' +
+      'import type {\n' +
+      '  ExplorerItem,\n' +
+      '  ExplorerResponse,\n' +
+      '  ExplorerView,\n' +
+      '} from "@/types/explorer";\n' +
+      'import type { TenderStatus } from "@/types/tender";\n' +
+      'import {\n' +
+      '  documentStatusClasses,\n' +
+      '  isTenderActionable,\n' +
+      '  sourceBadgeClasses,\n' +
+      '  tenderStatusClasses,\n' +
+      '} from "@/types/tender";\n' +
+      '\n' +
+      'const PAGE_SIZE = 25;\n' +
+      'const LIFECYCLE_STATUSES: ReadonlyArray<TenderStatus | "ALL"> = [\n' +
+      '  "OPEN",\n' +
+      '  "UNKNOWN",\n' +
+      '  "CLOSED",\n' +
+      '  "CANCELLED",\n' +
+      '  "ALL",\n' +
+      '];\n' +
+      'const DOCUMENT_VALUES = [\n' +
+      '  "",\n' +
+      '  "documents_available",\n' +
+      '  "files_missing",\n' +
+      '  "metadata_only",\n' +
+      '  "access_required",\n' +
+      '  "no_documents_found",\n' +
+      '  "processing",\n' +
+      '  "failed",\n' +
+      '] as const;\n' +
+      'const TENDER_SORT_VALUES = [\n' +
+      '  "newest",\n' +
+      '  "deadline_soonest",\n' +
+      '  "highest_price",\n' +
+      '  "document_availability",\n' +
+      '  "source",\n' +
+      '] as const;\n' +
+      'const RECOMMENDATION_SORT_VALUES = [\n' +
+      '  "best_match",\n' +
+      '  ...TENDER_SORT_VALUES,\n' +
+      '] as const;\n' +
+      '\n' +
+      'interface ExplorerQueryState {\n' +
+      '  view: ExplorerView;\n' +
+      '  lifecycleStatus: TenderStatus | "ALL";\n' +
+      '  source: string;\n' +
+      '  region: string;\n' +
+      '  countries: string[];\n' +
+      '  services: string[];\n' +
+      '  deadlineStatus: string;\n' +
+      '  documentStatus: string;\n' +
+      '  category: string;\n' +
+      '  sort: string;\n' +
+      '  priceMin: string;\n' +
+      '  priceMax: string;\n' +
+      '  keyword: string;\n' +
+      '  newOnly: boolean;\n' +
+      '  page: number;\n' +
+      '}\n' +
+      '\n' +
+      'const splitList = (value: string | null) =>\n' +
+      '  value\n' +
+      '    ? value\n' +
+      '        .split(",")\n' +
+      '        .map((item) => item.trim())\n' +
+      '        .filter(Boolean)\n' +
+      '    : [];\n' +
+      'const positiveInteger = (value: string | null) => {\n' +
+      '  const parsed = Number(value);\n' +
+      '  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;\n' +
+      '};\n' +
+      'const defaultSort = (view: ExplorerView) =>\n' +
+      '  view === "all" ? "newest" : "best_match";\n' +
+      '\n' +
+      'export function parseExplorerQuery(\n' +
+      '  params: URLSearchParams,\n' +
+      '): ExplorerQueryState {\n' +
+      '  const rawView = params.get("view");\n' +
+      '  const view: ExplorerView =\n' +
+      '    rawView === "recommended" || rawView === "dismissed" ? rawView : "all";\n' +
+      '  const rawStatus = (params.get("status") || "OPEN").toUpperCase();\n' +
+      '  const lifecycleStatus = LIFECYCLE_STATUSES.some(\n' +
+      '    (value) => value === rawStatus,\n' +
+      '  )\n' +
+      '    ? (rawStatus as TenderStatus | "ALL")\n' +
+      '    : "OPEN";\n' +
+      '  const requestedSort = params.get("sort") || defaultSort(view);\n' +
+      '  const availableSorts =\n' +
+      '    view === "all" ? TENDER_SORT_VALUES : RECOMMENDATION_SORT_VALUES;\n' +
+      '  const sort = availableSorts.some((value) => value === requestedSort)\n' +
+      '    ? requestedSort\n' +
+      '    : defaultSort(view);\n' +
+      '  const cursorPage =\n' +
+      '    Math.floor((positiveInteger(params.get("cursor")) ?? 0) / PAGE_SIZE) + 1;\n' +
+      '  return {\n' +
+      '    view,\n' +
+      '    lifecycleStatus,\n' +
+      '    source: params.get("source") || params.get("source_system") || "",\n' +
+      '    region: params.get("region") || "",\n' +
+      '    countries: splitList(params.get("countries") || params.get("country")),\n' +
+      '    services: splitList(params.get("services") || params.get("service")),\n' +
+      '    deadlineStatus: params.get("deadline_status") || "",\n' +
+      '    documentStatus: params.get("document_status") || "",\n' +
+      '    category: params.get("category") || "",\n' +
+      '    sort,\n' +
+      '    priceMin: params.get("price_min") || params.get("min_price") || "",\n' +
+      '    priceMax: params.get("price_max") || params.get("max_price") || "",\n' +
+      '    keyword: params.get("q") || params.get("search") || "",\n' +
+      '    newOnly: params.get("new_only") === "true",\n' +
+      '    page: positiveInteger(params.get("page")) ?? cursorPage,\n' +
+      '  };\n' +
+      '}\n' +
+      '\n' +
+      'export function buildExplorerSearch(query: ExplorerQueryState): string {\n' +
+      '  const params = new URLSearchParams({ view: query.view });\n' +
+      '  if (query.lifecycleStatus !== "OPEN")\n' +
+      '    params.set("status", query.lifecycleStatus.toLowerCase());\n' +
+      '  if (query.source) params.set("source", query.source);\n' +
+      '  if (query.region) params.set("region", query.region);\n' +
+      '  if (query.countries.length)\n' +
+      '    params.set("countries", query.countries.join(","));\n' +
+      '  if (query.services.length) params.set("services", query.services.join(","));\n' +
+      '  if (query.deadlineStatus) params.set("deadline_status", query.deadlineStatus);\n' +
+      '  if (query.documentStatus) params.set("document_status", query.documentStatus);\n' +
+      '  if (query.category.trim()) params.set("category", query.category.trim());\n' +
+      '  if (query.priceMin.trim()) params.set("price_min", query.priceMin.trim());\n' +
+      '  if (query.priceMax.trim()) params.set("price_max", query.priceMax.trim());\n' +
+      '  if (query.keyword.trim()) params.set("q", query.keyword.trim());\n' +
+      '  if (query.newOnly) params.set("new_only", "true");\n' +
+      '  if (query.sort !== defaultSort(query.view)) params.set("sort", query.sort);\n' +
+      '  if (query.page > 1) params.set("page", String(query.page));\n' +
+      '  return params.toString();\n' +
+      '}\n' +
+      '\n' +
+      'const isExpiredDeadline = (value: string | null) =>\n' +
+      '  Boolean(value && new Date(value).getTime() < Date.now());\n' +
+      '\n' +
+      'function TendersPageContent() {\n' +
+      '  const router = useRouter();\n' +
+      '  const t = useTranslations("explorer");\n' +
+      '  const tCommon = useTranslations("common");\n' +
+      '  const searchParams = useSearchParams();\n' +
+      '  const searchString = searchParams.toString();\n' +
+      '  const query = useMemo(\n' +
+      '    () => parseExplorerQuery(new URLSearchParams(searchString)),\n' +
+      '    [searchString],\n' +
+      '  );\n' +
+      '  const { catalog, catalogError, displayNameForSource, latestActivityBatch } =\n' +
+      '    useSourceRefresh();\n' +
+      '  const [response, setResponse] = useState<ExplorerResponse | null>(null);\n' +
+      '  const [loading, setLoading] = useState(true);\n' +
+      '  const [error, setError] = useState<string | null>(null);\n' +
+      '  const [mutationError, setMutationError] = useState<string | null>(null);\n' +
+      '  const [pendingRecommendation, setPendingRecommendation] = useState<\n' +
+      '    string | null\n' +
+      '  >(null);\n' +
+      '  const [refreshVersion, setRefreshVersion] = useState(0);\n' +
+      '  const [searchDraft, setSearchDraft] = useState(query.keyword);\n' +
+      '  const [categoryDraft, setCategoryDraft] = useState(query.category);\n' +
+      '  const [minimumDraft, setMinimumDraft] = useState(query.priceMin);\n' +
+      '  const [maximumDraft, setMaximumDraft] = useState(query.priceMax);\n' +
+      '  const [serverClock, setServerClock] = useState<ServerClockReference | null>(\n' +
+      '    null,\n' +
+      '  );\n' +
+      '  const [monotonicNow, setMonotonicNow] = useState(0);\n' +
+      '  const [dismissedBatchId, setDismissedBatchId] = useState(0);\n' +
+      '  const requestSequence = useRef(0);\n' +
+      '  const explorerHref = useMemo(\n' +
+      '    () => `/dashboard/tenders?${buildExplorerSearch(query)}`,\n' +
+      '    [query],\n' +
+      '  );\n' +
+      '\n' +
+      '  const navigate = useCallback(\n' +
+      '    (patch: Partial<ExplorerQueryState>, resetPage = true) => {\n' +
+      '      const next = {\n' +
+      '        ...query,\n' +
+      '        ...patch,\n' +
+      '        page: resetPage ? 1 : (patch.page ?? query.page),\n' +
+      '      };\n' +
+      '      clearExplorerReturnState();\n' +
+      '      router.push(`/dashboard/tenders?${buildExplorerSearch(next)}`);\n' +
+      '    },\n' +
+      '    [query, router],\n' +
+      '  );\n' +
+      '\n' +
+      '  useEffect(() => {\n' +
+      '    const canonical = buildExplorerSearch(query);\n' +
+      '    if (canonical !== searchString)\n' +
+      '      router.replace(`/dashboard/tenders?${canonical}`);\n' +
+      '  }, [query, router, searchString]);\n' +
+      '  useEffect(() => setSearchDraft(query.keyword), [query.keyword]);\n' +
+      '  useEffect(() => setCategoryDraft(query.category), [query.category]);\n' +
+      '  useEffect(() => setMinimumDraft(query.priceMin), [query.priceMin]);\n' +
+      '  useEffect(() => setMaximumDraft(query.priceMax), [query.priceMax]);\n' +
+      '  useEffect(() => {\n' +
+      '    if (searchDraft === query.keyword) return;\n' +
+      '    const timer = window.setTimeout(\n' +
+      '      () => navigate({ keyword: searchDraft }),\n' +
+      '      350,\n' +
+      '    );\n' +
+      '    return () => window.clearTimeout(timer);\n' +
+      '  }, [navigate, query.keyword, searchDraft]);\n' +
+      '\n' +
+      '  useEffect(() => {\n' +
+      '    const controller = new AbortController();\n' +
+      '    const sequence = ++requestSequence.current;\n' +
+      '    setLoading(true);\n' +
+      '    setError(null);\n' +
+      '    void listExplorer(\n' +
+      '      {\n' +
+      '        view: query.view,\n' +
+      '        limit: PAGE_SIZE,\n' +
+      '        offset: (query.page - 1) * PAGE_SIZE,\n' +
+      '        status: query.lifecycleStatus.toLowerCase(),\n' +
+      '        source: query.source || undefined,\n' +
+      '        q: query.keyword || undefined,\n' +
+      '        region: query.region || undefined,\n' +
+      '        countries: query.countries.length\n' +
+      '          ? query.countries.join(",")\n' +
+      '          : undefined,\n' +
+      '        services: query.services.length ? query.services.join(",") : undefined,\n' +
+      '        deadline_status: query.deadlineStatus || undefined,\n' +
+      '        document_status: query.documentStatus || undefined,\n' +
+      '        category: query.category || undefined,\n' +
+      '        price_min: query.priceMin || undefined,\n' +
+      '        price_max: query.priceMax || undefined,\n' +
+      '        sort: query.sort,\n' +
+      '        new_only: query.newOnly || undefined,\n' +
+      '      },\n' +
+      '      controller.signal,\n' +
+      '    )\n' +
+      '      .then(({ data }) => {\n' +
+      '        if (sequence !== requestSequence.current) return;\n' +
+      '        cons'... 30125 more characters
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    "use client";
+    
+    import Link from "next/link";
+    import { useRouter, useSearchParams } from "next/navigation";
+    import {
+      Suspense,
+      useCallback,
+      useEffect,
+      useMemo,
+      useRef,
+      useState,
+    } from "react";
+    import {
+      AlertCircle,
+      ChevronLeft,
+      ChevronRight,
+      Clock,
+      FileText,
+      Filter,
+      Loader2,
+      MapPin,
+      Search,
+      SlidersHorizontal,
+      X,
+    } from "lucide-react";
+    import { useLocale, useTranslations } from "next-intl";
+    
+    import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
+    import { BidiText, TechnicalText } from "@/components/i18n/BidiText";
+    import { SourceRefreshMenu } from "@/components/source-refresh/SourceRefreshMenu";
+    import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
+    import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";
+    import { NewTenderBadge } from "@/components/tenders/NewTenderBadge";
+    import { RecommendationSummary } from "@/components/tenders/RecommendationSummary";
+    import {
+      dismissRecommendation,
+      listExplorer,
+      restoreRecommendation,
+    } from "@/lib/explorer";
+    import {
+      clearExplorerReturnState,
+      readExplorerReturnState,
+      writeExplorerReturnState,
+    } from "@/lib/explorerReturnState";
+    import { CENTRAL_ASIA_COUNTRIES, CENTRAL_ASIA_REGION } from "@/lib/geography";
+    import { DEFAULT_SERVICE_OPTIONS } from "@/lib/services";
+    import {
+      adjustedServerNow,
+      createServerClockReference,
+      nextBadgeTickDelay,
+      type ServerClockReference,
+    } from "@/lib/tenderNewness";
+    import {
+      formatCurrency,
+      formatDate,
+      formatRelativeTime,
+    } from "@/i18n/formatters";
+    import type { CustomerSelectableLocale } from "@/i18n/locales";
+    import { localizeTaxonomyValue } from "@/i18n/taxonomy";
+    import { engagementStatusClasses } from "@/types/engagement";
+    import type {
+      ExplorerItem,
+      ExplorerResponse,
+      ExplorerView,
+    } from "@/types/explorer";
+    import type { TenderStatus } from "@/types/tender";
+    import {
+      documentStatusClasses,
+      isTenderActionable,
+      sourceBadgeClasses,
+      tenderStatusClasses,
+    } from "@/types/tender";
+    
+    const PAGE_SIZE = 25;
+    const LIFECYCLE_STATUSES: ReadonlyArray<TenderStatus | "ALL"> = [
+      "OPEN",
+      "UNKNOWN",
+      "CLOSED",
+      "CANCELLED",
+      "ALL",
+    ];
+    const DOCUMENT_VALUES = [
+      "",
+      "documents_available",
+      "files_missing",
+      "metadata_only",
+      "access_required",
+      "no_documents_found",
+      "processing",
+      "failed",
+    ] as const;
+    const TENDER_SORT_VALUES = [
+      "newest",
+      "deadline_soonest",
+      "highest_price",
+      "document_availability",
+      "source",
+    ] as const;
+    const RECOMMENDATION_SORT_VALUES = [
+      "best_match",
+      ...TENDER_SORT_VALUES,
+    ] as const;
+    
+    interface ExplorerQueryState {
+      view: ExplorerView;
+      lifecycleStatus: TenderStatus | "ALL";
+      source: string;
+      region: string;
+      countries: string[];
+      services: string[];
+      deadlineStatus: string;
+      documentStatus: string;
+      category: string;
+      sort: string;
+      priceMin: string;
+      priceMax: string;
+      keyword: string;
+      newOnly: boolean;
+      page: number;
+    }
+    
+    const splitList = (value: string | null) =>
+      value
+        ? value
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : [];
+    const positiveInteger = (value: string | null) => {
+      const parsed = Number(value);
+      return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    };
+    const defaultSort = (view: ExplorerView) =>
+      view === "all" ? "newest" : "best_match";
+    
+    export function parseExplorerQuery(
+      params: URLSearchParams,
+    ): ExplorerQueryState {
+      const rawView = params.get("view");
+      const view: ExplorerView =
+        rawView === "recommended" || rawView === "dismissed" ? rawView : "all";
+      const rawStatus = (params.get("status") || "OPEN").toUpperCase();
+      const lifecycleStatus = LIFECYCLE_STATUSES.some(
+        (value) => value === rawStatus,
+      )
+        ? (rawStatus as TenderStatus | "ALL")
+        : "OPEN";
+      const requestedSort = params.get("sort") || defaultSort(view);
+      const availableSorts =
+        view === "all" ? TENDER_SORT_VALUES : RECOMMENDATION_SORT_VALUES;
+      const sort = availableSorts.some((value) => value === requestedSort)
+        ? requestedSort
+        : defaultSort(view);
+      const cursorPage =
+        Math.floor((positiveInteger(params.get("cursor")) ?? 0) / PAGE_SIZE) + 1;
+      return {
+        view,
+        lifecycleStatus,
+        source: params.get("source") || params.get("source_system") || "",
+        region: params.get("region") || "",
+        countries: splitList(params.get("countries") || params.get("country")),
+        services: splitList(params.get("services") || params.get("service")),
+        deadlineStatus: params.get("deadline_status") || "",
+        documentStatus: params.get("document_status") || "",
+        category: params.get("category") || "",
+        sort,
+        priceMin: params.get("price_min") || params.get("min_price") || "",
+        priceMax: params.get("price_max") || params.get("max_price") || "",
+        keyword: params.get("q") || params.get("search") || "",
+        newOnly: params.get("new_only") === "true",
+        page: positiveInteger(params.get("page")) ?? cursorPage,
+      };
+    }
+    
+    export function buildExplorerSearch(query: ExplorerQueryState): string {
+      const params = new URLSearchParams({ view: query.view });
+      if (query.lifecycleStatus !== "OPEN")
+        params.set("status", query.lifecycleStatus.toLowerCase());
+      if (query.source) params.set("source", query.source);
+      if (query.region) params.set("region", query.region);
+      if (query.countries.length)
+        params.set("countries", query.countries.join(","));
+      if (query.services.length) params.set("services", query.services.join(","));
+      if (query.deadlineStatus) params.set("deadline_status", query.deadlineStatus);
+      if (query.documentStatus) params.set("document_status", query.documentStatus);
+      if (query.category.trim()) params.set("category", query.category.trim());
+      if (query.priceMin.trim()) params.set("price_min", query.priceMin.trim());
+      if (query.priceMax.trim()) params.set("price_max", query.priceMax.trim());
+      if (query.keyword.trim()) params.set("q", query.keyword.trim());
+      if (query.newOnly) params.set("new_only", "true");
+      if (query.sort !== defaultSort(query.view)) params.set("sort", query.sort);
+      if (query.page > 1) params.set("page", String(query.page));
+      return params.toString();
+    }
+    
+    const isExpiredDeadline = (value: string | null) =>
+      Boolean(value && new Date(value).getTime() < Date.now());
+    
+    function TendersPageContent() {
+      const router = useRouter();
+      const t = useTranslations("explorer");
+      const tCommon = useTranslations("common");
+      const searchParams = useSearchParams();
+      const searchString = searchParams.toString();
+      const query = useMemo(
+        () => parseExplorerQuery(new URLSearchParams(searchString)),
+        [searchString],
+      );
+      const { catalog, catalogError, displayNameForSource, latestActivityBatch } =
+        useSourceRefresh();
+      const [response, setResponse] = useState<ExplorerResponse | null>(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState<string | null>(null);
+      const [mutationError, setMutationError] = useState<string | null>(null);
+      const [pendingRecommendation, setPendingRecommendation] = useState<
+        string | null
+      >(null);
+      const [refreshVersion, setRefreshVersion] = useState(0);
+      const [searchDraft, setSearchDraft] = useState(query.keyword);
+      const [categoryDraft, setCategoryDraft] = useState(query.category);
+      const [minimumDraft, setMinimumDraft] = useState(query.priceMin);
+      const [maximumDraft, setMaximumDraft] = useState(query.priceMax);
+      const [serverClock, setServerClock] = useState<ServerClockReference | null>(
+        null,
+      );
+      const [monotonicNow, setMonotonicNow] = useState(0);
+      const [dismissedBatchId, setDismissedBatchId] = useState(0);
+      const requestSequence = useRef(0);
+      const explorerHref = useMemo(
+        () => `/dashboard/tenders?${buildExplorerSearch(query)}`,
+        [query],
+      );
+    
+      const navigate = useCallback(
+        (patch: Partial<ExplorerQueryState>, resetPage = true) => {
+          const next = {
+            ...query,
+            ...patch,
+            page: resetPage ? 1 : (patch.page ?? query.page),
+          };
+          clearExplorerReturnState();
+          router.push(`/dashboard/tenders?${buildExplorerSearch(next)}`);
+        },
+        [query, router],
+      );
+    
+      useEffect(() => {
+        const canonical = buildExplorerSearch(query);
+        if (canonical !== searchString)
+          router.replace(`/dashboard/tenders?${canonical}`);
+      }, [query, router, searchString]);
+      useEffect(() => setSearchDraft(query.keyword), [query.keyword]);
+      useEffect(() => setCategoryDraft(query.category), [query.category]);
+      useEffect(() => setMinimumDraft(query.priceMin), [query.priceMin]);
+      useEffect(() => setMaximumDraft(query.priceMax), [query.priceMax]);
+      useEffect(() => {
+        if (searchDraft === query.keyword) return;
+        const timer = window.setTimeout(
+          () => navigate({ keyword: searchDraft }),
+          350,
+        );
+        return () => window.clearTimeout(timer);
+      }, [navigate, query.keyword, searchDraft]);
+    
+      useEffect(() => {
+        const controller = new AbortController();
+        const sequence = ++requestSequence.current;
+        setLoading(true);
+        setError(null);
+        void listExplorer(
+          {
+            view: query.view,
+            limit: PAGE_SIZE,
+            offset: (query.page - 1) * PAGE_SIZE,
+            status: query.lifecycleStatus.toLowerCase(),
+            source: query.source || undefined,
+            q: query.keyword || undefined,
+            region: query.region || undefined,
+            countries: query.countries.length
+              ? query.countries.join(",")
+              : undefined,
+            services: query.services.length ? query.services.join(",") : undefined,
+            deadline_status: query.deadlineStatus || undefined,
+            document_status: query.documentStatus || undefined,
+            category: query.category || undefined,
+            price_min: query.priceMin || undefined,
+            price_max: query.priceMax || undefined,
+            sort: query.sort,
+            new_only: query.newOnly || undefined,
+          },
+          controller.signal,
+        )
+          .then(({ data }) => {
+            if (sequence !== requestSequence.current) return;
+            const finalPage = Math.max(1, Math.ceil(data.total / data.limit));
+            if (query.page > finalPage) navigate({ page: finalPage }, false);
+            else {
+              const browserMonotonicMs = performance.now();
+              setServerClock(
+                createServerClockReference(data.server_time, browserMonotonicMs),
+              );
+              setMonotonicNow(browserMonotonicMs);
+              setResponse(data);
+            }
+          })
+          .catch((requestError: unknown) => {
+            if (controller.signal.aborted || sequence !== requestSequence.current)
+              return;
+            const status = (requestError as { response?: { status?: number } })
+              .response?.status;
+            setError(
+              status === 401 || status === 403
+                ? t("accessDenied")
+                : t("loadFailed"),
+            );
+          })
+          .finally(() => {
+            if (sequence === requestSequence.current && !controller.signal.aborted)
+              setLoading(false);
+          });
+        return () => controller.abort();
+      }, [navigate, query, refreshVersion, t]);
+    
+      useEffect(() => {
+        if (!response || !serverClock) return;
+        const newUntilValues = response.items
+          .filter((item) => item.tender.is_new)
+          .map((item) => item.tender.new_until);
+        const timer = window.setTimeout(
+          () => setMonotonicNow(performance.now()),
+          nextBadgeTickDelay(newUntilValues, serverClock, monotonicNow),
+        );
+        return () => window.clearTimeout(timer);
+      }, [monotonicNow, response, serverClock]);
+    
+      useEffect(() => {
+        if (loading || !response) return;
+        const restoreState = readExplorerReturnState();
+        if (!restoreState || restoreState.explorerUrl !== explorerHref) return;
+        const row = window.document.querySelector<HTMLElement>(
+          `[data-tender-id="${CSS.escape(restoreState.tenderId)}"]`,
+        );
+        const frame = window.requestAnimationFrame(() => {
+          if (row) row.scrollIntoView({ block: "center" });
+          else window.scrollTo({ top: restoreState.scrollY, behavior: "auto" });
+          clearExplorerReturnState();
+        });
+        return () => window.cancelAnimationFrame(frame);
+      }, [explorerHref, loading, response]);
+    
+      const toggleList = (field: "countries" | "services", value: string) => {
+        const current = query[field];
+        navigate({
+          [field]: current.includes(value)
+            ? current.filter((item) => item !== value)
+            : [...current, value],
+        });
+      };
+      const commitDrafts = () =>
+        navigate({
+          category: categoryDraft,
+          priceMin: minimumDraft,
+          priceMax: maximumDraft,
+        });
+      const mutateRecommendation = async (id: string, restore: boolean) => {
+        setPendingRecommendation(id);
+        setMutationError(null);
+        try {
+          if (restore) await restoreRecommendation(id);
+          else await dismissRecommendation(id);
+          setRefreshVersion((value) => value + 1);
+        } catch (requestError: unknown) {
+          const status = (requestError as { response?: { status?: number } })
+            .response?.status;
+          setMutationError(
+            status === 401 || status === 403
+              ? t("recommendationDenied")
+              : status === 404
+                ? t("recommendationMissing")
+                : t("recommendationFailed"),
+          );
+        } finally {
+          setPendingRecommendation(null);
+        }
+      };
+      const counts = response?.counts ?? {
+        all_tenders: 0,
+        active_recommendations: 0,
+        dismissed_recommendations: 0,
+      };
+      const modes: Array<[ExplorerView, string, number]> = [
+        ["all", t("views.all"), counts.all_tenders],
+        ["recommended", t("views.recommended"), counts.active_recommendations],
+        ["dismissed", t("views.dismissed"), counts.dismissed_recommendations],
+      ];
+      const statuses: ReadonlyArray<readonly [TenderStatus | "ALL", string]> = [
+        ["OPEN", t("status.open")],
+        ["UNKNOWN", t("status.unknown")],
+        ["CLOSED", t("status.closed")],
+        ["CANCELLED", t("status.cancelled")],
+        ["ALL", t("status.all")],
+      ];
+      const documents = DOCUMENT_VALUES.map(
+        (value) =>
+          [
+            value,
+            value === ""
+              ? t("documents.all")
+              : value === "documents_available"
+                ? t("documents.ready")
+                : value === "files_missing"
+                  ? t("documents.preparationFailed")
+                  : value === "metadata_only"
+                    ? t("documents.discovered")
+                    : value === "access_required"
+                      ? t("documents.accessRequired")
+                      : value === "no_documents_found"
+                        ? t("documents.unavailable")
+                        : value === "processing"
+                          ? t("documents.processing")
+                          : t("documents.failed"),
+          ] as const,
+      );
+      const tenderSorts = TENDER_SORT_VALUES.map(
+        (value) =>
+          [
+            value,
+            value === "newest"
+              ? t("sorts.newest")
+              : value === "deadline_soonest"
+                ? t("sorts.deadline")
+                : value === "highest_price"
+                  ? t("sorts.price")
+                  : value === "document_availability"
+                    ? t("sorts.documents")
+                    : t("sorts.source"),
+          ] as const,
+      );
+      const recommendationSorts = [
+        ["best_match", t("sorts.match")] as const,
+        ...tenderSorts,
+      ];
+      const lastPage = response
+        ? Math.max(1, Math.ceil(response.total / response.limit))
+        : 1;
+      const profileRequired =
+        response?.recommendation_availability === "PROFILE_REQUIRED";
+      const allDismissed =
+        query.view === "recommended" &&
+        counts.active_recommendations === 0 &&
+        counts.dismissed_recommendations > 0;
+      const newArrival =
+        latestActivityBatch &&
+        latestActivityBatch.id > dismissedBatchId &&
+        latestActivityBatch.total_created > 0
+          ? latestActivityBatch
+          : null;
+      const showNewArrivals = () => {
+        if (!newArrival) return;
+        const source =
+          newArrival.events.length === 1 ? newArrival.events[0].source_system : "";
+        setDismissedBatchId(newArrival.id);
+        navigate({ newOnly: true, source });
+      };
+    
+      return (
+        <main className="mx-auto w-full max-w-[1600px] space-y-5 p-4 sm:p-6">
+          <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
+              <p className="mt-1 text-sm text-zinc-400">{t("subtitle")}</p>
+            </div>
+            <SourceRefreshMenu />
+          </header>
+          {newArrival ? (
+            <section
+              role="status"
+              aria-live="polite"
+              className="flex flex-col gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-50 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p>
+                <span className="font-semibold">
+                  {t("newArrivals", { count: newArrival.total_created })}
+                </span>
+                <span className="ms-2 text-cyan-100/70">{t("resultsStable")}</span>
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={showNewArrivals}
+                  className="rounded-lg bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-cyan-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+                >
+                  {t("show")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDismissedBatchId(newArrival.id)}
+                  aria-label={t("dismissNew")}
+                  className="rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </section>
+          ) : null}
+    
+          <div
+            role="tablist"
+            aria-label={t("viewsLabel")}
+            className="flex flex-wrap max-w-full gap-1 rounded-xl border border-zinc-800 bg-zinc-950 p-1"
+          >
+            {modes.map(([value, label, count]) => (
+              <button
+                key={value}
+                role="tab"
+                type="button"
+                aria-selected={query.view === value}
+                onClick={() => navigate({ view: value, sort: defaultSort(value) })}
+                className={`min-w-fit flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-indigo-400 ${query.view === value ? "bg-indigo-600 text-white" : "text-zinc-400 hover:bg-zinc-900"}`}
+              >
+                {label}{" "}
+                <span
+                  className="ms-1 tabular-nums"
+                  aria-label={t("itemCount", { count })}
+                >
+                  {count}
+                </span>
+              </button>
+            ))}
+          </div>
+    
+          <section
+            aria-label={t("filtersLabel")}
+            className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4"
+          >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <label className="relative min-w-0 xl:col-span-2">
+                <span className="sr-only">{t("search")}</span>
+                <Search className="pointer-events-none absolute start-3 top-2.5 h-4 w-4 text-zinc-500" />
+                <input
+                  dir="auto"
+                  value={searchDraft}
+                  onChange={(event) => setSearchDraft(event.target.value)}
+                  placeholder={t("search")}
+                  className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 ps-9 pe-3 text-sm text-white focus:border-indigo-400"
+                />
+              </label>
+              <select
+                aria-label={t("source")}
+                value={query.source}
+                disabled={Boolean(catalogError)}
+                onChange={(event) => navigate({ source: event.target.value })}
+                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+              >
+                <option value="">{t("allSources")}</option>
+                {query.source &&
+                !catalog.some((source) => source.source_system === query.source) ? (
+                  <option dir="auto" value={query.source}>{query.source}</option>
+                ) : null}
+                {catalog.map((source) => (
+                  <option dir="auto" key={source.source_system} value={source.source_system}>
+                    {source.display_name}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label={t("lifecycle")}
+                value={query.lifecycleStatus}
+                onChange={(event) =>
+                  navigate({
+                    lifecycleStatus: event.target.value as TenderStatus | "ALL",
+                  })
+                }
+                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+              >
+                {statuses.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label={t("sort")}
+                value={query.sort}
+                onChange={(event) => navigate({ sort: event.target.value })}
+                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+              >
+                {(query.view === "all" ? tenderSorts : recommendationSorts).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ),
+                )}
+              </select>
+            </div>
+            <button
+              type="button"
+              aria-pressed={query.newOnly}
+              onClick={() => navigate({ newOnly: !query.newOnly })}
+              title={t("newRecent")}
+              className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${query.newOnly ? "border-cyan-400 bg-cyan-400/10 text-cyan-200" : "border-zinc-700 text-zinc-300"}`}
+            >
+              {t("newLast24")}
+            </button>
+            <details>
+              <summary className="flex w-fit cursor-pointer list-none items-center gap-2 rounded px-2 py-1 text-sm font-semibold text-zinc-300 focus-visible:ring-2 focus-visible:ring-indigo-400">
+                <SlidersHorizontal className="h-4 w-4" />
+                {t("moreFilters")}
+              </summary>
+              <div className="mt-3 space-y-4 border-t border-zinc-800 pt-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <select
+                    aria-label={t("deadlineFilter")}
+                    value={query.deadlineStatus}
+                    onChange={(event) =>
+                      navigate({ deadlineStatus: event.target.value })
+                    }
+                    className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+                  >
+                    <option value="">{t("deadlineAny")}</option>
+                    <option value="active">{t("deadlineActive")}</option>
+                    <option value="expired">{t("deadlineExpired")}</option>
+                    <option value="unknown">{t("deadlineUnknown")}</option>
+                  </select>
+                  <select
+                    aria-label={t("documentStatus")}
+                    value={query.documentStatus}
+                    onChange={(event) =>
+                      navigate({ documentStatus: event.target.value })
+                    }
+                    className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+                  >
+                    {documents.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    dir="auto"
+                    aria-label={t("category")}
+                    value={categoryDraft}
+                    onChange={(event) => setCategoryDraft(event.target.value)}
+                    onBlur={commitDrafts}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") commitDrafts();
+                    }}
+                    placeholder={t("category")}
+                    className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+                  />
+                  <button
+                    type="button"
+                    aria-pressed={query.region === CENTRAL_ASIA_REGION}
+                    onClick={() =>
+                      navigate({
+                        region:
+                          query.region === CENTRAL_ASIA_REGION
+                            ? ""
+                            : CENTRAL_ASIA_REGION,
+                      })
+                    }
+                    className={`rounded-lg border px-3 py-2 text-sm ${query.region === CENTRAL_ASIA_REGION ? "border-indigo-400 text-indigo-200" : "border-zinc-700 text-zinc-300"}`}
+                  >
+                    {t("centralAsia")}
+                  </button>
+                  <input
+                    type="number"
+                    min="0"
+                    aria-label={t("minimumValue")}
+                    value={minimumDraft}
+                    onChange={(event) => setMinimumDraft(event.target.value)}
+                    onBlur={commitDrafts}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") commitDrafts();
+                    }}
+                    placeholder={t("minimumValue")}
+                    className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    aria-label={t("maximumValue")}
+                    value={maximumDraft}
+                    onChange={(event) => setMaximumDraft(event.target.value)}
+                    onBlur={commitDrafts}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") commitDrafts();
+                    }}
+                    placeholder={t("maximumValue")}
+                    className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+                  />
+                </div>
+                <fieldset>
+                  <legend className="mb-2 text-xs font-semibold uppercase text-zinc-500">
+                    {t("countries")}
+                  </legend>
+                  <div className="flex flex-wrap gap-2">
+                    {CENTRAL_ASIA_COUNTRIES.map((country) => (
+                      <button
+                        key={country}
+                        type="button"
+                        aria-pressed={query.countries.includes(country)}
+                        onClick={() => toggleList("countries", country)}
+                        className={`rounded-full border px-3 py-1 text-xs ${query.countries.includes(country) ? "border-indigo-400 text-indigo-200" : "border-zinc-700 text-zinc-400"}`}
+                      >
+                        {localizeTaxonomyValue("country", country, tCommon)}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <legend className="mb-2 text-xs font-semibold uppercase text-zinc-500">
+                    {t("services")}
+                  </legend>
+                  <div className="flex flex-wrap gap-2">
+                    {DEFAULT_SERVICE_OPTIONS.map((service) => (
+                      <button
+                        key={service.value}
+                        type="button"
+                        aria-pressed={query.services.includes(service.value)}
+                        onClick={() => toggleList("services", service.value)}
+                        className={`rounded-full border px-3 py-1 text-xs ${query.services.includes(service.value) ? "border-indigo-400 text-indigo-200" : "border-zinc-700 text-zinc-400"}`}
+                      >
+                        {localizeTaxonomyValue("service", service.value, tCommon)}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              </div>
+            </details>
+          </section>
+    
+          {mutationError ? (
+            <div
+              role="alert"
+              className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"
+            >
+              <AlertCircle className="h-4 w-4" />
+              {mutationError}
+            </div>
+          ) : null}
+          {profileRequired && query.view !== "all" && !loading ? (
+            <section className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-8 text-center">
+              <h2 className="text-lg font-semibold text-white">
+                {t("profileTitle")}
+              </h2>
+              <p className="mt-2 text-sm text-zinc-300">{t("profileHelp")}</p>
+              <Link
+                href="/dashboard/settings"
+                className="mt-4 inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                {t("openProfile")}
+              </Link>
+            </section>
+          ) : loading ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex min-h-52 items-center justify-center gap-3 rounded-xl border border-zinc-800 text-sm text-zinc-300"
+            >
+              <Loader2 className="h-5 w-5 animate-spin" />
+              {t("loading")}
+            </div>
+          ) : error ? (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center"
+            >
+              <p className="text-sm text-red-200">{error}</p>
+              <button
+                type="button"
+                onClick={() => setRefreshVersion((value) => value + 1)}
+                className="mt-4 rounded-lg border border-red-400/40 px-4 py-2 text-sm text-red-100"
+              >
+                {t("retry")}
+              </button>
+            </div>
+          ) : response && !response.items.length ? (
+            <section className="rounded-xl border border-zinc-800 p-10 text-center">
+              <Filter className="mx-auto h-7 w-7 text-zinc-500" />
+              <h2 className="mt-3 text-base font-semibold text-white">
+                {query.view === "all"
+                  ? t("empty.all")
+                  : query.view === "dismissed"
+                    ? t("empty.dismissed")
+                    : allDismissed
+                      ? t("empty.active")
+                      : t("empty.recommended")}
+              </h2>
+            </section>
+          ) : response ? (
+            <section aria-label={t("resultsLabel")} className="space-y-3">
+              <p className="text-xs text-zinc-500">
+                {t("showing", {
+                  start: response.offset + 1,
+                  end: Math.min(
+                    response.offset + response.items.length,
+                    response.total,
+                  ),
+                  total: response.total,
+                })}
+              </p>
+              {response.items.map((item) => (
+                <ExplorerCard
+                  key={item.tender.id}
+                  item={item}
+                  sourceDisplayName={displayNameForSource(
+                    item.tender.source_system,
+                  )}
+                  clock={serverClock}
+                  monotonicNow={monotonicNow}
+                  pendingRecommendation={pendingRecommendation}
+                  onDismiss={(id) => void mutateRecommendation(id, false)}
+                  onRestore={(id) => void mutateRecommendation(id, true)}
+                  onRefresh={() => setRefreshVersion((value) => value + 1)}
+                  onOpen={(tenderId) =>
+                    writeExplorerReturnState({
+                      explorerUrl: explorerHref,
+                      tenderId,
+                      scrollY: window.scrollY,
+                      page: query.page,
+                      createdAt: Date.now(),
+                    })
+                  }
+                />
+              ))}
+              <nav
+                aria-label={t("pagesLabel")}
+                className="flex items-center justify-between rounded-xl border border-zinc-800 p-3"
+              >
+                <button
+                  type="button"
+                  disabled={query.page <= 1}
+                  onClick={() => navigate({ page: query.page - 1 }, false)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40"
+                >
+                  <ChevronLeft className="rtl-mirror h-4 w-4" />
+                  {t("previous")}
+                </button>
+                <span className="text-sm text-zinc-400">
+                  {t("page", { page: query.page, totalPages: lastPage })}
+                </span>
+                <button
+                  type="button"
+                  disabled={query.page >= lastPage}
+                  onClick={() => navigate({ page: query.page + 1 }, false)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40"
+                >
+                  {t("next")}
+                  <ChevronRight className="rtl-mirror h-4 w-4" />
+                </button>
+              </nav>
+            </section>
+          ) : null}
+        </main>
+      );
+    }
+    
+    function ExplorerCard({
+      item,
+      sourceDisplayName,
+      clock,
+      monotonicNow,
+      pendingRecommendation,
+      onDismiss,
+      onRestore,
+      onRefresh,
+      onOpen,
+    }: {
+      item: ExplorerItem;
+      sourceDisplayName: string;
+      clock: ServerClockReference | null;
+      monotonicNow: number;
+      pendingRecommendation: string | null;
+      onDismiss: (id: string) => void;
+      onRestore: (id: string) => void;
+      onRefresh: () => void;
+      onOpen: (tenderId: string) => void;
+    }) {
+      const t = useTranslations("explorer");
+      const tMy = useTranslations("myTenders");
+      const locale = useLocale() as CustomerSelectableLocale;
+      const [initialNow] = useState(() => Date.now());
+      const { tender, recommendation, pursuit } = item;
+      const actionable = isTenderActionable(tender.status);
+      const expired = isExpiredDeadline(tender.deadline);
+      const remember = () => onOpen(tender.id);
+      const tenderStatus =
+        tender.status === "OPEN"
+          ? t("status.open")
+          : tender.status === "CLOSED"
+            ? t("status.closed")
+            : tender.status === "CANCELLED"
+              ? t("status.cancelled")
+              : t("status.unknown");
+      const documentStatus =
+        tender.document_status === "documents_available"
+          ? t("documents.ready")
+          : tender.document_status === "files_missing"
+            ? t("documents.preparationFailed")
+            : tender.document_status === "metadata_only"
+              ? t("documents.discovered")
+              : tender.document_status === "access_required"
+                ? t("documents.accessRequired")
+                : tender.document_status === "processing"
+                  ? t("documents.processing")
+                  : tender.document_status === "failed"
+                    ? t("documents.failed")
+                    : t("documents.unavailable");
+      const pursuitStatus = pursuit
+        ? pursuit.status === "SAVED"
+          ? tMy("statuses.saved")
+          : pursuit.status === "EVALUATING"
+            ? tMy("statuses.evaluating")
+            : pursuit.status === "PREPARING"
+              ? tMy("statuses.preparing")
+              : pursuit.status === "SUBMITTED"
+                ? tMy("statuses.submitted")
+                : pursuit.status === "WON"
+                  ? tMy("statuses.won")
+                  : pursuit.status === "LOST"
+                    ? tMy("statuses.lost")
+                    : tMy("statuses.dismissed")
+        : "";
+      const deadline = tender.deadline
+        ? formatRelativeTime(
+            tender.deadline,
+            clock ? adjustedServerNow(clock, monotonicNow) : initialNow,
+            locale,
+          )
+        : t("deadlineMissing");
+      const value =
+        tender.budget > 0
+          ? formatCurrency(tender.budget, tender.currency || "USD", locale, {
+              maximumFractionDigits: 0,
+            })
+          : t("valueMissing");
+      return (
+        <article
+          data-tender-id={tender.id}
+          className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4"
+        >
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(12rem,0.7fr)_minmax(13rem,auto)]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap gap-2">
+                <NewTenderBadge
+                  isNew={tender.is_new}
+                  newUntil={tender.new_until}
+                  clock={clock}
+                  monotonicNow={monotonicNow}
+                />
+                <span
+                  className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${sourceBadgeClasses(tender.source_system)}`}
+                >
+                  <BidiText>{sourceDisplayName}</BidiText>
+                </span>
+                <span
+                  className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${tenderStatusClasses(tender.status)}`}
+                >
+                  {t("sourceStatus", { status: tenderStatus })}
+                </span>
+                <span
+                  className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${documentStatusClasses(tender.document_status)}`}
+                >
+                  {t("documentCount", {
+                    status: documentStatus,
+                    count: tender.document_count,
+                  })}
+                </span>
+              </div>
+              <Link
+                onClick={remember}
+                href={`/dashboard/tenders/${tender.id}`}
+                className="mt-3 block text-base font-semibold text-white hover:text-indigo-300"
+              >
+                <BidiText>{tender.title}</BidiText>
+              </Link>
+              <p className="mt-1 text-xs text-zinc-500">
+                <BidiText>{tender.buyer || t("buyerMissing")}</BidiText>{" · "}<TechnicalText>{tender.external_id}</TechnicalText>
+              </p>
+              <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-400">
+                <span className="inline-flex gap-1">
+                  <MapPin className="h-3.5 w-3.5" />
+                  <BidiText>{tender.country || tender.region || t("locationMissing")}</BidiText>
+                </span>
+                <span>
+                  <BidiText>{tender.sector || tender.category || t("uncategorized")}</BidiText>
+                </span>
+              </div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <p
+                className={
+                  tender.budget > 0
+                    ? "font-semibold text-emerald-300"
+                    : "text-zinc-500"
+                }
+              >
+                {value}
+              </p>
+              <p
+                className={`inline-flex gap-1.5 ${expired ? "text-zinc-500" : "text-zinc-300"}`}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                {deadline}
+              </p>
+              <p className="text-xs text-zinc-500">
+                {formatDate(tender.deadline, locale)}
+              </p>
+              {pursuit ? (
+                <span
+                  className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${engagementStatusClasses(pursuit.status)}`}
+                >
+                  {t("pursuit", { status: pursuitStatus })}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-2 xl:justify-end">
+              <Link
+                onClick={remember}
+                href={`/dashboard/tenders/${tender.id}`}
+                className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                {t("viewTender")}
+              </Link>
+              {pursuit ? (
+                <EngagementWorkflowActions
+                  engagement={{
+                    engagement_id: pursuit.engagement_id,
+                    engagement_status: pursuit.status,
+                    allowed_actions: pursuit.allowed_actions,
+                  }}
+                  tenderId={tender.id}
+                  onRefresh={onRefresh}
+                />
+              ) : (
+                <PrepareBidButton
+                  tenderId={tender.id}
+                  disabled={!actionable || expired}
+                  title={
+                    !actionable
+                      ? t("status.unknown")
+                      : expired
+                        ? t("deadlinePassed")
+                        : t("startBid")
+                  }
+                />
+              )}
+            </div>
+          </div>
+          {recommendation ? (
+            <RecommendationSummary
+              recommendation={recommendation}
+              pending={pendingRecommendation === recommendation.recommendation_id}
+              onDismiss={onDismiss}
+              onRestore={onRestore}
+            />
+          ) : null}
+        </article>
+      );
+    }
+    
+    export default function TendersPage() {
+      return (
+        <Suspense
+          fallback={
+            <div role="status" className="flex h-64 items-center justify-center">
+              <Loader2 className="h-7 w-7 animate-spin text-indigo-500" />
+            </div>
+          }
+        >
+          <TendersPageContent />
+        </Suspense>
+      );
+    }
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///tmp/plasma-s93-frontend/tests/unified-explorer.test.mjs:207:12)
+    Test.runInAsyncScope (node:async_hooks:211:14)
+    Test.run (node:internal/test_runner/test:979:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:677:18)
+    Test.postRun (node:internal/test_runner/test:1090:19)
+    Test.run (node:internal/test_runner/test:1018:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:677:7)
+  ...
+1..159
+# tests 159
+# suites 0
+# pass 156
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 842.010364

@@ -10,11 +10,11 @@ from app.api.deps import require_approved_user
 from app.api.endpoints.tenders import (
     SourceRefreshResponse,
     SourceSyncResponse,
-    _normalized_source_result,
     _request_source_refresh,
     _source_refresh_response,
 )
 from app.models.all_models import SourceRefreshJob
+from app.services.source_registry import adapt_execution_result
 
 
 def user(*, approval_status: str = "approved", role: str = "pilot_user"):
@@ -194,9 +194,10 @@ class SourceRefreshTests(IsolatedAsyncioTestCase):
             failed_count=1,
             message="GIZ sync failed while fetching public tender pages.",
         )
-        status_value, created, updated, failed, _message = _normalized_source_result(result)
-        self.assertEqual(status_value, "source_unavailable")
-        self.assertEqual((created, updated, failed), (0, 0, 1))
+        canonical = adapt_execution_result("giz", result)
+        self.assertEqual(canonical.status, "source_unavailable")
+        self.assertEqual((canonical.created_count, canonical.updated_count, canonical.failed_count), (0, 0, 1))
+        self.assertEqual(canonical.message, result.message)
 
     def test_parser_failure_is_not_misreported_as_source_unavailable(self):
         result = SourceSyncResponse(
@@ -208,8 +209,30 @@ class SourceRefreshTests(IsolatedAsyncioTestCase):
             retryable=False,
             message="GIZ connector failed during listing.",
         )
-        status_value, *_ = _normalized_source_result(result)
-        self.assertEqual(status_value, "failed")
+        canonical = adapt_execution_result("giz", result)
+        self.assertEqual(canonical.status, "failed")
+        self.assertEqual(canonical.failure_stage, "listing")
+        self.assertEqual(canonical.failure_class, "XMLSyntaxError")
+        self.assertFalse(canonical.retryable)
+
+    def test_registry_adapter_preserves_counts_zeroes_and_safe_failure_state(self):
+        for fields in (
+            {"created_count": 2, "updated_count": 3, "unchanged_count": 4, "skipped_count": 5, "failed_count": 6},
+            {"new_count": 2, "updated": 3, "unchanged": 4, "skipped": 5, "failed": 6},
+        ):
+            with self.subTest(fields=fields):
+                result = adapt_execution_result("giz", SimpleNamespace(status="partial", **fields))
+                self.assertEqual(result.source_system, "giz")
+                self.assertEqual(result.status, "partial")
+                self.assertEqual((result.created_count, result.updated_count, result.unchanged_count,
+                                  result.skipped_count, result.failed_count), (2, 3, 4, 5, 6))
+                self.assertEqual(result.rejected_count, 11)
+        zero = adapt_execution_result("giz", SimpleNamespace(status="success", new_count=0,
+                                     created_count=99, skipped_count=0, failed_count=0))
+        self.assertEqual(zero.status, "completed")
+        self.assertEqual((zero.created_count, zero.updated_count, zero.unchanged_count,
+                          zero.skipped_count, zero.failed_count, zero.rejected_count), (0, 0, 0, 0, 0, 0))
+        self.assertEqual(adapt_execution_result("giz", SimpleNamespace(status="unknown")).status, "failed")
 
     async def test_enqueue_failure_is_persisted_as_dispatch_failure(self):
         db = FakeSession([None, None])

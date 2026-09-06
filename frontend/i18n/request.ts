@@ -23,9 +23,9 @@ export default getRequestConfig(async () => {
     return {
         locale,
         messages: pseudo ? await loadPseudoMessages() : await loadMessages(customerLocale),
-        onError(error) {
+        onError() {
             // Diagnostics are deliberately key/code-only: never log interpolated customer data.
-            console.error(`[i18n:${error.code}]`);
+            console.error('Operation failed');
         },
         getMessageFallback() {
             return 'Translation unavailable';

@@ -1,0 +1,12 @@
+[
+  "test_p0_3a_onboarding_access.py::OnboardingFrontendTests::test_pending_and_session_refresh_ux_is_present",
+  "test_s1_admin_approval_queue.py::AdminApprovalQueueTests::test_admin_pages_and_pilot_route_block_exist",
+  "test_s2_1_readiness_vault.py::S21ReadinessVaultTests::test_frontend_pages_exist_for_profile_and_readiness_vault",
+  "test_s2_2_geography.py::S22GeographyTests::test_frontend_uses_shared_geography_options",
+  "test_s2_3_services.py::S23ServiceTests::test_frontend_uses_shared_service_metadata",
+  "test_s2_4_readiness_admin.py::S24ReadinessAdminTests::test_readiness_vault_ux_supports_labels_filters_and_optional_files",
+  "test_s2_4_readiness_admin.py::S24ReadinessAdminTests::test_company_settings_shows_status_and_clean_target_summary",
+  "test_s3_1_tender_explorer_filters.py::S31TenderExplorerFilterStaticTests::test_frontend_uses_s2_taxonomies_for_tender_filters",
+  "test_s6_1_hunter_explorer_convergence_foundation.py::test_explorer_and_hunter_current_routes_are_distinct_and_tender_canonical",
+  "test_s6_1_hunter_explorer_convergence_foundation.py::test_s6_4_frontend_converges_with_passive_route_retirement"
+]

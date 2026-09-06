@@ -1,0 +1,10 @@
+{
+  "healthy": {
+    "database": true,
+    "redis": true
+  },
+  "redis_unavailable": {
+    "database": true,
+    "redis": false
+  }
+}

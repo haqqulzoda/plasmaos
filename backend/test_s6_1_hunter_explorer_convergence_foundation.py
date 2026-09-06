@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from frontend_contracts import translated
 from pathlib import Path
 
 from sqlalchemy import CheckConstraint, UniqueConstraint
@@ -117,7 +119,8 @@ def test_explorer_and_hunter_current_routes_are_distinct_and_tender_canonical() 
     explorer_client = source("frontend/lib/explorer.ts")
     hunter_page = source("frontend/app/dashboard/hunter/page.tsx")
     tender_api = source("backend/app/api/endpoints/tenders.py")
-    assert "listExplorer({" in explorer_page
+    assert re.search(r"\blistExplorer\(\s*\{", explorer_page)
+    assert 'from "@/lib/explorer"' in explorer_page
     assert "api.get<ExplorerResponse>('/explorer/tenders'" in explorer_client
     assert "api.get<Tender[]>('/tenders'" not in explorer_page
     assert "TenderRecommendation" not in tender_api
@@ -175,7 +178,8 @@ def test_s6_4_frontend_converges_with_passive_route_retirement() -> None:
     explorer_page = source("frontend/app/dashboard/tenders/page.tsx")
     hunter_page = source("frontend/app/dashboard/hunter/page.tsx")
     layout = source("frontend/app/dashboard/layout.tsx")
-    assert "'recommended', 'Recommended'" in explorer_page
+    assert re.search(r'[\"\']recommended[\"\']\s*,\s*t\(\s*[\"\']views\.recommended[\"\']', explorer_page)
+    assert translated(explorer_page, "explorer", "views.recommended") == "Recommended"
     assert "permanentRedirect" not in hunter_page
     assert "redirect('/dashboard/tenders?view=recommended')" in hunter_page
     assert "href: '/dashboard/hunter'" not in layout

@@ -1,0 +1,22 @@
+test_s1_1_project_foundation.py::test_project_identity_is_source_scoped_and_not_globally_unique
+test_s1_1_project_foundation.py::test_tender_project_cardinality_indexes_and_delete_behavior
+test_s1_1_project_foundation.py::test_only_deterministic_linkage_methods_are_allowed
+test_s1_1_project_foundation.py::test_world_bank_identifier_normalization_and_quarantine
+test_s1_1_project_foundation.py::test_same_identifier_shape_is_valid_in_separate_source_namespaces
+test_s1_1_project_foundation.py::test_world_bank_connector_maintains_project_linkage_on_every_upsert
+test_s1_1_project_foundation.py::test_existing_tender_api_contract_keeps_source_project_id
+test_s1_1_project_foundation.py::test_migration_is_the_single_head_after_sprint_zero_b3
+test_s1_1_project_foundation.py::test_migration_backfill_is_world_bank_only_and_strict
+
+==================================== ERRORS ====================================
+___________ ERROR collecting scripts/test_s1_1_project_foundation.py ___________
+import file mismatch:
+imported module 'test_s1_1_project_foundation' has this __file__ attribute:
+  /mnt/d/projects/plasmaos/backend/test_s1_1_project_foundation.py
+which is not the same as the test file we want to collect:
+  /mnt/d/projects/plasmaos/backend/scripts/test_s1_1_project_foundation.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules
+=========================== short test summary info ============================
+ERROR scripts/test_s1_1_project_foundation.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+9 tests collected, 1 error in 2.40s

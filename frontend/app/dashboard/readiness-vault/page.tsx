@@ -1,5 +1,7 @@
 'use client';
 
+import {CollectionPager} from '@/components/CollectionPager';
+import {useCollectionOffset} from '@/lib/useCollectionOffset';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -165,6 +167,9 @@ export default function ReadinessVaultPage() {
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [profileRequired, setProfileRequired] = useState(false);
+    const [offset, setOffset] = useCollectionOffset();
+    const [hasMore, setHasMore] = useState(false);
+    const [total, setTotal] = useState(0);
     const [filters, setFilters] = useState<Filters>(emptyFilters);
 
     const editingDocument = useMemo(
@@ -194,8 +199,10 @@ export default function ReadinessVaultPage() {
         setError(null);
         setProfileRequired(false);
         try {
-            const response = await api.get<ReadinessDocument[]>('/vault/readiness');
+            const response = await api.get<ReadinessDocument[]>('/vault/readiness', {params: {limit: 25, offset, ...filters}});
             setDocuments(response.data ?? []);
+            setHasMore(response.headers["x-has-more"] === "true");
+            setTotal(Number(response.headers["x-total-count"] ?? response.data.length));
         } catch (err) {
             if (apiStatus(err) === 404) {
                 setDocuments([]);
@@ -206,7 +213,7 @@ export default function ReadinessVaultPage() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [offset, filters]);
 
     useEffect(() => {
         loadDocuments();
@@ -248,6 +255,7 @@ export default function ReadinessVaultPage() {
     };
 
     const updateFilter = (field: keyof Filters, value: string) => {
+        setOffset(0);
         setFilters((current) => ({ ...current, [field]: value }));
     };
 
@@ -327,7 +335,7 @@ export default function ReadinessVaultPage() {
                     <div>
                         <h1 className="text-2xl font-semibold text-white">{t('title')}</h1>
                         <p className="text-sm text-gray-400">
-                            {t('recordCount', { shown: filteredDocuments.length, total: documents.length })}
+                            {t('recordCount', { shown: filteredDocuments.length, total })}
                         </p>
                     </div>
                 </div>
@@ -543,7 +551,7 @@ export default function ReadinessVaultPage() {
                 <div className="flex items-end">
                     <button
                         type="button"
-                        onClick={() => setFilters(emptyFilters)}
+                        onClick={() => {setOffset(0); setFilters(emptyFilters);}}
                         className="min-h-10 rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-900 hover:text-white"
                     >
                         {t('resetFilters')}
@@ -552,6 +560,7 @@ export default function ReadinessVaultPage() {
             </section>
 
             <section className="overflow-hidden rounded-lg border border-gray-800 bg-gray-950">
+                <CollectionPager offset={offset} hasMore={hasMore} onChange={setOffset} busy={loading} />
                 {loading ? (
                     <div role="status" aria-label={t('loading')} className="flex h-56 items-center justify-center">
                         <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />

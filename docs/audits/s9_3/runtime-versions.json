@@ -1,0 +1,19 @@
+{
+  "python": "3.12.3",
+  "node": "v22.14.0",
+  "npm": "10.9.2",
+  "postgresql": "16.15",
+  "packages": {
+    "fastapi": "0.141.1",
+    "starlette": "1.6.0",
+    "pydantic": "2.13.5",
+    "celery": "5.6.3",
+    "sqlalchemy": "2.0.52",
+    "alembic": "1.19.2",
+    "playwright": "1.62.0",
+    "PyJWT": "2.13.0",
+    "redis": "8.1.0",
+    "pytest": "9.1.1"
+  },
+  "chromium_executable": "/home/acer/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome"
+}

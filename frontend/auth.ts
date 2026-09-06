@@ -1,3 +1,4 @@
+import { createHmac, randomUUID } from 'node:crypto';
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 
@@ -57,6 +58,7 @@ async function validateAndRotateBackendSession(token: Record<string, unknown>) {
       cache: 'no-store',
     });
     if (!refreshResponse.ok) {
+      if (refreshResponse.status >= 500) return;
       clearBackendAuthority(token);
       return;
     }
@@ -71,8 +73,9 @@ async function validateAndRotateBackendSession(token: Record<string, unknown>) {
     delete token.backendSessionError;
     applyBackendClaims(token, refreshPayload);
   } catch {
-    // Current authority cannot be proven, so the browser session fails closed.
-    clearBackendAuthority(token);
+    // Preserve credentials during transport failure. Every protected backend
+    // request still verifies current account authority; no access is granted here.
+    return;
   }
 }
 
@@ -93,6 +96,7 @@ function applyBackendClaims(
 export const { handlers, auth } = NextAuth({
   secret: process.env.AUTH_SECRET,
   trustHost: true,
+  useSecureCookies: process.env.NODE_ENV === 'production',
   session: { strategy: 'jwt', maxAge: 60 * 60 * 8 },
   pages: {
     signIn: '/',
@@ -114,20 +118,29 @@ export const { handlers, auth } = NextAuth({
             : typeof account.providerAccountId === 'string'
               ? account.providerAccountId
               : undefined;
-        const email = typeof user?.email === 'string' ? user.email : undefined;
+        const email = typeof profile?.email === 'string' ? profile.email : undefined;
 
-        if (!googleId || !email) {
+        if (!googleId || !email || profile?.email_verified !== true) {
           throw new Error('Google identity payload incomplete');
         }
 
+        const secret = process.env.AUTH_BRIDGE_SECRET;
+        if (!secret || secret.length < 32) throw new Error('Authentication unavailable');
+        const identity = { google_id: googleId, email, name: user.name ?? email, avatar_url: user.image ?? null };
+        const now = Math.floor(Date.now() / 1000);
+        const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+        const claims = Buffer.from(JSON.stringify({
+          ...identity, sub: googleId, email_verified: true,
+          iss: 'plasma-authjs', aud: 'plasma-backend', iat: now, exp: now + 60, jti: randomUUID(),
+        })).toString('base64url');
+        const unsigned = `${header}.${claims}`;
+        const bridgeAssertion = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
         const response = await fetch(`${backendApiBase}/auth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            google_id: googleId,
-            email,
-            name: user.name ?? email,
-            avatar_url: user.image ?? null,
+            ...identity,
+            bridge_assertion: bridgeAssertion,
           }),
         });
 

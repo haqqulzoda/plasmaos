@@ -35,8 +35,8 @@ export function LanguageSelector({ surface }: LanguageSelectorProps) {
     setPendingLocale(locale);
     try {
       await applyUiLocale(locale, router);
-    } catch (requestError) {
-      console.error("Failed to persist interface language:", requestError);
+    } catch {
+      console.error("Failed to persist interface language:");
       setError(true);
     } finally {
       setPendingLocale(null);

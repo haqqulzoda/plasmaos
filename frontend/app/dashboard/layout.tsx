@@ -61,6 +61,9 @@ const CONTROL_PATHS = new Set([
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
     const t = useTranslations('navigation');
+    const common = useTranslations('common');
+    const [accessError, setAccessError] = useState(false);
+    const [retryVersion, setRetryVersion] = useState(0);
     const pathname = usePathname();
     const router = useRouter();
     const { data: session, status, update } = useSession();
@@ -90,6 +93,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             try {
                 const response = await api.get<AccessStatus>('/users/me/access-status');
                 const access = response.data;
+                if (!cancelled) setAccessError(false);
 
                 if (access.state === 'rejected' || access.state === 'disabled') {
                     if (!cancelled) setWorkspaceAccessAllowed(false);
@@ -130,14 +134,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 }
                 if (!cancelled) setWorkspaceAccessAllowed(false);
                 if (!cancelled) setAccessReadyPath(pathname);
-            } catch (error) {
-                console.error('Failed to evaluate workspace access:', error);
-                if (!cancelled) setWorkspaceAccessAllowed(false);
-                if (!CONTROL_PATHS.has(pathname)) {
-                    router.replace('/dashboard/pending-approval');
-                    return;
-                }
-                if (!cancelled) setAccessReadyPath(pathname);
+            } catch {
+                if (!cancelled) setAccessError(true);
             }
         };
 
@@ -148,10 +146,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         };
     }, [
         pathname,
+        retryVersion,
         router,
         status,
         update,
     ]);
+
+    if (accessError) {
+        return <div role="alert" className="min-h-screen bg-gray-950 text-white p-6 break-words">
+            <p>{common('states.unavailable')}</p>
+            <button className="mt-4 rounded border px-4 py-2 focus-visible:ring-2" onClick={() => {setAccessError(false); setRetryVersion(value => value + 1);}}>{common('actions.retry')}</button>
+        </div>;
+    }
 
     if (status === 'loading' || (accessReadyPath !== pathname && workspaceAccessAllowed !== true)) {
         return (
@@ -190,6 +196,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                prefetch={false}
                                 aria-label={t(item.nameKey)}
                                 className={clsx(
                                     'flex items-center justify-center gap-3 rounded-lg px-2 py-3 transition-all duration-200 sm:justify-start sm:px-4',

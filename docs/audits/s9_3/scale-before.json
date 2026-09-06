@@ -1,0 +1,53 @@
+{
+  "method": "Accepted S9.2 resolver loaded verbatim from recorded baseline; synthetic local PostgreSQL 1k/10k; full prepass before requested 25-row page; no production latency claim",
+  "rows": [
+    {
+      "corpus": 1000,
+      "filter": "documents_available",
+      "requested_page_rows": 25,
+      "prepass_tender_rows": 1000,
+      "matching_ids_materialized": 500,
+      "total": 500,
+      "queries": 3,
+      "filesystem_checks": 500,
+      "elapsed_ms": 1483.33,
+      "plans": []
+    },
+    {
+      "corpus": 1000,
+      "filter": "files_missing",
+      "requested_page_rows": 25,
+      "prepass_tender_rows": 1000,
+      "matching_ids_materialized": 0,
+      "total": 0,
+      "queries": 3,
+      "filesystem_checks": 500,
+      "elapsed_ms": 140.59,
+      "plans": []
+    },
+    {
+      "corpus": 10000,
+      "filter": "documents_available",
+      "requested_page_rows": 25,
+      "prepass_tender_rows": 10000,
+      "matching_ids_materialized": 5000,
+      "total": 5000,
+      "queries": 3,
+      "filesystem_checks": 5000,
+      "elapsed_ms": 6535.32,
+      "plans": []
+    },
+    {
+      "corpus": 10000,
+      "filter": "files_missing",
+      "requested_page_rows": 25,
+      "prepass_tender_rows": 10000,
+      "matching_ids_materialized": 0,
+      "total": 0,
+      "queries": 3,
+      "filesystem_checks": 5000,
+      "elapsed_ms": 1599.01,
+      "plans": []
+    }
+  ]
+}

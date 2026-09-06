@@ -95,8 +95,8 @@ export default function AdminCompanyDetailPage() {
             ]);
             setCompany(companyResponse.data);
             setDocuments(readinessResponse.data ?? []);
-        } catch (err) {
-            console.error('Failed to load company detail:', err);
+        } catch {
+            console.error('Failed to load company detail:');
             setError('Company detail could not be loaded.');
         } finally {
             setLoading(false);

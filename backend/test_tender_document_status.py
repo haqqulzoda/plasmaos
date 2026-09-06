@@ -84,7 +84,8 @@ class TenderDocumentStatusStaticTests(unittest.TestCase):
             '@router.get("", response_model=list[TenderResponse])', 1
         )[0]
 
-        self.assertIn('raw_download_status == "metadata_only"', download_route)
+        self.assertNotIn("scraper.download_file", download_route)
+        self.assertNotIn("UzExScraper(", download_route)
         self.assertIn("status_code=404", download_route)
         self.assertNotIn("RedirectResponse", download_route)
 
@@ -148,7 +149,7 @@ class TenderDocumentStatusBehaviorTests(unittest.TestCase):
                 ),
                 source_system="uzex",
             ),
-            "available",
+            "missing_file",
         )
 
     def test_missing_stored_file_is_not_listed_as_available(self) -> None:
@@ -294,7 +295,7 @@ class TenderDocumentStatusBehaviorTests(unittest.TestCase):
         self.assertNotIn("technical_warnings", public_payload)
         self.assertEqual(
             debug_payload["technical_warnings"],
-            ["provider project permission detail"],
+            ["Requirement extraction failed; inspect correlated server events."],
         )
 
     def test_failed_analysis_public_payloads_do_not_claim_success(self) -> None:

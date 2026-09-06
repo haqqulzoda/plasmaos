@@ -1,0 +1,22 @@
+
+> frontend@0.1.0 lint
+> eslint
+
+
+/tmp/plasma-s93-frontend/app/dashboard/bid-preparation/[proposalId]/page.tsx
+  300:15  warning  'detail' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  338:15  warning  'detail' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/tmp/plasma-s93-frontend/app/dashboard/tenders/[tenderId]/page.tsx
+  298:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  315:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  369:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/tmp/plasma-s93-frontend/i18n/request.ts
+  26:17  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/tmp/plasma-s93-frontend/lib/documentProxy.ts
+  57:12  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 7 problems (0 errors, 7 warnings)
+

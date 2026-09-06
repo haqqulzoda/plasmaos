@@ -1010,10 +1010,7 @@ class GizTenderSource:
             except Exception as exc:
                 self.last_rows_rejected += 1
                 self._record_failure(stage="eproc_detail", exc=exc)
-                logger.exception(
-                    "giz_eproc_detail_failed source_url=%s",
-                    row.get("source_url"),
-                )
+                logger.error("operation_failed event=giz:1013 error_type=%s", type(exc).__name__)
         return enriched
 
     async def _enrich_eproc_listing_row(

@@ -146,7 +146,7 @@ confirms drain progress.
 
 ## 12. Drain Test
 
-`python scripts/test_wb_project_enrichment_autodrain.py` bootstrapped a disposable
+`python scripts/verify_wb_project_enrichment_autodrain.py` bootstrapped a disposable
 PostgreSQL database at the existing repository head. With 125 linked eligible
 Projects and a batch of 25, scheduled-style invocations produced exactly:
 

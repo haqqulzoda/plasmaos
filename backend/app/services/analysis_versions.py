@@ -561,10 +561,19 @@ async def list_analysis_versions(
     analysis_id: UUID,
     user_id: UUID,
     company_profile_id: UUID,
+    limit: int = 25,
+    offset: int = 0,
+    metadata_only: bool = False,
 ) -> list[AnalysisVersion]:
+    from sqlalchemy.orm import load_only, raiseload
+    from app.schemas.analysis_version import AnalysisVersionMetadataResponse
+    options = (
+        (load_only(*(getattr(AnalysisVersion, name) for name in AnalysisVersionMetadataResponse.model_fields), raiseload=True), raiseload("*"))
+        if metadata_only else (selectinload(AnalysisVersion.document_snapshots),)
+    )
     result = await db.execute(
         select(AnalysisVersion)
-        .options(selectinload(AnalysisVersion.document_snapshots))
+        .options(*options)
         .join(TenderAnalysis, TenderAnalysis.id == AnalysisVersion.analysis_id)
         .where(
             AnalysisVersion.analysis_id == analysis_id,
@@ -572,7 +581,8 @@ async def list_analysis_versions(
             TenderAnalysis.company_profile_id == company_profile_id,
             TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
         )
-        .order_by(AnalysisVersion.version_number.asc())
+        .order_by(AnalysisVersion.version_number.asc(), AnalysisVersion.id.asc())
+        .limit(min(max(limit, 1), 101)).offset(max(offset, 0))
     )
     return list(result.scalars().all())
 

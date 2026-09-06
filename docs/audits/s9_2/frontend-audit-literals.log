@@ -1,0 +1,15 @@
+
+> frontend@0.1.0 audit:literals
+> node scripts/audit-customer-literals.mjs
+
+{
+  "scope": [
+    "app/dashboard/page.tsx",
+    "app/dashboard/readiness-vault/page.tsx",
+    "app/dashboard/tenders/[tenderId]/compliance/page.tsx",
+    "app/dashboard/bids/[id]/page.tsx",
+    "app/not-found.tsx",
+    "components/workspace/DocumentViewer.tsx"
+  ],
+  "candidates": []
+}

@@ -1,0 +1,97 @@
+{
+  "routes": [
+    {
+      "route": "legacy-list",
+      "status": 200,
+      "queries": 5,
+      "budget": 8
+    },
+    {
+      "route": "legacy-detail",
+      "status": 200,
+      "queries": 5,
+      "budget": 8
+    },
+    {
+      "route": "details",
+      "status": 200,
+      "queries": 12,
+      "budget": 13
+    },
+    {
+      "route": "decision",
+      "status": 200,
+      "queries": 6,
+      "budget": 7
+    },
+    {
+      "route": "documents",
+      "status": 200,
+      "queries": 5,
+      "budget": 6
+    },
+    {
+      "route": "stored-download",
+      "status": 200,
+      "queries": 4,
+      "budget": 8
+    },
+    {
+      "route": "missing-download",
+      "status": 404,
+      "queries": 4,
+      "budget": 8
+    },
+    {
+      "route": "compiled-text",
+      "status": 200,
+      "queries": 4,
+      "budget": 10
+    },
+    {
+      "route": "explorer",
+      "status": 200,
+      "queries": 7,
+      "budget": 8
+    },
+    {
+      "route": "proposals",
+      "status": 200,
+      "queries": 5,
+      "budget": 5
+    },
+    {
+      "route": "readiness",
+      "status": 200,
+      "queries": 5,
+      "budget": 6
+    },
+    {
+      "route": "history",
+      "status": 200,
+      "queries": 6,
+      "budget": 7
+    },
+    {
+      "route": "latest-analysis",
+      "status": 200,
+      "queries": 7,
+      "budget": 9
+    },
+    {
+      "route": "approval-queue",
+      "status": 200,
+      "queries": 3,
+      "budget": 5
+    },
+    {
+      "route": "source-status",
+      "status": 200,
+      "queries": 2,
+      "budget": 3
+    }
+  ],
+  "domain_fingerprints_unchanged": true,
+  "source_calls": 0,
+  "generation_calls": 0
+}

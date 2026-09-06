@@ -1,0 +1,90 @@
+[
+  {
+    "navigation": "passivity",
+    "surface": "explorer",
+    "before_total": 31,
+    "after_total": 16,
+    "before_users_me": 21,
+    "after_users_me": 5
+  },
+  {
+    "navigation": "passivity",
+    "surface": "details",
+    "before_total": 35,
+    "after_total": 19,
+    "before_users_me": 23,
+    "after_users_me": 7
+  },
+  {
+    "navigation": "passivity",
+    "surface": "my-tenders",
+    "before_total": 31,
+    "after_total": 14,
+    "before_users_me": 20,
+    "after_users_me": 3
+  },
+  {
+    "navigation": "passivity",
+    "surface": "bid-preparation",
+    "before_total": 33,
+    "after_total": 16,
+    "before_users_me": 22,
+    "after_users_me": 5
+  },
+  {
+    "navigation": "passivity",
+    "surface": "compliance",
+    "before_total": 41,
+    "after_total": 20,
+    "before_users_me": 27,
+    "after_users_me": 6
+  },
+  {
+    "navigation": "passivity",
+    "surface": "readiness",
+    "before_total": 33,
+    "after_total": 15,
+    "before_users_me": 21,
+    "after_users_me": 3
+  },
+  {
+    "navigation": "passivity",
+    "surface": "settings",
+    "before_total": 37,
+    "after_total": 17,
+    "before_users_me": 24,
+    "after_users_me": 4
+  },
+  {
+    "navigation": "client-navigation",
+    "surface": "explorer",
+    "before_total": 5,
+    "after_total": 7,
+    "before_users_me": 4,
+    "after_users_me": 4
+  },
+  {
+    "navigation": "client-navigation",
+    "surface": "my-tenders",
+    "before_total": 5,
+    "after_total": 3,
+    "before_users_me": 3,
+    "after_users_me": 1
+  },
+  {
+    "navigation": "client-navigation",
+    "surface": "bid-preparation",
+    "before_total": 5,
+    "after_total": 5,
+    "before_users_me": 3,
+    "after_users_me": 3
+  },
+  {
+    "navigation": "client-navigation",
+    "surface": "settings",
+    "before_total": 1,
+    "after_total": 1,
+    "before_users_me": 1,
+    "after_users_me": 1
+  }
+]

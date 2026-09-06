@@ -1,0 +1,5 @@
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+--- LOADING CONFIG FROM: /mnt/d/projects/plasmaos/.env ---
+--- DB URI: postgresql+asyncpg://acer:****@127.0.0.1:56592/plasma_s05b4b_s92_audit ---
+20260904_0001_s8_2_analysis_language (head)

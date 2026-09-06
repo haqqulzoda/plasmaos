@@ -1,0 +1,151 @@
+ M backend/Dockerfile
+D  backend/alembic/__pycache__/env.cpython-314.pyc
+D  backend/alembic/versions/__pycache__/14c7b4cac4ea_add_content_hash_and_analysis_id_.cpython-314.pyc
+D  backend/alembic/versions/__pycache__/20260227_0001_google_oauth_cutover.cpython-314.pyc
+D  backend/alembic/versions/__pycache__/27fc6790093d_add_tender_document_storage_fields.cpython-314.pyc
+D  backend/alembic/versions/__pycache__/619f79030fe7_add_dynamic_compliance_ontology_and_.cpython-314.pyc
+D  backend/alembic/versions/__pycache__/65c42c5b80fa_add_tenderrecommendation_table.cpython-314.pyc
+D  backend/alembic/versions/__pycache__/9f3d2f4b6a10_add_tender_sync_jobs_table.cpython-314.pyc
+D  backend/alembic/versions/__pycache__/ebccc6f00c82_add_dynamic_compliance_ontology_and_.cpython-314.pyc
+D  backend/app/__pycache__/__init__.cpython-314.pyc
+D  backend/app/__pycache__/main.cpython-314.pyc
+D  backend/app/api/__pycache__/__init__.cpython-314.pyc
+D  backend/app/api/__pycache__/deps.cpython-314.pyc
+D  backend/app/api/endpoints/__pycache__/__init__.cpython-314.pyc
+D  backend/app/api/endpoints/__pycache__/auth.cpython-314.pyc
+D  backend/app/api/endpoints/__pycache__/hunter.cpython-314.pyc
+D  backend/app/api/endpoints/__pycache__/proposals.cpython-314.pyc
+D  backend/app/api/endpoints/__pycache__/tenders.cpython-314.pyc
+D  backend/app/api/endpoints/__pycache__/users.cpython-314.pyc
+D  backend/app/api/endpoints/__pycache__/vault.cpython-314.pyc
+ M backend/app/api/endpoints/admin.py
+ M backend/app/api/endpoints/auth.py
+ M backend/app/api/endpoints/proposals.py
+ M backend/app/api/endpoints/tenders.py
+ M backend/app/api/endpoints/vault.py
+D  backend/app/api/routers/__pycache__/__init__.cpython-314.pyc
+D  backend/app/api/routers/__pycache__/audit.cpython-314.pyc
+ M backend/app/api/routers/audit.py
+D  backend/app/core/__pycache__/__init__.cpython-314.pyc
+D  backend/app/core/__pycache__/ai.cpython-314.pyc
+D  backend/app/core/__pycache__/ai_analyzer.cpython-314.pyc
+D  backend/app/core/__pycache__/celery_app.cpython-314.pyc
+D  backend/app/core/__pycache__/config.cpython-314.pyc
+D  backend/app/core/__pycache__/evaluator.cpython-314.pyc
+D  backend/app/core/__pycache__/parser.cpython-314.pyc
+D  backend/app/core/__pycache__/scraper.cpython-314.pyc
+D  backend/app/core/__pycache__/telegram.cpython-314.pyc
+D  backend/app/core/agents/__pycache__/hunter.cpython-314.pyc
+ M backend/app/core/agents/requirement_extractor.py
+ M backend/app/core/agents/strategy_extractor.py
+ M backend/app/core/ai.py
+ M backend/app/core/ai_analyzer.py
+ M backend/app/core/config.py
+ M backend/app/core/parser.py
+ M backend/app/core/scraper.py
+ D backend/app/core/security.py
+ M backend/app/core/security/__init__.py
+D  backend/app/core/security/__pycache__/__init__.cpython-314.pyc
+D  backend/app/core/security/__pycache__/audit_trail.cpython-314.pyc
+D  backend/app/db/__pycache__/__init__.cpython-314.pyc
+D  backend/app/db/__pycache__/session.cpython-314.pyc
+ M backend/app/main.py
+D  backend/app/models/__pycache__/__init__.cpython-314.pyc
+D  backend/app/models/__pycache__/all_models.cpython-314.pyc
+D  backend/app/models/__pycache__/audit.cpython-314.pyc
+D  backend/app/models/__pycache__/base.cpython-314.pyc
+D  backend/app/models/__pycache__/company.cpython-314.pyc
+D  backend/app/models/__pycache__/taxonomy.cpython-314.pyc
+D  backend/app/models/__pycache__/user.cpython-314.pyc
+D  backend/app/schemas/__pycache__/__init__.cpython-314.pyc
+D  backend/app/schemas/__pycache__/audit.cpython-314.pyc
+D  backend/app/schemas/__pycache__/proposal.cpython-314.pyc
+D  backend/app/schemas/__pycache__/tender.cpython-314.pyc
+D  backend/app/schemas/__pycache__/vault.cpython-314.pyc
+ M backend/app/services/analysis_versions.py
+ M backend/app/services/explorer.py
+ M backend/app/services/giz_document_hydration.py
+ M backend/app/services/project_enrichment.py
+ M backend/app/services/source_refresh_jobs.py
+ M backend/app/services/tender_sources/adb.py
+ M backend/app/services/tender_sources/ebrd.py
+ M backend/app/services/tender_sources/giz.py
+D  backend/app/workers/__pycache__/hunter_tasks.cpython-314.pyc
+D  backend/app/workers/__pycache__/tender_tasks.cpython-314.pyc
+ M backend/app/workers/hunter_tasks.py
+ M backend/app/workers/source_refresh_tasks.py
+ M backend/app/workers/tender_tasks.py
+ M backend/requirements.txt
+D  backend/scripts/__pycache__/seed_taxonomy.cpython-314.pyc
+D  backend/scripts/__pycache__/test_evaluator.cpython-314.pyc
+D  backend/scripts/__pycache__/test_extraction.cpython-314.pyc
+D  backend/scripts/__pycache__/verify_vault_db.cpython-314.pyc
+ D backend/scripts/test_extraction.py
+ D backend/scripts/test_s1_1_project_foundation.py
+ D backend/scripts/test_s2_1_compliance_ownership.py
+ D backend/scripts/test_s2_2_analysis_version_foundation.py
+ D backend/scripts/test_s2_2b_analysis_aggregate_concurrency.py
+ D backend/scripts/test_s2_3_version_aware_compliance_reads.py
+ D backend/scripts/test_s3_3_privileged_account_survivability.py
+ D backend/scripts/test_s3_4_administrative_audit_hardening.py
+ D backend/scripts/test_s3_5_admin_operational_ux_hardening.py
+ D backend/scripts/test_s4_1_tender_engagement_foundation.py
+ D backend/scripts/test_s4_2_my_tenders_list_experience.py
+ D backend/scripts/test_s4_3_bid_preparation_reconciliation.py
+ D backend/scripts/test_s4_4_tender_engagement_workflow_ux.py
+ D backend/scripts/test_s5_2_tender_details_read_model.py
+ D backend/scripts/test_s6_2_unified_explorer_backend.py
+ M backend/scripts/test_s8_2_analysis_language_migration.py
+ D backend/scripts/test_wb_project_enrichment_autodrain.py
+ D backend/test_ai.py
+ M backend/test_p0_2a_release_admin_repair.py
+ M backend/test_p0_3a_onboarding_access.py
+ M backend/test_p0_3b_source_refresh.py
+ M backend/test_p0_security_static.py
+ M backend/test_s0_2_disabled_authorization.py
+ M backend/test_s1_admin_approval_queue.py
+ M backend/test_s2_1_readiness_vault.py
+ M backend/test_s2_2_geography.py
+ M backend/test_s2_3_services.py
+ M backend/test_s2_4_readiness_admin.py
+ M backend/test_s3_1_admin_account_lifecycle.py
+ M backend/test_s3_1_tender_explorer_filters.py
+ M backend/test_s3_2_session_revocation_restore_security.py
+ M backend/test_s4_2_my_tenders_list_experience.py
+ M backend/test_s4_4_workflow_postgresql.py
+ M backend/test_s6_1_hunter_explorer_convergence_foundation.py
+ D backend/test_tender_api.py
+ M backend/test_tender_document_status.py
+ D backend/test_uzbek_nlp.py
+ M docker-compose.yml
+ M docs/S3_1_ADMIN_ACCOUNT_LIFECYCLE.md
+ M docs/S4_4_TENDER_ENGAGEMENT_WORKFLOW_UX.md
+ M docs/SR_2_1_SEMANTIC_BATCH_TENDER_PERSISTENCE.md
+ M docs/WB_PROJECT_ENRICHMENT_AUTODRAIN_HOTFIX.md
+ M frontend/Dockerfile
+ M frontend/app/admin/companies/[companyProfileId]/page.tsx
+ M frontend/app/admin/page.tsx
+ M frontend/app/dashboard/bid-preparation/[proposalId]/page.tsx
+ M frontend/app/dashboard/bid-preparation/page.tsx
+ M frontend/app/dashboard/layout.tsx
+ M frontend/app/dashboard/my-tenders/page.tsx
+ M frontend/app/dashboard/onboarding/page.tsx
+ M frontend/app/dashboard/readiness-vault/page.tsx
+ M frontend/app/dashboard/settings/page.tsx
+ M frontend/app/dashboard/tenders/[tenderId]/compliance/page.tsx
+ M frontend/app/dashboard/tenders/[tenderId]/page.tsx
+ M frontend/app/dashboard/tenders/page.tsx
+ M frontend/auth.ts
+ M frontend/components/bid-preparation/PrepareBidButton.tsx
+ M frontend/components/i18n/LanguageSelector.tsx
+ M frontend/components/source-refresh/SourceRefreshMenu.tsx
+ M frontend/i18n/request.ts
+ M frontend/lib/api.ts
+ M frontend/lib/documentProxy.ts
+ M frontend/middleware.ts
+ M frontend/next.config.ts
+ M frontend/package-lock.json
+ M frontend/package.json
+ M frontend/tests/bid-preparation.test.mjs
+ M frontend/tests/s7-3-p0-localization.test.mjs
+ M frontend/tests/unified-explorer.test.mjs

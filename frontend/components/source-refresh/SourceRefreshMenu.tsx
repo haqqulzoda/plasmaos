@@ -28,7 +28,7 @@ export function SourceRefreshMenu() {
         <RefreshCw className="h-4 w-4" aria-hidden="true" />
         {t("sourceRefresh")}
       </summary>
-      <div className="absolute end-0 z-40 mt-2 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-zinc-700 bg-zinc-950 p-2 shadow-2xl">
+      <div className="absolute start-0 sm:start-auto sm:end-0 z-40 mt-2 w-[min(19rem,calc(100vw-8rem))] rounded-xl border border-zinc-700 bg-zinc-950 p-2 shadow-2xl">
         {catalogLoading ? (
           <p
             role="status"

@@ -7,6 +7,9 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from typing import Annotated
+from fastapi import Query, Response
+from app.core.pagination import page_rows
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, case, func, not_, or_, select
@@ -118,6 +121,9 @@ class ApprovalQueueItem(BaseModel):
 
 class ApprovalQueueResponse(BaseModel):
     items: list[ApprovalQueueItem]
+    has_more: bool = False
+    limit: int = 25
+    offset: int = 0
 
 
 class AdminAccountItem(BaseModel):
@@ -238,7 +244,7 @@ async def _count_optional_model_rows(
         logger.warning(
             "admin_optional_metric_unavailable table=%s",
             getattr(model, "__tablename__", str(model)),
-            exc_info=True,
+            exc_info=False,
         )
         return 0
 
@@ -650,6 +656,9 @@ async def get_admin_accounts(
 )
 async def get_approval_queue(
     db: AsyncSession = Depends(get_db),
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    response: Response = None,
 ) -> ApprovalQueueResponse:
     """Return users/companies that need or recently received approval review."""
     result = await db.execute(
@@ -663,16 +672,18 @@ async def get_approval_queue(
                 ),
             )
         )
-        .order_by(User.created_at.desc())
+        .order_by(User.created_at.desc(), User.id.asc())
+        .limit(limit + 1).offset(offset)
     )
     users = result.scalars().unique().all()
     return ApprovalQueueResponse(
+        has_more=len(users) > limit, limit=limit, offset=offset,
         items=[
             ApprovalQueueItem(
                 user=_user_payload(user),
                 company=_company_payload(user.company_profile),
             )
-            for user in users
+            for user in page_rows(list(users), limit=limit, offset=offset, response=response)
         ]
     )
 

@@ -141,7 +141,7 @@ def test_frontend_navigation_separates_bid_preparation_and_my_tenders() -> None:
     assert '"myTenders": "My Tenders"' in navigation
     assert '"bidPreparation": "Bid Preparation"' in navigation
     bids = source("frontend/app/dashboard/bid-preparation/page.tsx")
-    assert 'api.get("/proposals")' in bids
+    assert 'api.get("/proposals", {params: {limit: 25, offset}})' in bids
 
 
 def test_passive_tender_detail_only_reads_and_click_handler_is_the_only_post() -> None:

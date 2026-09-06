@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from frontend_contracts import catalog_message, translated
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -136,11 +137,13 @@ class S21ReadinessVaultTests(unittest.TestCase):
         readiness_page = read("../frontend/app/dashboard/readiness-vault/page.tsx")
         layout = read("../frontend/app/dashboard/layout.tsx")
 
-        self.assertIn("Company profile", settings_page)
-        self.assertIn("Readiness vault", readiness_page)
+        self.assertEqual(translated(settings_page, "settings", "title"), "Company profile")
+        self.assertEqual(translated(readiness_page, "readiness", "title"), "Readiness Vault")
         self.assertIn("optional_file_url", readiness_page)
-        self.assertIn("Company Profile", layout)
-        self.assertIn("Readiness Vault", layout)
+        self.assertIn("nameKey: 'companyProfile', href: '/dashboard/settings'", layout)
+        self.assertEqual(catalog_message("navigation", "companyProfile"), "Company Profile")
+        self.assertIn("nameKey: 'readinessVault', href: '/dashboard/readiness-vault'", layout)
+        self.assertEqual(catalog_message("navigation", "readinessVault"), "Readiness Vault")
 
 
 if __name__ == "__main__":

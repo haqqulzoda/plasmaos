@@ -1,0 +1,44 @@
+
+> frontend@0.1.0 test:hunter-retirement
+> node --no-warnings --experimental-strip-types --test tests/hunter-retirement.test.mjs
+
+TAP version 13
+# Subtest: legacy customer route is a passive compatibility redirect
+ok 1 - legacy customer route is a passive compatibility redirect
+  ---
+  duration_ms: 2.561253
+  ...
+# Subtest: dead Hunter frontend implementation and types are removed
+ok 2 - dead Hunter frontend implementation and types are removed
+  ---
+  duration_ms: 2.979101
+  ...
+# Subtest: unified Explorer remains canonical frontend authority
+ok 3 - unified Explorer remains canonical frontend authority
+  ---
+  duration_ms: 0.369392
+  ...
+# Subtest: primary navigation has no duplicate discovery product
+ok 4 - primary navigation has no duplicate discovery product
+  ---
+  duration_ms: 3.706497
+  ...
+# Subtest: legacy backend APIs remain compatibility-only and share mutation authority
+ok 5 - legacy backend APIs remain compatibility-only and share mutation authority
+  ---
+  duration_ms: 0.992197
+  ...
+# Subtest: generation owner and document dispatch stay internal and unchanged
+ok 6 - generation owner and document dispatch stay internal and unchanged
+  ---
+  duration_ms: 0.263561
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 230.861527

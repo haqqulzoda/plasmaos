@@ -1,0 +1,262 @@
+{
+  "method": "Accepted S9.2 production build in isolated Linux checkout; controlled S8.3 local HTTP fixtures; real Chromium; 390x844; secure middleware plus HTTP Auth.js cookie fixture; no production/backend/provider traffic",
+  "rows": [
+    {
+      "locale": "en",
+      "surface": "explorer",
+      "status": 200,
+      "final_path": "/dashboard/tenders?view=all",
+      "screenshot": "en-explorer.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "Tender Explorer"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 21,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "details",
+      "status": 200,
+      "final_path": "/dashboard/tenders/s72-tender",
+      "screenshot": "en-details.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "English tender — مناقصة عربية — Тендер",
+          "Pursuit",
+          "Project Context",
+          "Requirements & Documents",
+          "Compliance & Company Readiness",
+          "Procurement Contacts",
+          "Bid Preparation"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 23,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/s72-tender/details')": 1,
+        "('GET', '/api/v1/tenders/s72-tender')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "my-tenders",
+      "status": 200,
+      "final_path": "/dashboard/my-tenders",
+      "screenshot": "en-my-tenders.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "My Tenders",
+          "Original procurement title — do not translate"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 20,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "bid-preparation",
+      "status": 200,
+      "final_path": "/dashboard/bid-preparation",
+      "screenshot": "en-bid-preparation.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "Bid Preparation"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 22,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/proposals')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "compliance",
+      "status": 200,
+      "final_path": "/dashboard/tenders/s72-tender/compliance",
+      "screenshot": "en-compliance.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "English tender — مناقصة عربية — Тендер"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 27,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/s72-tender/documents')": 1,
+        "('GET', '/api/v1/tenders/s72-tender')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/compiled-text')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/latest-analysis')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "readiness",
+      "status": 200,
+      "final_path": "/dashboard/readiness-vault",
+      "screenshot": "en-readiness.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "Readiness Vault"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 21,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/meta/services')": 1,
+        "('GET', '/api/v1/vault/readiness')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "settings",
+      "status": 200,
+      "final_path": "/dashboard/settings",
+      "screenshot": "en-settings.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "Company profile",
+          "Interface language",
+          "Default analysis language",
+          "Company",
+          "Markets and services"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 24,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/meta/geography')": 1,
+        "('GET', '/api/v1/users/me/company')": 1,
+        "('GET', '/api/v1/meta/services')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "surface": "explorer",
+      "kind": "client-navigation",
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 4,
+        "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1
+      },
+      "final_path": "/dashboard/tenders"
+    },
+    {
+      "surface": "my-tenders",
+      "kind": "client-navigation",
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 3,
+        "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 1,
+        "('GET', '/api/v1/users/me/access-status')": 1
+      },
+      "final_path": "/dashboard/my-tenders"
+    },
+    {
+      "surface": "bid-preparation",
+      "kind": "client-navigation",
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 3,
+        "('GET', '/api/v1/proposals')": 1,
+        "('GET', '/api/v1/users/me/access-status')": 1
+      },
+      "final_path": "/dashboard/bid-preparation"
+    },
+    {
+      "surface": "settings",
+      "kind": "client-navigation",
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 1
+      },
+      "final_path": "/dashboard/settings"
+    }
+  ]
+}

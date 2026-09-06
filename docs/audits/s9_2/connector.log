@@ -1,0 +1,6 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+--- LOADING CONFIG FROM: /mnt/d/projects/plasmaos/.env ---
+--- DB URI: postgresql+asyncpg://acer:****@127.0.0.1:56592/plasma_s05b4b_s92_audit ---
+Forensic compliance category checks passed.
+.....................................s................uu........................................................................................................uuuu.......................................
+196 passed, 1 skipped, 6 subtests passed in 16.19s

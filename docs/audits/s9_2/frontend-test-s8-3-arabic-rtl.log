@@ -1,0 +1,104 @@
+
+> frontend@0.1.0 test:s8-3-arabic-rtl
+> node --no-warnings --experimental-strip-types --test tests/s8-3-arabic-rtl.test.mjs
+
+TAP version 13
+# Subtest: Arabic activation is atomic across registry, loader, root direction, and selector
+ok 1 - Arabic activation is atomic across registry, loader, root direction, and selector
+  ---
+  duration_ms: 6.665507
+  ...
+# Subtest: all 15 Arabic namespaces match the complete 866-key customer contract
+ok 2 - all 15 Arabic namespaces match the complete 866-key customer contract
+  ---
+  duration_ms: 21.650745
+  ...
+# Subtest: all four catalogs retain exact key, ICU placeholder, and rich placeholder parity
+ok 3 - all four catalogs retain exact key, ICU placeholder, and rich placeholder parity
+  ---
+  duration_ms: 28.820404
+  ...
+# Subtest: Arabic released copy has no exact English fallback leaf
+ok 4 - Arabic released copy has no exact English fallback leaf
+  ---
+  duration_ms: 2.589628
+  ...
+# Subtest: Arabic copy preserves approved brands and avoids inflated claims
+ok 5 - Arabic copy preserves approved brands and avoids inflated claims
+  ---
+  duration_ms: 1.689808
+  ...
+# Subtest: Arabic variants, weighted Accept-Language, and locale precedence resolve canonically
+ok 6 - Arabic variants, weighted Accept-Language, and locale precedence resolve canonically
+  ---
+  duration_ms: 9.621249
+  ...
+# Subtest: one direction function maps Arabic to RTL and every other UI locale to LTR
+ok 7 - one direction function maps Arabic to RTL and every other UI locale to LTR
+  ---
+  duration_ms: 0.641444
+  ...
+# Subtest: Arabic number, currency, date, relative time, and file-size formatting is centralized
+ok 8 - Arabic number, currency, date, relative time, and file-size formatting is centralized
+  ---
+  duration_ms: 72.362311
+  ...
+# Subtest: Arabic ICU messages execute with Arabic plural rules and source interpolation
+ok 9 - Arabic ICU messages execute with Arabic plural rules and source interpolation
+  ---
+  duration_ms: 17.747102
+  ...
+# Subtest: Arabic UI remains independent from the gated analysis-language registry
+ok 10 - Arabic UI remains independent from the gated analysis-language registry
+  ---
+  duration_ms: 1.038351
+  ...
+# Subtest: source, user, technical, and analysis content have reusable bidi boundaries
+ok 11 - source, user, technical, and analysis content have reusable bidi boundaries
+  ---
+  duration_ms: 2.250928
+  ...
+# Subtest: analysis, evidence, identifier, and filename islands are explicit in Compliance
+ok 12 - analysis, evidence, identifier, and filename islands are explicit in Compliance
+  ---
+  duration_ms: 1.429057
+  ...
+# Subtest: profile, onboarding, search, proposal, and readiness inputs declare content direction
+ok 13 - profile, onboarding, search, proposal, and readiness inputs declare content direction
+  ---
+  duration_ms: 3.679044
+  ...
+# Subtest: customer CSS and semantic direction icons pass the zero-exception RTL guard
+ok 14 - customer CSS and semantic direction icons pass the zero-exception RTL guard
+  ---
+  duration_ms: 29.48229
+  ...
+# Subtest: dedicated Admin content is an explicit English LTR island
+ok 15 - dedicated Admin content is an explicit English LTR island
+  ---
+  duration_ms: 0.863712
+  ...
+# Subtest: document source geometry stays LTR while source lines use auto direction
+ok 16 - document source geometry stays LTR while source lines use auto direction
+  ---
+  duration_ms: 0.607363
+  ...
+# Subtest: locale switching persists only ui_locale then refreshes without route replacement
+ok 17 - locale switching persists only ui_locale then refreshes without route replacement
+  ---
+  duration_ms: 1.070053
+  ...
+# Subtest: canonical query and payload values remain locale-neutral
+ok 18 - canonical query and payload values remain locale-neutral
+  ---
+  duration_ms: 3.006621
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 978.642164

@@ -1,5 +1,7 @@
 'use client';
 
+import {CollectionPager} from '@/components/CollectionPager';
+import {useCollectionOffset} from '@/lib/useCollectionOffset';
 import { useState, useEffect, use, useMemo, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import DocumentViewer from '@/components/workspace/DocumentViewer';
@@ -400,6 +402,8 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
     const [selectedAnalysisLanguage, setSelectedAnalysisLanguage] = useState<CustomerAnalysisLanguage>(DEFAULT_ANALYSIS_LANGUAGE);
     const [resultAnalysisLanguage, setResultAnalysisLanguage] = useState<AnalysisLanguage | null>(null);
     const [analysisVersion, setAnalysisVersion] = useState<number | null>(null);
+    const [historyOffset, setHistoryOffset] = useCollectionOffset("historyPage");
+    const [historyHasMore, setHistoryHasMore] = useState(false);
     const [analysisHistory, setAnalysisHistory] = useState<AnalysisVersionMetadata[]>([]);
 
     useEffect(() => {
@@ -507,15 +511,15 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
             return;
         }
         let active = true;
-        api.get<AnalysisVersionMetadata[]>(`/tenders/${resolvedTenderId}/analyses/${analysisId}/versions`)
-            .then(({ data }) => {
-                if (active) setAnalysisHistory(Array.isArray(data) ? data : []);
+        api.get<AnalysisVersionMetadata[]>(`/tenders/${resolvedTenderId}/analyses/${analysisId}/versions`, {params: {limit: 25, offset: historyOffset}})
+            .then(({ data, headers }) => {
+                if (active) {setAnalysisHistory(Array.isArray(data) ? data : []); setHistoryHasMore(headers["x-has-more"] === "true");}
             })
             .catch(() => {
                 if (active) setAnalysisHistory([]);
             });
         return () => { active = false; };
-    }, [resolvedTenderId, analysisId, analysisVersion]);
+    }, [resolvedTenderId, analysisId, analysisVersion, historyOffset]);
 
     // ── Load persisted risk overrides scoped to current analysis ──
     useEffect(() => {
@@ -592,7 +596,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                 `/tenders/${resolvedTenderId}/compliance/export/pdf${query}`,
                 { responseType: 'blob' },
             );
-            const contentType = response.headers['content-type'] || 'application/pdf';
+            const contentType = (typeof response.headers['content-type'] === 'string' ? response.headers['content-type'] : undefined) || 'application/pdf';
             const blob = new Blob([response.data], { type: contentType });
             const url = URL.createObjectURL(blob);
             const downloadName = filenameFromContentDisposition(
@@ -825,6 +829,7 @@ export default function CompliancePage({ params }: { params: Promise<{ tenderId:
                             onSelectRequirement={setSelectedRequirement}
                             analysisLanguage={resultAnalysisLanguage}
                             analysisVersion={analysisVersion}
+                            historyPager={<CollectionPager offset={historyOffset} hasMore={historyHasMore} onChange={setHistoryOffset} />}
                             analysisHistory={analysisHistory}
                         />
                     ) : isLoading ? (
@@ -1176,6 +1181,7 @@ function ComplianceResults({
     analysisLanguage,
     analysisVersion,
     analysisHistory,
+    historyPager,
 }: {
     evaluation: DynamicEvaluation;
     analysisId: string | null;
@@ -1190,6 +1196,7 @@ function ComplianceResults({
     analysisLanguage: AnalysisLanguage | null;
     analysisVersion: number | null;
     analysisHistory: AnalysisVersionMetadata[];
+    historyPager: React.ReactNode;
 }) {
     const t = useTranslations('compliance');
     // Use hybrid result for the verdict when available, fall back to legacy
@@ -1371,6 +1378,7 @@ function ComplianceResults({
                     {analysisHistory.length > 0 && (
                         <div className="border-t border-gray-800 px-5 py-3">
                             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">{t('versionHistory')}</p>
+                            {historyPager}
                             <div className="flex flex-wrap gap-2">
                                 {analysisHistory.map((version) => (
                                     <span key={`${version.analysis_id}-${version.version_number}`} className={clsx(

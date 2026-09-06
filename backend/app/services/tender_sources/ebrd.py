@@ -593,10 +593,7 @@ class EbrdTenderSource:
                     detail = await self.fetch_detail_by_url(str(row["source_url"]), client=client)
                     enriched.append(_merge_listing_detail(row, detail))
                 except Exception:
-                    logger.exception(
-                        "ebrd_detail_fetch_failed external_id=%s",
-                        row.get("external_id"),
-                    )
+                    logger.error("operation_failed event=ebrd:596 error_type=%s", "unavailable")
                     enriched.append(row)
         deduped: dict[str, dict[str, Any]] = {}
         for opportunity in enriched:

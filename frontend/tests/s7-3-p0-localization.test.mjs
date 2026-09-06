@@ -88,7 +88,7 @@ test("locale changes are persist-first and preserve route and mounted state", ()
   const selector = read("components/i18n/LanguageSelector.tsx");
   const action = read("i18n/localeAction.ts");
   assert.match(selector, /await applyUiLocale\(locale, router\)/);
-  assert.match(selector, /catch \(requestError\)/);
+  assert.match(selector, /catch\s*\{/);
   assert.match(action, /const preference = await persist\(locale\)/);
   assert.ok(
     action.indexOf("await persist(locale)") <

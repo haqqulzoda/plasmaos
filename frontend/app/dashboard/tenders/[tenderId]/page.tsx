@@ -295,9 +295,9 @@ export default function TenderDetailPage({
     try {
       const response = await api.get<Tender>(`/tenders/${tenderId}`);
       setTender(response.data);
-    } catch (error: unknown) {
+    } catch {
       setTender(null);
-      console.error("Failed to load Tender:", error);
+      console.error("Failed to load Tender:");
       setTenderError(t("loadFailed"));
     } finally {
       setIsLoadingTender(false);
@@ -312,9 +312,9 @@ export default function TenderDetailPage({
         `/tenders/${tenderId}/details`,
       );
       setDetails(response.data);
-    } catch (error: unknown) {
+    } catch {
       setDetails(null);
-      console.error("Failed to load additional Tender details:", error);
+      console.error("Failed to load additional Tender details:");
       setDetailsError(t("detailsFailed"));
     } finally {
       setIsLoadingDetails(false);
@@ -348,7 +348,7 @@ export default function TenderDetailPage({
           { responseType: "blob" },
         );
         const contentType =
-          response.headers["content-type"] ||
+          (typeof response.headers["content-type"] === "string" ? response.headers["content-type"] : undefined) ||
           item.content_type ||
           "application/octet-stream";
         const url = URL.createObjectURL(
@@ -366,8 +366,8 @@ export default function TenderDetailPage({
         link.click();
         link.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-      } catch (error: unknown) {
-        console.error("Failed to open Tender document:", error);
+      } catch {
+        console.error("Failed to open Tender document:");
         setDocumentActionError(t("documentOpenFailed"));
       } finally {
         setOpeningDocumentId(null);

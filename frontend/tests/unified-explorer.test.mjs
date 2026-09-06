@@ -200,7 +200,7 @@ test("accessibility and responsive contracts are present", () => {
     'role="alert"',
     'aria-label={t("pagesLabel")}',
     "focus-visible",
-    "overflow-x-auto",
+    "flex-wrap",
     "sm:",
     "xl:",
   ])

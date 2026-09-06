@@ -92,13 +92,7 @@ async def _execute_source_refresh(source_system: str, job_id: UUID) -> dict[str,
                         lease_owner=attempt_id,
                     )
             except Exception:
-                logger.exception(
-                    "source_refresh_heartbeat_failed source_system=%s job_id=%s "
-                    "attempt_id=%s",
-                    source_system,
-                    job_id,
-                    attempt_id,
-                )
+                logger.error("operation_failed event=source_refresh_tasks:95 error_type=%s", "unavailable")
                 renewed = False
             if not renewed:
                 lease_lost.set()
@@ -150,15 +144,7 @@ async def _execute_source_refresh(source_system: str, job_id: UUID) -> dict[str,
             "worker execution",
             exc,
         )
-        logger.exception(
-            "source_refresh_worker_exception source_system=%s job_id=%s "
-            "stage=worker_execution failure_class=%s http_status=%s retryable=%s",
-            source_system,
-            job_id,
-            details.failure_class,
-            details.http_status,
-            str(details.retryable).lower(),
-        )
+        logger.error("operation_failed event=source_refresh_tasks:153 error_type=%s", type(exc).__name__)
     else:
         if not lease_lost.is_set():
             final_status = result.status

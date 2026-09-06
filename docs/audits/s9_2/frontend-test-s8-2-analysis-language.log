@@ -1,0 +1,49 @@
+
+> frontend@0.1.0 test:s8-2-analysis-language
+> node --no-warnings --experimental-strip-types --test tests/s8-2-analysis-language.test.mjs
+
+TAP version 13
+# Subtest: analysis registry is independent, canonical, native-labelled, and truthfully gates Arabic
+ok 1 - analysis registry is independent, canonical, native-labelled, and truthfully gates Arabic
+  ---
+  duration_ms: 4.186254
+  ...
+# Subtest: Settings separates interface and default analysis preferences
+ok 2 - Settings separates interface and default analysis preferences
+  ---
+  duration_ms: 0.916441
+  ...
+# Subtest: Compliance captures one explicit per-run language and preserves default
+ok 3 - Compliance captures one explicit per-run language and preserves default
+  ---
+  duration_ms: 1.27323
+  ...
+# Subtest: version metadata, history, legacy NULL, and exact export version are represented
+ok 4 - version metadata, history, legacy NULL, and exact export version are represented
+  ---
+  duration_ms: 1.087222
+  ...
+# Subtest: content direction is scoped and evidence remains auto
+ok 5 - content direction is scoped and evidence remains auto
+  ---
+  duration_ms: 0.86364
+  ...
+# Subtest: all active UI catalogs contain independent analysis-language copy
+ok 6 - all active UI catalogs contain independent analysis-language copy
+  ---
+  duration_ms: 0.425192
+  ...
+# Subtest: UI locale is not execution-language authority
+ok 7 - UI locale is not execution-language authority
+  ---
+  duration_ms: 0.603267
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 166.265292

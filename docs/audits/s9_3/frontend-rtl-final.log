@@ -1,0 +1,10 @@
+
+> frontend@0.1.0 audit:rtl
+> node scripts/audit-rtl.mjs
+
+{
+  "ok": true,
+  "physical": [],
+  "icons": [],
+  "authority": []
+}

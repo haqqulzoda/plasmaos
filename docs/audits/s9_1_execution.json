@@ -1,0 +1,479 @@
+{
+  "audit": "Sprint 9.1",
+  "date": "2026-09-05",
+  "status": "AUDIT DELIVERED; ACCEPTANCE NOT PASS",
+  "baseline": {
+    "sha": "b121cda5b76911c59fdab5733d70aa6883908e9c",
+    "branch": "main",
+    "initial_working_tree": "clean",
+    "head_unchanged": true
+  },
+  "scope": {
+    "production_access": false,
+    "deployment": false,
+    "adb_ebrd_recovery": false,
+    "runtime_cleanup": false,
+    "sprint_9_2_started": false,
+    "database": "synthetic disposable localhost:56591/plasma_s05b4b_s91_audit only",
+    "configured_existing_database_head": "NOT ACCESSED / UNVERIFIED"
+  },
+  "evidence_policy": {
+    "retained": "JSON, Markdown, scripts and 28 PNG captures in this manifest",
+    "observed_before_restart": "Runtime command outputs were observed in prior work segments. Their raw /tmp logs, disposable dependencies and database were lost on environment restart. Results below are not claims of post-restart reruns.",
+    "not_verified": "Completion of schema-data-preflight; existing configured database; production configuration/performance; unchanged historical Windows browser acceptance suites.",
+    "command_notation": "Commands identify check families or reproducible invocation forms; this is not a verbatim shell transcript. Synthetic signing keys are omitted."
+  },
+  "environment_observed": {
+    "host_python": "3.12.3",
+    "node": "22.14.0",
+    "npm": "10.9.2",
+    "postgresql": "16.15",
+    "fastapi": "0.141.1",
+    "celery": "5.6.3",
+    "sqlalchemy": "2.0.52",
+    "pydantic": "2.14.0b1",
+    "alembic": "1.19.2",
+    "pytest": "9.1.1",
+    "playwright": "1.62.0",
+    "frontend_resolutions_artifact": "docs/audits/s9_1_bundle.json",
+    "dependency_changes": "none; isolated temporary install only"
+  },
+  "checks": [
+    {
+      "check": "Frontend focused checks",
+      "commands": [
+        "npm run lint",
+        "npm run audit:literals",
+        "npm run typecheck",
+        "npm run test:project-context",
+        "npm run test:localization-foundation",
+        "npm run test:s7-3-localization",
+        "npm run test:s7-4-localization",
+        "npm run test:s8-2-analysis-language",
+        "npm run audit:rtl",
+        "npm run test:s8-3-arabic-rtl",
+        "npm run test:admin",
+        "npm run test:my-tenders",
+        "npm run test:bid-preparation",
+        "npm run test:engagement-workflow",
+        "npm run test:tender-details",
+        "npm run test:tender-cleanup",
+        "npm run test:explorer",
+        "npm run test:sr3",
+        "npm run test:hunter-retirement"
+      ],
+      "result": "19/19 PASS",
+      "evidence": "observed command output; raw logs unavailable after restart"
+    },
+    {
+      "check": "Clean Linux locked install and production build",
+      "commands": [
+        "npm ci",
+        "npm run build"
+      ],
+      "result": "PASS in isolated copy of tracked frontend",
+      "initial_failure": "Existing Windows node_modules lacked Linux native watcher; clean install resolved environment issue. No manifest/lock modification.",
+      "evidence": "observed output; retained s9_1_bundle.json"
+    },
+    {
+      "check": "Backend maintained root diagnostic",
+      "invocation": "Explicit root backend/test_*.py file list, excluding test_ai.py, test_tender_api.py, test_uzbek_nlp.py; python -m pytest -q; synthetic environment",
+      "result": {
+        "passed": 602,
+        "failed": 10,
+        "skipped": 1,
+        "subtests_passed": 94,
+        "warnings": 6,
+        "seconds": 47.62
+      },
+      "failures": "Exact ten nodes and replacement expectations in main report section 29",
+      "exclusions": "Import-time live developer probes, not counted as passing coverage",
+      "evidence": "observed output; raw log unavailable after restart"
+    },
+    {
+      "check": "Initial root collection",
+      "result": "FAIL; test_tender_api.py and test_uzbek_nlp.py access localhost API at import",
+      "test_ai": "Excluded from initial run after source inspection established import-time model/PDF invocation"
+    },
+    {
+      "check": "Duplicate basename proof",
+      "command": "python -m pytest --collect-only -q test_s1_1_project_foundation.py scripts/test_s1_1_project_foundation.py",
+      "cwd": "backend",
+      "result": "9 tests collected; 1 import mismatch collection error"
+    },
+    {
+      "check": "Connector gate",
+      "command": "bash scripts/run_connector_regression_gate.sh",
+      "result": {
+        "passed": 195,
+        "skipped": 1,
+        "subtests_passed": 4,
+        "seconds": 11.75
+      },
+      "evidence": "observed output; raw log unavailable after restart"
+    },
+    {
+      "check": "Disposable PostgreSQL bootstrap / Alembic",
+      "commands": [
+        "repository fresh baseline bootstrap to head",
+        "alembic heads",
+        "alembic current",
+        "alembic check"
+      ],
+      "result": "PASS observed; one expected head; no new upgrade operations",
+      "head": "20260904_0001_s8_2_analysis_language",
+      "warning": "Online env.py widens alembic_version column and commits; commands were confined to disposable DB"
+    },
+    {
+      "check": "Schema/data preflight",
+      "command": "python scripts/run_s0_3_schema_data_preflight.py --env-file /dev/null --compact",
+      "result": "INVOKED, COMPLETION UNVERIFIED after restart; not claimed passed"
+    },
+    {
+      "check": "Synthetic backend auth probes",
+      "result": "H01 and H02 confirmed",
+      "evidence": [
+        "docs/audits/s9_1_security_probes.json",
+        "docs/audits/s9_1_openapi.json"
+      ],
+      "secrets_retained": false
+    },
+    {
+      "check": "Query-count probe",
+      "command": "python scripts/audit_s9_1_query_probe.py",
+      "result": "30 responses HTTP 200; zero measured INSERT/UPDATE/DELETE; 1/30 fixture sizes",
+      "evidence": "docs/audits/s9_1_query_measurements.json",
+      "limits": "Fixed query counts do not bound rows/JSON/filesystem work. Source jobs and pending approvals empty. No source fallbacks executed."
+    },
+    {
+      "check": "Representative mobile browser",
+      "command": "python frontend/scripts/audit-s9-1-browser.py with S91_FRONTEND_ROOT pointing at clean copy",
+      "result": "28 page loads; 7 surfaces x EN/UZ/RU/AR; 390x844; correct lang/dir; no page exceptions",
+      "evidence": "docs/audits/s9_1_browser/results.json and 28 PNGs",
+      "limits": "Existing synthetic S8.3 HTTP fixtures; dev replay; page loads only. Visual overlap/clipping findings remain. Not full historical acceptance or accessibility certification."
+    },
+    {
+      "check": "Frontend dependency advisory audit",
+      "command": "npm audit --json",
+      "result": {
+        "info": 0,
+        "low": 1,
+        "moderate": 3,
+        "high": 12,
+        "critical": 2,
+        "total": 18
+      },
+      "evidence": "docs/audits/s9_1_npm_audit.json",
+      "limits": "Time-sensitive package matches; not demonstrated exploitation of all packages"
+    },
+    {
+      "check": "Post-restart offline artifact verification",
+      "result": "PASS",
+      "details": [
+        "4 added Python files AST-parse",
+        "43 numbered report sections",
+        "98 acceptance rows",
+        "29 frontend entries, 91 backend method/path entries match retained runtime registry",
+        "83 OpenAPI paths",
+        "30 query records and 28 browser captures consistent",
+        "30 migration revisions form resolved graph with expected sole head",
+        "All local report/appendix/acceptance file links resolve",
+        "Current tracked modifications limited to three Python 3.14 caches; audit additions are untracked"
+      ]
+    }
+  ],
+  "artifact_manifest": [
+    {
+      "path": "backend/scripts/audit_s9_1_architecture.py",
+      "change": "ADDED",
+      "bytes": 18263,
+      "sha256": "e4565e8d709e7c4dd7cfbbd431a24e78d3f217b97025293e34e0e5505afd53cf"
+    },
+    {
+      "path": "backend/scripts/audit_s9_1_query_probe.py",
+      "change": "ADDED",
+      "bytes": 5658,
+      "sha256": "8bc2574b5f2fe42acf826122abfb9a12dad486436deb44d8cf1edbc48b8a0f64"
+    },
+    {
+      "path": "backend/scripts/render_s9_1_audit.py",
+      "change": "ADDED",
+      "bytes": 16156,
+      "sha256": "1678a896f728516f7cc8739a999dad5460179595ae07d9287e860101f306c58d"
+    },
+    {
+      "path": "frontend/scripts/audit-s9-1-browser.py",
+      "change": "ADDED",
+      "bytes": 4646,
+      "sha256": "9b6f3843d978404b7a68681fffc92f01c7adf757db05700917348c8c86eccb93"
+    },
+    {
+      "path": "docs/S9_1_CROSS_PRODUCT_ARCHITECTURE_LEGACY_AUDIT.md",
+      "change": "ADDED",
+      "bytes": 65429,
+      "sha256": "1155b44269210477175d116a69d87678a5cb87045b1d621a1d1b56ba650b6aaf"
+    },
+    {
+      "path": "docs/audits/s9_1_acceptance.md",
+      "change": "ADDED",
+      "bytes": 13430,
+      "sha256": "9c01b30ece3955bbda841bab5d559e088317c8535613d1192a76e13f76f8180e"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-bid-preparation.png",
+      "change": "ADDED",
+      "bytes": 43208,
+      "sha256": "231768bbce5259feac2718da2130a8d33769f5ff5d607c3f54a15eeef1b75449"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-compliance.png",
+      "change": "ADDED",
+      "bytes": 38934,
+      "sha256": "18836eddebe1bcce397399b1495e78f915047d17133bd5218344c2ea0a9c3af2"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-details.png",
+      "change": "ADDED",
+      "bytes": 75659,
+      "sha256": "9c2d7453c92c0ff33478a5a1c3476eda9229fe3774be3eb0cae5e92f92ad56cb"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-explorer.png",
+      "change": "ADDED",
+      "bytes": 47145,
+      "sha256": "8d810a114066a1f70dd3d2bfb35324805cd6c8980ea1cdacf9bfd0b6bff20094"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-my-tenders.png",
+      "change": "ADDED",
+      "bytes": 51975,
+      "sha256": "2045d7eb1ff1b6b56019f9fda7a70cc087f13219499009a524797685ede46021"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-readiness.png",
+      "change": "ADDED",
+      "bytes": 36364,
+      "sha256": "db7b6c1a5ebaf5c6a815c6e742f0f495b09ffbeb3932fe7bbe18b8fe5e64505b"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-settings.png",
+      "change": "ADDED",
+      "bytes": 47648,
+      "sha256": "eb436560f5d6308ad2115fc5d2d9c0acd24b93912d5d0035c3166bc1e3e2ccf4"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-bid-preparation.png",
+      "change": "ADDED",
+      "bytes": 48208,
+      "sha256": "9a48173d81818b38de87ca3780245a5aeb62377705a1723e2e5bd590bddd4772"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-compliance.png",
+      "change": "ADDED",
+      "bytes": 44324,
+      "sha256": "476956ddd0623553df543b494656f289aee400a67219f233e83e248802cdbfe7"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-details.png",
+      "change": "ADDED",
+      "bytes": 83163,
+      "sha256": "063b6e4f5dc99ae4e1d1165fdb1e1f88eca20150d8a71f1fc800d6a4b10c263b"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-explorer.png",
+      "change": "ADDED",
+      "bytes": 50973,
+      "sha256": "94f27ad6736580ead77992fbd279086eca43eecce6d70a682b84205dbc3e86e3"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-my-tenders.png",
+      "change": "ADDED",
+      "bytes": 60462,
+      "sha256": "0b2fa2d71c409aa4f2182e02bb678a33eddbfbe1acd5b9945e71928f1ecf464a"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-readiness.png",
+      "change": "ADDED",
+      "bytes": 40282,
+      "sha256": "0a15ec7e64f4b6051dda4b4ba5d3244cbb9e61c71128207309285a601082937a"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-settings.png",
+      "change": "ADDED",
+      "bytes": 55004,
+      "sha256": "01c6d3d4e4cb8fe711c6e7896a2fc7f19d08d08ebb9d1223307f3ebdb13eec2d"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/results.json",
+      "change": "ADDED",
+      "bytes": 29675,
+      "sha256": "341d4fb8a7703b0c7f388ee8435ad8e18450420aff8e523e88a20dae573aa3b0"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-bid-preparation.png",
+      "change": "ADDED",
+      "bytes": 50784,
+      "sha256": "41bfe27e02c6b93b67ed84f47dc1ae7894e667d41f753a68328d87c41c1b5e6d"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-compliance.png",
+      "change": "ADDED",
+      "bytes": 43761,
+      "sha256": "69841878798bf78ac99dc8bb08c8114a135493d34e7ef7463d0eed4158b27239"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-details.png",
+      "change": "ADDED",
+      "bytes": 86147,
+      "sha256": "83daf7dbb4648c4da00a388ce751b357b49093da1eef22a6a3d8f358e738850d"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-explorer.png",
+      "change": "ADDED",
+      "bytes": 52047,
+      "sha256": "9388d9dfb6c71773f5db032f57597bd5eb018b83722dffdd9541ff58402b49f2"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-my-tenders.png",
+      "change": "ADDED",
+      "bytes": 52574,
+      "sha256": "e6fb11dbea5dd19d385879d9238a3bb8f09691f7a6a4d511cf2de39bf85b8b4d"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-readiness.png",
+      "change": "ADDED",
+      "bytes": 41854,
+      "sha256": "6779b60928b98fdd753d84e82ea379d6199f6a5827d26c101b5b48ed66d6ac2c"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-settings.png",
+      "change": "ADDED",
+      "bytes": 52443,
+      "sha256": "d8196c59506617b7cca2260083c23e85bb035428a72a03ba6cc170663d5e5b0c"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-bid-preparation.png",
+      "change": "ADDED",
+      "bytes": 52687,
+      "sha256": "cc39da9d35628e5c273ba1bf0a39f199f57e59de2fbfd9071804bb063f4b37c6"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-compliance.png",
+      "change": "ADDED",
+      "bytes": 42124,
+      "sha256": "868e5d3ce6eb42675b3f7eec33ba32f1ed82db0e7990f9ad8d7218016c8ded79"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-details.png",
+      "change": "ADDED",
+      "bytes": 84283,
+      "sha256": "fffe393fd5c846a4ecf10e3db58051e09b16d9e30f486148908e472983d466ee"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-explorer.png",
+      "change": "ADDED",
+      "bytes": 55665,
+      "sha256": "f1a1094b29eaec9045dcaac2aabac81bab754fcb0e87c3483a11e512a3f2cabd"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-my-tenders.png",
+      "change": "ADDED",
+      "bytes": 58235,
+      "sha256": "6b751f69d54e8a497bb7c8311288cd0a290bcad26310fc519cb11ef55f692eef"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-readiness.png",
+      "change": "ADDED",
+      "bytes": 41361,
+      "sha256": "910fa664bb94203ba0e9ae3f88d7126ac79d2bd7146789a1a94522e2b018d794"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-settings.png",
+      "change": "ADDED",
+      "bytes": 51301,
+      "sha256": "ab5a81e437bb5ddec069cb4aaff4c74fd6a3c59af80f8f424ccabc969c68b88a"
+    },
+    {
+      "path": "docs/audits/s9_1_bundle.json",
+      "change": "ADDED",
+      "bytes": 1222,
+      "sha256": "93d0bd1ae0d3d5e4f83ffcb52fd045c86198233a23d03f53ab2ef3f9a65f6a48"
+    },
+    {
+      "path": "docs/audits/s9_1_inventory.json",
+      "change": "ADDED",
+      "bytes": 784385,
+      "sha256": "5db8d90b144d006b954c56b8dffb2c127e685ed1a4c26137d5f312541a133494"
+    },
+    {
+      "path": "docs/audits/s9_1_inventory.md",
+      "change": "ADDED",
+      "bytes": 228109,
+      "sha256": "3194c78dcadad5ca5b224a965500dfadf2eb3387dd65ca7bdb53e58f8a3851ea"
+    },
+    {
+      "path": "docs/audits/s9_1_npm_audit.json",
+      "change": "ADDED",
+      "bytes": 60841,
+      "sha256": "3b5486dab0fb16d46bf3eb79d7a1ebcf7001de0096ee07dedfdaad077b8015c0"
+    },
+    {
+      "path": "docs/audits/s9_1_openapi.json",
+      "change": "ADDED",
+      "bytes": 462674,
+      "sha256": "0473934bf2cece109b91df372bedfe0bc4a181c6f7f5e8460b1f860c2b5d7a7e"
+    },
+    {
+      "path": "docs/audits/s9_1_query_measurements.json",
+      "change": "ADDED",
+      "bytes": 169551,
+      "sha256": "4524e54f0e1dc0c53009075cf704deb21e6fae673c87ad4b1912d7af9d344886"
+    },
+    {
+      "path": "docs/audits/s9_1_security_probes.json",
+      "change": "ADDED",
+      "bytes": 248,
+      "sha256": "518086925813aa67862044e6d9badff634d754e16c5aa217172093e390e3d6ac"
+    },
+    {
+      "path": "docs/audits/s9_1_execution.json",
+      "change": "ADDED",
+      "sha256": null,
+      "note": "Self-hash omitted to avoid recursive manifest"
+    }
+  ],
+  "unrelated_tracked_modifications": [
+    {
+      "path": "backend/app/api/endpoints/__pycache__/users.cpython-314.pyc",
+      "change": "MODIFIED",
+      "attribution": "Observed after environment restart; not edited or reverted by audit; origin unverified"
+    },
+    {
+      "path": "backend/app/models/__pycache__/audit.cpython-314.pyc",
+      "change": "MODIFIED",
+      "attribution": "Observed after environment restart; not edited or reverted by audit; origin unverified"
+    },
+    {
+      "path": "backend/app/models/__pycache__/user.cpython-314.pyc",
+      "change": "MODIFIED",
+      "attribution": "Observed after environment restart; not edited or reverted by audit; origin unverified"
+    }
+  ],
+  "proposed_cleanup_only": {
+    "tracked_python_cache_files": 53,
+    "unused_refresh_helpers": 2,
+    "unused_direct_frontend_dependencies": [
+      "jwt-decode",
+      "tailwind-merge"
+    ],
+    "duplicate_giz_endpoint_helper_closure": 22,
+    "duplicate_test_basenames": 15,
+    "stale_test_failures": 10
+  },
+  "handoff": {
+    "main_report": "docs/S9_1_CROSS_PRODUCT_ARCHITECTURE_LEGACY_AUDIT.md",
+    "acceptance": "docs/audits/s9_1_acceptance.md",
+    "inventories": "docs/audits/s9_1_inventory.md",
+    "next_task": "Sprint 9.2 contract in main report section 40; H01/H02 remain mandatory release blockers for separately scoped hardening."
+  }
+}

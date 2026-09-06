@@ -1,0 +1,69 @@
+...................................................................... [ 10%]
+.................................................................... [ 20%]
+....................................................... [ 28%]
+........................................................................ [ 38%]
+........................................................................ [ 49%]
+......................................... [ 55%]
+................................................. [ 62%]
+............................F..................................F.... [ 72%]
+.......................................................... [ 80%]
+................................................................... [ 90%]
+s.................................................................       [100%]
+=================================== FAILURES ===================================
+______ test_frontend_navigation_separates_bid_preparation_and_my_tenders _______
+
+    def test_frontend_navigation_separates_bid_preparation_and_my_tenders() -> None:
+        layout = source("frontend/app/dashboard/layout.tsx")
+        navigation = source("frontend/messages/en/navigation.json")
+        assert "nameKey: 'myTenders'" in layout
+        assert "href: '/dashboard/my-tenders'" in layout
+        assert "nameKey: 'bidPreparation'" in layout
+        assert "href: '/dashboard/bid-preparation'" in layout
+        assert '"myTenders": "My Tenders"' in navigation
+        assert '"bidPreparation": "Bid Preparation"' in navigation
+        bids = source("frontend/app/dashboard/bid-preparation/page.tsx")
+>       assert 'api.get("/proposals")' in bids
+E       assert 'api.get("/proposals")' in '"use client";\n\nimport {CollectionPager} from "@/components/CollectionPager";\nimport {useCollectionOffset} from "@/...              </div>\n            </motion.div>\n          ))}\n        </motion.div>\n      )}\n    </div>\n  );\n}\n'
+
+test_s4_2_my_tenders_list_experience.py:144: AssertionError
+_____ TenderDetailsContractTests.test_endpoint_is_secondary_approved_read ______
+
+self = <test_s5_2_tender_details_read_model.TenderDetailsContractTests testMethod=test_endpoint_is_secondary_approved_read>
+
+    def test_endpoint_is_secondary_approved_read(self) -> None:
+        source = inspect.getsource(tender_endpoints.get_tender_details)
+        self.assertIn("require_approved_pilot_access", inspect.getsource(tender_endpoints))
+        self.assertIn("customer_visible_tender_condition", source)
+>       self.assertIn("compose_tender_details", source)
+E       AssertionError: 'compose_tender_details' not found in 'async def list_tenders(\n    limit: int = Query(default=20, ge=1, le=200),\n    offset: int = Query(default=0, ge=0),\n    source: str | None = Query(default=None),\n    source_system: str | None = Query(default=None),\n    q: str | None = Query(default=None),\n    region: list[str] | None = Query(default=None),\n    country: str | None = Query(default=None),\n    countries: list[str] | None = Query(default=None),\n    service: str | None = Query(default=None),\n    services: list[str] | None = Query(default=None),\n    tender_status: str | None = Query(default=None, alias="status"),\n    deadline_status: str | None = Query(default=None),\n    deadline_from: datetime | None = Query(default=None),\n    deadline_to: datetime | None = Query(default=None),\n    price_min: float | None = Query(default=None, ge=0),\n    price_max: float | None = Query(default=None, ge=0),\n    document_status: str | None = Query(default=None),\n    category: str | None = Query(default=None),\n    sort: str | None = Query(default="newest"),\n    current_user: User = Depends(require_approved_pilot_access),\n    db: AsyncSession = Depends(get_db),\n) -> list[TenderResponse]:\n    """\n    List customer-visible tenders with explorer filters.\n\n    Returns a paginated tender list.\n    """\n    document_tender_ids = await resolve_filesystem_document_filter_tender_ids(\n        db=db,\n        document_status=document_status,\n    )\n    query = select(Tender).options(\n        load_only(\n            Tender.id,\n            Tender.external_id,\n            Tender.source_system,\n            Tender.canonical_source_key,\n            Tender.source_url,\n            Tender.title,\n            Tender.description,\n            Tender.budget,\n            Tender.currency,\n            Tender.deadline,\n            Tender.publication_date,\n            Tender.country,\n            Tender.region,\n            Tender.sector,\n            Tender.buyer,\n            Tender.procurement_category,\n            Tender.procurement_method,\n            Tender.notice_type,\n            Tender.project_id,\n            Tender.source_metadata_json,\n            Tender.status,\n            Tender.category,\n            Tender.created_at,\n        )\n    ).where(customer_visible_tender_condition(Tender))\n    query, _ = apply_explorer_tender_filters(\n        query,\n        source=source,\n        source_system=source_system,\n        q=q,\n        region=region,\n        country=country,\n        countries=countries,\n        service=service,\n        services=services,\n        tender_status=tender_status,\n        deadline_status=deadline_status,\n        deadline_from=deadline_from,\n        deadline_to=deadline_to,\n        price_min=price_min,\n        price_max=price_max,\n        document_status=document_status,\n        document_tender_ids=document_tender_ids,\n        category=category,\n    )\n\n    query = (\n        _apply_tender_sort(query, sort)\n        .offset(offset)\n        .limit(limit)\n    )\n\n    result = await db.execute(\n        query\n    )\n    tenders = result.scalars().all()\n    summaries = await _batched_tender_summaries(\n        db=db,\n        tender_ids=[tender.id for tender in tenders],\n    )\n    live_dates = {}\n\n    serialized_tenders = [\n        _serialize_tender(\n            t,\n            summary=summaries.get(t.id),\n            live_dates=live_dates.get(t.id),\n        )\n        for t in tenders\n    ]\n    return serialized_tenders\n'
+
+test_s5_2_tender_details_read_model.py:25: AssertionError
+=============================== warnings summary ===============================
+../../../../../tmp/plasma-s92-venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /tmp/plasma-s92-venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+../../../../../tmp/plasma-s92-venv/lib/python3.12/site-packages/starlette/testclient.py:53
+  /tmp/plasma-s92-venv/lib/python3.12/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+app/api/endpoints/hunter.py:37
+  /mnt/d/projects/plasmaos/backend/app/api/endpoints/hunter.py:37: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class HunterTenderPayload(BaseModel):
+
+app/api/endpoints/hunter.py:48
+  /mnt/d/projects/plasmaos/backend/app/api/endpoints/hunter.py:48: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class HunterRecommendationPayload(BaseModel):
+
+test_s0_3_schema_data_preflight.py::SchemaDataPreflightSafetyTests::test_repository_head_is_resolved_without_running_migrations
+test_s0_5b4_baseline_bootstrap.py::test_repository_head_is_the_approved_single_head
+test_s1_3b_project_context_runtime_recovery.py::test_recovery_adds_no_migration_and_reuses_sprint_1_2_worker
+test_sr2_3_connector_capability_document_decoupling.py::DocumentAndMigrationTests::test_additive_nullable_metrics_and_single_head
+  /tmp/plasma-s92-venv/lib/python3.12/site-packages/alembic/config.py:604: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED test_s4_2_my_tenders_list_experience.py::test_frontend_navigation_separates_bid_preparation_and_my_tenders
+FAILED test_s5_2_tender_details_read_model.py::TenderDetailsContractTests::test_endpoint_is_secondary_approved_read
+2 failed, 683 passed, 1 skipped, 8 warnings, 100 subtests passed in 85.45s (0:01:25)

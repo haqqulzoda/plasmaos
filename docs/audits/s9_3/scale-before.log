@@ -1,0 +1,5 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+scale=1000 filter=documents_available queries=3 files=500 ms=1483.33
+scale=1000 filter=files_missing queries=3 files=500 ms=140.59
+scale=10000 filter=documents_available queries=3 files=5000 ms=6535.32
+scale=10000 filter=files_missing queries=3 files=5000 ms=1599.01

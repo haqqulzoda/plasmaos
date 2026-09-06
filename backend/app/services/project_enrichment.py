@@ -519,10 +519,7 @@ async def enqueue_world_bank_project_enrichment_batch(
             enqueued += 1
         except Exception:
             failed_ids.append(project_id)
-            logger.exception(
-                "world_bank_project_enrichment_dispatch_failed project_id=%s",
-                project_id,
-            )
+            logger.error("operation_failed event=project_enrichment:522 error_type=%s", "unavailable")
     for project_id in failed_ids:
         await mark_project_enrichment_failure(
             db,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from frontend_contracts import translated
 from pathlib import Path
 import unittest
 
@@ -59,7 +60,7 @@ class AdminApprovalQueueTests(unittest.TestCase):
         self.assertIn("role === 'operator'", admin_layout)
         self.assertIn("session?.approval_status === 'approved'", admin_layout)
         self.assertIn("router.replace('/dashboard')", admin_layout)
-        self.assertIn("Admin Console", dashboard_layout)
+        self.assertEqual(translated(dashboard_layout, "navigation", "adminConsole"), "Admin Console")
         self.assertNotIn("name: 'Admin'", dashboard_layout)
         self.assertIn("'/admin/:path*'", middleware)
 

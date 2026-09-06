@@ -1,0 +1,36 @@
+{
+  "node": "v22.14.0",
+  "packages": [
+    {
+      "name": "next",
+      "version": "16.2.11",
+      "license": "MIT"
+    },
+    {
+      "name": "next-auth",
+      "version": "5.0.0-beta.32",
+      "license": "ISC"
+    },
+    {
+      "name": "@auth/core",
+      "version": "0.41.3",
+      "license": "ISC"
+    },
+    {
+      "name": "axios",
+      "version": "1.18.0",
+      "license": "MIT"
+    },
+    {
+      "name": "postcss",
+      "version": "8.5.28",
+      "license": "MIT"
+    },
+    {
+      "name": "sharp",
+      "version": "0.35.0",
+      "license": "Apache-2.0"
+    }
+  ],
+  "lock_packages": 504
+}

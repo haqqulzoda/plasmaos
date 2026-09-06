@@ -1,0 +1,8 @@
+{
+  "scope": "synthetic existing pilot account on disposable local database only",
+  "status": 200,
+  "no_bearer_or_google_id_token_sent": true,
+  "token_issued": true,
+  "subject_matches_fixture": true,
+  "legacy_list_invalid_bearer_status": 200
+}

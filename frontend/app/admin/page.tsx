@@ -46,8 +46,8 @@ export default function AdminPage() {
             ]);
             setActivity(activityResponse.data);
             setCorpusHealth(corpusResponse.data);
-        } catch (err) {
-            console.error('Failed to load admin overview:', err);
+        } catch {
+            console.error('Failed to load admin overview:');
             setError('Failed to load admin overview.');
         } finally {
             setLoading(false);

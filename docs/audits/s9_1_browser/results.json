@@ -1,0 +1,888 @@
+{
+  "method": "unchanged tracked frontend in isolated Linux checkout; existing S8.3 HTTP fixtures; real Chromium; 390x844; route loads only; no production/backend/provider traffic",
+  "rows": [
+    {
+      "locale": "en",
+      "surface": "explorer",
+      "status": 200,
+      "final_path": "/dashboard/tenders?view=all",
+      "screenshot": "en-explorer.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "Tender Explorer"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 7,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "details",
+      "status": 200,
+      "final_path": "/dashboard/tenders/s72-tender",
+      "screenshot": "en-details.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "English tender — مناقصة عربية — Тендер",
+          "Pursuit",
+          "Project Context",
+          "Requirements & Documents",
+          "Compliance & Company Readiness",
+          "Procurement Contacts",
+          "Bid Preparation"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 11,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/s72-tender')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/details')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "my-tenders",
+      "status": 200,
+      "final_path": "/dashboard/my-tenders",
+      "screenshot": "en-my-tenders.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "My Tenders",
+          "Original procurement title — do not translate"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 9,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "bid-preparation",
+      "status": 200,
+      "final_path": "/dashboard/bid-preparation",
+      "screenshot": "en-bid-preparation.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "Bid Preparation"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 9,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/proposals')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "compliance",
+      "status": 200,
+      "final_path": "/dashboard/tenders/s72-tender/compliance",
+      "screenshot": "en-compliance.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "English tender — مناقصة عربية — Тендер"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 19,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/s72-tender/documents')": 2,
+        "('GET', '/api/v1/tenders/s72-tender')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/compiled-text')": 2,
+        "('GET', '/api/v1/tenders/s72-tender/latest-analysis')": 2
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "readiness",
+      "status": 200,
+      "final_path": "/dashboard/readiness-vault",
+      "screenshot": "en-readiness.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "Readiness Vault"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 11,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/vault/readiness')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/meta/services')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "en",
+      "surface": "settings",
+      "status": 200,
+      "final_path": "/dashboard/settings",
+      "screenshot": "en-settings.png",
+      "dom": {
+        "lang": "en",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Command Center",
+          "Company profile",
+          "Interface language",
+          "Default analysis language",
+          "Company",
+          "Markets and services"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 17,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/meta/services')": 2,
+        "('GET', '/api/v1/users/me/company')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/meta/geography')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "uz",
+      "surface": "explorer",
+      "status": 200,
+      "final_path": "/dashboard/tenders?view=all",
+      "screenshot": "uz-explorer.png",
+      "dom": {
+        "lang": "uz",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Boshqaruv markazi",
+          "Tenderlar katalogi"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 8,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "uz",
+      "surface": "details",
+      "status": 200,
+      "final_path": "/dashboard/tenders/s72-tender",
+      "screenshot": "uz-details.png",
+      "dom": {
+        "lang": "uz",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Boshqaruv markazi",
+          "English tender — مناقصة عربية — Тендер",
+          "Ishtirok",
+          "Loyiha ma’lumotlari",
+          "Talablar va hujjatlar",
+          "Muvofiqlik tahlili va kompaniya tayyorgarligi",
+          "Xarid bo‘yicha kontaktlar",
+          "Taklif tayyorlash"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 11,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/s72-tender')": 2,
+        "('GET', '/api/v1/tenders/s72-tender/details')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "uz",
+      "surface": "my-tenders",
+      "status": 200,
+      "final_path": "/dashboard/my-tenders",
+      "screenshot": "uz-my-tenders.png",
+      "dom": {
+        "lang": "uz",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Boshqaruv markazi",
+          "Mening tenderlarim",
+          "Original procurement title — do not translate"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 9,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "uz",
+      "surface": "bid-preparation",
+      "status": 200,
+      "final_path": "/dashboard/bid-preparation",
+      "screenshot": "uz-bid-preparation.png",
+      "dom": {
+        "lang": "uz",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Boshqaruv markazi",
+          "Taklif tayyorlash"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 9,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/proposals')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "uz",
+      "surface": "compliance",
+      "status": 200,
+      "final_path": "/dashboard/tenders/s72-tender/compliance",
+      "screenshot": "uz-compliance.png",
+      "dom": {
+        "lang": "uz",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Boshqaruv markazi",
+          "English tender — مناقصة عربية — Тендер"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 19,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/documents')": 2,
+        "('GET', '/api/v1/tenders/s72-tender')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/compiled-text')": 2,
+        "('GET', '/api/v1/tenders/s72-tender/latest-analysis')": 2
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "uz",
+      "surface": "readiness",
+      "status": 200,
+      "final_path": "/dashboard/readiness-vault",
+      "screenshot": "uz-readiness.png",
+      "dom": {
+        "lang": "uz",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Boshqaruv markazi",
+          "Tayyorgarlik hujjatlari"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 11,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/vault/readiness')": 2,
+        "('GET', '/api/v1/meta/services')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "uz",
+      "surface": "settings",
+      "status": 200,
+      "final_path": "/dashboard/settings",
+      "screenshot": "uz-settings.png",
+      "dom": {
+        "lang": "uz",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Boshqaruv markazi",
+          "Kompaniya profili",
+          "Interfeys tili",
+          "Standart tahlil tili",
+          "Kompaniya",
+          "Bozorlar va xizmatlar"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 17,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/meta/services')": 2,
+        "('GET', '/api/v1/meta/geography')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/users/me/company')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ru",
+      "surface": "explorer",
+      "status": 200,
+      "final_path": "/dashboard/tenders?view=all",
+      "screenshot": "ru-explorer.png",
+      "dom": {
+        "lang": "ru",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Центр управления",
+          "Каталог тендеров"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 8,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ru",
+      "surface": "details",
+      "status": 200,
+      "final_path": "/dashboard/tenders/s72-tender",
+      "screenshot": "ru-details.png",
+      "dom": {
+        "lang": "ru",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Центр управления",
+          "English tender — مناقصة عربية — Тендер",
+          "Участие",
+          "Контекст проекта",
+          "Требования и документы",
+          "Анализ соответствия и готовность компании",
+          "Контакты по закупке",
+          "Подготовка заявки"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 11,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/s72-tender')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/details')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ru",
+      "surface": "my-tenders",
+      "status": 200,
+      "final_path": "/dashboard/my-tenders",
+      "screenshot": "ru-my-tenders.png",
+      "dom": {
+        "lang": "ru",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Центр управления",
+          "Мои тендеры",
+          "Original procurement title — do not translate"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 9,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ru",
+      "surface": "bid-preparation",
+      "status": 200,
+      "final_path": "/dashboard/bid-preparation",
+      "screenshot": "ru-bid-preparation.png",
+      "dom": {
+        "lang": "ru",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Центр управления",
+          "Подготовка заявки"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 9,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/proposals')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ru",
+      "surface": "compliance",
+      "status": 200,
+      "final_path": "/dashboard/tenders/s72-tender/compliance",
+      "screenshot": "ru-compliance.png",
+      "dom": {
+        "lang": "ru",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Центр управления",
+          "English tender — مناقصة عربية — Тендер"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 19,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/documents')": 2,
+        "('GET', '/api/v1/tenders/s72-tender')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/compiled-text')": 2,
+        "('GET', '/api/v1/tenders/s72-tender/latest-analysis')": 2
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ru",
+      "surface": "readiness",
+      "status": 200,
+      "final_path": "/dashboard/readiness-vault",
+      "screenshot": "ru-readiness.png",
+      "dom": {
+        "lang": "ru",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Центр управления",
+          "Документы готовности"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 11,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/meta/services')": 2,
+        "('GET', '/api/v1/vault/readiness')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ru",
+      "surface": "settings",
+      "status": 200,
+      "final_path": "/dashboard/settings",
+      "screenshot": "ru-settings.png",
+      "dom": {
+        "lang": "ru",
+        "dir": "ltr",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "Центр управления",
+          "Профиль компании",
+          "Язык интерфейса",
+          "Язык анализа по умолчанию",
+          "Компания",
+          "Рынки и услуги"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 17,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/meta/services')": 2,
+        "('GET', '/api/v1/meta/geography')": 2,
+        "('GET', '/api/v1/users/me/company')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ar",
+      "surface": "explorer",
+      "status": 200,
+      "final_path": "/dashboard/tenders?view=all",
+      "screenshot": "ar-explorer.png",
+      "dom": {
+        "lang": "ar",
+        "dir": "rtl",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "مركز القيادة",
+          "مستكشف المناقصات"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 8,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/explorer/tenders?view=all&limit=25&offset=0&status=open&sort=newest')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ar",
+      "surface": "details",
+      "status": 200,
+      "final_path": "/dashboard/tenders/s72-tender",
+      "screenshot": "ar-details.png",
+      "dom": {
+        "lang": "ar",
+        "dir": "rtl",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "مركز القيادة",
+          "English tender — مناقصة عربية — Тендер",
+          "المتابعة",
+          "سياق المشروع",
+          "المتطلبات والمستندات",
+          "الامتثال وجاهزية الشركة",
+          "جهات اتصال المشتريات",
+          "إعداد العطاء"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 11,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/s72-tender')": 2,
+        "('GET', '/api/v1/tenders/s72-tender/details')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ar",
+      "surface": "my-tenders",
+      "status": 200,
+      "final_path": "/dashboard/my-tenders",
+      "screenshot": "ar-my-tenders.png",
+      "dom": {
+        "lang": "ar",
+        "dir": "rtl",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "مركز القيادة",
+          "مناقصاتي",
+          "Original procurement title — do not translate"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 9,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/my-tenders?status=ACTIVE&sort=recently_updated&offset=0&limit=25')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ar",
+      "surface": "bid-preparation",
+      "status": 200,
+      "final_path": "/dashboard/bid-preparation",
+      "screenshot": "ar-bid-preparation.png",
+      "dom": {
+        "lang": "ar",
+        "dir": "rtl",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "مركز القيادة",
+          "إعداد العطاء"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 9,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/proposals')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ar",
+      "surface": "compliance",
+      "status": 200,
+      "final_path": "/dashboard/tenders/s72-tender/compliance",
+      "screenshot": "ar-compliance.png",
+      "dom": {
+        "lang": "ar",
+        "dir": "rtl",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "مركز القيادة",
+          "English tender — مناقصة عربية — Тендер"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 19,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/tenders/s72-tender')": 2,
+        "('GET', '/api/v1/tenders/s72-tender/documents')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/compiled-text')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1,
+        "('GET', '/api/v1/tenders/s72-tender/latest-analysis')": 2
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ar",
+      "surface": "readiness",
+      "status": 200,
+      "final_path": "/dashboard/readiness-vault",
+      "screenshot": "ar-readiness.png",
+      "dom": {
+        "lang": "ar",
+        "dir": "rtl",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "مركز القيادة",
+          "سجل الجاهزية"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 11,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/meta/services')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/vault/readiness')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    },
+    {
+      "locale": "ar",
+      "surface": "settings",
+      "status": 200,
+      "final_path": "/dashboard/settings",
+      "screenshot": "ar-settings.png",
+      "dom": {
+        "lang": "ar",
+        "dir": "rtl",
+        "width": 390,
+        "scroll": 390,
+        "headings": [
+          "مركز القيادة",
+          "ملف الشركة",
+          "لغة الواجهة",
+          "لغة التحليل الافتراضية",
+          "الشركة",
+          "الأسواق والخدمات"
+        ],
+        "unlabelled": 0
+      },
+      "browser_errors": [],
+      "backend_requests": {
+        "('GET', '/api/v1/users/me')": 17,
+        "('POST', '/api/v1/auth/refresh')": 4,
+        "('GET', '/api/v1/users/me/access-status')": 3,
+        "('GET', '/api/v1/meta/geography')": 2,
+        "('GET', '/api/v1/meta/services')": 2,
+        "('GET', '/api/v1/tenders/sources/refresh-status')": 1,
+        "('GET', '/api/v1/users/me/company')": 2,
+        "('GET', '/api/v1/tenders/sources/catalog')": 1,
+        "('GET', '/api/v1/tenders/sources/refresh-activity?cursor=c0&limit=25')": 1
+      },
+      "domain_writes": []
+    }
+  ]
+}

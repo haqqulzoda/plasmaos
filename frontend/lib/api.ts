@@ -94,7 +94,7 @@ api.interceptors.response.use(
     async (error) => {
         if (error.response?.status === 401 && typeof window !== 'undefined') {
             setApiAccessToken(null);
-            await signOut({ callbackUrl: '/login' });
+            await signOut({ callbackUrl: '/' });
         }
         return Promise.reject(error);
     }

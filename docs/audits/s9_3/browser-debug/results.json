@@ -1,0 +1,13 @@
+{
+  "method": "Real Chromium against local production Next.js and controlled HTTP API fixtures; backend security cases execute real route/dependency code with synthetic DB and signed assertion fixtures",
+  "cases": [
+    {
+      "case": "mobile/en/320/explorer",
+      "status": "FAIL",
+      "error": "{'tag': 'BUTTON', 'id': '', 'text': 'World BankRefresh', 'class': 'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-start text-xs text-zinc-200 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-60', 'left': -20.5625, 'right': 249.4375}"
+    }
+  ],
+  "external_requests": [],
+  "passed": 0,
+  "failed": 1
+}

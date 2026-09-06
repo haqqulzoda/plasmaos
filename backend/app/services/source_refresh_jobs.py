@@ -86,31 +86,8 @@ def validate_trigger_kind(trigger_kind: str) -> str:
     return normalized
 
 
-def _bounded_int(
-    options: Mapping[str, Any],
-    name: str,
-    *,
-    minimum: int,
-    maximum: int,
-) -> int | None:
-    if name not in options:
-        return None
-    value = options[name]
-    if isinstance(value, bool):
-        raise ValueError(f"{name} must be an integer")
-    parsed = int(value)
-    if not minimum <= parsed <= maximum:
-        raise ValueError(f"{name} must be between {minimum} and {maximum}")
-    return parsed
 
 
-def _strict_bool(options: Mapping[str, Any], name: str) -> bool | None:
-    if name not in options:
-        return None
-    value = options[name]
-    if not isinstance(value, bool):
-        raise ValueError(f"{name} must be a boolean")
-    return value
 
 
 def validate_source_refresh_options(

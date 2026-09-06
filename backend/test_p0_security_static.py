@@ -142,8 +142,8 @@ class P0SecurityStaticTests(unittest.TestCase):
         self.assertIn('"https://apietender.uzex.uz/api/common/TradeList"', tenders)
         self.assertIn('row.get("start_date")', tenders)
         self.assertIn('row.get("end_date")', tenders)
-        self.assertIn("await _apply_live_uzex_dates(tenders)", tenders)
-        self.assertIn("await _apply_live_uzex_dates([tender])", tenders)
+        self.assertNotIn("await _apply_live_uzex_dates(tenders)", tenders)
+        self.assertNotIn("await _apply_live_uzex_dates([tender])", tenders)
 
     def test_int42_removes_small_scale_uzex_from_customer_scope(self) -> None:
         scraper = read("app/core/scraper.py")

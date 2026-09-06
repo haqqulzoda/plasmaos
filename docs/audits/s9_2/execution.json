@@ -1,0 +1,1362 @@
+{
+  "sprint": "9.2",
+  "date": "2026-09-05",
+  "scope_status": "PASS",
+  "application_release_ready": false,
+  "baseline": {
+    "branch": "main",
+    "sha": "b121cda5b76911c59fdab5733d70aa6883908e9c",
+    "inventory_rebased_before_deletion": true,
+    "git_commit_created": false,
+    "pre_existing_9_1_files_preserved": [
+      "backend/scripts/audit_s9_1_architecture.py",
+      "backend/scripts/render_s9_1_audit.py",
+      "docs/S9_1_CROSS_PRODUCT_ARCHITECTURE_LEGACY_AUDIT.md",
+      "docs/audits/s9_1_acceptance.md",
+      "docs/audits/s9_1_browser/ar-bid-preparation.png",
+      "docs/audits/s9_1_browser/ar-compliance.png",
+      "docs/audits/s9_1_browser/ar-details.png",
+      "docs/audits/s9_1_browser/ar-explorer.png",
+      "docs/audits/s9_1_browser/ar-my-tenders.png",
+      "docs/audits/s9_1_browser/ar-readiness.png",
+      "docs/audits/s9_1_browser/ar-settings.png",
+      "docs/audits/s9_1_browser/en-bid-preparation.png",
+      "docs/audits/s9_1_browser/en-compliance.png",
+      "docs/audits/s9_1_browser/en-details.png",
+      "docs/audits/s9_1_browser/en-explorer.png",
+      "docs/audits/s9_1_browser/en-my-tenders.png",
+      "docs/audits/s9_1_browser/en-readiness.png",
+      "docs/audits/s9_1_browser/en-settings.png",
+      "docs/audits/s9_1_browser/results.json",
+      "docs/audits/s9_1_browser/ru-bid-preparation.png",
+      "docs/audits/s9_1_browser/ru-compliance.png",
+      "docs/audits/s9_1_browser/ru-details.png",
+      "docs/audits/s9_1_browser/ru-explorer.png",
+      "docs/audits/s9_1_browser/ru-my-tenders.png",
+      "docs/audits/s9_1_browser/ru-readiness.png",
+      "docs/audits/s9_1_browser/ru-settings.png",
+      "docs/audits/s9_1_browser/uz-bid-preparation.png",
+      "docs/audits/s9_1_browser/uz-compliance.png",
+      "docs/audits/s9_1_browser/uz-details.png",
+      "docs/audits/s9_1_browser/uz-explorer.png",
+      "docs/audits/s9_1_browser/uz-my-tenders.png",
+      "docs/audits/s9_1_browser/uz-readiness.png",
+      "docs/audits/s9_1_browser/uz-settings.png",
+      "docs/audits/s9_1_bundle.json",
+      "docs/audits/s9_1_execution.json",
+      "docs/audits/s9_1_inventory.json",
+      "docs/audits/s9_1_inventory.md",
+      "docs/audits/s9_1_npm_audit.json",
+      "docs/audits/s9_1_openapi.json",
+      "docs/audits/s9_1_query_measurements.json",
+      "docs/audits/s9_1_security_probes.json",
+      "frontend/scripts/audit-s9-1-browser.py"
+    ],
+    "pre_existing_9_1_query_probe_import_updated": true,
+    "pre_existing_modified_caches": "Three Python 3.14 caches included in authorized index removal; local bytes retained."
+  },
+  "changes": {
+    "probe_moves": 4,
+    "additional_discovered_probe": "scripts/test_extraction.py imported removed MODEL_NAME; moved to explicit extraction_probe.py with current diagnostic API arguments",
+    "proof_renames": 15,
+    "stale_test_nodes_repaired": 10,
+    "unused_refresh_validators_removed": 2,
+    "obsolete_result_adapter_removed": 1,
+    "giz_duplicate_functions_removed": 22,
+    "security_shadow_removed": true,
+    "canonical_security_ast_unchanged": true,
+    "removed_direct_dependencies": [
+      "jwt-decode",
+      "tailwind-merge"
+    ],
+    "unrelated_lock_package_records_changed": 0,
+    "caches_untracked": 53,
+    "current_tracked_caches": 0,
+    "translation_keys_deleted": 0,
+    "document_viewer_moved": false,
+    "http_routes_deleted": 0,
+    "migrations_added_deleted_or_squashed": 0
+  },
+  "validation": {
+    "broad_collection": {
+      "command": "cd backend && python scripts/verify_s9_2_collection.py",
+      "collected": 615,
+      "errors": 0,
+      "operational_side_effects_detected": 0,
+      "duplicate_test_basenames": 0,
+      "renamed_proof_modules_imported_under_guard": true,
+      "log": "collection.log"
+    },
+    "backend": {
+      "command": "cd backend && python -m pytest -q test_*.py",
+      "passed": 614,
+      "failed": 0,
+      "skipped": 1,
+      "subtests_passed": 100,
+      "warnings": 6,
+      "seconds": 52.38,
+      "excluded_files": [],
+      "skip_reason": "Known 481480 local storage fixture is not present",
+      "log": "backend.log"
+    },
+    "stale_nodes": {
+      "ids": "stale-nodes.json",
+      "passed": 10,
+      "failed": 0,
+      "log": "stale-nodes.log"
+    },
+    "probes": {
+      "command": "cd backend && python -m pytest -q test_probe_import_safety.py",
+      "passed": 1,
+      "subtests_passed": 4,
+      "log": "probe-imports.log",
+      "help_checks": "All four --help commands exit 0; no model probes invoked"
+    },
+    "connectors": {
+      "command": "bash backend/scripts/run_connector_regression_gate.sh",
+      "passed": 196,
+      "failed": 0,
+      "skipped": 1,
+      "subtests_passed": 6,
+      "seconds": 16.19,
+      "log": "connector.log"
+    },
+    "frontend": {
+      "environment": "Clean isolated current frontend copy; unchanged sibling backend files for static cross-repo checks; no private env copy",
+      "checks": [
+        {
+          "check": "ci",
+          "exit_code": 0,
+          "log": "frontend-ci.log"
+        },
+        {
+          "check": "lint",
+          "exit_code": 0,
+          "log": "frontend-lint.log"
+        },
+        {
+          "check": "audit:literals",
+          "exit_code": 0,
+          "log": "frontend-audit-literals.log"
+        },
+        {
+          "check": "typecheck",
+          "exit_code": 0,
+          "log": "frontend-typecheck.log"
+        },
+        {
+          "check": "test:project-context",
+          "exit_code": 0,
+          "log": "frontend-test-project-context.log"
+        },
+        {
+          "check": "test:localization-foundation",
+          "exit_code": 0,
+          "log": "frontend-test-localization-foundation.log"
+        },
+        {
+          "check": "test:s7-3-localization",
+          "exit_code": 0,
+          "log": "frontend-test-s7-3-localization.log"
+        },
+        {
+          "check": "test:s7-4-localization",
+          "exit_code": 0,
+          "log": "frontend-test-s7-4-localization.log"
+        },
+        {
+          "check": "test:s8-2-analysis-language",
+          "exit_code": 0,
+          "log": "frontend-test-s8-2-analysis-language.log"
+        },
+        {
+          "check": "audit:rtl",
+          "exit_code": 0,
+          "log": "frontend-audit-rtl.log"
+        },
+        {
+          "check": "test:s8-3-arabic-rtl",
+          "exit_code": 0,
+          "log": "frontend-test-s8-3-arabic-rtl.log"
+        },
+        {
+          "check": "test:admin",
+          "exit_code": 0,
+          "log": "frontend-test-admin.log"
+        },
+        {
+          "check": "test:my-tenders",
+          "exit_code": 0,
+          "log": "frontend-test-my-tenders.log"
+        },
+        {
+          "check": "test:bid-preparation",
+          "exit_code": 0,
+          "log": "frontend-test-bid-preparation.log"
+        },
+        {
+          "check": "test:engagement-workflow",
+          "exit_code": 0,
+          "log": "frontend-test-engagement-workflow.log"
+        },
+        {
+          "check": "test:tender-details",
+          "exit_code": 0,
+          "log": "frontend-test-tender-details.log"
+        },
+        {
+          "check": "test:tender-cleanup",
+          "exit_code": 0,
+          "log": "frontend-test-tender-cleanup.log"
+        },
+        {
+          "check": "test:explorer",
+          "exit_code": 0,
+          "log": "frontend-test-explorer.log"
+        },
+        {
+          "check": "test:sr3",
+          "exit_code": 0,
+          "log": "frontend-test-sr3.log"
+        },
+        {
+          "check": "test:hunter-retirement",
+          "exit_code": 0,
+          "log": "frontend-test-hunter-retirement.log",
+          "initial_failure": "Temporary checkout omitted sibling backend files read by this static test; copied those unchanged sources."
+        },
+        {
+          "check": "build",
+          "exit_code": 0,
+          "log": "frontend-build.log"
+        }
+      ],
+      "focused_checks": 19,
+      "clean_npm_ci": "PASS",
+      "production_build": "PASS",
+      "browser_scope": "No new browser run claimed; no product UI changes"
+    },
+    "alembic": {
+      "target": "127.0.0.1:56592/plasma_s05b4b_s92_audit",
+      "postgresql": "16.15",
+      "bootstrap": "PASS",
+      "heads": "PASS",
+      "current": "PASS",
+      "check": "PASS; no new upgrade operations",
+      "sole_head": "20260904_0001_s8_2_analysis_language",
+      "configured_existing_db": "NOT ACCESSED",
+      "shutdown_log": "disposable-shutdown.log",
+      "disposable_server_stopped": true
+    },
+    "semantic_preservation": {
+      "surviving_tender_definitions_ast_unchanged": 199,
+      "protected_files_unchanged": 182,
+      "proof_file_asts": "15 unchanged except renamed imports",
+      "evidence": "semantic-preservation.json"
+    },
+    "environment": {
+      "python": "3.12.3",
+      "node": "22.14.0",
+      "npm": "10.9.2",
+      "resolved_python_packages": "python-environment.txt",
+      "backend_requirements_unchanged": true
+    },
+    "initial_failures_resolved": [
+      "Original duplicate-basename mismatch reproduced before cleanup",
+      "Two first-pass replacement assertions corrected to actual catalog key/case; final ten pass",
+      "Broad collector exposed additional stale extraction MODEL_NAME import; moved/repaired diagnostic only",
+      "Temporary frontend static test lacked sibling backend files; checkout corrected; unchanged check passes"
+    ],
+    "final_artifact_checks": [
+      "31 report sections",
+      "90 acceptance rows",
+      "100 deletion/rename safety records",
+      "All local report/ledger/tool links resolve",
+      "No unclassified Git change",
+      "No tracked cache artifacts",
+      "Prior 9.1 artifact hashes retained except intentionally updated query-probe import",
+      "Changed/new Python files parse"
+    ]
+  },
+  "non_goals_preserved": {
+    "h01_h12_fixed": false,
+    "production_access_or_mutation": false,
+    "deployment": false,
+    "adb_recovery": false,
+    "ebrd_recovery": false,
+    "orm_or_table_deletion": false,
+    "compatibility_route_removal": false,
+    "scheduled_task_rename": false,
+    "private_env_edit": false,
+    "arabic_analysis_ungated": false,
+    "arabic_pdf_gate_removed": false
+  },
+  "h01_h12_carry_forward": {
+    "H01": "MANDATORY 9.3 RELEASE BLOCKER: Google bridge identity verification",
+    "H02": "MANDATORY 9.3 RELEASE BLOCKER: backend guards on legacy Tender reads",
+    "H03": "Passive GET source/document I/O",
+    "H04": "Bounded Explorer filtering",
+    "H05": "Upload limits/signature/cleanup",
+    "H06": "Stable errors/redacted logging",
+    "H07": "Credential/configuration exposure",
+    "H08": "Dependency advisory triage/reproducibility",
+    "H09": "Pagination/history performance",
+    "H10": "Production request amplification",
+    "H11": "Canonical sign-in/session recovery",
+    "H12": "Mobile clipping/overlap"
+  },
+  "manifest": [
+    {
+      "path": "backend/alembic/__pycache__/env.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/alembic/versions/__pycache__/14c7b4cac4ea_add_content_hash_and_analysis_id_.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/alembic/versions/__pycache__/20260227_0001_google_oauth_cutover.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/alembic/versions/__pycache__/27fc6790093d_add_tender_document_storage_fields.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/alembic/versions/__pycache__/619f79030fe7_add_dynamic_compliance_ontology_and_.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/alembic/versions/__pycache__/65c42c5b80fa_add_tenderrecommendation_table.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/alembic/versions/__pycache__/9f3d2f4b6a10_add_tender_sync_jobs_table.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/alembic/versions/__pycache__/ebccc6f00c82_add_dynamic_compliance_ontology_and_.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/__pycache__/__init__.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/__pycache__/main.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/__pycache__/__init__.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/__pycache__/deps.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/endpoints/__pycache__/__init__.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/endpoints/__pycache__/auth.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/endpoints/__pycache__/hunter.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/endpoints/__pycache__/proposals.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/endpoints/__pycache__/tenders.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/endpoints/__pycache__/users.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/endpoints/__pycache__/vault.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/endpoints/tenders.py",
+      "git_status": " M",
+      "classification": "GIZ duplicate closure and obsolete result adapter removal",
+      "bytes": 304249,
+      "sha256": "3e5906d85598ad2a0276d400317548d44e59a1c7973ccbc0785d9bb75d5405f8"
+    },
+    {
+      "path": "backend/app/api/routers/__pycache__/__init__.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/api/routers/__pycache__/audit.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/__pycache__/__init__.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/__pycache__/ai.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/__pycache__/ai_analyzer.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/__pycache__/celery_app.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/__pycache__/config.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/__pycache__/evaluator.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/__pycache__/parser.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/__pycache__/scraper.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/__pycache__/telegram.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/agents/__pycache__/hunter.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/security.py",
+      "git_status": " D",
+      "classification": "security mirror topology; canonical AST unchanged"
+    },
+    {
+      "path": "backend/app/core/security/__init__.py",
+      "git_status": " M",
+      "classification": "security mirror topology; canonical AST unchanged",
+      "bytes": 4917,
+      "sha256": "f2e3cf4e39fa982117e1365648009354adddaff92f3a9672d2042ade0336df4f"
+    },
+    {
+      "path": "backend/app/core/security/__pycache__/__init__.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/core/security/__pycache__/audit_trail.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/db/__pycache__/__init__.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/db/__pycache__/session.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/models/__pycache__/__init__.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/models/__pycache__/all_models.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/models/__pycache__/audit.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/models/__pycache__/base.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/models/__pycache__/company.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/models/__pycache__/taxonomy.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/models/__pycache__/user.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/schemas/__pycache__/__init__.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/schemas/__pycache__/audit.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/schemas/__pycache__/proposal.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/schemas/__pycache__/tender.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/schemas/__pycache__/vault.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/services/source_refresh_jobs.py",
+      "git_status": " M",
+      "classification": "unused refresh helpers",
+      "bytes": 13580,
+      "sha256": "97229f590192904434d833db69a4f0ad80077c4fe31273c817203d2b3f366258"
+    },
+    {
+      "path": "backend/app/workers/__pycache__/hunter_tasks.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/app/workers/__pycache__/tender_tasks.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/frontend_contracts.py",
+      "git_status": "??",
+      "classification": "static semantic/catalog test support",
+      "bytes": 1502,
+      "sha256": "c2c47158a1db09af22ec330a2b2eddc281de443d6b4baa03781a278348f7a9ef"
+    },
+    {
+      "path": "backend/scripts/README.md",
+      "git_status": "??",
+      "classification": "historical/operator tool classification",
+      "bytes": 8812,
+      "sha256": "fcc10d564fa966c35f1560ca9b12d5d19388a82cc942f78bf32401444bee3fa1"
+    },
+    {
+      "path": "backend/scripts/__pycache__/seed_taxonomy.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/scripts/__pycache__/test_evaluator.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/scripts/__pycache__/test_extraction.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/scripts/__pycache__/verify_vault_db.cpython-314.pyc",
+      "git_status": "D ",
+      "classification": "cache cleanup (index removal; local file retained)"
+    },
+    {
+      "path": "backend/scripts/audit_s9_1_query_probe.py",
+      "git_status": "??",
+      "classification": "pre-existing 9.1 tool: renamed proof import only",
+      "bytes": 5660,
+      "sha256": "3e97557fd7774133cd07ad488626b334b92bbe84ae78453d872bf970bb77c5e9"
+    },
+    {
+      "path": "backend/scripts/probes/README.md",
+      "git_status": "??",
+      "classification": "probe topology / explicit usage",
+      "bytes": 2038,
+      "sha256": "1baab5c832e059a101e0a254daa9370dbb63af756d6056e7604502ffac264782"
+    },
+    {
+      "path": "backend/scripts/probes/ai_probe.py",
+      "git_status": "??",
+      "classification": "probe topology / explicit usage",
+      "bytes": 1030,
+      "sha256": "34492f2b40ede039609a025138eefbc7a6ee31f6bb9461f97ad1fb57223521c2"
+    },
+    {
+      "path": "backend/scripts/probes/extraction_probe.py",
+      "git_status": "??",
+      "classification": "probe topology / explicit usage",
+      "bytes": 4480,
+      "sha256": "c4c3397b4be10bc0331ba4651c9870464f0d7866436157a0d4cd1f49fc6c409e"
+    },
+    {
+      "path": "backend/scripts/probes/tender_api_probe.py",
+      "git_status": "??",
+      "classification": "probe topology / explicit usage",
+      "bytes": 1020,
+      "sha256": "4ccca0d844a4ea62fb44a2531735ac16f3335911e6d329969b30bda691469aac"
+    },
+    {
+      "path": "backend/scripts/probes/uzbek_nlp_probe.py",
+      "git_status": "??",
+      "classification": "probe topology / explicit usage",
+      "bytes": 1250,
+      "sha256": "e598e8f1029de25e9337668fc9d9e2ccd18beebb07c5352bcfe1cf04420d6498"
+    },
+    {
+      "path": "backend/scripts/test_extraction.py",
+      "git_status": " D",
+      "classification": "probe topology / explicit usage"
+    },
+    {
+      "path": "backend/scripts/test_s1_1_project_foundation.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s2_1_compliance_ownership.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s2_2_analysis_version_foundation.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s2_2b_analysis_aggregate_concurrency.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s2_3_version_aware_compliance_reads.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s3_3_privileged_account_survivability.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s3_4_administrative_audit_hardening.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s3_5_admin_operational_ux_hardening.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s4_1_tender_engagement_foundation.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s4_2_my_tenders_list_experience.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s4_3_bid_preparation_reconciliation.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s4_4_tender_engagement_workflow_ux.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s5_2_tender_details_read_model.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s6_2_unified_explorer_backend.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/test_s8_2_analysis_language_migration.py",
+      "git_status": " M",
+      "classification": "renamed verification import reference",
+      "bytes": 8144,
+      "sha256": "5d07756befeb3aaa45fff6ef712eb4e1c6e03d04d70c84a4f579b45d6a23f52e"
+    },
+    {
+      "path": "backend/scripts/test_wb_project_enrichment_autodrain.py",
+      "git_status": " D",
+      "classification": "test topology / proof rename"
+    },
+    {
+      "path": "backend/scripts/verify_s1_1_project_foundation.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 16898,
+      "sha256": "9508f91bbaf8bf5654ce677af896aaeaeb0e3e69cff827be8307f27d018815cf"
+    },
+    {
+      "path": "backend/scripts/verify_s2_1_compliance_ownership.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 19637,
+      "sha256": "797bcf92596c3bd8ddda21a522eba0f0dd1fd0d533069caab6a2d71d4b15a560"
+    },
+    {
+      "path": "backend/scripts/verify_s2_2_analysis_version_foundation.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 35039,
+      "sha256": "df69e1052d88d15a04f955ed0db8becd311f2676198a423b814e9ad3ea881fbf"
+    },
+    {
+      "path": "backend/scripts/verify_s2_2b_analysis_aggregate_concurrency.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 25858,
+      "sha256": "4148620c34fa3bc5ca5382ca87da974e309351a694cada90da5d2fc4b12e6c90"
+    },
+    {
+      "path": "backend/scripts/verify_s2_3_version_aware_compliance_reads.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 12749,
+      "sha256": "b2e31f88353a6db6bafa52e560eb464035424dc4f04551e3df982c4c7b5511e2"
+    },
+    {
+      "path": "backend/scripts/verify_s3_3_privileged_account_survivability.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 14278,
+      "sha256": "ac7aef21b85598f23c4955b7860fd2661c405a03e54c1946bd6fa2998b79e676"
+    },
+    {
+      "path": "backend/scripts/verify_s3_4_administrative_audit_hardening.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 18021,
+      "sha256": "bda39dc573ecb56f94790ed3841042ec1fc358e3392dab4442a23c41d3b0722e"
+    },
+    {
+      "path": "backend/scripts/verify_s3_5_admin_operational_ux_hardening.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 16790,
+      "sha256": "be3dad09ed603c8db9660c06abfb64f8e55b43e9fca623f51e77f618d6ae815b"
+    },
+    {
+      "path": "backend/scripts/verify_s4_1_tender_engagement_foundation.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 20812,
+      "sha256": "09f530b191497f796e682789aca4f7c14181d6d23fe39501cc1d0e282801597d"
+    },
+    {
+      "path": "backend/scripts/verify_s4_2_my_tenders_list_experience.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 17190,
+      "sha256": "508c973892396f9aca39a3a71b373f8965487c42eab3ea8cfc1c14d454623f0e"
+    },
+    {
+      "path": "backend/scripts/verify_s4_3_bid_preparation_reconciliation.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 14445,
+      "sha256": "2ecf002b2625c9d4bcfbfc86bac72c1e8676ff8c7b4a571553d040a2a524b8ca"
+    },
+    {
+      "path": "backend/scripts/verify_s4_4_tender_engagement_workflow_ux.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 12742,
+      "sha256": "5412caf025b6be5d8873445db4692264025b717656913e647e04402a4858f209"
+    },
+    {
+      "path": "backend/scripts/verify_s5_2_tender_details_read_model.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 28854,
+      "sha256": "9ef7888ccd8333dba7b102d6bff91ddc87ee9f730a6c4ac7e6f442994fdb41ab"
+    },
+    {
+      "path": "backend/scripts/verify_s6_2_unified_explorer_backend.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 24133,
+      "sha256": "09bfaf8cdaf82c1fbec75ab3c1eb172794936e0526696a9d2ba95309e9c2fbb4"
+    },
+    {
+      "path": "backend/scripts/verify_s9_2_collection.py",
+      "git_status": "??",
+      "classification": "guarded collection tooling",
+      "bytes": 2130,
+      "sha256": "73c28c60e8ee255495e9b1b6b372d090a064b9414aa0f7715f3a5b12e57b8e07"
+    },
+    {
+      "path": "backend/scripts/verify_wb_project_enrichment_autodrain.py",
+      "git_status": "??",
+      "classification": "test topology / proof rename",
+      "bytes": 13643,
+      "sha256": "38e6d3c61468efd12be5ff0a42e78b0014378798fc5d5c6078e3c0730acdb634"
+    },
+    {
+      "path": "backend/test_ai.py",
+      "git_status": " D",
+      "classification": "probe topology / explicit usage"
+    },
+    {
+      "path": "backend/test_p0_2a_release_admin_repair.py",
+      "git_status": " M",
+      "classification": "security topology assertion update",
+      "bytes": 6343,
+      "sha256": "a1a9ba396319b2feabcb785d50c306701574931ab1cb26be63777c3435c4d21e"
+    },
+    {
+      "path": "backend/test_p0_3a_onboarding_access.py",
+      "git_status": " M",
+      "classification": "ten stale-node semantic repairs",
+      "bytes": 7044,
+      "sha256": "e787b6f0764a72c72252e80ef2061b97ddc202405b6777a1bbaa7ea9f837163f"
+    },
+    {
+      "path": "backend/test_p0_3b_source_refresh.py",
+      "git_status": " M",
+      "classification": "canonical source-result adapter tests",
+      "bytes": 9592,
+      "sha256": "00fef275f8a17915eccb570f14fa797e0b568d50f9a1f0ed21c5a965971daea0"
+    },
+    {
+      "path": "backend/test_probe_import_safety.py",
+      "git_status": "??",
+      "classification": "probe import-safety regression",
+      "bytes": 1782,
+      "sha256": "e1efb93bdcce199afddac936e132862296b650f7c8f2ec8396d99c5cd9cc07ee"
+    },
+    {
+      "path": "backend/test_s0_2_disabled_authorization.py",
+      "git_status": " M",
+      "classification": "security topology assertion update",
+      "bytes": 14762,
+      "sha256": "ee3eee59f3cb269fbabdbf8e4c325b5fd4abd51a34a79a62da4c6c1fdc54d46f"
+    },
+    {
+      "path": "backend/test_s1_admin_approval_queue.py",
+      "git_status": " M",
+      "classification": "ten stale-node semantic repairs",
+      "bytes": 3896,
+      "sha256": "8edc6dd2bb59db6cf16f2992ea1cc0e04ef9324ed0aca8829966765e921908d2"
+    },
+    {
+      "path": "backend/test_s2_1_readiness_vault.py",
+      "git_status": " M",
+      "classification": "ten stale-node semantic repairs",
+      "bytes": 6199,
+      "sha256": "79bb09c642d1c3dc48eb77af5aa6cb7c83f0a7f53ae825674da871e62b62db57"
+    },
+    {
+      "path": "backend/test_s2_2_geography.py",
+      "git_status": " M",
+      "classification": "ten stale-node semantic repairs",
+      "bytes": 5486,
+      "sha256": "7f6dbca11e7b0108c748e517d4e758d3d52d883ecbf803c5615f3a0c4d4bca41"
+    },
+    {
+      "path": "backend/test_s2_3_services.py",
+      "git_status": " M",
+      "classification": "ten stale-node semantic repairs",
+      "bytes": 6099,
+      "sha256": "164c099aa9a20f618bbbc11587b440e318abe4ef39505731bff8762d66924588"
+    },
+    {
+      "path": "backend/test_s2_4_readiness_admin.py",
+      "git_status": " M",
+      "classification": "ten stale-node semantic repairs",
+      "bytes": 4715,
+      "sha256": "d1a7fcbe56e9a17c8283c0c20ba87c342185afb87e92f164deacaadca85ffaba"
+    },
+    {
+      "path": "backend/test_s3_1_tender_explorer_filters.py",
+      "git_status": " M",
+      "classification": "ten stale-node semantic repairs",
+      "bytes": 4414,
+      "sha256": "2d5e8134e11aa7bbacc6fe24663e5c956269a3fba9078c5abc5011883b57e08c"
+    },
+    {
+      "path": "backend/test_s3_2_session_revocation_restore_security.py",
+      "git_status": " M",
+      "classification": "security topology assertion update",
+      "bytes": 9092,
+      "sha256": "10fd421063f38f3101fd65d7091fc8d295042388c856facd7425298e14249132"
+    },
+    {
+      "path": "backend/test_s4_4_workflow_postgresql.py",
+      "git_status": " M",
+      "classification": "renamed verification import reference",
+      "bytes": 645,
+      "sha256": "ac19232dd973b3c13a8466dbfe54a8ecff7de6b945722bd9f053513d51e26b41"
+    },
+    {
+      "path": "backend/test_s6_1_hunter_explorer_convergence_foundation.py",
+      "git_status": " M",
+      "classification": "ten stale-node semantic repairs",
+      "bytes": 8139,
+      "sha256": "98f412545e1f1df0f14a325bd5678e36f312ceee0e400a0f065134a9a1743f6b"
+    },
+    {
+      "path": "backend/test_tender_api.py",
+      "git_status": " D",
+      "classification": "probe topology / explicit usage"
+    },
+    {
+      "path": "backend/test_uzbek_nlp.py",
+      "git_status": " D",
+      "classification": "probe topology / explicit usage"
+    },
+    {
+      "path": "docs/S3_1_ADMIN_ACCOUNT_LIFECYCLE.md",
+      "git_status": " M",
+      "classification": "historical documentation: narrow path update or provenance note",
+      "bytes": 12202,
+      "sha256": "84b506440e75d12ec9dcbae7a12b54d21ed4534af48ddfe9306f82d6803e2c72"
+    },
+    {
+      "path": "docs/S4_4_TENDER_ENGAGEMENT_WORKFLOW_UX.md",
+      "git_status": " M",
+      "classification": "historical documentation: narrow path update or provenance note",
+      "bytes": 11489,
+      "sha256": "9f0bb785bd82a15cd3b710b74e62f1d54c02cb3bbe5cdd2ab86f1730e8678296"
+    },
+    {
+      "path": "docs/S9_2_LEGACY_CONTRACT_TEST_TOPOLOGY_CLEANUP.md",
+      "git_status": "??",
+      "classification": "Sprint 9.2 required report",
+      "bytes": 22180,
+      "sha256": "eb6c5e0a03a7ed6bfd2b9a0342bc0cab3fab52e0a4400daff634667c709e903e"
+    },
+    {
+      "path": "docs/SR_2_1_SEMANTIC_BATCH_TENDER_PERSISTENCE.md",
+      "git_status": " M",
+      "classification": "historical documentation: narrow path update or provenance note",
+      "bytes": 16151,
+      "sha256": "c8d802ace080ac6f44175d4864afff71250313c2af44fa08a649553fdeacbd44"
+    },
+    {
+      "path": "docs/WB_PROJECT_ENRICHMENT_AUTODRAIN_HOTFIX.md",
+      "git_status": " M",
+      "classification": "historical documentation: narrow path update or provenance note",
+      "bytes": 9531,
+      "sha256": "13616c94755517e9397fe1adeed65666736cb0dd508f0d37a393acc1cd741f60"
+    },
+    {
+      "path": "docs/audits/s9_2/acceptance.md",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 13350,
+      "sha256": "c5d46ca8c20a11b89100c50a17cbfdf22e8c84db1e3b5c82462a5026541c04c7"
+    },
+    {
+      "path": "docs/audits/s9_2/alembic-check.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 865,
+      "sha256": "4b517bbdff1c90834a0248eb588e761ca735c9de70996e9096eecebb32c8e8f4"
+    },
+    {
+      "path": "docs/audits/s9_2/alembic-current.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 318,
+      "sha256": "f14b90e18a344bb5f17e6d6313f86551ef18194fc1ad6a00a276d2ea2907082f"
+    },
+    {
+      "path": "docs/audits/s9_2/alembic-heads.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 44,
+      "sha256": "5ab7a4cff4fd512b4077ffec505ce932e0c1e8b2770287f0dab7be97f23430c2"
+    },
+    {
+      "path": "docs/audits/s9_2/backend.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 2412,
+      "sha256": "eda787ea5038e9d36b423e7fc0d512eaaaa0e02aeeadb629f16144cf91f61ba4"
+    },
+    {
+      "path": "docs/audits/s9_2/baseline-collection.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1629,
+      "sha256": "b9d25ed912efa00500276fc1fe5f0d58b54a18a633dfc6a73c7f5999ae3f3a51"
+    },
+    {
+      "path": "docs/audits/s9_2/bootstrap.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 587,
+      "sha256": "fc9ce0e748d8ebc43c6d51f4dd3ddbcdb6eb7c75b489333a934a06273fd63e03"
+    },
+    {
+      "path": "docs/audits/s9_2/collection.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 69453,
+      "sha256": "30cd911dfa64716d1b3266b2ef09f5ceb7de6ccf52ab74d964ff43aa429aafd8"
+    },
+    {
+      "path": "docs/audits/s9_2/connector.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 544,
+      "sha256": "fb40b2bdaf6770ffb99eb7238902bf4a4a7a6213183958659a134c7819d2b53e"
+    },
+    {
+      "path": "docs/audits/s9_2/deletion_proof.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 23798,
+      "sha256": "b506bd4517b9053bec6739fd0300753827217369d9d27762ce44b34de362965a"
+    },
+    {
+      "path": "docs/audits/s9_2/dependency-proof.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 167,
+      "sha256": "1aabd5c29566709dbb19d8fb67289c7023afd5de691514e227f9e7b7c09d3468"
+    },
+    {
+      "path": "docs/audits/s9_2/disposable-shutdown.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 56,
+      "sha256": "ca19178a35ab4153b75b494963b66ce8243e1b94c173107c87b44d09db23652d"
+    },
+    {
+      "path": "docs/audits/s9_2/execution.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 execution and manifest",
+      "sha256": null,
+      "note": "Self-hash omitted"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-audit-literals.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 365,
+      "sha256": "7e63d184c48492754692b1bb81ce1b73b8926593af271418ed026663c4fd2f31"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-audit-rtl.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 127,
+      "sha256": "d57789da81027518761f5275c4ff4b9c4d8a2e4daadf40e9877318cf803d096e"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-build.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1599,
+      "sha256": "ff3e428c365d32cc53f8e0975467ac9d54ed148b00538f21464156bf57be7fc8"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-ci.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 27,
+      "sha256": "9af5b641ee6ebaed06bd8b491ce307660f508069ed6292930b24ce0ca9acd4ec"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-lint.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 33,
+      "sha256": "596cb56788cfc0dfab4886fb07703457a292cd1e556aca9d7ab6a3620fa71873"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-results.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 2333,
+      "sha256": "dfdab8e425f4e5fd3ab57cee8e38062c42c2fa07b9550fd1266fb519a5a4ab61"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-admin.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1163,
+      "sha256": "6a445d35a9ac879d4f638f41ad39ea84e384df73b3da69e2d9800075bc95d559"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-bid-preparation.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1900,
+      "sha256": "9a29981cf4e0885a1f7c30f57e44103744f35f7e0fb91832029e1e188268a828"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-engagement-workflow.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1287,
+      "sha256": "e3da1f0e92e5049126d7a6caebd68cf8df434155aa2264d50c86402f9e8c4c2f"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-explorer.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1981,
+      "sha256": "2a94ced7a2f5d25e0ed265e3a3442d8122e975e8e3ac0039aea59b5edbc5ec56"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-hunter-retirement.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1305,
+      "sha256": "ffed83404dd950ce2ef23206e6e778c4954f9f0688a9110781b9718079e66c63"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-localization-foundation.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 3965,
+      "sha256": "95517521187c99a71170bf2a09c260ddc01e750f4df92f1f582d39ea9e8fb927"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-my-tenders.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1303,
+      "sha256": "1bb867db3e06b61c44b30167cfeea694317517d397f089ad5478693bb68432a1"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-project-context.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 3204,
+      "sha256": "efa353cea18f9fc31b1dc8a1eb1f90eefeb43ada4690a4f67817bfce5a050aa4"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-s7-3-localization.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 2159,
+      "sha256": "72031ecf8795ccbd918ea769240873ad9958c30594cca93a5e0beec268aaf722"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-s7-4-localization.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 2282,
+      "sha256": "ae9aeb9d47a33fefb2676c99c10d1153590cd9994b90390572817dc89d3b6291"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-s8-2-analysis-language.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1577,
+      "sha256": "9ec57c690fad5a54b0a1103d993c6ae77ec6286805fe30b6d4c340e115fbac2e"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-s8-3-arabic-rtl.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 3909,
+      "sha256": "6426aa7f7961d52f150669cdd10f205036083e4b82cdf7210de794d9e8f4de15"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-sr3.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 2580,
+      "sha256": "d7c82de36e6b34aff710103319d4740669cb8c228e03b83ba63b2535a1d3008a"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-tender-cleanup.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1847,
+      "sha256": "e87974cf2d0cfad9ee5d0294bfaefa2d672c5a2654d3ed8f7faaa7872e301aa9"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-tender-details.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 2625,
+      "sha256": "68fa632762e67731d3056626cf41e6f8013e313a1f5ded2fd04054de8cb453eb"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-typecheck.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 44,
+      "sha256": "6395c2028d2efb2e4992400755df02dac270564d1495c7f1c6aa81f48f24e940"
+    },
+    {
+      "path": "docs/audits/s9_2/legacy-references.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 54681,
+      "sha256": "729a71bdc25b3e130d63ea21078dbfe45e01ad0f3021c815e946a1e374591061"
+    },
+    {
+      "path": "docs/audits/s9_2/preflight.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 7323,
+      "sha256": "1d48f9ae4d4e7bbcaff18983fcc4c49e852e45bbfe43647ddc6b60709409c1c9"
+    },
+    {
+      "path": "docs/audits/s9_2/probe-cli-help.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1500,
+      "sha256": "15bac5d9dea4457fe8c86078d5d33be106e163263aae68f2a73b512f747fce37"
+    },
+    {
+      "path": "docs/audits/s9_2/probe-imports.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 113,
+      "sha256": "e53bc6b2f4a6bc1b8931c27181811899eae95b9e2264df0a8e6f66cad323bbbd"
+    },
+    {
+      "path": "docs/audits/s9_2/python-environment.txt",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1279,
+      "sha256": "450a251ff0772c9da37c42a651edf469dde09985f807ac7b0361280b706dbd70"
+    },
+    {
+      "path": "docs/audits/s9_2/rebased_inventory.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 784385,
+      "sha256": "5db8d90b144d006b954c56b8dffb2c127e685ed1a4c26137d5f312541a133494"
+    },
+    {
+      "path": "docs/audits/s9_2/renames.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 2357,
+      "sha256": "28a759e979fe580cc3c0a3b1d3f9debf5fef735d97e50680d37ccf3ce3798602"
+    },
+    {
+      "path": "docs/audits/s9_2/safety-ledger.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 59611,
+      "sha256": "1f14d28a720224fc674925054f3c58d13462f61438286224b3315078ad788770"
+    },
+    {
+      "path": "docs/audits/s9_2/safety-ledger.md",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 45049,
+      "sha256": "108ebc0ac132a453727a3eeb3de39d35b1386d85dd6683a4298b7e72560b3b7a"
+    },
+    {
+      "path": "docs/audits/s9_2/semantic-preservation.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 10164,
+      "sha256": "8a9cd338ce7b767119495402f552d107ec6a4aeec5cae62e0ff4ebe3efc7f58f"
+    },
+    {
+      "path": "docs/audits/s9_2/stale-nodes.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 1143,
+      "sha256": "f77e2023e6f639b1f36bf0cabb5e89d3a89dd08c157cc7a2ac6a56fc22301216"
+    },
+    {
+      "path": "docs/audits/s9_2/stale-nodes.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 99,
+      "sha256": "05fb18cb37287354077af336a5db69f226c19128bc9e19be752fd9c7980b6a91"
+    },
+    {
+      "path": "docs/audits/s9_2/tool-classification.json",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 12606,
+      "sha256": "6d9b0521af2e8e108bd53aef109cfc7d6841c0d966b4ea59fd67f1334f4ed04c"
+    },
+    {
+      "path": "docs/audits/s9_2/topology-focused.log",
+      "git_status": "??",
+      "classification": "Sprint 9.2 retained validation evidence",
+      "bytes": 100,
+      "sha256": "512f6fff855d4c31cb6e87a9bfbfd2248487d784b508692a86b20033f6c29835"
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "git_status": " M",
+      "classification": "unused direct dependencies only",
+      "bytes": 251553,
+      "sha256": "ea5178b7767b9eb383ac3bdf01de9458fdf3e2abf8547475708f3e0387e07d50"
+    },
+    {
+      "path": "frontend/package.json",
+      "git_status": " M",
+      "classification": "unused direct dependencies only",
+      "bytes": 2873,
+      "sha256": "0c50ec20601072139ff74066ee45eba1e3cd6b0e57975237a629e6b4ba8cb06f"
+    }
+  ],
+  "handoff": "Sprint 9.3 only after review; permanent CI/release gate and readiness/queue/failure diagnostics also deferred. No hardening implemented."
+}

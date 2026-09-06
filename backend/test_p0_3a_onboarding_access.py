@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from frontend_contracts import literal_call, translated
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
@@ -161,11 +162,13 @@ class OnboardingFrontendTests(TestCase):
         auth = (FRONTEND / "auth.ts").read_text()
 
         self.assertNotIn("window.location.reload", onboarding)
-        self.assertIn("Company profile submitted", onboarding)
-        self.assertIn("router.replace('/dashboard/pending-approval')", onboarding)
-        self.assertIn("Refresh approval status", pending)
-        self.assertIn("Access approved", pending)
-        self.assertIn("You do not need to submit the form again", pending)
+        self.assertEqual(translated(onboarding, "onboarding", "submittedTitle"), "Company profile submitted")
+        self.assertIn("setSubmitted(true)", onboarding)
+        literal_call(onboarding, "api.post", "/users/me/company/onboarding")
+        literal_call(onboarding, "router.replace", "/dashboard/pending-approval")
+        self.assertEqual(translated(pending, "auth", "refreshStatus"), "Refresh approval status")
+        self.assertEqual(translated(pending, "auth", "accessApproved"), "Access approved")
+        self.assertIn("You do not need to submit the form again", translated(pending, "auth", "pendingHelp"))
         self.assertIn("'/users/me/access-status'", layout)
         self.assertIn("await validateAndRotateBackendSession", auth)
         self.assertIn("await update()", onboarding)

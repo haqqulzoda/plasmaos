@@ -184,7 +184,7 @@ async def _enrich_adb_document_async(
                 failed.download_status = "failed"
                 failed.download_error = type(exc).__name__[:2000]
                 await failure_db.commit()
-        logger.exception("adb_document_enrichment_failed document_id=%s", document_uuid)
+        logger.error("operation_failed event=tender_tasks:187 error_type=%s", type(exc).__name__)
         raise
     finally:
         await engine.dispose()
@@ -369,7 +369,7 @@ async def _persist_sync_job_state(
             await sync_db.commit()
         except Exception:
             await sync_db.rollback()
-            logger.exception("Failed to persist sync state for job %s", job_id)
+            logger.error("operation_failed event=tender_tasks:372 error_type=%s", "unavailable")
 
 
 def _extract_file_path(file_url: str) -> str:
@@ -1217,12 +1217,7 @@ async def _process_tender_docs_async(
                             error_type=type(doc_exc).__name__,
                             error=doc_exc,
                         )
-                        logger.exception(
-                            "Tender document sync failed for tender_id=%s job_id=%s index=%s",
-                            tender_uuid,
-                            job_id,
-                            index,
-                        )
+                        logger.error("operation_failed event=tender_tasks:1220 error_type=%s", type(doc_exc).__name__)
                         continue
                     finally:
                         if docs_to_process:

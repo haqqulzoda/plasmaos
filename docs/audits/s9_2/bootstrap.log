@@ -1,0 +1,11 @@
+Target: postgresql://acer:***@127.0.0.1:56592/plasma_s05b4b_s92_audit
+Baseline SHA-256 verified: 8d34e4a5a57be2867c326b151ae6ef034cf34ab3dab02ad212996a6257396f7b
+Empty-database guard passed on PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1).
+{
+  "baseline_revision": "20260824_0002_s0_4c",
+  "downgrade_floor": "20260824_0002_s0_4c",
+  "final_revision": "20260904_0001_s8_2_analysis_language",
+  "snapshot_sha256": "8d34e4a5a57be2867c326b151ae6ef034cf34ab3dab02ad212996a6257396f7b",
+  "status": "completed",
+  "target": "postgresql://acer:***@127.0.0.1:56592/plasma_s05b4b_s92_audit"
+}

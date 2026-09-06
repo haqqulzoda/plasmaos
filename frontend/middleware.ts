@@ -24,6 +24,21 @@ function denyRequest(request: NextRequest) {
   return NextResponse.redirect(redirectUrl);
 }
 
+function unavailableResponse(request: NextRequest) {
+  const locale = request.cookies.get(UI_LOCALE_COOKIE_NAME)?.value ?? 'en';
+  const copy: Record<string, [string, string]> = {
+    en: ['Access verification is temporarily unavailable.', 'Retry'],
+    uz: ['Kirish huquqini tekshirish vaqtincha mavjud emas.', 'Qayta urinish'],
+    ru: ['Проверка доступа временно недоступна.', 'Повторить'],
+    ar: ['التحقق من الوصول غير متاح مؤقتًا.', 'إعادة المحاولة'],
+  };
+  const selected = copy[locale] ?? copy.en;
+  const lang = Object.hasOwn(copy, locale) ? locale : 'en';
+  return new NextResponse(`<!doctype html><html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${selected[0]}</title><body><main><h1>${selected[0]}</h1><a href="">${selected[1]}</a></main></body></html>`, {
+    status: 503, headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '5'},
+  });
+}
+
 export async function middleware(request: NextRequest) {
   if (isPublicPath(request.nextUrl.pathname)) {
     const requestHeaders = new Headers(request.headers);
@@ -47,6 +62,14 @@ export async function middleware(request: NextRequest) {
     return denyRequest(request);
   }
 
+  // Backend API routes enforce canonical authority themselves. The extra /me
+  // call per API request adds no authorization and amplifies page loads.
+  if (request.nextUrl.pathname.startsWith('/api/v1/')) {
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.delete(PERSISTED_UI_LOCALE_HEADER);
+    return NextResponse.next({request: {headers: requestHeaders}});
+  }
+
   try {
     const authorityResponse = await fetch(`${backendApiBase}/users/me`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -54,6 +77,7 @@ export async function middleware(request: NextRequest) {
       redirect: 'manual',
     });
     if (!authorityResponse.ok) {
+      if (authorityResponse.status >= 500) return unavailableResponse(request);
       return denyRequest(request);
     }
 
@@ -76,7 +100,7 @@ export async function middleware(request: NextRequest) {
     }
     return nextResponse;
   } catch {
-    return denyRequest(request);
+    return unavailableResponse(request);
   }
 }
 

@@ -1,0 +1,902 @@
+[
+  {
+    "target": "backend/scripts/test_s1_1_project_foundation.py \u2192 backend/scripts/verify_s1_1_project_foundation.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s2_1_compliance_ownership.py \u2192 backend/scripts/verify_s2_1_compliance_ownership.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s2_2_analysis_version_foundation.py \u2192 backend/scripts/verify_s2_2_analysis_version_foundation.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s2_2b_analysis_aggregate_concurrency.py \u2192 backend/scripts/verify_s2_2b_analysis_aggregate_concurrency.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s2_3_version_aware_compliance_reads.py \u2192 backend/scripts/verify_s2_3_version_aware_compliance_reads.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s3_3_privileged_account_survivability.py \u2192 backend/scripts/verify_s3_3_privileged_account_survivability.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s3_4_administrative_audit_hardening.py \u2192 backend/scripts/verify_s3_4_administrative_audit_hardening.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s3_5_admin_operational_ux_hardening.py \u2192 backend/scripts/verify_s3_5_admin_operational_ux_hardening.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s4_1_tender_engagement_foundation.py \u2192 backend/scripts/verify_s4_1_tender_engagement_foundation.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s4_2_my_tenders_list_experience.py \u2192 backend/scripts/verify_s4_2_my_tenders_list_experience.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s4_3_bid_preparation_reconciliation.py \u2192 backend/scripts/verify_s4_3_bid_preparation_reconciliation.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s4_4_tender_engagement_workflow_ux.py \u2192 backend/scripts/verify_s4_4_tender_engagement_workflow_ux.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s5_2_tender_details_read_model.py \u2192 backend/scripts/verify_s5_2_tender_details_read_model.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_s6_2_unified_explorer_backend.py \u2192 backend/scripts/verify_s6_2_unified_explorer_backend.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/scripts/test_wb_project_enrichment_autodrain.py \u2192 backend/scripts/verify_wb_project_enrichment_autodrain.py",
+    "risk": "MEDIUM",
+    "reason": "Distinct PostgreSQL proof, not duplicate root coverage",
+    "caller_and_framework_proof": "All import/path references migrated; framework pytest basename collision removed; no Celery registration",
+    "regression": "Guarded import of all verify modules; unchanged AST except imports; broad/root/real PostgreSQL workflow pass",
+    "external_compatibility": "Developer invocation renamed; old reports retain historical outcomes",
+    "rollback": "Reverse rename and associated imports together"
+  },
+  {
+    "target": "backend/test_ai.py \u2192 backend/scripts/probes/ai_probe.py",
+    "risk": "LOW",
+    "reason": "Live developer diagnostic, not pytest coverage",
+    "caller_and_framework_proof": "Only explicit main invokes work; no route/task/framework registration; extraction obsolete MODEL_NAME import repaired locally",
+    "regression": "Isolated import denies all dependency imports/open/chdir; four probes pass; broad collection clean",
+    "external_compatibility": "Explicit CLI usage documented; live model calls not executed",
+    "rollback": "Reverse move with prior source from baseline; restore old command only deliberately"
+  },
+  {
+    "target": "backend/test_tender_api.py \u2192 backend/scripts/probes/tender_api_probe.py",
+    "risk": "LOW",
+    "reason": "Live developer diagnostic, not pytest coverage",
+    "caller_and_framework_proof": "Only explicit main invokes work; no route/task/framework registration; extraction obsolete MODEL_NAME import repaired locally",
+    "regression": "Isolated import denies all dependency imports/open/chdir; four probes pass; broad collection clean",
+    "external_compatibility": "Explicit CLI usage documented; live model calls not executed",
+    "rollback": "Reverse move with prior source from baseline; restore old command only deliberately"
+  },
+  {
+    "target": "backend/test_uzbek_nlp.py \u2192 backend/scripts/probes/uzbek_nlp_probe.py",
+    "risk": "LOW",
+    "reason": "Live developer diagnostic, not pytest coverage",
+    "caller_and_framework_proof": "Only explicit main invokes work; no route/task/framework registration; extraction obsolete MODEL_NAME import repaired locally",
+    "regression": "Isolated import denies all dependency imports/open/chdir; four probes pass; broad collection clean",
+    "external_compatibility": "Explicit CLI usage documented; live model calls not executed",
+    "rollback": "Reverse move with prior source from baseline; restore old command only deliberately"
+  },
+  {
+    "target": "backend/scripts/test_extraction.py \u2192 backend/scripts/probes/extraction_probe.py",
+    "risk": "LOW",
+    "reason": "Live developer diagnostic, not pytest coverage",
+    "caller_and_framework_proof": "Only explicit main invokes work; no route/task/framework registration; extraction obsolete MODEL_NAME import repaired locally",
+    "regression": "Isolated import denies all dependency imports/open/chdir; four probes pass; broad collection clean",
+    "external_compatibility": "Explicit CLI usage documented; live model calls not executed",
+    "rollback": "Reverse move with prior source from baseline; restore old command only deliberately"
+  },
+  {
+    "target": "source_refresh_jobs.py::_bounded_int",
+    "risk": "LOW",
+    "reason": "Definition-only redundant validator",
+    "caller_and_framework_proof": "No same-module/cross-module/worker/dynamic callers; no decorators; registry owns option validation",
+    "regression": "SR2/SR3 and invalid options in passing root/connector gates",
+    "external_compatibility": "Private helper; no public contract removed",
+    "rollback": "Restore exact baseline definition"
+  },
+  {
+    "target": "source_refresh_jobs.py::_strict_bool",
+    "risk": "LOW",
+    "reason": "Definition-only redundant validator",
+    "caller_and_framework_proof": "No same-module/cross-module/worker/dynamic callers; no decorators; registry owns option validation",
+    "regression": "SR2/SR3 and invalid options in passing root/connector gates",
+    "external_compatibility": "Private helper; no public contract removed",
+    "rollback": "Restore exact baseline definition"
+  },
+  {
+    "target": "tenders.py::_normalized_source_result",
+    "risk": "LOW/MEDIUM",
+    "reason": "Obsolete test-only tuple adapter",
+    "caller_and_framework_proof": "Two test callers migrated; no runtime/task/route caller; canonical adapter retained",
+    "regression": "Counts, zero aliases, unavailable/parser failures and safe state tested",
+    "external_compatibility": "Public DTOs/runners unchanged",
+    "rollback": "Restore helper/import and reverse two test migrations together"
+  },
+  {
+    "target": "tenders.py::_giz_payload_looks_like_html",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_archive_limits_payload",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_official_listed_document_count",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_inner_source_url",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_file_url_for_source",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_zip_member_name",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_zip_member_is_symlink",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_archive_member_extension",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_member_storage_filename",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_relabel_parsed_text",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_upsert_inner_document",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_find_duplicate_document_by_sha",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_mark_document_failed",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_parse_stored_document",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_zip_member_rejection_reason",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_extract_supported_zip_members",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_update_giz_document_coverage",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_rejected_payload_content_type",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_giz_valid_file_signature",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_download_giz_document_into_storage",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_process_giz_documents_for_compliance",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "tenders.py::_compile_tender_text_from_documents",
+    "risk": "MEDIUM",
+    "reason": "Duplicate endpoint-local hydration closure",
+    "caller_and_framework_proof": "No incoming same-module edge from outside exact 22-name set; no decorators/dynamic/worker imports. Matching service names are separate live definitions",
+    "regression": "GIZ/archive/hydration/heavy-worker/status tests and connector gate pass; all 199 surviving Tender definitions AST-identical",
+    "external_compatibility": "Private dead helper; all HTTP routes and canonical GIZ service retained",
+    "rollback": "Restore entire exact closure and removed zipfile import from baseline"
+  },
+  {
+    "target": "backend/app/core/security.py",
+    "risk": "HIGH",
+    "reason": "AST-identical sibling shadowed by runtime package",
+    "caller_and_framework_proof": "Three static readers migrated; no direct-file loader/entrypoint/Celery usage found; canonical import name unchanged",
+    "regression": "Existing disabled/rejected/version/lifecycle/Admin/auth tests pass; package AST identical",
+    "external_compatibility": "No supported direct-file external contract found; public auth behavior unchanged",
+    "rollback": "Restore shadow file and static-reader expectations together"
+  },
+  {
+    "target": "frontend direct dependency jwt-decode",
+    "risk": "LOW",
+    "reason": "No tracked imports, dynamic strings, config/plugin or script use",
+    "caller_and_framework_proof": "Lockfile has no incoming dependency requirement; exactly two package nodes removed",
+    "regression": "npm ci + all 19 frontend checks + production build pass; unrelated lock records identical",
+    "external_compatibility": "No customer API/import contract affected",
+    "rollback": "Restore manifest and lockfile pair atomically"
+  },
+  {
+    "target": "frontend direct dependency tailwind-merge",
+    "risk": "LOW",
+    "reason": "No tracked imports, dynamic strings, config/plugin or script use",
+    "caller_and_framework_proof": "Lockfile has no incoming dependency requirement; exactly two package nodes removed",
+    "regression": "npm ci + all 19 frontend checks + production build pass; unrelated lock records identical",
+    "external_compatibility": "No customer API/import contract affected",
+    "rollback": "Restore manifest and lockfile pair atomically"
+  },
+  {
+    "target": "backend/alembic/__pycache__/env.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/alembic/versions/__pycache__/14c7b4cac4ea_add_content_hash_and_analysis_id_.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/alembic/versions/__pycache__/20260227_0001_google_oauth_cutover.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/alembic/versions/__pycache__/27fc6790093d_add_tender_document_storage_fields.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/alembic/versions/__pycache__/619f79030fe7_add_dynamic_compliance_ontology_and_.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/alembic/versions/__pycache__/65c42c5b80fa_add_tenderrecommendation_table.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/alembic/versions/__pycache__/9f3d2f4b6a10_add_tender_sync_jobs_table.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/alembic/versions/__pycache__/ebccc6f00c82_add_dynamic_compliance_ontology_and_.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/__pycache__/__init__.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/__pycache__/main.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/__pycache__/__init__.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/__pycache__/deps.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/endpoints/__pycache__/__init__.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/endpoints/__pycache__/auth.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/endpoints/__pycache__/hunter.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/endpoints/__pycache__/proposals.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/endpoints/__pycache__/tenders.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/endpoints/__pycache__/users.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/endpoints/__pycache__/vault.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/routers/__pycache__/__init__.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/api/routers/__pycache__/audit.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/__pycache__/__init__.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/__pycache__/ai.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/__pycache__/ai_analyzer.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/__pycache__/celery_app.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/__pycache__/config.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/__pycache__/evaluator.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/__pycache__/parser.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/__pycache__/scraper.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/__pycache__/telegram.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/agents/__pycache__/hunter.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/security/__pycache__/__init__.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/core/security/__pycache__/audit_trail.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/db/__pycache__/__init__.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/db/__pycache__/session.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/models/__pycache__/__init__.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/models/__pycache__/all_models.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/models/__pycache__/audit.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/models/__pycache__/base.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/models/__pycache__/company.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/models/__pycache__/taxonomy.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/models/__pycache__/user.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/schemas/__pycache__/__init__.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/schemas/__pycache__/audit.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/schemas/__pycache__/proposal.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/schemas/__pycache__/tender.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/schemas/__pycache__/vault.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/workers/__pycache__/hunter_tasks.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/app/workers/__pycache__/tender_tasks.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/scripts/__pycache__/seed_taxonomy.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/scripts/__pycache__/test_evaluator.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/scripts/__pycache__/test_extraction.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  },
+  {
+    "target": "backend/scripts/__pycache__/verify_vault_db.cpython-314.pyc",
+    "risk": "LOW",
+    "reason": "Generated interpreter cache",
+    "caller_and_framework_proof": "git ls-files exact scope; ignored local bytes retained; no source/task registration removed",
+    "regression": "After imports/tests: zero tracked cache paths; ignore rules unchanged",
+    "external_compatibility": "No source compatibility contract",
+    "rollback": "Restore index entry from baseline if deliberately required; local bytes never removed"
+  }
+]

@@ -107,7 +107,7 @@ class ReleaseAdminRepairTests(unittest.TestCase):
 
     def test_auth_reconciliation_bumps_sessions_and_records_activity(self) -> None:
         auth = read_backend("app/api/endpoints/auth.py")
-        security = read_backend("app/core/security.py")
+        security = read_backend("app/core/security/__init__.py")
         admin = read_backend("app/api/endpoints/admin.py")
 
         self.assertIn("record_admin_audit_event", auth)

@@ -1,0 +1,292 @@
+[
+  {
+    "path": "backend/add_company_columns.py",
+    "previous_path": null,
+    "classification": "Operator-dangerous; explicit target/intent only; not setup authority"
+  },
+  {
+    "path": "backend/add_financial_columns.py",
+    "previous_path": null,
+    "classification": "Operator-dangerous; explicit target/intent only; not setup authority"
+  },
+  {
+    "path": "backend/add_vault_profile_columns.py",
+    "previous_path": null,
+    "classification": "Operator-dangerous; explicit target/intent only; not setup authority"
+  },
+  {
+    "path": "backend/debug_auth.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/debug_dom.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/diagnose.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/init_db.py",
+    "previous_path": null,
+    "classification": "Operator-dangerous; explicit target/intent only; not setup authority"
+  },
+  {
+    "path": "backend/local_test_ai.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/local_test_parser.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/reset_db.py",
+    "previous_path": null,
+    "classification": "Operator-dangerous; explicit target/intent only; not setup authority"
+  },
+  {
+    "path": "backend/scripts/__pycache__/seed_taxonomy.cpython-314.pyc",
+    "previous_path": null,
+    "classification": "Operator-dangerous; explicit target/intent only; not setup authority"
+  },
+  {
+    "path": "backend/scripts/__pycache__/test_evaluator.cpython-314.pyc",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/__pycache__/test_extraction.cpython-314.pyc",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/__pycache__/verify_vault_db.cpython-314.pyc",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/audit_sr1_source_refresh.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/audit_sr2_1_semantic_batch.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/audit_sr2_2_source_refresh_orchestration.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/audit_sr2_3_connector_capability_document_decoupling.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/audit_sr2_4_refresh_activity_source_catalog_newness.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/bootstrap_database.py",
+    "previous_path": null,
+    "classification": "Canonical empty-disposable bootstrap; keep guards and immutable baseline"
+  },
+  {
+    "path": "backend/scripts/diff_reproducibility.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/enqueue_world_bank_project_enrichment.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/models_output.txt",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/purge_small_scale_uzex_tenders.py",
+    "previous_path": null,
+    "classification": "Operator-dangerous; explicit target/intent only; not setup authority"
+  },
+  {
+    "path": "backend/scripts/qa_s8_2_live_model_languages.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/report_analysis_aggregate_concurrency.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/report_world_bank_project_enrichment_backlog.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/run_connector_regression_gate.sh",
+    "previous_path": null,
+    "classification": "Maintained offline connector regression gate"
+  },
+  {
+    "path": "backend/scripts/run_s0_3_schema_data_preflight.py",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/seed_taxonomy.py",
+    "previous_path": null,
+    "classification": "Operator-dangerous; explicit target/intent only; not setup authority"
+  },
+  {
+    "path": "backend/scripts/test_evaluator.py",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/probes/extraction_probe.py",
+    "previous_path": "backend/scripts/test_extraction.py",
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "backend/scripts/test_s0_5b3_migration.py",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/test_s0_5b4_baseline.py",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/test_s0_5b5_drift.py",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s1_1_project_foundation.py",
+    "previous_path": "backend/scripts/test_s1_1_project_foundation.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/test_s1_2_project_enrichment.py",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s2_1_compliance_ownership.py",
+    "previous_path": "backend/scripts/test_s2_1_compliance_ownership.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s2_2_analysis_version_foundation.py",
+    "previous_path": "backend/scripts/test_s2_2_analysis_version_foundation.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s2_2b_analysis_aggregate_concurrency.py",
+    "previous_path": "backend/scripts/test_s2_2b_analysis_aggregate_concurrency.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s2_3_version_aware_compliance_reads.py",
+    "previous_path": "backend/scripts/test_s2_3_version_aware_compliance_reads.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s3_3_privileged_account_survivability.py",
+    "previous_path": "backend/scripts/test_s3_3_privileged_account_survivability.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s3_4_administrative_audit_hardening.py",
+    "previous_path": "backend/scripts/test_s3_4_administrative_audit_hardening.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s3_5_admin_operational_ux_hardening.py",
+    "previous_path": "backend/scripts/test_s3_5_admin_operational_ux_hardening.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s4_1_tender_engagement_foundation.py",
+    "previous_path": "backend/scripts/test_s4_1_tender_engagement_foundation.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s4_2_my_tenders_list_experience.py",
+    "previous_path": "backend/scripts/test_s4_2_my_tenders_list_experience.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s4_3_bid_preparation_reconciliation.py",
+    "previous_path": "backend/scripts/test_s4_3_bid_preparation_reconciliation.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s4_4_tender_engagement_workflow_ux.py",
+    "previous_path": "backend/scripts/test_s4_4_tender_engagement_workflow_ux.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s5_2_tender_details_read_model.py",
+    "previous_path": "backend/scripts/test_s5_2_tender_details_read_model.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_s6_2_unified_explorer_backend.py",
+    "previous_path": "backend/scripts/test_s6_2_unified_explorer_backend.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/test_s7_2_locale_migration.py",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/test_s8_2_analysis_language_migration.py",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_wb_project_enrichment_autodrain.py",
+    "previous_path": "backend/scripts/test_wb_project_enrichment_autodrain.py",
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/scripts/verify_vault_db.py",
+    "previous_path": null,
+    "classification": "Historical/focused verification; explicit invocation; retained sprint-specific assumptions"
+  },
+  {
+    "path": "backend/seed_tenders.py",
+    "previous_path": null,
+    "classification": "Operator-dangerous; explicit target/intent only; not setup authority"
+  },
+  {
+    "path": "frontend/scripts/audit-customer-literals.mjs",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "frontend/scripts/audit-rtl.mjs",
+    "previous_path": null,
+    "classification": "Explicit-use diagnostic/report/operator tooling; not an automatic setup step"
+  },
+  {
+    "path": "scripts/compose-release.sh",
+    "previous_path": null,
+    "classification": "Release operational wrapper; not a test; deployment outside 9.2"
+  }
+]

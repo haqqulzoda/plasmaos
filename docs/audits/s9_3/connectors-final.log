@@ -1,0 +1,4 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+Forensic compliance category checks passed.
+.....................................s................uu........................................................................................................uuuu.......................................
+196 passed, 1 skipped, 6 subtests passed in 23.51s

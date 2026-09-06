@@ -379,9 +379,7 @@ def _parse_strategy_response(
                 strict=False,
             )
         except ValidationError as exc:
-            logger.error(
-                "Strategy extraction schema validation failed: %s", exc
-            )
+            logger.error("operation_failed event=strategy_extractor:382 error_type=%s", type(exc).__name__)
             raise RuntimeError(
                 "Strategy Extractor: structured response validation failed."
             ) from exc
@@ -397,9 +395,7 @@ def _parse_strategy_response(
                 strict=False,
             )
         except ValidationError as exc:
-            logger.error(
-                "Strategy extraction JSON validation failed: %s", exc
-            )
+            logger.error("operation_failed event=strategy_extractor:400 error_type=%s", type(exc).__name__)
             raise RuntimeError(
                 "Strategy Extractor: JSON response validation failed."
             ) from exc

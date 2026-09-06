@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from frontend_contracts import translated
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
@@ -134,9 +135,13 @@ class S22GeographyTests(unittest.TestCase):
             self.assertIn(expected, geography)
 
         self.assertIn("useGeographyMeta", onboarding)
-        self.assertIn("Select all Central Asia", onboarding)
+        self.assertEqual(translated(onboarding, "onboarding", "selectCentralAsia"), "Select all Central Asia")
+        self.assertIn("geography.central_asia_countries", onboarding)
+        self.assertIn("target_countries: toggleValue", onboarding)
         self.assertIn("useGeographyMeta", settings)
-        self.assertIn("Select all Central Asia", settings)
+        self.assertEqual(translated(settings, "settings", "selectCentralAsia"), "Select all Central Asia")
+        self.assertIn("geography.central_asia_countries", settings)
+        self.assertIn("profile.target_countries", settings)
 
 
 if __name__ == "__main__":

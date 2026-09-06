@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from frontend_contracts import translated
 from pathlib import Path
 import unittest
 
@@ -46,10 +47,10 @@ class S24ReadinessAdminTests(unittest.TestCase):
             "filters.status",
             "filters.related_service",
             "filteredDocuments",
-            "labelForDocumentType",
-            "labelForDocumentStatus",
+            "documentTypeMessageKey(document.document_type)",
+            "documentStatusMessageKey(document.status)",
             "labelForService",
-            "labelForExpiryState",
+            "expiryMessageKey(expiry)",
             "optional_file_url: form.optional_file_url || null",
             "api.post<ReadinessDocument>",
             "api.put<ReadinessDocument>",
@@ -61,8 +62,10 @@ class S24ReadinessAdminTests(unittest.TestCase):
         settings_page = read("../frontend/app/dashboard/settings/page.tsx")
 
         self.assertIn("TargetSummary", settings_page)
-        self.assertIn("Approval:", settings_page)
-        self.assertIn("Pilot:", settings_page)
+        translated(settings_page, "settings", "approvalStatus", placeholder="status")
+        self.assertIn("status: accountStatusLabel(profile.approval_status)", settings_page)
+        translated(settings_page, "settings", "pilotStatus", placeholder="status")
+        self.assertIn("status: accountStatusLabel(profile.pilot_status)", settings_page)
         self.assertIn("labelForService", settings_page)
         self.assertIn("CENTRAL_ASIA_REGION", settings_page)
 

@@ -1,0 +1,145 @@
+[
+  {
+    "route": "/documents/{doc_id}/download",
+    "handler": "download_document",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "",
+    "handler": "list_tenders",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/details",
+    "handler": "get_tender_details",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}",
+    "handler": "get_tender",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/project",
+    "handler": "get_tender_project_context",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/decision-snapshot",
+    "handler": "get_tender_decision_snapshot",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/competitors",
+    "handler": "get_tender_competitors",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/compiled-text",
+    "handler": "get_tender_compiled_text",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/sources/catalog",
+    "handler": "get_source_catalog",
+    "guard": [
+      "Depends(require_approved_user)"
+    ]
+  },
+  {
+    "route": "/sources/refresh-status",
+    "handler": "get_source_refresh_status",
+    "guard": [
+      "Depends(require_approved_user)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/sources/refresh-activity",
+    "handler": "get_source_refresh_activity",
+    "guard": [
+      "Depends(require_approved_user)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/sync-status",
+    "handler": "get_sync_status",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/documents",
+    "handler": "get_tender_documents",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/latest-analysis",
+    "handler": "get_latest_analysis",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/analyses/{analysis_id}/versions",
+    "handler": "get_analysis_versions",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/analyses/{analysis_id}/versions/{version_number}",
+    "handler": "get_analysis_version_detail",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/compliance/export/pdf",
+    "handler": "export_compliance_pdf",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  },
+  {
+    "route": "/{tender_id}/overrides",
+    "handler": "get_risk_overrides",
+    "guard": [
+      "Depends(require_approved_pilot_access)",
+      "Depends(get_db)"
+    ]
+  }
+]

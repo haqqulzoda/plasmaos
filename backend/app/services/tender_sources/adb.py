@@ -479,12 +479,7 @@ def parse_adb_rss(
                 )
             )
         except (TypeError, ValueError) as exc:
-            logger.warning(
-                "adb_rss_item_rejected stage=parse item_index=%s "
-                "failure_class=%s retryable=false",
-                index,
-                type(exc).__name__,
-            )
+            logger.error("operation_failed event=adb:482 error_type=%s", type(exc).__name__)
     return payloads
 
 
@@ -562,7 +557,7 @@ def _pdf_text(pdf_bytes: bytes) -> str | None:
             for page in document[:MAX_CONTACT_PDF_PAGES]:
                 pages.append(page.get_text("text"))
     except Exception:
-        logger.exception("adb_pdf_text_extraction_failed")
+        logger.error("operation_failed event=adb:565 error_type=%s", "unavailable")
         return None
     text = "\n".join(pages)
     return text[:MAX_CONTACT_TEXT_CHARS] if text.strip() else None

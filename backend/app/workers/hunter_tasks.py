@@ -99,11 +99,7 @@ async def _run_hunter_sweep_async() -> dict[str, int]:
                             dispatched_docs.add(tender.id)
                             stats["documents_dispatched"] += 1
                         except Exception as exc:
-                            logger.error(
-                                "Failed to dispatch document processing for tender_id=%s: %s",
-                                tender.id,
-                                exc,
-                            )
+                            logger.error("operation_failed event=hunter_tasks:102 error_type=%s", type(exc).__name__)
 
                     if not tenders:
                         continue
@@ -120,11 +116,7 @@ async def _run_hunter_sweep_async() -> dict[str, int]:
                                 profile=profile,
                             )
                         except Exception:
-                            logger.exception(
-                                "Hunter evaluation failed for profile_id=%s batch_start=%s",
-                                profile.id,
-                                batch_start,
-                            )
+                            logger.error("operation_failed event=hunter_tasks:123 error_type=%s", "unavailable")
                             continue
 
                         batch_tender_ids = {tender.id for tender in batch}

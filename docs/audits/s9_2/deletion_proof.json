@@ -1,0 +1,757 @@
+{
+  "sha": "b121cda5b76911c59fdab5733d70aa6883908e9c",
+  "giz": {
+    "names": [
+      "_giz_payload_looks_like_html",
+      "_giz_archive_limits_payload",
+      "_giz_official_listed_document_count",
+      "_giz_inner_source_url",
+      "_giz_file_url_for_source",
+      "_giz_zip_member_name",
+      "_giz_zip_member_is_symlink",
+      "_giz_archive_member_extension",
+      "_giz_member_storage_filename",
+      "_giz_relabel_parsed_text",
+      "_giz_upsert_inner_document",
+      "_giz_find_duplicate_document_by_sha",
+      "_giz_mark_document_failed",
+      "_giz_parse_stored_document",
+      "_giz_zip_member_rejection_reason",
+      "_giz_extract_supported_zip_members",
+      "_update_giz_document_coverage",
+      "_giz_rejected_payload_content_type",
+      "_giz_valid_file_signature",
+      "_download_giz_document_into_storage",
+      "_process_giz_documents_for_compliance",
+      "_compile_tender_text_from_documents"
+    ],
+    "incoming_same_module_edges": [],
+    "registered_decorators": {
+      "_giz_payload_looks_like_html": [],
+      "_giz_archive_limits_payload": [],
+      "_giz_official_listed_document_count": [],
+      "_giz_inner_source_url": [],
+      "_giz_file_url_for_source": [],
+      "_giz_zip_member_name": [],
+      "_giz_zip_member_is_symlink": [],
+      "_giz_archive_member_extension": [],
+      "_giz_member_storage_filename": [],
+      "_giz_relabel_parsed_text": [],
+      "_giz_upsert_inner_document": [],
+      "_giz_find_duplicate_document_by_sha": [],
+      "_giz_mark_document_failed": [],
+      "_giz_parse_stored_document": [],
+      "_giz_zip_member_rejection_reason": [],
+      "_giz_extract_supported_zip_members": [],
+      "_update_giz_document_coverage": [],
+      "_giz_rejected_payload_content_type": [],
+      "_giz_valid_file_signature": [],
+      "_download_giz_document_into_storage": [],
+      "_process_giz_documents_for_compliance": [],
+      "_compile_tender_text_from_documents": []
+    },
+    "all_tracked_references": {
+      "_giz_payload_looks_like_html": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5710,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6274,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 162,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 745,
+          "kind": "reference"
+        }
+      ],
+      "_giz_archive_limits_payload": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5744,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6149,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 167,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 613,
+          "kind": "reference"
+        }
+      ],
+      "_giz_official_listed_document_count": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5755,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6100,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 178,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 564,
+          "kind": "reference"
+        }
+      ],
+      "_giz_inner_source_url": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5766,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5826,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 189,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 250,
+          "kind": "reference"
+        }
+      ],
+      "_giz_file_url_for_source": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5776,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5837,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 199,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 261,
+          "kind": "reference"
+        }
+      ],
+      "_giz_zip_member_name": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5784,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5991,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 207,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 445,
+          "kind": "reference"
+        }
+      ],
+      "_giz_zip_member_is_symlink": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5796,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5944,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 219,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 395,
+          "kind": "reference"
+        }
+      ],
+      "_giz_archive_member_extension": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5800,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5946,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5992,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 223,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 397,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 446,
+          "kind": "reference"
+        }
+      ],
+      "_giz_member_storage_filename": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5804,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6022,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 227,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 482,
+          "kind": "reference"
+        }
+      ],
+      "_giz_relabel_parsed_text": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5809,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5930,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 232,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 381,
+          "kind": "reference"
+        }
+      ],
+      "_giz_upsert_inner_document": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5817,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5993,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 240,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 447,
+          "kind": "reference"
+        }
+      ],
+      "_giz_find_duplicate_document_by_sha": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5864,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6053,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 288,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 513,
+          "kind": "reference"
+        }
+      ],
+      "_giz_mark_document_failed": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5888,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5907,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5914,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5917,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5927,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5967,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5971,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5979,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5984,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5987,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6007,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6010,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6047,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6083,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6085,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 319,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 348,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 356,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 359,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 371,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 378,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 421,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 425,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 433,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 438,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 441,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 461,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 468,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 507,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 545,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 547,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 692,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 716,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 727,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 743,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 755,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 767,
+          "kind": "reference"
+        }
+      ],
+      "_giz_parse_stored_document": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5893,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6016,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6078,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6330,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6337,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 333,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 475,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 538,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 820,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 837,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/test_giz_hydration_worker.py",
+          "line": 168,
+          "kind": "reference"
+        }
+      ],
+      "_giz_zip_member_rejection_reason": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5936,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6001,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 387,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 455,
+          "kind": "reference"
+        }
+      ],
+      "_giz_extract_supported_zip_members": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 5958,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6334,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 409,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 829,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/test_giz_hydration_worker.py",
+          "line": 208,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/test_giz_hydration_worker.py",
+          "line": 215,
+          "kind": "reference"
+        }
+      ],
+      "_update_giz_document_coverage": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6091,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6339,
+          "kind": "reference"
+        }
+      ],
+      "_giz_rejected_payload_content_type": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6159,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6230,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 623,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 697,
+          "kind": "reference"
+        }
+      ],
+      "_giz_valid_file_signature": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6168,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6280,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 632,
+          "kind": "definition"
+        },
+        {
+          "path": "backend/app/services/giz_document_hydration.py",
+          "line": 752,
+          "kind": "reference"
+        }
+      ],
+      "_download_giz_document_into_storage": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6189,
+          "kind": "definition"
+        }
+      ],
+      "_process_giz_documents_for_compliance": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6308,
+          "kind": "definition"
+        }
+      ],
+      "_compile_tender_text_from_documents": [
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6340,
+          "kind": "reference"
+        },
+        {
+          "path": "backend/app/api/endpoints/tenders.py",
+          "line": 6344,
+          "kind": "definition"
+        }
+      ]
+    },
+    "function_hashes": {
+      "_giz_payload_looks_like_html": "9ebd868696fcafa968470699fcdbdbcb482624a9ff5a5c94d715d7bdb21b675a",
+      "_giz_archive_limits_payload": "73c94cf5c604f1ffaa6df590f4e0879e0e22a3ad930783ee376862b77f74aec5",
+      "_giz_official_listed_document_count": "c53f7e9d0ef9f807a73e0095af623706e3bfd8b3d9b5b5ad11fcd7c29af02e51",
+      "_giz_inner_source_url": "28dd0e65db98882169d54712f71e12b807f6d7e725e97483e307e2754a330f39",
+      "_giz_file_url_for_source": "c729ef5127063235fdb692b7b70e030031f2a00218ee980594fc78128b0140b7",
+      "_giz_zip_member_name": "2b15a59f53b3953165baf8eb034000914bc6b02b94107f6341167a566f189e48",
+      "_giz_zip_member_is_symlink": "f7b900f19362f6622f7f81c2ddb6aac6d678fb3793fa043f2294a52bb7a9c412",
+      "_giz_archive_member_extension": "73e0ea8b1a2c56fc44ea5c407ef6455117de6e5bc87065f30910c1b0915c2c92",
+      "_giz_member_storage_filename": "050e9edead96651ba7e4bc70ab2a915c48f32ee059459618c96978be631b7cc8",
+      "_giz_relabel_parsed_text": "7d3917df5b7cae9b98686d0431266234de0bd20b93cf8096399c080ab677f7ee",
+      "_giz_upsert_inner_document": "0d7a8d7a08e63726690ef7fc53c655ce1756eac9983ac1d4ecb3d52fd50e1e83",
+      "_giz_find_duplicate_document_by_sha": "037d86cdb07181dc15bd050b0dafb013ae4df778832bf9bd6de1e554679ee972",
+      "_giz_mark_document_failed": "9255d18ffa763683281fa18685b3a5982f2e99a8575b0bd154795426ba835483",
+      "_giz_parse_stored_document": "9a6ca83e524ce66f36587fba009d5ab94bd24a483cfb02354684a7e97411519f",
+      "_giz_zip_member_rejection_reason": "4eed5544659bc02c085eefa6605724c3a7965e0cba218301504948bd7dcbdce4",
+      "_giz_extract_supported_zip_members": "dcf4ab9f95f0eaa1c45b7f81f1e6c78e7c5468bd6b1fae0221f75056e61b3ed2",
+      "_update_giz_document_coverage": "97538fd42d539fb847975cd5be888d19bfbba55f49b596fb56d642e2650878cf",
+      "_giz_rejected_payload_content_type": "c7843744fa0e7a5c57f2188654e146963854736e3ee0f73e3c375a64eadf8665",
+      "_giz_valid_file_signature": "f5b2b14efd0d508464454320f5010499056cdd67b6883b074b45e7e38c6709f7",
+      "_download_giz_document_into_storage": "fa16d983ba477988990c931338100ad6e69c0ecd0df6fe7865f9e873b2645b13",
+      "_process_giz_documents_for_compliance": "31991a0d2cb011c1299eb19d773f8c9c393694aaa26266d37be42006fb2ea248",
+      "_compile_tender_text_from_documents": "bbccd155694407d369357e92fbecbe461b697f6b91d3220731f33fa683b777a2"
+    }
+  },
+  "security_ast_equal": true,
+  "refresh_helpers": {
+    "post_cleanup_source_references": {
+      "_bounded_int": [],
+      "_strict_bool": [],
+      "_normalized_source_result": []
+    },
+    "pre_cleanup_evidence": "Rebased inventory and inspected definitions: validators had definitions only; normalized adapter was used only by two source-refresh test methods. No registered decorators, worker/task references or dynamic invocation found.",
+    "canonical_validation": "source_registry unchanged; validate_source_refresh_options still delegates",
+    "canonical_adapter_tests": "two migrated nodes plus count/zero/failure-state test; connector and maintained root suite pass"
+  },
+  "security": {
+    "ast_parity_before_removal": true,
+    "normal_import_resolution": "app.core.security package __init__.py, confirmed by existing runtime test",
+    "direct_file_readers_updated": [
+      "backend/test_s0_2_disabled_authorization.py",
+      "backend/test_p0_2a_release_admin_repair.py",
+      "backend/test_s3_2_session_revocation_restore_security.py"
+    ],
+    "dynamic_loader_result": "No security direct-file loader, task registration, distribution entrypoint, shell invocation or configured alternate import found in tracked source. Other importlib usages load migration/bootstrap/preflight scripts.",
+    "external_compatibility": "Canonical import path unchanged. No supported out-of-tree direct-file loader contract established; no public HTTP route removed.",
+    "after_removal_package_ast_equal_to_baseline": true
+  }
+}

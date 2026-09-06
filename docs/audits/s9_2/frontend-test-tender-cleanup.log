@@ -1,0 +1,59 @@
+
+> frontend@0.1.0 test:tender-cleanup
+> node --no-warnings --experimental-strip-types --test tests/tender-cleanup.test.mjs
+
+TAP version 13
+# Subtest: dead workspace and duplicate Tender components are removed
+ok 1 - dead workspace and duplicate Tender components are removed
+  ---
+  duration_ms: 3.464304
+  ...
+# Subtest: legacy lists and workspace are permanent read-only redirects
+ok 2 - legacy lists and workspace are permanent read-only redirects
+  ---
+  duration_ms: 1.302335
+  ...
+# Subtest: legacy bid detail validates only an owned Proposal ID
+ok 3 - legacy bid detail validates only an owned Proposal ID
+  ---
+  duration_ms: 0.946645
+  ...
+# Subtest: Bid Preparation passive effects read persisted state and never synchronize
+ok 4 - Bid Preparation passive effects read persisted state and never synchronize
+  ---
+  duration_ms: 1.706331
+  ...
+# Subtest: Bid Preparation mutations remain explicit event handlers
+ok 5 - Bid Preparation mutations remain explicit event handlers
+  ---
+  duration_ms: 1.389006
+  ...
+# Subtest: canonical cross-surface links use the correct identifiers
+ok 6 - canonical cross-surface links use the correct identifiers
+  ---
+  duration_ms: 0.473597
+  ...
+# Subtest: canonical navigation and runtime copy omit obsolete product terminology
+ok 7 - canonical navigation and runtime copy omit obsolete product terminology
+  ---
+  duration_ms: 4.883794
+  ...
+# Subtest: dead Decision Snapshot and competitor client contracts are removed
+ok 8 - dead Decision Snapshot and competitor client contracts are removed
+  ---
+  duration_ms: 0.624009
+  ...
+# Subtest: all six canonical Tender Details anchors remain present
+ok 9 - all six canonical Tender Details anchors remain present
+  ---
+  duration_ms: 1.237757
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 302.585634

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from frontend_contracts import translated
 from pathlib import Path
 import unittest
 
@@ -66,7 +67,9 @@ class S31TenderExplorerFilterStaticTests(unittest.TestCase):
 
         self.assertIn("CENTRAL_ASIA_COUNTRIES", explorer)
         self.assertIn("DEFAULT_SERVICE_OPTIONS", explorer)
-        self.assertIn("Central Asia", explorer)
+        self.assertEqual(translated(explorer, "explorer", "centralAsia"), "Central Asia")
+        self.assertIn('localizeTaxonomyValue("country", country, tCommon)', explorer)
+        self.assertIn('localizeTaxonomyValue("service", service.value, tCommon)', explorer)
         for expected in (
             "Uzbekistan",
             "Kazakhstan",

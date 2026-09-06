@@ -2,7 +2,7 @@
 # Plasma AI — Backend Dockerfile
 # Base: Playwright image (includes browsers)
 # ============================================
-FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
+FROM mcr.microsoft.com/playwright/python:v1.62.0-noble
 
 WORKDIR /app
 
@@ -12,9 +12,8 @@ ENV PLASMA_BUILD_SHA=$PLASMA_BUILD_SHA
 ENV PLASMA_BUILD_TIME=$PLASMA_BUILD_TIME
 
 # 1. Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir uvicorn gunicorn
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir -c constraints.txt -r requirements.txt
 
 # 2. Ensure Playwright browsers match the installed Python package
 RUN playwright install chromium

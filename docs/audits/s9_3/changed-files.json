@@ -1,0 +1,1395 @@
+{
+  "comparison": "Accepted S9.2 baseline hashes, not Git HEAD; self hashes intentionally omitted",
+  "files": [
+    {
+      "path": ".env.example",
+      "status": "added",
+      "sha256": "3c8c090b4181cb4a772e706c657fe7d236c13e0e51d87373c68fbc52ef8f22d0"
+    },
+    {
+      "path": ".github/workflows/release-gate.yml",
+      "status": "added",
+      "sha256": "7cd035fdba013a585b078f2503d11d68852445085ab884fe82305de94d9d07fa"
+    },
+    {
+      "path": "backend/Dockerfile",
+      "status": "modified",
+      "sha256": "f22eb5d428d67525de05ee3c1665a880a55c43f920fd7f8a00415e6c42a2fa4e"
+    },
+    {
+      "path": "backend/app/api/endpoints/admin.py",
+      "status": "modified",
+      "sha256": "661055a16979f6774a3e8c1e82a4fa6977178acb4f453e0b809d141b8afb7e31"
+    },
+    {
+      "path": "backend/app/api/endpoints/auth.py",
+      "status": "modified",
+      "sha256": "695ae5c6146cf5ce6c0540851b18a1a7af085a899d6812e10107382a7a1a582b"
+    },
+    {
+      "path": "backend/app/api/endpoints/operations.py",
+      "status": "added",
+      "sha256": "d17ffc16066602fb02c0a14a448dfbc289ad584f3792d82418f7521638a8ea05"
+    },
+    {
+      "path": "backend/app/api/endpoints/proposals.py",
+      "status": "modified",
+      "sha256": "c89b64bca7b4231a852c356625a8571eac75f518c981284c66d833f38cb29606"
+    },
+    {
+      "path": "backend/app/api/endpoints/tenders.py",
+      "status": "modified",
+      "sha256": "4ed95402390df08e1982ca180ace553fed4129e42fbe21e411b022632c594e92"
+    },
+    {
+      "path": "backend/app/api/endpoints/vault.py",
+      "status": "modified",
+      "sha256": "d530809d2b5cef44e1ebccf9e09de04d44b4841893c9457372f95de3e53ee7b1"
+    },
+    {
+      "path": "backend/app/api/routers/audit.py",
+      "status": "modified",
+      "sha256": "56b41f90b5c8d2e67ccfff681f6deda66f1d6dbd9f8368281e976bdd9da359f0"
+    },
+    {
+      "path": "backend/app/core/agents/requirement_extractor.py",
+      "status": "modified",
+      "sha256": "8c865a35f6717f424e77e04adb2ea0b6d8eb17836db401130c5b380ba65fdd96"
+    },
+    {
+      "path": "backend/app/core/agents/strategy_extractor.py",
+      "status": "modified",
+      "sha256": "d7751b53cd238dcdecbf8f8182d14d4d97f72035ef414851a588304e0be0ff5d"
+    },
+    {
+      "path": "backend/app/core/ai.py",
+      "status": "modified",
+      "sha256": "98ae8b763ffb3f7c72a67b87484a24cb23f6b2e877989a2c5351bdf894ee153d"
+    },
+    {
+      "path": "backend/app/core/ai_analyzer.py",
+      "status": "modified",
+      "sha256": "a6c8e936bf2c10094f5188e4c618cc869dea88312814c89a7b362ce1916ef0b2"
+    },
+    {
+      "path": "backend/app/core/auth_bridge.py",
+      "status": "added",
+      "sha256": "7996e9c3fd25ec37439a1c680735fe7570680de5c086f0587d08b81413afb6b9"
+    },
+    {
+      "path": "backend/app/core/config.py",
+      "status": "modified",
+      "sha256": "7a0205b55ef213be70264d886e118f29126f4f5b76fe38f6d332af562d2c4f9f"
+    },
+    {
+      "path": "backend/app/core/http_hardening.py",
+      "status": "added",
+      "sha256": "e9a6d20ddb4651862c91971b723d151a693cfda1a4e174ec9106203db6540db8"
+    },
+    {
+      "path": "backend/app/core/pagination.py",
+      "status": "added",
+      "sha256": "06f61911d66850388637d902bc469efb79d12f48370d8f6ae32c0ae68b16effc"
+    },
+    {
+      "path": "backend/app/core/parser.py",
+      "status": "modified",
+      "sha256": "9f74c1daf2643211db15602d85fff9dbfacdcfc9ec5ac1607a2e7f38d1fd9df0"
+    },
+    {
+      "path": "backend/app/core/probe_urls.py",
+      "status": "added",
+      "sha256": "1643daee6d1f1c405fae9f0fd3228d93a4faea64843c1351f5fb41b39fbd7625"
+    },
+    {
+      "path": "backend/app/core/scraper.py",
+      "status": "modified",
+      "sha256": "03c49dd296f327decb4bd0970530049729e30c3f79f5afb3e9857994ff25a7c3"
+    },
+    {
+      "path": "backend/app/core/upload_model.py",
+      "status": "added",
+      "sha256": "8fd831608c4f06cdb735491e621afcd2631ec9fee517653794cd0bbdb001661a"
+    },
+    {
+      "path": "backend/app/core/upload_parser.py",
+      "status": "added",
+      "sha256": "cd8cd39817f8ff73add39301a3866d45d5068f30c0f16033750db1454441fde8"
+    },
+    {
+      "path": "backend/app/core/uploads.py",
+      "status": "added",
+      "sha256": "1321bcbc9c0ca5e3f99aefb58d26f8784d7f69114e025a6f5c923605b3ceff5d"
+    },
+    {
+      "path": "backend/app/main.py",
+      "status": "modified",
+      "sha256": "ea95bdac579c3abeb5571a9efc9aeed8a791448371779fbe87569fcb178a5513"
+    },
+    {
+      "path": "backend/app/services/analysis_versions.py",
+      "status": "modified",
+      "sha256": "2abe5ad345a9c243c09a215c59d11b4c53eb4d5db32887df66de4b06a6df328e"
+    },
+    {
+      "path": "backend/app/services/explorer.py",
+      "status": "modified",
+      "sha256": "2fbd47311ee6e560692e347fa273a33bc6bbbc798e308ff882bd35efe611cc6d"
+    },
+    {
+      "path": "backend/app/services/giz_document_hydration.py",
+      "status": "modified",
+      "sha256": "8fa71851416319eb0fe83c4eb9b4245cc4e156442e6c499ce4595a4fccb93d28"
+    },
+    {
+      "path": "backend/app/services/project_enrichment.py",
+      "status": "modified",
+      "sha256": "227fdb96c336bd2b60bb75f1aaeb7d83bbdf2c4946c6a541f5db6b78565a6474"
+    },
+    {
+      "path": "backend/app/services/tender_sources/adb.py",
+      "status": "modified",
+      "sha256": "34bbe0345542a792e335567f5c2e90441d521e8206540617ef6eb3b12a358027"
+    },
+    {
+      "path": "backend/app/services/tender_sources/ebrd.py",
+      "status": "modified",
+      "sha256": "d7013c78d6683ef8842f63dc031e58753fb2579c35d9007e010bd35fa7d29770"
+    },
+    {
+      "path": "backend/app/services/tender_sources/giz.py",
+      "status": "modified",
+      "sha256": "b97b50d14ade25ff3eb5a52bd330dc61a69de63c3d6ed228051b5bf314f80207"
+    },
+    {
+      "path": "backend/app/workers/hunter_tasks.py",
+      "status": "modified",
+      "sha256": "3c37075538ce36bdf6f1fb41112fb79541f2fa95aa42d581b4d8ffd7f8fd1fe2"
+    },
+    {
+      "path": "backend/app/workers/source_refresh_tasks.py",
+      "status": "modified",
+      "sha256": "627b340a71ba9a11c2780150afe73aa626ab2befe663c4b773599487e2ef089b"
+    },
+    {
+      "path": "backend/app/workers/tender_tasks.py",
+      "status": "modified",
+      "sha256": "9de136d7d5defadf7067db803443a97a250c42f6329ca991e96fbd6b4bfdab97"
+    },
+    {
+      "path": "backend/constraints.txt",
+      "status": "added",
+      "sha256": "c54895f0246dac73146975420aa6ee99b57e4519a93aae590cb09fd3ff88872e"
+    },
+    {
+      "path": "backend/requirements-test.txt",
+      "status": "added",
+      "sha256": "64f9e9032c56dae0b16598b50b8eb7d13e8a81e398808070953d3891caf889a6"
+    },
+    {
+      "path": "backend/requirements.txt",
+      "status": "modified",
+      "sha256": "7d532fd2dc90a6cd431c68d5b22addec4f15afa6454d3238ccab34991145b8c5"
+    },
+    {
+      "path": "backend/scripts/release_test_target.py",
+      "status": "added",
+      "sha256": "9c6b0de6c744d96d20175cc545885125360ce33c4b94ccbd571e705122b8da6b"
+    },
+    {
+      "path": "backend/scripts/verify_release_migrations.py",
+      "status": "added",
+      "sha256": "7dbb5ef5329e9ae49b1790d6833d9a28d0bb4850e6199d2e88b42364db83a10f"
+    },
+    {
+      "path": "backend/scripts/verify_release_scale.py",
+      "status": "added",
+      "sha256": "e3ed2cd005b472fcef8d82847790c6854266885d9fc0a456531d54b2b4efa6dc"
+    },
+    {
+      "path": "backend/test_p0_security_static.py",
+      "status": "modified",
+      "sha256": "23f78ba9ff118901b58ea28949d0a654f8ba54f82720d730359784ef9e90f386"
+    },
+    {
+      "path": "backend/test_release_config.py",
+      "status": "added",
+      "sha256": "4148f5eff3f4c19b990ed8ba94946e90985dfb429d620293b131e29f49e140b9"
+    },
+    {
+      "path": "backend/test_release_reads.py",
+      "status": "added",
+      "sha256": "d166c541c1445bfb094fac36c83079f251ecc22a17503e9c6d2eb95387b05e3d"
+    },
+    {
+      "path": "backend/test_release_runtime.py",
+      "status": "added",
+      "sha256": "7fa58f14d315620176d1759f11f5465a61879df1e43026ad7909609a11349d9a"
+    },
+    {
+      "path": "backend/test_release_security.py",
+      "status": "added",
+      "sha256": "69f54293879ccafdf9498cf02343ae0bc1882a1ccb263cd2987409e848eb706f"
+    },
+    {
+      "path": "backend/test_release_uploads.py",
+      "status": "added",
+      "sha256": "34a45368ba76582e4ea0456149e1a2145df5242450c5e5dadd41c79335b1ef73"
+    },
+    {
+      "path": "backend/test_s0_2_disabled_authorization.py",
+      "status": "modified",
+      "sha256": "0fc86c945bfab4d74a8a043d23a573af7f167512b0d92f11ba4f46a7f83ad8cd"
+    },
+    {
+      "path": "backend/test_s3_1_admin_account_lifecycle.py",
+      "status": "modified",
+      "sha256": "1ec3324bdd1324aaaad42d6212db2ed5ebf5d69a2bc1d567711f4c62609fb8ec"
+    },
+    {
+      "path": "backend/test_s4_2_my_tenders_list_experience.py",
+      "status": "modified",
+      "sha256": "3a04168dab9eb06a947a17ac7f83353d1eb0371370d4515e94993f2970aecef8"
+    },
+    {
+      "path": "backend/test_tender_document_status.py",
+      "status": "modified",
+      "sha256": "22b4f6b74f5001514191727fa26bbbd8e37980a19150d8030702c7a7660e2ed6"
+    },
+    {
+      "path": "docker-compose.yml",
+      "status": "modified",
+      "sha256": "a5e7665ac2134cf06fdc5214bfea3e378c44426f49b772047aa5a8f1bad9128a"
+    },
+    {
+      "path": "docs/S9_3_RELEASE_HARDENING.md",
+      "status": "added",
+      "sha256": "34ad7bd04f64ebd0990bfb0f004b8ee9acdce420fb78ae6e1567589b3ed0fd52"
+    },
+    {
+      "path": "docs/audits/s9_1_acceptance.md",
+      "status": "added",
+      "sha256": "9c01b30ece3955bbda841bab5d559e088317c8535613d1192a76e13f76f8180e"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-bid-preparation.png",
+      "status": "added",
+      "sha256": "231768bbce5259feac2718da2130a8d33769f5ff5d607c3f54a15eeef1b75449"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-compliance.png",
+      "status": "added",
+      "sha256": "18836eddebe1bcce397399b1495e78f915047d17133bd5218344c2ea0a9c3af2"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-details.png",
+      "status": "added",
+      "sha256": "9c2d7453c92c0ff33478a5a1c3476eda9229fe3774be3eb0cae5e92f92ad56cb"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-explorer.png",
+      "status": "added",
+      "sha256": "8d810a114066a1f70dd3d2bfb35324805cd6c8980ea1cdacf9bfd0b6bff20094"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-my-tenders.png",
+      "status": "added",
+      "sha256": "2045d7eb1ff1b6b56019f9fda7a70cc087f13219499009a524797685ede46021"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-readiness.png",
+      "status": "added",
+      "sha256": "db7b6c1a5ebaf5c6a815c6e742f0f495b09ffbeb3932fe7bbe18b8fe5e64505b"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ar-settings.png",
+      "status": "added",
+      "sha256": "eb436560f5d6308ad2115fc5d2d9c0acd24b93912d5d0035c3166bc1e3e2ccf4"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-bid-preparation.png",
+      "status": "added",
+      "sha256": "9a48173d81818b38de87ca3780245a5aeb62377705a1723e2e5bd590bddd4772"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-compliance.png",
+      "status": "added",
+      "sha256": "476956ddd0623553df543b494656f289aee400a67219f233e83e248802cdbfe7"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-details.png",
+      "status": "added",
+      "sha256": "063b6e4f5dc99ae4e1d1165fdb1e1f88eca20150d8a71f1fc800d6a4b10c263b"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-explorer.png",
+      "status": "added",
+      "sha256": "94f27ad6736580ead77992fbd279086eca43eecce6d70a682b84205dbc3e86e3"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-my-tenders.png",
+      "status": "added",
+      "sha256": "0b2fa2d71c409aa4f2182e02bb678a33eddbfbe1acd5b9945e71928f1ecf464a"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-readiness.png",
+      "status": "added",
+      "sha256": "0a15ec7e64f4b6051dda4b4ba5d3244cbb9e61c71128207309285a601082937a"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/en-settings.png",
+      "status": "added",
+      "sha256": "01c6d3d4e4cb8fe711c6e7896a2fc7f19d08d08ebb9d1223307f3ebdb13eec2d"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/results.json",
+      "status": "added",
+      "sha256": "341d4fb8a7703b0c7f388ee8435ad8e18450420aff8e523e88a20dae573aa3b0"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-bid-preparation.png",
+      "status": "added",
+      "sha256": "41bfe27e02c6b93b67ed84f47dc1ae7894e667d41f753a68328d87c41c1b5e6d"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-compliance.png",
+      "status": "added",
+      "sha256": "69841878798bf78ac99dc8bb08c8114a135493d34e7ef7463d0eed4158b27239"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-details.png",
+      "status": "added",
+      "sha256": "83daf7dbb4648c4da00a388ce751b357b49093da1eef22a6a3d8f358e738850d"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-explorer.png",
+      "status": "added",
+      "sha256": "9388d9dfb6c71773f5db032f57597bd5eb018b83722dffdd9541ff58402b49f2"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-my-tenders.png",
+      "status": "added",
+      "sha256": "e6fb11dbea5dd19d385879d9238a3bb8f09691f7a6a4d511cf2de39bf85b8b4d"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-readiness.png",
+      "status": "added",
+      "sha256": "6779b60928b98fdd753d84e82ea379d6199f6a5827d26c101b5b48ed66d6ac2c"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/ru-settings.png",
+      "status": "added",
+      "sha256": "d8196c59506617b7cca2260083c23e85bb035428a72a03ba6cc170663d5e5b0c"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-bid-preparation.png",
+      "status": "added",
+      "sha256": "cc39da9d35628e5c273ba1bf0a39f199f57e59de2fbfd9071804bb063f4b37c6"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-compliance.png",
+      "status": "added",
+      "sha256": "868e5d3ce6eb42675b3f7eec33ba32f1ed82db0e7990f9ad8d7218016c8ded79"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-details.png",
+      "status": "added",
+      "sha256": "fffe393fd5c846a4ecf10e3db58051e09b16d9e30f486148908e472983d466ee"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-explorer.png",
+      "status": "added",
+      "sha256": "f1a1094b29eaec9045dcaac2aabac81bab754fcb0e87c3483a11e512a3f2cabd"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-my-tenders.png",
+      "status": "added",
+      "sha256": "6b751f69d54e8a497bb7c8311288cd0a290bcad26310fc519cb11ef55f692eef"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-readiness.png",
+      "status": "added",
+      "sha256": "910fa664bb94203ba0e9ae3f88d7126ac79d2bd7146789a1a94522e2b018d794"
+    },
+    {
+      "path": "docs/audits/s9_1_browser/uz-settings.png",
+      "status": "added",
+      "sha256": "ab5a81e437bb5ddec069cb4aaff4c74fd6a3c59af80f8f424ccabc969c68b88a"
+    },
+    {
+      "path": "docs/audits/s9_1_bundle.json",
+      "status": "added",
+      "sha256": "93d0bd1ae0d3d5e4f83ffcb52fd045c86198233a23d03f53ab2ef3f9a65f6a48"
+    },
+    {
+      "path": "docs/audits/s9_1_execution.json",
+      "status": "added",
+      "sha256": "db104056e05903940287d42dec7d2e43c61ae6b8189ef49fcff899fa898de31c"
+    },
+    {
+      "path": "docs/audits/s9_1_inventory.json",
+      "status": "added",
+      "sha256": "5db8d90b144d006b954c56b8dffb2c127e685ed1a4c26137d5f312541a133494"
+    },
+    {
+      "path": "docs/audits/s9_1_inventory.md",
+      "status": "added",
+      "sha256": "3194c78dcadad5ca5b224a965500dfadf2eb3387dd65ca7bdb53e58f8a3851ea"
+    },
+    {
+      "path": "docs/audits/s9_1_npm_audit.json",
+      "status": "added",
+      "sha256": "3b5486dab0fb16d46bf3eb79d7a1ebcf7001de0096ee07dedfdaad077b8015c0"
+    },
+    {
+      "path": "docs/audits/s9_1_openapi.json",
+      "status": "added",
+      "sha256": "0473934bf2cece109b91df372bedfe0bc4a181c6f7f5e8460b1f860c2b5d7a7e"
+    },
+    {
+      "path": "docs/audits/s9_1_query_measurements.json",
+      "status": "added",
+      "sha256": "4524e54f0e1dc0c53009075cf704deb21e6fae673c87ad4b1912d7af9d344886"
+    },
+    {
+      "path": "docs/audits/s9_1_security_probes.json",
+      "status": "added",
+      "sha256": "518086925813aa67862044e6d9badff634d754e16c5aa217172093e390e3d6ac"
+    },
+    {
+      "path": "docs/audits/s9_2/acceptance.md",
+      "status": "added",
+      "sha256": "c5d46ca8c20a11b89100c50a17cbfdf22e8c84db1e3b5c82462a5026541c04c7"
+    },
+    {
+      "path": "docs/audits/s9_2/alembic-check.log",
+      "status": "added",
+      "sha256": "4b517bbdff1c90834a0248eb588e761ca735c9de70996e9096eecebb32c8e8f4"
+    },
+    {
+      "path": "docs/audits/s9_2/alembic-current.log",
+      "status": "added",
+      "sha256": "f14b90e18a344bb5f17e6d6313f86551ef18194fc1ad6a00a276d2ea2907082f"
+    },
+    {
+      "path": "docs/audits/s9_2/alembic-heads.log",
+      "status": "added",
+      "sha256": "5ab7a4cff4fd512b4077ffec505ce932e0c1e8b2770287f0dab7be97f23430c2"
+    },
+    {
+      "path": "docs/audits/s9_2/backend.log",
+      "status": "added",
+      "sha256": "eda787ea5038e9d36b423e7fc0d512eaaaa0e02aeeadb629f16144cf91f61ba4"
+    },
+    {
+      "path": "docs/audits/s9_2/baseline-collection.log",
+      "status": "added",
+      "sha256": "b9d25ed912efa00500276fc1fe5f0d58b54a18a633dfc6a73c7f5999ae3f3a51"
+    },
+    {
+      "path": "docs/audits/s9_2/bootstrap.log",
+      "status": "added",
+      "sha256": "fc9ce0e748d8ebc43c6d51f4dd3ddbcdb6eb7c75b489333a934a06273fd63e03"
+    },
+    {
+      "path": "docs/audits/s9_2/collection.log",
+      "status": "added",
+      "sha256": "30cd911dfa64716d1b3266b2ef09f5ceb7de6ccf52ab74d964ff43aa429aafd8"
+    },
+    {
+      "path": "docs/audits/s9_2/connector.log",
+      "status": "added",
+      "sha256": "fb40b2bdaf6770ffb99eb7238902bf4a4a7a6213183958659a134c7819d2b53e"
+    },
+    {
+      "path": "docs/audits/s9_2/deletion_proof.json",
+      "status": "added",
+      "sha256": "b506bd4517b9053bec6739fd0300753827217369d9d27762ce44b34de362965a"
+    },
+    {
+      "path": "docs/audits/s9_2/dependency-proof.json",
+      "status": "added",
+      "sha256": "1aabd5c29566709dbb19d8fb67289c7023afd5de691514e227f9e7b7c09d3468"
+    },
+    {
+      "path": "docs/audits/s9_2/disposable-shutdown.log",
+      "status": "added",
+      "sha256": "ca19178a35ab4153b75b494963b66ce8243e1b94c173107c87b44d09db23652d"
+    },
+    {
+      "path": "docs/audits/s9_2/execution.json",
+      "status": "added",
+      "sha256": "188648ddca7a5cb8b447070e800b3f3b760d4ad1feb837c3fc8146c39ab26bc5"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-audit-literals.log",
+      "status": "added",
+      "sha256": "7e63d184c48492754692b1bb81ce1b73b8926593af271418ed026663c4fd2f31"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-audit-rtl.log",
+      "status": "added",
+      "sha256": "d57789da81027518761f5275c4ff4b9c4d8a2e4daadf40e9877318cf803d096e"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-build.log",
+      "status": "added",
+      "sha256": "ff3e428c365d32cc53f8e0975467ac9d54ed148b00538f21464156bf57be7fc8"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-ci.log",
+      "status": "added",
+      "sha256": "9af5b641ee6ebaed06bd8b491ce307660f508069ed6292930b24ce0ca9acd4ec"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-lint.log",
+      "status": "added",
+      "sha256": "596cb56788cfc0dfab4886fb07703457a292cd1e556aca9d7ab6a3620fa71873"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-results.json",
+      "status": "added",
+      "sha256": "dfdab8e425f4e5fd3ab57cee8e38062c42c2fa07b9550fd1266fb519a5a4ab61"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-admin.log",
+      "status": "added",
+      "sha256": "6a445d35a9ac879d4f638f41ad39ea84e384df73b3da69e2d9800075bc95d559"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-bid-preparation.log",
+      "status": "added",
+      "sha256": "9a29981cf4e0885a1f7c30f57e44103744f35f7e0fb91832029e1e188268a828"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-engagement-workflow.log",
+      "status": "added",
+      "sha256": "e3da1f0e92e5049126d7a6caebd68cf8df434155aa2264d50c86402f9e8c4c2f"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-explorer.log",
+      "status": "added",
+      "sha256": "2a94ced7a2f5d25e0ed265e3a3442d8122e975e8e3ac0039aea59b5edbc5ec56"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-hunter-retirement.log",
+      "status": "added",
+      "sha256": "ffed83404dd950ce2ef23206e6e778c4954f9f0688a9110781b9718079e66c63"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-localization-foundation.log",
+      "status": "added",
+      "sha256": "95517521187c99a71170bf2a09c260ddc01e750f4df92f1f582d39ea9e8fb927"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-my-tenders.log",
+      "status": "added",
+      "sha256": "1bb867db3e06b61c44b30167cfeea694317517d397f089ad5478693bb68432a1"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-project-context.log",
+      "status": "added",
+      "sha256": "efa353cea18f9fc31b1dc8a1eb1f90eefeb43ada4690a4f67817bfce5a050aa4"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-s7-3-localization.log",
+      "status": "added",
+      "sha256": "72031ecf8795ccbd918ea769240873ad9958c30594cca93a5e0beec268aaf722"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-s7-4-localization.log",
+      "status": "added",
+      "sha256": "ae9aeb9d47a33fefb2676c99c10d1153590cd9994b90390572817dc89d3b6291"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-s8-2-analysis-language.log",
+      "status": "added",
+      "sha256": "9ec57c690fad5a54b0a1103d993c6ae77ec6286805fe30b6d4c340e115fbac2e"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-s8-3-arabic-rtl.log",
+      "status": "added",
+      "sha256": "6426aa7f7961d52f150669cdd10f205036083e4b82cdf7210de794d9e8f4de15"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-sr3.log",
+      "status": "added",
+      "sha256": "d7c82de36e6b34aff710103319d4740669cb8c228e03b83ba63b2535a1d3008a"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-tender-cleanup.log",
+      "status": "added",
+      "sha256": "e87974cf2d0cfad9ee5d0294bfaefa2d672c5a2654d3ed8f7faaa7872e301aa9"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-test-tender-details.log",
+      "status": "added",
+      "sha256": "68fa632762e67731d3056626cf41e6f8013e313a1f5ded2fd04054de8cb453eb"
+    },
+    {
+      "path": "docs/audits/s9_2/frontend-typecheck.log",
+      "status": "added",
+      "sha256": "6395c2028d2efb2e4992400755df02dac270564d1495c7f1c6aa81f48f24e940"
+    },
+    {
+      "path": "docs/audits/s9_2/legacy-references.json",
+      "status": "added",
+      "sha256": "729a71bdc25b3e130d63ea21078dbfe45e01ad0f3021c815e946a1e374591061"
+    },
+    {
+      "path": "docs/audits/s9_2/preflight.json",
+      "status": "added",
+      "sha256": "1d48f9ae4d4e7bbcaff18983fcc4c49e852e45bbfe43647ddc6b60709409c1c9"
+    },
+    {
+      "path": "docs/audits/s9_2/probe-cli-help.log",
+      "status": "added",
+      "sha256": "15bac5d9dea4457fe8c86078d5d33be106e163263aae68f2a73b512f747fce37"
+    },
+    {
+      "path": "docs/audits/s9_2/probe-imports.log",
+      "status": "added",
+      "sha256": "e53bc6b2f4a6bc1b8931c27181811899eae95b9e2264df0a8e6f66cad323bbbd"
+    },
+    {
+      "path": "docs/audits/s9_2/python-environment.txt",
+      "status": "added",
+      "sha256": "450a251ff0772c9da37c42a651edf469dde09985f807ac7b0361280b706dbd70"
+    },
+    {
+      "path": "docs/audits/s9_2/rebased_inventory.json",
+      "status": "added",
+      "sha256": "5db8d90b144d006b954c56b8dffb2c127e685ed1a4c26137d5f312541a133494"
+    },
+    {
+      "path": "docs/audits/s9_2/renames.json",
+      "status": "added",
+      "sha256": "28a759e979fe580cc3c0a3b1d3f9debf5fef735d97e50680d37ccf3ce3798602"
+    },
+    {
+      "path": "docs/audits/s9_2/safety-ledger.json",
+      "status": "added",
+      "sha256": "1f14d28a720224fc674925054f3c58d13462f61438286224b3315078ad788770"
+    },
+    {
+      "path": "docs/audits/s9_2/safety-ledger.md",
+      "status": "added",
+      "sha256": "108ebc0ac132a453727a3eeb3de39d35b1386d85dd6683a4298b7e72560b3b7a"
+    },
+    {
+      "path": "docs/audits/s9_2/semantic-preservation.json",
+      "status": "added",
+      "sha256": "8a9cd338ce7b767119495402f552d107ec6a4aeec5cae62e0ff4ebe3efc7f58f"
+    },
+    {
+      "path": "docs/audits/s9_2/stale-nodes.json",
+      "status": "added",
+      "sha256": "f77e2023e6f639b1f36bf0cabb5e89d3a89dd08c157cc7a2ac6a56fc22301216"
+    },
+    {
+      "path": "docs/audits/s9_2/stale-nodes.log",
+      "status": "added",
+      "sha256": "05fb18cb37287354077af336a5db69f226c19128bc9e19be752fd9c7980b6a91"
+    },
+    {
+      "path": "docs/audits/s9_2/tool-classification.json",
+      "status": "added",
+      "sha256": "6d9b0521af2e8e108bd53aef109cfc7d6841c0d966b4ea59fd67f1334f4ed04c"
+    },
+    {
+      "path": "docs/audits/s9_2/topology-focused.log",
+      "status": "added",
+      "sha256": "512f6fff855d4c31cb6e87a9bfbfd2248487d784b508692a86b20033f6c29835"
+    },
+    {
+      "path": "docs/audits/s9_3/acceptance.json",
+      "status": "added",
+      "sha256": "a8e13ff773294770e4b74fc8e66e50378c2c8d13a2b6117752ad47d532938fcd"
+    },
+    {
+      "path": "docs/audits/s9_3/analysis-final.log",
+      "status": "added",
+      "sha256": "1282ffd2c3d285985cd4c047ad689a80d6d824270a7bc5bd940034f78dcbbfb0"
+    },
+    {
+      "path": "docs/audits/s9_3/backend-final.log",
+      "status": "added",
+      "sha256": "506bad94f32e4358cf84600c38b34ff8ccbacaf2bca0bc8260d6b9b5c650e9f3"
+    },
+    {
+      "path": "docs/audits/s9_3/backend-intermediate-2.log",
+      "status": "added",
+      "sha256": "8095af9cdfec24b38a4965d565c79a1c92c753b3d3167cddd8b8442b022918eb"
+    },
+    {
+      "path": "docs/audits/s9_3/backend-intermediate.log",
+      "status": "added",
+      "sha256": "7ab98e30e7efe5b02f704a0d64a7587ed67815bea6ade05fe4087e94b7062de6"
+    },
+    {
+      "path": "docs/audits/s9_3/baseline-backend.log",
+      "status": "added",
+      "sha256": "0afab7d9ef4651b21f73c9268181f505da37d2d9851b681e9a8fdc4b286866d7"
+    },
+    {
+      "path": "docs/audits/s9_3/baseline.json",
+      "status": "added",
+      "sha256": "9e77525d60de4343cfd5de81423c939d92fb6456da3623ae0d6d01fd84c63487"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-cold-debug.log",
+      "status": "added",
+      "sha256": "878fad0ce6594951a244451caf4e66c4c5133ba7ee5b425e8f894a4989ee7602"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-cold-debug/en-bid-preparation-320.png",
+      "status": "added",
+      "sha256": "55e2952b45f7ce7a940f826bf9f36b8d2581fe73f34cffe0eb8be6bf6a5fc78d"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-cold-debug/en-explorer-320.png",
+      "status": "added",
+      "sha256": "c4c29d0630416b58e87323b0509d266477c9aca86d33c3d00df74723afa5d91c"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-cold-debug/en-my-tenders-320.png",
+      "status": "added",
+      "sha256": "7a28990ac08492e7116158aebaabd1ded94e8c31757739e2c854a364842788cd"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-cold-debug/frontend.log",
+      "status": "added",
+      "sha256": "86966c8dd260d9e9342484a11ea5da346785ca97d763a897abf48f0ebebb3f09"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-cold-debug/results.json",
+      "status": "added",
+      "sha256": "13412754b7d73c881eb93ab430227291af596da6b36a888faf0d9f95cb13d4ec"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-debug.log",
+      "status": "added",
+      "sha256": "435f5a4a12be0c1251a18eabe2e8fc225015d1b4ed56149e6a57b6594fb750fa"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-debug/en-explorer-320.png",
+      "status": "added",
+      "sha256": "ed1592052f6f0644f9eecc7d07caf81635d0ed8686d8aede2faa0a60114d5724"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-debug/frontend.log",
+      "status": "added",
+      "sha256": "e98d458bfe1597450b1a8844b30f4d8e64cdc8dd8cfef8a930780a89b91e2547"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-debug/results.json",
+      "status": "added",
+      "sha256": "716316522b3d4a7c5d8e07b77d0d0b3eb6ea33f58d08548f2ef2d39d3c84cb26"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-final.log",
+      "status": "added",
+      "sha256": "80b97c14e60ccae05894a5143692eb24dae24903622d3831c7259745a9f54f78"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-install.log",
+      "status": "added",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-upload-debug.log",
+      "status": "added",
+      "sha256": "861eafc483a55b3b7e8813db407e30e229cd8f09b89fc6b01db4966de5ac9927"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-upload-debug/frontend.log",
+      "status": "added",
+      "sha256": "310eaf83ca427cc02fb48ba4811cd5a1eef1587ad1c13b5dff93d492c2b16e96"
+    },
+    {
+      "path": "docs/audits/s9_3/browser-upload-debug/results.json",
+      "status": "added",
+      "sha256": "e127451ed4fdd8c21efb945c6b7439f49bb4aa2be9a9f8674ad9ba059bd5f771"
+    },
+    {
+      "path": "docs/audits/s9_3/browser.log",
+      "status": "added",
+      "sha256": "ab60f075fd4376ba679738bd541b5a0946783bf921a633377d3abd57e422bbd9"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ar-bid-preparation-320.png",
+      "status": "added",
+      "sha256": "a81c7e2f20051ee7caee6727180e2852a0c5f83e80791f00ef73ace8299b3412"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ar-bid-preparation-390.png",
+      "status": "added",
+      "sha256": "4ac9d7b57aabd7725c14e7f001191d6dbac957c360dc51719f8077fc56074776"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ar-explorer-320.png",
+      "status": "added",
+      "sha256": "427dc0c53d2fb769ae0a7b7eca39f428bf1456528b87684ab67a4b54d1d984b3"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ar-explorer-390.png",
+      "status": "added",
+      "sha256": "e238969c2182098d27754d5c00e50cc8efafc4c2f7eee99501134cbe694c2160"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ar-my-tenders-320.png",
+      "status": "added",
+      "sha256": "349c8cc33e2e83c22239a5404b733d8cafa4b40e03df81b5cdf757c8296f289b"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ar-my-tenders-390.png",
+      "status": "added",
+      "sha256": "c1be05b376f00dc9ff7633c4d861a523ea4e0983cfa085a99d42d8236be064ce"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/en-bid-preparation-320.png",
+      "status": "added",
+      "sha256": "55e2952b45f7ce7a940f826bf9f36b8d2581fe73f34cffe0eb8be6bf6a5fc78d"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/en-bid-preparation-390.png",
+      "status": "added",
+      "sha256": "13209ed081d2713f9ae5a1e1b49508be130830c782b6006b7e7ed25530e9cb93"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/en-explorer-320.png",
+      "status": "added",
+      "sha256": "c4c29d0630416b58e87323b0509d266477c9aca86d33c3d00df74723afa5d91c"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/en-explorer-390.png",
+      "status": "added",
+      "sha256": "c1819e0b7928e8efd986fb039289a4fe28b49e09a1c781414d0ecf5f0ff9a60a"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/en-my-tenders-320.png",
+      "status": "added",
+      "sha256": "7a28990ac08492e7116158aebaabd1ded94e8c31757739e2c854a364842788cd"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/en-my-tenders-390.png",
+      "status": "added",
+      "sha256": "c008f2bdac97ae82f9af61a0000461f4d6a0c8b73bb7ba4d4e7d077cc514371c"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/frontend.log",
+      "status": "added",
+      "sha256": "9c7aa54f7286f3bfb399d5b2e9ceafa79bcbaab32cc6026010bc4e1c0d5b4647"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/results-first.json",
+      "status": "added",
+      "sha256": "f624e33491a69b312431ca4bdb561f520a717e575f9fa368207889ce52114aac"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/results-second.json",
+      "status": "added",
+      "sha256": "18ae4948f65038a3ece68ec35e004bbd1e5de024edb3d0ac6a71f6b79aa5c6f4"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/results.json",
+      "status": "added",
+      "sha256": "36396193a5c6fd0579a008a7166763d743692c85576f6bbd4c14eaf676c72436"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ru-bid-preparation-320.png",
+      "status": "added",
+      "sha256": "cb0a371be0574de80dd71f09ebe092398ef6b8cd8850f3987fe87d6729306598"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ru-bid-preparation-390.png",
+      "status": "added",
+      "sha256": "47019703a8d78dcf8a64f1f30803aff0df41d05df583aa6584c8ac0ade067640"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ru-explorer-320.png",
+      "status": "added",
+      "sha256": "02ec08bac3b74048cad6d08bc3284ddcc4be4a49bbd8f1babc6d2ef09471cb5d"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ru-explorer-390.png",
+      "status": "added",
+      "sha256": "792bbd46cc30924ebe1268b49944dc1f227794bcb38926ea7c8f958eaad0a0f4"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ru-my-tenders-320.png",
+      "status": "added",
+      "sha256": "3c7ba07c03a17ff7748e9205d88cb964189ef3eab0d76ed99aa6cd3644dcc6e7"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/ru-my-tenders-390.png",
+      "status": "added",
+      "sha256": "e70a31663eb5fcd480b2cdc9f793ac970b5747c956eda0d79d7e54e6e6b4fde8"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/uz-bid-preparation-320.png",
+      "status": "added",
+      "sha256": "6811b7f1a23d64c09d206505f947a3b308c4cb279c4a8a5411c93495c5f80f82"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/uz-bid-preparation-390.png",
+      "status": "added",
+      "sha256": "113d7ee837a8086c82c744b2c9140706dcfe8df50f7f71ab91fb6a30ec71ead9"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/uz-explorer-320.png",
+      "status": "added",
+      "sha256": "e088307fb54a2ce8d96a8c778bedc79385d96eb29f9edb5121f3609ac14e049f"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/uz-explorer-390.png",
+      "status": "added",
+      "sha256": "9553a51d6de6e05aa6b770b7c1b56de896735d0874ce29db302f96325df5045f"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/uz-my-tenders-320.png",
+      "status": "added",
+      "sha256": "f70d01fc7da2b31985fa228e73aee322196d788e1212b4f288bc3abf1ff7a795"
+    },
+    {
+      "path": "docs/audits/s9_3/browser/uz-my-tenders-390.png",
+      "status": "added",
+      "sha256": "54a829cab8f8b73a8b5b31a3ce45abb495a46d1c71417aed5a95eee16b3f101a"
+    },
+    {
+      "path": "docs/audits/s9_3/changed-files.json",
+      "status": "added",
+      "sha256": null
+    },
+    {
+      "path": "docs/audits/s9_3/changed-files.md",
+      "status": "added",
+      "sha256": null
+    },
+    {
+      "path": "docs/audits/s9_3/config-dependencies.log",
+      "status": "added",
+      "sha256": "f8d7d425c48ef6afe316d338efbef7ea3588e5f62a1721624e415a927bbca9a4"
+    },
+    {
+      "path": "docs/audits/s9_3/connectors-final.log",
+      "status": "added",
+      "sha256": "394abe9b72b1b6c42c999a0af0117e026f696ce5ec4ab5bc98b5d6e25f4986e3"
+    },
+    {
+      "path": "docs/audits/s9_3/dependency-contract.json",
+      "status": "added",
+      "sha256": "d84a2fd22b4764a96484d937a1e39668db594b936abe8d8cbdfdfc959dc85fcf"
+    },
+    {
+      "path": "docs/audits/s9_3/dependency-lock-changes.json",
+      "status": "added",
+      "sha256": "42a6a4d5f4fbb919511d17c77d4efe72faee41b40d54f34f3cc2fa5304e004b6"
+    },
+    {
+      "path": "docs/audits/s9_3/dependency-transitive-update.log",
+      "status": "added",
+      "sha256": "da8978cbf63f0e4f7e5734381775293d9d41ad39c712a49381737bc368321138"
+    },
+    {
+      "path": "docs/audits/s9_3/dependency-triage.json",
+      "status": "added",
+      "sha256": "0fec4dbbfd3b3a35988ab2b9a54758f82fbac593853e8b5b0896feabb82c36c8"
+    },
+    {
+      "path": "docs/audits/s9_3/dependency-update.log",
+      "status": "added",
+      "sha256": "877ffee61dcf01bec863458986ea235786356b56a6f990204ad99f9bd53b9486"
+    },
+    {
+      "path": "docs/audits/s9_3/diff-check.log",
+      "status": "added",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/audits/s9_3/final-working-tree.txt",
+      "status": "added",
+      "sha256": "d14fc82e79b0733c62c7f325f9237569334e4e214380e41c9f9e785ad443b321"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-baseline-build.log",
+      "status": "added",
+      "sha256": "2088f0a15dca1cc6b6cb2811887110778ee482dfb813a26783b2ccd1c0678dd3"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-build-final.log",
+      "status": "added",
+      "sha256": "af2259963dbfad1384a8734f0c03ffa90e1c4324376147d3d2719075ea550675"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-build.log",
+      "status": "added",
+      "sha256": "63c8189adfba27fc623f882160a2177859b5843c349e152d2702dfdbf23a40fc"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-final.log",
+      "status": "added",
+      "sha256": "4f589d970878da1db38eb1f2e9f7eb7bb2228719a5356c154522928ac8cc31e8"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-last-layout.log",
+      "status": "added",
+      "sha256": "738893096becdfd84c1c2a502d4b08685aba0af5d8dfb9f6ad2fd19d7d1062f7"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-lint-final.log",
+      "status": "added",
+      "sha256": "596cb56788cfc0dfab4886fb07703457a292cd1e556aca9d7ab6a3620fa71873"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-lint.log",
+      "status": "added",
+      "sha256": "eadab216bd85d3aa66d3876ea6bee3e882f3f07820a20a143a019f8cf7ee0862"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-rtl-final.log",
+      "status": "added",
+      "sha256": "d57789da81027518761f5275c4ff4b9c4d8a2e4daadf40e9877318cf803d096e"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-tests-final.log",
+      "status": "added",
+      "sha256": "97a5f41d9942d1b20275c3bd531346d313e8b3d59b7726504287008e301d12c5"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-tests.log",
+      "status": "added",
+      "sha256": "47e5e477ac2044ddf96312579341537289e8f267d0de958f4d2d89f07316bfec"
+    },
+    {
+      "path": "docs/audits/s9_3/frontend-typecheck.log",
+      "status": "added",
+      "sha256": "6395c2028d2efb2e4992400755df02dac270564d1495c7f1c6aa81f48f24e940"
+    },
+    {
+      "path": "docs/audits/s9_3/migrations.log",
+      "status": "added",
+      "sha256": "2b883729c4bb542641e76392057c10a2decc89bc076c5ea999bfc4ee9e41fbba"
+    },
+    {
+      "path": "docs/audits/s9_3/npm-audit-after.json",
+      "status": "added",
+      "sha256": "14370b3f2a0ccd514b5e287249e5439fc79326b69e3685c92adff0e92bb0e71a"
+    },
+    {
+      "path": "docs/audits/s9_3/npm-audit-before.json",
+      "status": "added",
+      "sha256": "5743fcefa7d888ca8126a59cc779a60be6584d14b4801276a73a33480fd6027c"
+    },
+    {
+      "path": "docs/audits/s9_3/npm-audit-intermediate.json",
+      "status": "added",
+      "sha256": "495b329ea6d3621cb13581f5304a008478b576aa741ff45efa624f6acaa7bcdb"
+    },
+    {
+      "path": "docs/audits/s9_3/production-before-navigation.log",
+      "status": "added",
+      "sha256": "15fa0901814aa8035b9b51b8386e9c3253c0e0f4bd359575a89fa9aae3d243ee"
+    },
+    {
+      "path": "docs/audits/s9_3/production-before.log",
+      "status": "added",
+      "sha256": "15fa0901814aa8035b9b51b8386e9c3253c0e0f4bd359575a89fa9aae3d243ee"
+    },
+    {
+      "path": "docs/audits/s9_3/production-before/en-bid-preparation.png",
+      "status": "added",
+      "sha256": "ad5f1b0af33e2ba442e3b6471d291cb7aa26177bfdb1452212ee6c07b48ea98f"
+    },
+    {
+      "path": "docs/audits/s9_3/production-before/en-compliance.png",
+      "status": "added",
+      "sha256": "2ce45e8643792d8c32409352923f3db81606d366fa38fa3b75db774c7e719b7b"
+    },
+    {
+      "path": "docs/audits/s9_3/production-before/en-details.png",
+      "status": "added",
+      "sha256": "97ee8c38930685cd722995e7b27a1eaf613bcd2b2aae28481996bcf16188663a"
+    },
+    {
+      "path": "docs/audits/s9_3/production-before/en-explorer.png",
+      "status": "added",
+      "sha256": "f925128648764a842f5b09677abdb8ee353da751d551437ec623fcfe6ef8905f"
+    },
+    {
+      "path": "docs/audits/s9_3/production-before/en-my-tenders.png",
+      "status": "added",
+      "sha256": "3c127b2df9c94c1f2264d565e9c52fe26a67a235a46db385ad5030663f071a94"
+    },
+    {
+      "path": "docs/audits/s9_3/production-before/en-readiness.png",
+      "status": "added",
+      "sha256": "954045043133cdfa49e2e38700f8c39d026b48baf983ec818b7f4ceab81a6865"
+    },
+    {
+      "path": "docs/audits/s9_3/production-before/en-settings.png",
+      "status": "added",
+      "sha256": "5967f03f63af3861fee141ab98a237e0adfd872a0f887e3d54e9d54080bb48fb"
+    },
+    {
+      "path": "docs/audits/s9_3/production-before/results.json",
+      "status": "added",
+      "sha256": "5b83e19ab28b35fe8ccb9e94dcc82b7df2fc0bd13bc06d31ba83d88d2a5e03d9"
+    },
+    {
+      "path": "docs/audits/s9_3/pydantic-versions.log",
+      "status": "added",
+      "sha256": "b3a6ac153ead2d275ed8f8816ffd609490079cfc64ecc2ea72c8a9171af8429d"
+    },
+    {
+      "path": "docs/audits/s9_3/python-gunicorn.log",
+      "status": "added",
+      "sha256": "e88d21b753b4a6fe1cf5176a9d6c30283068c9475ecdfe0c589a943e83dab15c"
+    },
+    {
+      "path": "docs/audits/s9_3/python-pip-check.log",
+      "status": "added",
+      "sha256": "9261363b733079a641c2e4cc9bc46ffa1d8336945a87f807b6cf68847dbc9b09"
+    },
+    {
+      "path": "docs/audits/s9_3/python-stabilize.log",
+      "status": "added",
+      "sha256": "b3d9066e4298b2a2aedb55ead3c0f6cf069c1483fab052c93d975428d1b5b7f1"
+    },
+    {
+      "path": "docs/audits/s9_3/read-proof.json",
+      "status": "added",
+      "sha256": "56f95f3e85ae4efacec2cf239b6feda4adf8d63e088266d00605cebe981ff6c2"
+    },
+    {
+      "path": "docs/audits/s9_3/readiness-runtime.json",
+      "status": "added",
+      "sha256": "0ae31f107b42a71b29b5561d75037f57b66a29b8eea7eaa2e35fdd35da19c2ca"
+    },
+    {
+      "path": "docs/audits/s9_3/reads-config.log",
+      "status": "added",
+      "sha256": "8fd3cbd036a88f99ce28640045b2451a75fb1ad24f38d36d7dbf98cd85cc7ac4"
+    },
+    {
+      "path": "docs/audits/s9_3/request-comparison.json",
+      "status": "added",
+      "sha256": "1656cf0139d69a452e28a9dcf94c918e8dd65af7f92cc5b23f21abbdedc5801a"
+    },
+    {
+      "path": "docs/audits/s9_3/result-index.md",
+      "status": "added",
+      "sha256": "93b17e91565bf58e55cf3e15e5d3b495d6c1376db214be635a8bf9a4a5e8093d"
+    },
+    {
+      "path": "docs/audits/s9_3/runtime-versions.json",
+      "status": "added",
+      "sha256": "d872151b4ea5bedc88fab47c22b9447945a72f9f8802508242b71aac31226128"
+    },
+    {
+      "path": "docs/audits/s9_3/runtime.log",
+      "status": "added",
+      "sha256": "1e015e8fde232d60a7a7fbd853a1fcb4fe409fc86ce825e10ab76883e9b9c81b"
+    },
+    {
+      "path": "docs/audits/s9_3/scale-before.json",
+      "status": "added",
+      "sha256": "54f33a02ff5fd26f8cc8b2b2025f4f2702022dc83035a4d4e794546d445c112e"
+    },
+    {
+      "path": "docs/audits/s9_3/scale-before.log",
+      "status": "added",
+      "sha256": "f01aa83bb29550d0696debdfc11bfa816d32cde96eb692fb09ed13d9eb675b10"
+    },
+    {
+      "path": "docs/audits/s9_3/scale.json",
+      "status": "added",
+      "sha256": "6e6e2c767f2b89f8d323d3782f727d91c7c2c45eeab37c246d525340e84f53f7"
+    },
+    {
+      "path": "docs/audits/s9_3/scale.log",
+      "status": "added",
+      "sha256": "21284d76f6355278e21e4e7dfaf6dc57dd9f1dc02aac955501825a3effd44347"
+    },
+    {
+      "path": "docs/audits/s9_3/security-final-focused.log",
+      "status": "added",
+      "sha256": "53691285e9a3e40b9c67d219ecaf7559652675fc2d47edc384069b9f3df41db9"
+    },
+    {
+      "path": "docs/audits/s9_3/security-final.log",
+      "status": "added",
+      "sha256": "123e66bc4a36f21d8802c395ba38ca97e9bfc83e254fd4b82064113dcb12e00b"
+    },
+    {
+      "path": "docs/audits/s9_3/security-intermediate.log",
+      "status": "added",
+      "sha256": "0b03da5e5f6dccd0fec45ffdd2b04b1fc8ff074abb0c86be08bf205aec30d02b"
+    },
+    {
+      "path": "docs/audits/s9_3/tender-read-inventory.json",
+      "status": "added",
+      "sha256": "3ab1292333ae7d9dd048b8f7823d4780bd4edfd539f635a53dec067e8b3a7cf0"
+    },
+    {
+      "path": "docs/audits/s9_3/uploads.log",
+      "status": "added",
+      "sha256": "5c8ba85e832b59df27bac7ab2444970a3f08679c11d4d36dfc816857b47042ae"
+    },
+    {
+      "path": "frontend/Dockerfile",
+      "status": "modified",
+      "sha256": "346c00a8638a0d76f25735c6740c81077d86ee047e34df380c52aee4ed15f492"
+    },
+    {
+      "path": "frontend/app/admin/companies/[companyProfileId]/page.tsx",
+      "status": "modified",
+      "sha256": "e85570d803c2cc119ab20f311b3f03c760fd5b2e756ff9db2560065a684b2661"
+    },
+    {
+      "path": "frontend/app/admin/page.tsx",
+      "status": "modified",
+      "sha256": "41d91cc9a9dcef391f720eafb4bfc3851f41c5bf56650dc2178c4298b852c8c1"
+    },
+    {
+      "path": "frontend/app/dashboard/bid-preparation/[proposalId]/page.tsx",
+      "status": "modified",
+      "sha256": "478c9e7f2cedeac0c34b5e1e0e6d371a8290c230e497e48bd76efccaf5ee764a"
+    },
+    {
+      "path": "frontend/app/dashboard/bid-preparation/page.tsx",
+      "status": "modified",
+      "sha256": "78fe0578bfb023b01bcf8d1885cb2920b1535f8fb6c5c07a0a463f23616fa26e"
+    },
+    {
+      "path": "frontend/app/dashboard/layout.tsx",
+      "status": "modified",
+      "sha256": "d9c02474915fdcb93e69eb986ceb608dc939648d7d2b642fec823121cf5b558c"
+    },
+    {
+      "path": "frontend/app/dashboard/my-tenders/page.tsx",
+      "status": "modified",
+      "sha256": "84d48a3876bedadf75116db6a05a83b8ed9711c3342d6af839dab29810527334"
+    },
+    {
+      "path": "frontend/app/dashboard/onboarding/page.tsx",
+      "status": "modified",
+      "sha256": "b4e3da254edee7030fa3cbab0b6a7a91aa58fb68236d367f306955c40ab405bb"
+    },
+    {
+      "path": "frontend/app/dashboard/readiness-vault/page.tsx",
+      "status": "modified",
+      "sha256": "478a8b824d61597af91e2eaff6e81ea5d44547c10608a349872ffc4d328fb9c3"
+    },
+    {
+      "path": "frontend/app/dashboard/settings/page.tsx",
+      "status": "modified",
+      "sha256": "b786c25ee1075158755a9fe01762859a82993bb1456e9c679b8e61ce4aae5d49"
+    },
+    {
+      "path": "frontend/app/dashboard/tenders/[tenderId]/compliance/page.tsx",
+      "status": "modified",
+      "sha256": "e6182e9c9cea94eb9543aed78e10e4ec2d850465f08879cce009ce0e4ed6a32e"
+    },
+    {
+      "path": "frontend/app/dashboard/tenders/[tenderId]/page.tsx",
+      "status": "modified",
+      "sha256": "774386fe28456f1b46b48aee90945406b1fb4bbb281e9b253098ecdc123c3c26"
+    },
+    {
+      "path": "frontend/app/dashboard/tenders/page.tsx",
+      "status": "modified",
+      "sha256": "a274bd1f73f067e1ef66eda0b460f9e7614e67a28f534c88f103a986c6e1d983"
+    },
+    {
+      "path": "frontend/auth.ts",
+      "status": "modified",
+      "sha256": "6653ec8f9f71e54a31448b4125f3d37b41cdf05849de23f622a2203f17714fc0"
+    },
+    {
+      "path": "frontend/components/CollectionPager.tsx",
+      "status": "added",
+      "sha256": "b59aaa6de8d6d15ffdbd9179daf37620075ec34572b23c00fa034673b3a26179"
+    },
+    {
+      "path": "frontend/components/bid-preparation/PrepareBidButton.tsx",
+      "status": "modified",
+      "sha256": "386b25c358916ba6d9683f169398b25a56d87bd93206fdec452de470ba772321"
+    },
+    {
+      "path": "frontend/components/i18n/LanguageSelector.tsx",
+      "status": "modified",
+      "sha256": "3b49d19d54e6abafa676940fc8c299374bcc7ef3f191d61dce6f9e01fe055818"
+    },
+    {
+      "path": "frontend/components/source-refresh/SourceRefreshMenu.tsx",
+      "status": "modified",
+      "sha256": "5139844c3ccae39595965375a1958a0ad2c85470ba12081ce46d1800094db5a3"
+    },
+    {
+      "path": "frontend/i18n/request.ts",
+      "status": "modified",
+      "sha256": "00dc03eb3d50b00fdaf5e94021543483297cb80f3fe0bc042e7bbd0fd7c978b7"
+    },
+    {
+      "path": "frontend/lib/api.ts",
+      "status": "modified",
+      "sha256": "c07316ead2980666e416c7677365d02edd5a176bf5b937843d6d7cc2f0a67e42"
+    },
+    {
+      "path": "frontend/lib/documentProxy.ts",
+      "status": "modified",
+      "sha256": "60a7f35cc636e063311995b40f2b1eb4fd893ea5e2de09a57f0ab6d9081dc227"
+    },
+    {
+      "path": "frontend/lib/useCollectionOffset.ts",
+      "status": "added",
+      "sha256": "3a543c1ab37203cde4b36f58a59860c44b3d2ca5cb35ded4039d2182ee13b0cd"
+    },
+    {
+      "path": "frontend/middleware.ts",
+      "status": "modified",
+      "sha256": "e2b336e65d813c42809fcb655ba11d3ecd2d554067d91e228a6d36a672feec98"
+    },
+    {
+      "path": "frontend/next.config.ts",
+      "status": "modified",
+      "sha256": "a885a18028fd28eb1630aed7ae093bf16081cfe7e634f18eb28dd7dbfc03705a"
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "status": "modified",
+      "sha256": "11201044b12e62213b3ec7c24dc78094e5af9877c6c81b1bbd0db97036e90c30"
+    },
+    {
+      "path": "frontend/package.json",
+      "status": "modified",
+      "sha256": "18532576bcd12e6783b77c98412de09b0f86c376cc48d1dfbeaf59a375f343da"
+    },
+    {
+      "path": "frontend/tests/bid-preparation.test.mjs",
+      "status": "modified",
+      "sha256": "418606792775df1050f79d4bc49f8538fc38b04963f42e6aff396e97c50f0df3"
+    },
+    {
+      "path": "frontend/tests/release-hardening-browser.py",
+      "status": "added",
+      "sha256": "a8c06ad7afe5854d2f1b19437f0a5ba8bff7affc08031d07a860035d9680b82e"
+    },
+    {
+      "path": "frontend/tests/s7-3-p0-localization.test.mjs",
+      "status": "modified",
+      "sha256": "e0917c9604f70bf6154132b8457c76e9e36e6313d19ac2fa26ce62fe4d91765a"
+    },
+    {
+      "path": "frontend/tests/unified-explorer.test.mjs",
+      "status": "modified",
+      "sha256": "58ce976bf4aea81f9260e4626c414b85ff105d725258f3cfce1954bccfda377b"
+    },
+    {
+      "path": "scripts/run_release_gate.sh",
+      "status": "added",
+      "sha256": "150ed6a191a6d7233a044e54d17a8f8cf7d6db7f0d11c647801f0f16fbd5243b"
+    }
+  ]
+}

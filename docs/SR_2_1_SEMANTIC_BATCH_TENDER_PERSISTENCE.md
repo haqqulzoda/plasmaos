@@ -292,3 +292,5 @@ scheduling, or completion APIs. Source result objects now carry internal unchang
 counts; workers can log them, while durable job-schema storage remains the SR-2.2
 contract. SR-2.3 connector-result redesign and ADB critical-path work, and all
 SR-2.4/SR-3 notification/UI work, also remain untouched.
+
+Sprint 9.2 tooling update: the historical `scripts/test_extraction.py` diagnostic moved to `backend/scripts/probes/extraction_probe.py`; its explicit invocation uses the current extraction model chain and taxonomy argument. The historical result above is preserved.

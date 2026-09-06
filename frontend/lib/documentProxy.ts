@@ -54,11 +54,8 @@ export async function proxyTenderDocumentDownload(id: string) {
         cache: "no-store",
       },
     );
-  } catch (error) {
-    console.error("Document proxy request failed", {
-      documentId: id,
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
+  } catch {
+    console.error("Document proxy request failed");
     return NextResponse.json(
       { detail: "Document service is unavailable. Please try again later." },
       { status: 502 },

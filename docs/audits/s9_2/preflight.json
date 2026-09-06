@@ -1,0 +1,138 @@
+{
+  "sha": "b121cda5b76911c59fdab5733d70aa6883908e9c",
+  "branch": "main",
+  "initial_status": [
+    " M backend/app/api/endpoints/__pycache__/users.cpython-314.pyc",
+    " M backend/app/models/__pycache__/audit.cpython-314.pyc",
+    " M backend/app/models/__pycache__/user.cpython-314.pyc",
+    "?? backend/scripts/audit_s9_1_architecture.py",
+    "?? backend/scripts/audit_s9_1_query_probe.py",
+    "?? backend/scripts/render_s9_1_audit.py",
+    "?? docs/S9_1_CROSS_PRODUCT_ARCHITECTURE_LEGACY_AUDIT.md",
+    "?? docs/audits/",
+    "?? frontend/scripts/audit-s9-1-browser.py"
+  ],
+  "duplicates": {
+    "test_s1_1_project_foundation.py": [
+      "backend/scripts/test_s1_1_project_foundation.py",
+      "backend/test_s1_1_project_foundation.py"
+    ],
+    "test_s2_1_compliance_ownership.py": [
+      "backend/scripts/test_s2_1_compliance_ownership.py",
+      "backend/test_s2_1_compliance_ownership.py"
+    ],
+    "test_s2_2_analysis_version_foundation.py": [
+      "backend/scripts/test_s2_2_analysis_version_foundation.py",
+      "backend/test_s2_2_analysis_version_foundation.py"
+    ],
+    "test_s2_2b_analysis_aggregate_concurrency.py": [
+      "backend/scripts/test_s2_2b_analysis_aggregate_concurrency.py",
+      "backend/test_s2_2b_analysis_aggregate_concurrency.py"
+    ],
+    "test_s2_3_version_aware_compliance_reads.py": [
+      "backend/scripts/test_s2_3_version_aware_compliance_reads.py",
+      "backend/test_s2_3_version_aware_compliance_reads.py"
+    ],
+    "test_s3_3_privileged_account_survivability.py": [
+      "backend/scripts/test_s3_3_privileged_account_survivability.py",
+      "backend/test_s3_3_privileged_account_survivability.py"
+    ],
+    "test_s3_4_administrative_audit_hardening.py": [
+      "backend/scripts/test_s3_4_administrative_audit_hardening.py",
+      "backend/test_s3_4_administrative_audit_hardening.py"
+    ],
+    "test_s3_5_admin_operational_ux_hardening.py": [
+      "backend/scripts/test_s3_5_admin_operational_ux_hardening.py",
+      "backend/test_s3_5_admin_operational_ux_hardening.py"
+    ],
+    "test_s4_1_tender_engagement_foundation.py": [
+      "backend/scripts/test_s4_1_tender_engagement_foundation.py",
+      "backend/test_s4_1_tender_engagement_foundation.py"
+    ],
+    "test_s4_2_my_tenders_list_experience.py": [
+      "backend/scripts/test_s4_2_my_tenders_list_experience.py",
+      "backend/test_s4_2_my_tenders_list_experience.py"
+    ],
+    "test_s4_3_bid_preparation_reconciliation.py": [
+      "backend/scripts/test_s4_3_bid_preparation_reconciliation.py",
+      "backend/test_s4_3_bid_preparation_reconciliation.py"
+    ],
+    "test_s4_4_tender_engagement_workflow_ux.py": [
+      "backend/scripts/test_s4_4_tender_engagement_workflow_ux.py",
+      "backend/test_s4_4_tender_engagement_workflow_ux.py"
+    ],
+    "test_s5_2_tender_details_read_model.py": [
+      "backend/scripts/test_s5_2_tender_details_read_model.py",
+      "backend/test_s5_2_tender_details_read_model.py"
+    ],
+    "test_s6_2_unified_explorer_backend.py": [
+      "backend/scripts/test_s6_2_unified_explorer_backend.py",
+      "backend/test_s6_2_unified_explorer_backend.py"
+    ],
+    "test_wb_project_enrichment_autodrain.py": [
+      "backend/scripts/test_wb_project_enrichment_autodrain.py",
+      "backend/test_wb_project_enrichment_autodrain.py"
+    ]
+  },
+  "tracked_caches": [
+    "backend/alembic/__pycache__/env.cpython-314.pyc",
+    "backend/alembic/versions/__pycache__/14c7b4cac4ea_add_content_hash_and_analysis_id_.cpython-314.pyc",
+    "backend/alembic/versions/__pycache__/20260227_0001_google_oauth_cutover.cpython-314.pyc",
+    "backend/alembic/versions/__pycache__/27fc6790093d_add_tender_document_storage_fields.cpython-314.pyc",
+    "backend/alembic/versions/__pycache__/619f79030fe7_add_dynamic_compliance_ontology_and_.cpython-314.pyc",
+    "backend/alembic/versions/__pycache__/65c42c5b80fa_add_tenderrecommendation_table.cpython-314.pyc",
+    "backend/alembic/versions/__pycache__/9f3d2f4b6a10_add_tender_sync_jobs_table.cpython-314.pyc",
+    "backend/alembic/versions/__pycache__/ebccc6f00c82_add_dynamic_compliance_ontology_and_.cpython-314.pyc",
+    "backend/app/__pycache__/__init__.cpython-314.pyc",
+    "backend/app/__pycache__/main.cpython-314.pyc",
+    "backend/app/api/__pycache__/__init__.cpython-314.pyc",
+    "backend/app/api/__pycache__/deps.cpython-314.pyc",
+    "backend/app/api/endpoints/__pycache__/__init__.cpython-314.pyc",
+    "backend/app/api/endpoints/__pycache__/auth.cpython-314.pyc",
+    "backend/app/api/endpoints/__pycache__/hunter.cpython-314.pyc",
+    "backend/app/api/endpoints/__pycache__/proposals.cpython-314.pyc",
+    "backend/app/api/endpoints/__pycache__/tenders.cpython-314.pyc",
+    "backend/app/api/endpoints/__pycache__/users.cpython-314.pyc",
+    "backend/app/api/endpoints/__pycache__/vault.cpython-314.pyc",
+    "backend/app/api/routers/__pycache__/__init__.cpython-314.pyc",
+    "backend/app/api/routers/__pycache__/audit.cpython-314.pyc",
+    "backend/app/core/__pycache__/__init__.cpython-314.pyc",
+    "backend/app/core/__pycache__/ai.cpython-314.pyc",
+    "backend/app/core/__pycache__/ai_analyzer.cpython-314.pyc",
+    "backend/app/core/__pycache__/celery_app.cpython-314.pyc",
+    "backend/app/core/__pycache__/config.cpython-314.pyc",
+    "backend/app/core/__pycache__/evaluator.cpython-314.pyc",
+    "backend/app/core/__pycache__/parser.cpython-314.pyc",
+    "backend/app/core/__pycache__/scraper.cpython-314.pyc",
+    "backend/app/core/__pycache__/telegram.cpython-314.pyc",
+    "backend/app/core/agents/__pycache__/hunter.cpython-314.pyc",
+    "backend/app/core/security/__pycache__/__init__.cpython-314.pyc",
+    "backend/app/core/security/__pycache__/audit_trail.cpython-314.pyc",
+    "backend/app/db/__pycache__/__init__.cpython-314.pyc",
+    "backend/app/db/__pycache__/session.cpython-314.pyc",
+    "backend/app/models/__pycache__/__init__.cpython-314.pyc",
+    "backend/app/models/__pycache__/all_models.cpython-314.pyc",
+    "backend/app/models/__pycache__/audit.cpython-314.pyc",
+    "backend/app/models/__pycache__/base.cpython-314.pyc",
+    "backend/app/models/__pycache__/company.cpython-314.pyc",
+    "backend/app/models/__pycache__/taxonomy.cpython-314.pyc",
+    "backend/app/models/__pycache__/user.cpython-314.pyc",
+    "backend/app/schemas/__pycache__/__init__.cpython-314.pyc",
+    "backend/app/schemas/__pycache__/audit.cpython-314.pyc",
+    "backend/app/schemas/__pycache__/proposal.cpython-314.pyc",
+    "backend/app/schemas/__pycache__/tender.cpython-314.pyc",
+    "backend/app/schemas/__pycache__/vault.cpython-314.pyc",
+    "backend/app/workers/__pycache__/hunter_tasks.cpython-314.pyc",
+    "backend/app/workers/__pycache__/tender_tasks.cpython-314.pyc",
+    "backend/scripts/__pycache__/seed_taxonomy.cpython-314.pyc",
+    "backend/scripts/__pycache__/test_evaluator.cpython-314.pyc",
+    "backend/scripts/__pycache__/test_extraction.cpython-314.pyc",
+    "backend/scripts/__pycache__/verify_vault_db.cpython-314.pyc"
+  ],
+  "security_ast_equal": true,
+  "manifests": {
+    "backend/requirements.txt": "aab28118b43b0b022de0f6c8389a68aa7f895f5b530f80e7f1c848101eda59d9",
+    "frontend/package.json": "17db288b5549cc22e050de8951e3c43b99113b23cf3922df559457cda081f27a",
+    "frontend/package-lock.json": "b77e213d6a5954fab835db8dc0b966657e73644031792d07d99ffe8fef2c16bc"
+  }
+}
