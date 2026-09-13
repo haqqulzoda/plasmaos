@@ -2,6 +2,7 @@
   "language": {
     "title": "Interfeys tili",
     "onboardingHelp": "Avval tilni tanlang. Ro‘yxatdan o‘tishning qolgan qismi darhol shu tilda ko‘rsatiladi.",
+    "authHelp": "Kirish va mijoz ish maydoni uchun tilni tanlang.",
     "settingsHelp": "Mahsulot navigatsiyasi, yorliqlar va amallar uchun tilni tanlang. Kompaniya va tender ma’lumotlari tarjima qilinmaydi.",
     "optionsLabel": "Mavjud interfeys tillari",
     "optionLabel": "{language} tilidan foydalanish",
@@ -46,5 +47,24 @@
     "rejected": "Rad etilgan",
     "disabled": "O‘chirilgan",
     "unknown": "Noma’lum"
+  },
+  "redesign": {
+    "context": "Kompaniya sozlamalari",
+    "description": "Kompaniya ma’lumotlari va maqsadli bozorlarni yangilab boring.",
+    "identityHelp": "Kompaniya rekvizitlari va aloqa ma’lumotlari.",
+    "marketsHelp": "Kompaniyangiz ishlaydigan bozorlar va xizmatlarni tanlang.",
+    "overview": "Saqlangan kompaniya profili",
+    "unsaved": "Saqlanmagan o‘zgarishlar",
+    "upToDate": "Saqlanmagan o‘zgarishlar yo‘q",
+    "cancel": "O‘zgarishlarni bekor qilish",
+    "retry": "Qayta urinish"
+  },
+  "pilotStates": {
+    "lead": "Istiqbolli mijoz",
+    "scoped_pilot": "Cheklangan pilot",
+    "active_pilot": "Faol pilot",
+    "at_risk": "Xavf ostida",
+    "converted": "Mijozga aylangan",
+    "paused": "To‘xtatilgan"
   }
 }

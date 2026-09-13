@@ -90,5 +90,18 @@
   "actionUnavailable": "Bu tender holatida taklif tayyorlash mumkin emas.",
   "legacyOpening": "Taklif tayyorlash ochilmoqda…",
   "legacyInvalid": "Bu eski xatcho‘p sizga tegishli taklif tayyorlash materialiga olib bormaydi.",
-  "legacyList": "Taklif tayyorlash ro‘yxatini ochish"
+  "legacyList": "Taklif tayyorlash ro‘yxatini ochish",
+  "redesign": {
+    "description": "Takliflarni tayyorlang va saqlangan ishlaringizni ko‘ring.",
+    "total": "{count} ta tayyorlov",
+    "denied": "Sessiyangiz bu tayyorlovlarga kira olmaydi. Qayta tizimga kiring.",
+    "retry": "Qayta urinish",
+    "price": "Sizning narxingiz",
+    "notSet": "Belgilanmagan",
+    "deadline": "Muddat",
+    "generating": "Bu taklif yaratilmoqda deb belgilangan. Mavjud ishni ko‘rish uchun uni oching.",
+    "pagination": "Taklif tayyorlash sahifalari",
+    "page": "{page}-sahifa · {count} ta tayyorlov",
+    "pageEmpty": "Bu sahifada tayyorlovlar yo‘q"
+  }
 }

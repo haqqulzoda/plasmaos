@@ -5,6 +5,7 @@ import { Ban, LogOut } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
+import { Button } from '@/components/ui/Button';
 
 export default function AccessBlockedPage() {
     const t = useTranslations('auth');
@@ -33,24 +34,23 @@ export default function AccessBlockedPage() {
     };
 
     return (
-        <div className="min-h-[60vh] flex items-center justify-center">
-            <section className="w-full max-w-xl border border-gray-800 bg-gray-950 rounded-lg p-8 text-center space-y-5">
-                <div className="mx-auto w-12 h-12 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-                    <Ban className="w-6 h-6 text-red-300" />
+        <div className="customer-page customer-state-page">
+            <section className="ds-surface customer-state-card customer-state-copy">
+                <div className="customer-state-icon ds-tone-danger">
+                    <Ban aria-hidden />
                 </div>
-                <div className="space-y-2">
-                    <h1 className="text-2xl font-semibold text-white">{title}</h1>
-                    <p className="text-gray-300 leading-6">{message}</p>
-                    {reason && <p className="text-sm text-gray-500">{t('reason', {reason})}</p>}
+                <div>
+                    <h1>{title}</h1>
+                    <p className="ds-muted">{message}</p>
+                    {reason && <p className="ds-muted bidi-auto">{t('reason', {reason})}</p>}
                 </div>
-                <button
-                    type="button"
+                <Button
+                    variant="secondary"
                     onClick={handleLogout}
-                    className="inline-flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-900 hover:text-white transition-colors"
+                    leadingIcon={<LogOut aria-hidden />}
                 >
-                    <LogOut className="w-4 h-4" />
                     {t('logout')}
-                </button>
+                </Button>
             </section>
         </div>
     );

@@ -1,843 +1,916 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
-import Link from 'next/link';
+import { useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import Link from "next/link";
 import {
-    AlertTriangle,
-    Archive,
-    ArrowRight,
-    CheckCircle2,
-    ClipboardCheck,
-    Clock,
-    FileSearch,
-    Loader2,
-    Radar,
-    ShieldAlert,
-    ShieldCheck,
-} from 'lucide-react';
+  AlertTriangle,
+  Archive,
+  ArrowRight,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock,
+  FileSearch,
+  Radar,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
 
-import { api } from '@/lib/api';
-import { useSourceRefresh } from '@/components/source-refresh/SourceRefreshProvider';
+import { Alert } from "@/components/ui/Feedback";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import {
-    expiryState,
-    documentTypeMessageKey,
-} from '@/lib/readiness';
-import { labelForService, useServiceMeta } from '@/lib/services';
-import { formatDate as formatLocaleDate } from '@/i18n/formatters';
-import type { CustomerSelectableLocale } from '@/i18n/locales';
-import { translateServiceLabel } from '@/i18n/taxonomy';
-import { BidiText } from '@/components/i18n/BidiText';
-import type { Tender } from '@/types/tender';
-import {
-    documentAggregateLabel,
-    isTenderActionable,
-} from '@/types/tender';
+  Surface,
+  SectionHeader,
+  PageHeader,
+  EmptyState,
+  Metric,
+  StatusBadge,
+  PageSkeleton,
+} from "@/components/ui/Display";
+import { SourceRefreshMenu } from "@/components/source-refresh/SourceRefreshMenu";
+import { listExplorer } from "@/lib/explorer";
+import type { ExplorerItem, ExplorerTenderSummary } from "@/types/explorer";
+import { api } from "@/lib/api";
+import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
+import { expiryState, documentTypeMessageKey } from "@/lib/readiness";
+import { formatDate as formatLocaleDate } from "@/i18n/formatters";
+import type { CustomerSelectableLocale } from "@/i18n/locales";
+import { BidiText } from "@/components/i18n/BidiText";
+import type { Tender } from "@/types/tender";
+import { documentAggregateLabel, isTenderActionable } from "@/types/tender";
 import type {
-    DynamicEvaluation,
-    DynamicRequirements,
-    HybridCompliancePayload,
-} from '@/types/compliance';
+  DynamicEvaluation,
+  DynamicRequirements,
+  HybridCompliancePayload,
+} from "@/types/compliance";
 
 type CompanyProfile = {
-    company_profile_id?: string | null;
-    onboarding_required?: boolean;
-    company_name?: string | null;
-    target_regions?: string[] | null;
-    target_countries?: string[] | null;
-    target_services?: string[] | null;
-    approval_status?: string | null;
-    pilot_status?: string | null;
+  company_profile_id?: string | null;
+  onboarding_required?: boolean;
+  company_name?: string | null;
+  target_regions?: string[] | null;
+  target_countries?: string[] | null;
+  target_services?: string[] | null;
+  approval_status?: string | null;
+  pilot_status?: string | null;
 };
 
 type ReadinessDocument = {
-    id: string;
-    document_type: string;
-    document_name: string;
-    expiry_date?: string | null;
-    status: string;
-    related_service?: string | null;
-    updated_at?: string | null;
-    created_at?: string | null;
+  id: string;
+  document_type: string;
+  document_name: string;
+  expiry_date?: string | null;
+  status: string;
+  related_service?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
 };
 
 type LatestAnalysis = {
-    analysis_id: string | null;
-    requirements: DynamicRequirements | null;
-    evaluation: DynamicEvaluation | null;
-    hybrid_compliance?: HybridCompliancePayload | null;
-    coverage_metadata?: Record<string, unknown> | null;
-    analysis_status: string;
-    extraction_error?: string | null;
-    created_at?: string | null;
+  analysis_id: string | null;
+  requirement_count?: number;
+  manual_review_count?: number;
+  requirements: DynamicRequirements | null;
+  evaluation: DynamicEvaluation | null;
+  hybrid_compliance?: HybridCompliancePayload | null;
+  coverage_metadata?: Record<string, unknown> | null;
+  analysis_status: string;
+  extraction_error?: string | null;
+  created_at?: string | null;
 };
 
 type AnalysisSummary = {
-    tender: Tender;
-    analysis: LatestAnalysis;
+  tender: Tender;
+  analysis: LatestAnalysis;
 };
 
 type LoadState = {
-    profile: CompanyProfile | null;
-    readiness: ReadinessDocument[];
-    opportunities: Tender[];
-    analyses: AnalysisSummary[];
-    failures: string[];
+  profile: CompanyProfile | null;
+  readiness: ReadinessDocument[];
+  opportunities: ExplorerTenderSummary[];
+  analyses: AnalysisSummary[];
+  failures: string[];
+  recommendations: ExplorerItem[];
 };
 
 type ActionItem = {
-    key: string;
-    issue: string;
-    subject: string;
-    status: string;
-    href: string;
-    tone: 'danger' | 'warning' | 'review';
-    priority: number;
+  key: string;
+  issue: string;
+  subject: string;
+  status: string;
+  href: string;
+  tone: "danger" | "warning" | "review";
+  priority: number;
 };
 
-type DashboardTranslator = (key: string, values?: Record<string, string | number>) => string;
+type DashboardTranslator = (
+  key: string,
+  values?: Record<string, string | number>,
+) => string;
 
 const REQUIRED_READINESS_TYPES = [
-    'registration_document',
-    'tax_clearance',
-    'financial_statement',
-    'license',
+  "registration_document",
+  "tax_clearance",
+  "financial_statement",
+  "license",
 ];
 
-function unique(values: Array<string | null | undefined>): string[] {
-    return Array.from(new Set(values.filter((value): value is string => Boolean(value && value.trim()))));
-}
-
-function normalizeList(values?: string[] | null): string[] {
-    return Array.isArray(values) ? unique(values) : [];
-}
-
-function customerDate(value: string | null | undefined, locale: CustomerSelectableLocale, t: DashboardTranslator) {
-    return value ? formatLocaleDate(value, locale) : t('updatedUnavailable');
+function customerDate(
+  value: string | null | undefined,
+  locale: CustomerSelectableLocale,
+  t: DashboardTranslator,
+) {
+  return value ? formatLocaleDate(value, locale) : t("updatedUnavailable");
 }
 
 function deadlineState(deadline: string | null, t: DashboardTranslator) {
-    if (!deadline) return t('deadline.unknown');
-    const days = Math.ceil((new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (days < 0) return t('deadline.expired');
-    if (days === 0) return t('deadline.today');
-    if (days === 1) return t('deadline.one');
-    return t('deadline.many', { count: days });
+  if (!deadline) return t("deadline.unknown");
+  const days = Math.ceil(
+    (new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+  );
+  if (days < 0) return t("deadline.expired");
+  if (days === 0) return t("deadline.today");
+  if (days === 1) return t("deadline.one");
+  return t("deadline.many", { count: days });
 }
 
-function isCurrentTender(tender: Tender) {
-    return isTenderActionable(tender)
-        && (!tender.deadline || new Date(tender.deadline).getTime() >= Date.now());
-}
-
-function serviceFields(tender: Tender) {
-    return unique([tender.sector, tender.procurement_category, tender.category]);
-}
-
-function matchesAny(values: string[], candidates: string[]) {
-    const normalized = new Set(values.map((value) => value.toLowerCase()));
-    return candidates.some((candidate) => normalized.has(candidate.toLowerCase()));
-}
-
-function matchReason(tender: Tender, profile: CompanyProfile | null, serviceOptions: ReturnType<typeof useServiceMeta>, t: DashboardTranslator, tCommon: DashboardTranslator) {
-    const countries = normalizeList(profile?.target_countries);
-    const regions = normalizeList(profile?.target_regions);
-    const services = normalizeList(profile?.target_services);
-    const tenderServices = serviceFields(tender);
-
-    const geographyMatch = countries.find((country) => tender.country === country)
-        ?? regions.find((region) => tender.region === region)
-        ?? tender.country
-        ?? tender.region
-        ?? t('supportedGeography');
-    const serviceMatch = services.find((service) => matchesAny([service], tenderServices))
-        ?? tenderServices[0]
-        ?? t('sourceCoverage');
-
-    return t('matchReason', {
-        geography: geographyMatch,
-        service: translateServiceLabel(serviceMatch, tCommon, labelForService(serviceMatch, serviceOptions) || serviceMatch),
-    });
+function isCurrentTender(tender: ExplorerTenderSummary) {
+  return (
+    isTenderActionable(tender.status) &&
+    (!tender.deadline || new Date(tender.deadline).getTime() >= Date.now())
+  );
 }
 
 function analysisRequirementCount(analysis: LatestAnalysis) {
-    if (typeof analysis.hybrid_compliance?.total_requirements === 'number') {
-        return analysis.hybrid_compliance.total_requirements;
-    }
-    const mapped = analysis.requirements?.mapped_requirement_uuids?.length ?? 0;
-    const unmapped = analysis.requirements?.unmapped_custom_requirements?.length ?? 0;
-    return mapped + unmapped;
+  if (typeof analysis.hybrid_compliance?.total_requirements === "number") {
+    return analysis.hybrid_compliance.total_requirements;
+  }
+  if (typeof analysis.requirement_count === "number")
+    return analysis.requirement_count;
+  const mapped = analysis.requirements?.mapped_requirement_uuids?.length ?? 0;
+  const unmapped =
+    analysis.requirements?.unmapped_custom_requirements?.length ?? 0;
+  return mapped + unmapped;
 }
 
 function coverageStatus(analysis: LatestAnalysis) {
-    const coverage = analysis.coverage_metadata ?? {};
-    const status = String(coverage.coverage_status ?? '');
-    const sourceCoverage = coverage.source_document_coverage as { coverage_status?: unknown } | undefined;
-    if (status === 'failed') return 'Failed';
-    if (status === 'partial' || sourceCoverage?.coverage_status === 'partial') return 'Partial coverage';
-    if (status === 'complete') return 'Complete coverage';
-    return 'Coverage recorded';
+  const coverage = analysis.coverage_metadata ?? {};
+  const status = String(coverage.coverage_status ?? "");
+  const sourceCoverage = coverage.source_document_coverage as
+    | { coverage_status?: unknown }
+    | undefined;
+  if (status === "failed") return "Failed";
+  if (status === "partial" || sourceCoverage?.coverage_status === "partial")
+    return "Partial coverage";
+  if (status === "complete") return "Complete coverage";
+  return "Coverage recorded";
 }
 
 function cleanAnalysisStatus(analysis: LatestAnalysis) {
-    if (analysis.analysis_status === 'failed') return 'Failed';
-    if (coverageStatus(analysis) === 'Partial coverage') return 'Partial coverage';
-    if (
-        analysis.analysis_status === 'needs_review'
-        || (analysis.hybrid_compliance?.manual_review_count ?? 0) > 0
-        || (analysis.evaluation?.unmapped_requirements?.length ?? 0) > 0
-    ) {
-        return 'Needs review';
-    }
-    return 'Completed';
+  if (analysis.analysis_status === "failed") return "Failed";
+  if (coverageStatus(analysis) === "Partial coverage")
+    return "Partial coverage";
+  if (
+    analysis.analysis_status === "needs_review" ||
+    (analysis.manual_review_count ??
+      analysis.hybrid_compliance?.manual_review_count ??
+      0) > 0 ||
+    (analysis.evaluation?.unmapped_requirements?.length ?? 0) > 0
+  ) {
+    return "Needs review";
+  }
+  return "Completed";
 }
 
 function analysisStatusMessageKey(status: string) {
-    if (status === 'Failed') return 'status.failed';
-    if (status === 'Needs review') return 'status.needsReview';
-    if (status === 'Partial coverage') return 'status.partial';
-    return 'status.complete';
-}
-
-function coverageStatusMessageKey(status: string) {
-    if (status === 'Failed') return 'status.failed';
-    if (status === 'Partial coverage') return 'status.partial';
-    if (status === 'Complete coverage') return 'status.coverageComplete';
-    return 'status.coverageRecorded';
+  if (status === "Failed") return "status.failed";
+  if (status === "Needs review") return "status.needsReview";
+  if (status === "Partial coverage") return "status.partial";
+  return "status.complete";
 }
 
 function documentAggregateMessageKey(label: string) {
-    if (label === 'Partial coverage') return 'status.partial';
-    if (label === 'Ready for analysis') return 'status.readyAnalysis';
-    if (label === 'Document discovered') return 'status.documentDiscovered';
-    if (label === 'Preparation failed') return 'status.preparationFailed';
-    return 'status.documentsUnavailable';
-}
-
-function statusClasses(tone: 'danger' | 'warning' | 'review' | 'success' | 'neutral') {
-    if (tone === 'danger') return 'border-red-500/25 bg-red-500/10 text-red-200';
-    if (tone === 'warning') return 'border-amber-500/25 bg-amber-500/10 text-amber-200';
-    if (tone === 'review') return 'border-sky-500/25 bg-sky-500/10 text-sky-200';
-    if (tone === 'success') return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200';
-    return 'border-zinc-700 bg-zinc-900 text-zinc-300';
+  if (label === "Partial coverage") return "status.partial";
+  if (label === "Ready for analysis") return "status.readyAnalysis";
+  if (label === "Document discovered") return "status.documentDiscovered";
+  if (label === "Preparation failed") return "status.preparationFailed";
+  return "status.documentsUnavailable";
 }
 
 function isReadinessAvailable(document: ReadinessDocument) {
-    return document.status === 'available' && expiryState(document.expiry_date) !== 'expired';
+  return (
+    document.status === "available" &&
+    expiryState(document.expiry_date) !== "expired"
+  );
 }
 
 function requiredMissingTypes(documents: ReadinessDocument[]) {
-    return REQUIRED_READINESS_TYPES.filter((type) =>
-        !documents.some((document) => document.document_type === type && isReadinessAvailable(document)),
-    );
+  return REQUIRED_READINESS_TYPES.filter(
+    (type) =>
+      !documents.some(
+        (document) =>
+          document.document_type === type && isReadinessAvailable(document),
+      ),
+  );
 }
 
 function buildActionItems(
-    analyses: AnalysisSummary[],
-    opportunities: Tender[],
-    readiness: ReadinessDocument[],
-    locale: CustomerSelectableLocale,
-    t: DashboardTranslator,
-    tReadiness: DashboardTranslator,
+  analyses: AnalysisSummary[],
+  opportunities: ExplorerTenderSummary[],
+  readiness: ReadinessDocument[],
+  locale: CustomerSelectableLocale,
+  t: DashboardTranslator,
+  tReadiness: DashboardTranslator,
 ) {
-    const items: ActionItem[] = [];
+  const items: ActionItem[] = [];
 
-    analyses.forEach(({ tender, analysis }) => {
-        const status = cleanAnalysisStatus(analysis);
-        if (status === 'Failed') {
-            items.push({
-                key: `analysis-failed-${analysis.analysis_id}`,
-                issue: t('issues.analysisFailed'),
-                subject: tender.title,
-                status: t('status.failed'),
-                href: `/dashboard/tenders/${tender.id}/compliance`,
-                tone: 'danger',
-                priority: 1,
-            });
-        } else if (status === 'Needs review') {
-            items.push({
-                key: `analysis-review-${analysis.analysis_id}`,
-                issue: t('issues.manualReview'),
-                subject: tender.title,
-                status: t('status.reviewCount', { count: analysis.hybrid_compliance?.manual_review_count ?? 1 }),
-                href: `/dashboard/tenders/${tender.id}/compliance`,
-                tone: 'review',
-                priority: 2,
-            });
-        }
+  analyses.forEach(({ tender, analysis }) => {
+    const status = cleanAnalysisStatus(analysis);
+    if (status === "Failed") {
+      items.push({
+        key: `analysis-failed-${analysis.analysis_id}`,
+        issue: t("issues.analysisFailed"),
+        subject: tender.title,
+        status: t("status.failed"),
+        href: `/dashboard/tenders/${tender.id}/compliance`,
+        tone: "danger",
+        priority: 1,
+      });
+    } else if (status === "Needs review") {
+      items.push({
+        key: `analysis-review-${analysis.analysis_id}`,
+        issue: t("issues.manualReview"),
+        subject: tender.title,
+        status: t("status.reviewCount", {
+          count: analysis.hybrid_compliance?.manual_review_count ?? 1,
+        }),
+        href: `/dashboard/tenders/${tender.id}/compliance`,
+        tone: "review",
+        priority: 2,
+      });
+    }
+  });
+
+  opportunities
+    .filter((tender) =>
+      ["partial", "files_missing", "metadata_only", "access_required"].includes(
+        tender.document_status,
+      ),
+    )
+    .slice(0, 3)
+    .forEach((tender) => {
+      items.push({
+        key: `coverage-${tender.id}`,
+        issue: t("issues.coverage"),
+        subject: tender.title,
+        status: t(documentAggregateMessageKey(documentAggregateLabel(tender))),
+        href: `/dashboard/tenders/${tender.id}`,
+        tone: "warning",
+        priority: 3,
+      });
     });
 
-    opportunities
-        .filter((tender) => ['partial', 'files_missing', 'metadata_only', 'access_required'].includes(tender.document_status))
-        .slice(0, 3)
-        .forEach((tender) => {
-            items.push({
-                key: `coverage-${tender.id}`,
-                issue: t('issues.coverage'),
-                subject: tender.title,
-                status: t(documentAggregateMessageKey(documentAggregateLabel(tender))),
-                href: `/dashboard/tenders/${tender.id}`,
-                tone: 'warning',
-                priority: 3,
-            });
-        });
+  readiness.forEach((document) => {
+    const expiry = expiryState(document.expiry_date);
+    if (document.status === "expired" || expiry === "expired") {
+      items.push({
+        key: `readiness-expired-${document.id}`,
+        issue: t("issues.expired"),
+        subject: document.document_name,
+        status: customerDate(document.expiry_date, locale, t),
+        href: "/dashboard/readiness-vault",
+        tone: "danger",
+        priority: 1,
+      });
+    } else if (expiry === "expiring_soon") {
+      items.push({
+        key: `readiness-soon-${document.id}`,
+        issue: t("issues.expiring"),
+        subject: document.document_name,
+        status: customerDate(document.expiry_date, locale, t),
+        href: "/dashboard/readiness-vault",
+        tone: "warning",
+        priority: 4,
+      });
+    }
+  });
 
-    readiness.forEach((document) => {
-        const expiry = expiryState(document.expiry_date);
-        if (document.status === 'expired' || expiry === 'expired') {
-            items.push({
-                key: `readiness-expired-${document.id}`,
-                issue: t('issues.expired'),
-                subject: document.document_name,
-                status: customerDate(document.expiry_date, locale, t),
-                href: '/dashboard/readiness-vault',
-                tone: 'danger',
-                priority: 1,
-            });
-        } else if (expiry === 'expiring_soon') {
-            items.push({
-                key: `readiness-soon-${document.id}`,
-                issue: t('issues.expiring'),
-                subject: document.document_name,
-                status: customerDate(document.expiry_date, locale, t),
-                href: '/dashboard/readiness-vault',
-                tone: 'warning',
-                priority: 4,
-            });
-        }
+  requiredMissingTypes(readiness).forEach((type) => {
+    items.push({
+      key: `readiness-missing-${type}`,
+      issue: t("issues.missing"),
+      subject: tReadiness(documentTypeMessageKey(type)),
+      status: t("status.requiredBid"),
+      href: "/dashboard/readiness-vault",
+      tone: "warning",
+      priority: 5,
     });
+  });
 
-    requiredMissingTypes(readiness).forEach((type) => {
-        items.push({
-            key: `readiness-missing-${type}`,
-            issue: t('issues.missing'),
-            subject: tReadiness(documentTypeMessageKey(type)),
-            status: t('status.requiredBid'),
-            href: '/dashboard/readiness-vault',
-            tone: 'warning',
-            priority: 5,
-        });
-    });
-
-    return items.sort((a, b) => a.priority - b.priority).slice(0, 5);
-}
-
-function buildTenderParams(profile: CompanyProfile | null) {
-    const params: Record<string, string | number> = {
-        limit: 40,
-        sort: 'deadline_soonest',
-    };
-    const countries = normalizeList(profile?.target_countries);
-    const services = normalizeList(profile?.target_services);
-    const regions = normalizeList(profile?.target_regions);
-    if (countries.length > 0) params.countries = countries.join(',');
-    if (services.length > 0) params.services = services.join(',');
-    if (countries.length === 0 && regions.length > 0) params.region = regions[0];
-    return params;
+  return items.sort((a, b) => a.priority - b.priority).slice(0, 5);
 }
 
 async function fetchLatestAnalyses(tenders: Tender[]) {
-    const settled = await Promise.allSettled(
-        tenders.slice(0, 12).map(async (tender) => {
-            const response = await api.get<LatestAnalysis>(`/tenders/${tender.id}/latest-analysis`);
-            return { tender, analysis: response.data };
-        }),
+  const settled = await Promise.allSettled(
+    tenders.slice(0, 12).map(async (tender) => {
+      const response = await api.get<LatestAnalysis>(
+        `/tenders/${tender.id}/latest-analysis`,
+        { params: { summary_only: true } },
+      );
+      return { tender, analysis: response.data };
+    }),
+  );
+  if (settled.some((result) => result.status === "rejected"))
+    throw new Error("Analysis summaries unavailable");
+  return settled
+    .filter(
+      (result): result is PromiseFulfilledResult<AnalysisSummary> =>
+        result.status === "fulfilled",
+    )
+    .map((result) => result.value)
+    .filter((item) => Boolean(item.analysis.analysis_id))
+    .sort(
+      (a, b) =>
+        new Date(b.analysis.created_at ?? 0).getTime() -
+        new Date(a.analysis.created_at ?? 0).getTime(),
     );
-    return settled
-        .filter((result): result is PromiseFulfilledResult<AnalysisSummary> => result.status === 'fulfilled')
-        .map((result) => result.value)
-        .filter((item) => Boolean(item.analysis.analysis_id))
-        .sort((a, b) =>
-            new Date(b.analysis.created_at ?? 0).getTime() - new Date(a.analysis.created_at ?? 0).getTime(),
-        );
 }
 
-function isTestOnlyTender(tender: Tender) {
-    const marker = `${tender.title} ${tender.external_id}`.toLowerCase();
-    return marker.includes('[test]') || marker.includes('test-only') || marker.startsWith('test ');
+function isTestOnlyTender(tender: Pick<Tender, "title" | "external_id">) {
+  const marker = `${tender.title} ${tender.external_id}`.toLowerCase();
+  return (
+    marker.includes("[test]") ||
+    marker.includes("test-only") ||
+    marker.startsWith("test ")
+  );
 }
 
 export default function DashboardPage() {
-    const locale = useLocale() as CustomerSelectableLocale;
-    const translate = useTranslations('dashboard');
-    const translateCommon = useTranslations('common');
-    const translateReadiness = useTranslations('readiness');
-    const t = translate as DashboardTranslator;
-    const tCommon = translateCommon as DashboardTranslator;
-    const tReadiness = translateReadiness as DashboardTranslator;
-    const translateRef = useRef(t);
-    useEffect(() => { translateRef.current = t; }, [t]);
-    const serviceOptions = useServiceMeta();
-    const { catalog, displayNameForSource } = useSourceRefresh();
-    const [state, setState] = useState<LoadState>({
-        profile: null,
-        readiness: [],
-        opportunities: [],
-        analyses: [],
-        failures: [],
-    });
-    const [loading, setLoading] = useState(true);
+  const locale = useLocale() as CustomerSelectableLocale;
+  const translate = useTranslations("dashboard");
+  const translateReadiness = useTranslations("readiness");
+  const t = translate as DashboardTranslator;
+  const tReadiness = translateReadiness as DashboardTranslator;
+  const { displayNameForSource } = useSourceRefresh();
+  const [state, setState] = useState<LoadState>({
+    profile: null,
+    readiness: [],
+    opportunities: [],
+    analyses: [],
+    failures: [],
+    recommendations: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const [retryVersion, setRetryVersion] = useState(0);
+  const copy = useTranslations("dashboard.redesign");
 
-    useEffect(() => {
-        let mounted = true;
+  useEffect(() => {
+    let mounted = true;
 
-        const loadDashboard = async () => {
-            setLoading(true);
-            const failures: string[] = [];
+    const loadDashboard = async () => {
+      setLoading(true);
+      const failures: string[] = [];
 
-            const profileResult = await api.get<CompanyProfile>('/users/me/company')
-                .then((response) => response.data)
-                .catch(() => {
-                    failures.push(translateRef.current('failures.profile'));
-                    return null;
-                });
+      const profileResult = await api
+        .get<CompanyProfile>("/users/me/company")
+        .then((response) => response.data)
+        .catch(() => {
+          failures.push("profile");
+          return null;
+        });
 
-            const [readinessResult, opportunityResult, analysisTenderResult] = await Promise.allSettled([
-                api.get<ReadinessDocument[]>('/vault/readiness'),
-                api.get<Tender[]>('/tenders', { params: buildTenderParams(profileResult) }),
-                api.get<Tender[]>('/tenders', { params: { limit: 24, sort: 'newest' } }),
-            ]);
+      const [readinessResult, opportunityResult, analysisTenderResult] =
+        await Promise.allSettled([
+          api.get<ReadinessDocument[]>("/vault/readiness"),
+          listExplorer({
+            view: "recommended",
+            limit: 8,
+            offset: 0,
+            status: "OPEN",
+            sort: "best_match",
+          }),
+          api.get<Tender[]>("/tenders", {
+            params: { limit: 24, sort: "newest" },
+          }),
+        ]);
 
-            const readiness = readinessResult.status === 'fulfilled' ? readinessResult.value.data ?? [] : [];
-            if (readinessResult.status === 'rejected') failures.push(translateRef.current('failures.readiness'));
+      const readiness =
+        readinessResult.status === "fulfilled"
+          ? (readinessResult.value.data ?? [])
+          : [];
+      if (readinessResult.status === "rejected") failures.push("readiness");
 
-            const opportunities = opportunityResult.status === 'fulfilled'
-                ? (opportunityResult.value.data ?? []).filter((tender) => isCurrentTender(tender) && !isTestOnlyTender(tender))
-                : [];
-            if (opportunityResult.status === 'rejected') failures.push(translateRef.current('failures.opportunities'));
+      const opportunities =
+        opportunityResult.status === "fulfilled"
+          ? opportunityResult.value.data.items
+              .map((item) => item.tender)
+              .filter(
+                (tender) =>
+                  isCurrentTender(tender) && !isTestOnlyTender(tender),
+              )
+          : [];
+      if (opportunityResult.status === "rejected")
+        failures.push("opportunities");
 
-            const analysisCandidates = analysisTenderResult.status === 'fulfilled'
-                ? (analysisTenderResult.value.data ?? []).filter((tender) => !isTestOnlyTender(tender))
-                : opportunities;
-            if (analysisTenderResult.status === 'rejected') failures.push(translateRef.current('failures.analyses'));
-
-            const analyses = await fetchLatestAnalyses(analysisCandidates).catch(() => {
-                failures.push(translateRef.current('failures.analyses'));
-                return [];
-            });
-
-            if (mounted) {
-                setState({
-                    profile: profileResult,
-                    readiness,
-                    opportunities,
-                    analyses,
-                    failures,
-                });
-                setLoading(false);
-            }
-        };
-
-        loadDashboard();
-
-        return () => {
-            mounted = false;
-        };
-    }, []);
-
-    const profileTargets = useMemo(() => ({
-        countries: normalizeList(state.profile?.target_countries),
-        regions: normalizeList(state.profile?.target_regions),
-        services: normalizeList(state.profile?.target_services),
-    }), [state.profile]);
-
-    const priorityOpportunities = useMemo(
-        () => state.opportunities
-            .filter((tender) => catalog.some((source) => source.source_system === tender.source_system))
-            .slice(0, 8),
-        [catalog, state.opportunities],
-    );
-
-    const readinessStats = useMemo(() => {
-        const expired = state.readiness.filter((document) =>
-            document.status === 'expired' || expiryState(document.expiry_date) === 'expired',
-        );
-        const expiringSoon = state.readiness.filter((document) => expiryState(document.expiry_date) === 'expiring_soon');
-        const missingTypes = requiredMissingTypes(state.readiness);
-        const available = state.readiness.filter(isReadinessAvailable);
-        const explicitlyMissing = state.readiness.filter((document) => document.status === 'missing');
-        return {
-            available: available.length,
-            missing: missingTypes.length + explicitlyMissing.length,
-            expired: expired.length,
-            expiringSoon: expiringSoon.length,
-            missingTypes,
-        };
-    }, [state.readiness]);
-
-    const actionItems = useMemo(
-        () => buildActionItems(state.analyses, state.opportunities, state.readiness, locale, t, tReadiness),
-        [locale, state.analyses, state.opportunities, state.readiness, t, tReadiness],
-    );
-
-    const recentActivity = useMemo(() => {
-        const analysisEvents = state.analyses.slice(0, 4).map(({ tender, analysis }) => ({
-            key: `analysis-${analysis.analysis_id}`,
-            label: cleanAnalysisStatus(analysis) === 'Completed'
-                ? t('analysisCompleted')
-                : t('analysisState', { status: t(analysisStatusMessageKey(cleanAnalysisStatus(analysis))) }),
-            subject: tender.title,
-            when: analysis.created_at,
-            href: `/dashboard/tenders/${tender.id}/compliance`,
-        }));
-        const readinessEvents = state.readiness
-            .filter((document) => document.updated_at || document.created_at)
-            .sort((a, b) =>
-                new Date(b.updated_at ?? b.created_at ?? 0).getTime()
-                - new Date(a.updated_at ?? a.created_at ?? 0).getTime(),
+      const analysisCandidates =
+        analysisTenderResult.status === "fulfilled"
+          ? (analysisTenderResult.value.data ?? []).filter(
+              (tender) => !isTestOnlyTender(tender),
             )
-            .slice(0, 2)
-            .map((document) => ({
-                key: `readiness-${document.id}`,
-                label: t('readinessUpdated'),
-                subject: document.document_name,
-                when: document.updated_at ?? document.created_at,
-                href: '/dashboard/readiness-vault',
-            }));
-        return [...analysisEvents, ...readinessEvents]
-            .sort((a, b) => new Date(b.when ?? 0).getTime() - new Date(a.when ?? 0).getTime())
-            .slice(0, 6);
-    }, [state.analyses, state.readiness, t]);
+          : [];
+      if (analysisTenderResult.status === "rejected") failures.push("analyses");
 
-    const readinessTone = readinessStats.expired > 0
-        ? 'danger'
-        : readinessStats.missing > 0 || readinessStats.expiringSoon > 0
-            ? 'warning'
-            : 'success';
+      const analyses = await fetchLatestAnalyses(analysisCandidates).catch(
+        () => {
+          failures.push("analyses");
+          return [];
+        },
+      );
 
-    if (loading) {
-        return (
-            <div role="status" aria-label={t('loading')} className="flex h-64 items-center justify-center">
-                <Loader2 className="h-7 w-7 animate-spin text-zinc-400" />
-            </div>
-        );
-    }
+      if (mounted) {
+        setState({
+          profile: profileResult,
+          readiness,
+          opportunities,
+          analyses,
+          failures,
+          recommendations:
+            opportunityResult.status === "fulfilled"
+              ? opportunityResult.value.data.items
+              : [],
+        });
+        setLoading(false);
+      }
+    };
 
-    const isNewCompany = !state.profile?.company_profile_id
-        || state.profile.onboarding_required
-        || (
-            state.readiness.length === 0
-            && state.analyses.length === 0
-            && priorityOpportunities.length === 0
-        );
+    loadDashboard();
 
+    return () => {
+      mounted = false;
+    };
+  }, [retryVersion]);
+
+  const readinessStats = useMemo(() => {
+    const expired = state.readiness.filter(
+      (document) =>
+        document.status === "expired" ||
+        expiryState(document.expiry_date) === "expired",
+    );
+    const expiringSoon = state.readiness.filter(
+      (document) => expiryState(document.expiry_date) === "expiring_soon",
+    );
+    const missingTypes = requiredMissingTypes(state.readiness);
+    const available = state.readiness.filter(isReadinessAvailable);
+    const explicitlyMissing = state.readiness.filter(
+      (document) => document.status === "missing",
+    );
+    return {
+      available: available.length,
+      missing: missingTypes.length + explicitlyMissing.length,
+      expired: expired.length,
+      expiringSoon: expiringSoon.length,
+      missingTypes,
+    };
+  }, [state.readiness]);
+
+  const actionItems = useMemo(
+    () =>
+      buildActionItems(
+        state.analyses,
+        state.opportunities,
+        state.readiness,
+        locale,
+        t,
+        tReadiness,
+      ),
+    [
+      locale,
+      state.analyses,
+      state.opportunities,
+      state.readiness,
+      t,
+      tReadiness,
+    ],
+  );
+
+  const recentActivity = useMemo(() => {
+    const analysisEvents = state.analyses
+      .slice(0, 4)
+      .map(({ tender, analysis }) => ({
+        key: `analysis-${analysis.analysis_id}`,
+        label:
+          cleanAnalysisStatus(analysis) === "Completed"
+            ? t("analysisCompleted")
+            : t("analysisState", {
+                status: t(
+                  analysisStatusMessageKey(cleanAnalysisStatus(analysis)),
+                ),
+              }),
+        subject: tender.title,
+        when: analysis.created_at,
+        href: `/dashboard/tenders/${tender.id}/compliance`,
+      }));
+    const readinessEvents = state.readiness
+      .filter((document) => document.updated_at || document.created_at)
+      .sort(
+        (a, b) =>
+          new Date(b.updated_at ?? b.created_at ?? 0).getTime() -
+          new Date(a.updated_at ?? a.created_at ?? 0).getTime(),
+      )
+      .slice(0, 2)
+      .map((document) => ({
+        key: `readiness-${document.id}`,
+        label: t("readinessUpdated"),
+        subject: document.document_name,
+        when: document.updated_at ?? document.created_at,
+        href: "/dashboard/readiness-vault",
+      }));
+    return [...analysisEvents, ...readinessEvents]
+      .sort(
+        (a, b) =>
+          new Date(b.when ?? 0).getTime() - new Date(a.when ?? 0).getTime(),
+      )
+      .slice(0, 6);
+  }, [state.analyses, state.readiness, t]);
+
+  const readinessTone =
+    readinessStats.expired > 0
+      ? "danger"
+      : readinessStats.missing > 0 || readinessStats.expiringSoon > 0
+        ? "warning"
+        : "success";
+
+  if (loading)
     return (
-        <div className="space-y-5">
-            <header className="flex flex-col gap-2 border-b border-zinc-800 pb-4 md:flex-row md:items-end md:justify-between">
-                <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{t('eyebrow')}</p>
-                    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">{t('title')}</h1>
-                    <p className="mt-1 max-w-3xl text-sm text-zinc-400">
-                        {t('subtitle')}
-                    </p>
-                </div>
-                <Link
-                    href="/dashboard/tenders"
-                    className="inline-flex items-center gap-2 rounded-md border border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500"
-                >
-                    {t('openExplorer')}
-                    <ArrowRight className="rtl-mirror h-4 w-4" />
-                </Link>
-            </header>
-
-            {state.failures.length > 0 && (
-                <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                    {t('partialData')}
-                </div>
-            )}
-
-            {isNewCompany && <NewCompanySteps />}
-
-            <section className="rounded-md border border-zinc-800 bg-zinc-950">
-                <SectionHeader
-                    icon={<AlertTriangle className="h-4 w-4" />}
-                    title={t('actionTitle')}
-                    description={t('actionHelp')}
-                />
-                {actionItems.length === 0 ? (
-                    <EmptySection
-                        icon={<CheckCircle2 className="h-5 w-5" />}
-                        title={t('noUrgent')}
-                        body={t('noUrgentHelp')}
-                    />
-                ) : (
-                    <div className="divide-y divide-zinc-900">
-                        {actionItems.map((item) => (
-                            <Link
-                                key={item.key}
-                                href={item.href}
-                                className="grid gap-3 px-4 py-3 text-sm hover:bg-zinc-900/60 md:grid-cols-[1.1fr_1.4fr_180px_90px] md:items-center"
-                            >
-                                <div className="font-medium text-zinc-100">{item.issue}</div>
-                                <BidiText className="min-w-0 truncate text-zinc-400">{item.subject}</BidiText>
-                                <span className={`w-fit rounded border px-2 py-1 text-xs font-semibold ${statusClasses(item.tone)}`}>
-                                    {item.status}
-                                </span>
-                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-300 md:justify-end">
-                                    {t('open')} <ArrowRight className="rtl-mirror h-3.5 w-3.5" />
-                                </span>
-                            </Link>
-                        ))}
-                    </div>
-                )}
-            </section>
-
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)]">
-                <section className="rounded-md border border-zinc-800 bg-zinc-950">
-                    <SectionHeader
-                        icon={<Radar className="h-4 w-4" />}
-                        title={t('opportunitiesTitle')}
-                        description={t('opportunitiesHelp')}
-                    />
-                    {priorityOpportunities.length === 0 ? (
-                        <EmptySection
-                            icon={<FileSearch className="h-5 w-5" />}
-                            title={profileTargets.countries.length + profileTargets.regions.length + profileTargets.services.length === 0
-                                ? t('targetingMissing')
-                                : t('noMatches')}
-                            body={profileTargets.countries.length + profileTargets.regions.length + profileTargets.services.length === 0
-                                ? t('targetingHelp')
-                                : t('broadenHelp')}
-                            actionHref="/dashboard/settings"
-                            actionLabel={t('openProfile')}
-                        />
+      <div className="customer-page">
+        <PageSkeleton label={t("loading")} />
+      </div>
+    );
+  const unavailable = (key: string) => state.failures.includes(key);
+  const failedAll = ["profile", "readiness", "opportunities", "analyses"].every(
+    unavailable,
+  );
+  const retry = (
+    <Button variant="secondary" onClick={() => setRetryVersion((v) => v + 1)}>
+      {copy("retry")}
+    </Button>
+  );
+  const missing = (
+    <EmptyState
+      title={copy("unavailable")}
+      description={copy("unavailableHelp")}
+      action={retry}
+    />
+  );
+  const setup =
+    !unavailable("profile") &&
+    (!state.profile?.company_profile_id ||
+      state.profile.onboarding_required ||
+      (!state.readiness.length && !state.analyses.length));
+  return (
+    <div className="customer-page ds-stack" data-page="dashboard">
+      <PageHeader
+        eyebrow={t("eyebrow")}
+        title={t("title")}
+        description={t("subtitle")}
+        primaryAction={
+          <ButtonLink href="/dashboard/tenders">
+            {t("openExplorer")}
+            <ArrowRight className="rtl-mirror" aria-hidden />
+          </ButtonLink>
+        }
+        secondaryAction={<SourceRefreshMenu foundation />}
+      />
+      {state.failures.length > 0 && (
+        <Alert
+          tone={failedAll ? "danger" : "warning"}
+          title={failedAll ? copy("failed") : t("partialData")}
+          action={retry}
+        >
+          {copy("unavailableHelp")}
+        </Alert>
+      )}
+      {failedAll ? (
+        missing
+      ) : (
+        <>
+          {setup && (
+            <Surface className="dashboard-setup">
+              <div className="ds-stack">
+                <h2>{t("gettingStarted")}</h2>
+                <p className="ds-muted">{copy("setupHelp")}</p>
+                <ButtonLink href="/dashboard/settings">
+                  {t("openProfile")}
+                </ButtonLink>
+              </div>
+              <div className="dashboard-steps">
+                {[
+                  {
+                    label: t("steps.profile"),
+                    href: "/dashboard/settings",
+                    done: Boolean(
+                      state.profile?.company_profile_id &&
+                        !state.profile.onboarding_required,
+                    ),
+                    Icon: ClipboardCheck,
+                  },
+                  {
+                    label: t("steps.readiness"),
+                    href: "/dashboard/readiness-vault",
+                    done:
+                      !unavailable("readiness") &&
+                      readinessStats.available > 0 &&
+                      readinessStats.missing === 0,
+                    Icon: Archive,
+                  },
+                  {
+                    label: t("steps.tenders"),
+                    href: "/dashboard/tenders",
+                    done: false,
+                    Icon: Radar,
+                  },
+                  {
+                    label: t("steps.analysis"),
+                    href: "/dashboard/tenders",
+                    done: !unavailable("analyses") && state.analyses.length > 0,
+                    Icon: ShieldCheck,
+                  },
+                ].map(({ label, href, done, Icon }) => (
+                  <Surface
+                    variant="subtle"
+                    className="dashboard-step"
+                    key={href + label}
+                  >
+                    <Icon aria-hidden />
+                    <strong>{label}</strong>
+                    {done ? (
+                      <StatusBadge tone="success">
+                        {copy("complete")}
+                      </StatusBadge>
                     ) : (
-                        <div className="divide-y divide-zinc-900">
-                            {priorityOpportunities.slice(0, 8).map((tender) => (
-                                <Link
-                                    key={tender.id}
-                                    href={`/dashboard/tenders/${tender.id}`}
-                                    className="grid gap-3 px-4 py-3 hover:bg-zinc-900/60 lg:grid-cols-[92px_minmax(0,1fr)_120px_118px_150px]"
-                                >
-                                    <BidiText className="text-xs font-semibold uppercase text-zinc-500">{displayNameForSource(tender.source_system)}</BidiText>
-                                    <div className="min-w-0">
-                                        <BidiText className="block truncate text-sm font-medium text-zinc-100">{tender.title}</BidiText>
-                                        <p className="mt-1 truncate text-xs text-zinc-500">
-                                            {matchReason(tender, state.profile, serviceOptions, t, tCommon)}
-                                        </p>
-                                    </div>
-                                    <BidiText className="text-sm text-zinc-300">{tender.country || t('unknown')}</BidiText>
-                                    <span className="text-sm text-zinc-400">{deadlineState(tender.deadline, t)}</span>
-                                    <span className={`w-fit rounded border px-2 py-1 text-xs font-semibold ${tender.compliance_analysis_available ? statusClasses('success') : statusClasses('warning')}`}>
-                                        {t(documentAggregateMessageKey(documentAggregateLabel(tender)))}
-                                    </span>
-                                </Link>
-                            ))}
-                        </div>
+                      <ButtonLink variant="secondary" size="sm" href={href}>
+                        {t("open")}
+                      </ButtonLink>
                     )}
-                </section>
-
-                <section className="rounded-md border border-zinc-800 bg-zinc-950">
-                    <SectionHeader
-                        icon={<Archive className="h-4 w-4" />}
-                        title={t('readinessTitle')}
-                        description={t('readinessHelp')}
-                        actionHref="/dashboard/readiness-vault"
-                        actionLabel={t('readinessVault')}
-                    />
-                    <div className="p-4">
-                        <div className={`rounded-md border px-4 py-3 ${statusClasses(readinessTone)}`}>
-                            <div className="text-sm font-semibold">
-                                {readinessTone === 'danger'
-                                    ? t('readinessRisk')
-                                    : readinessTone === 'warning'
-                                        ? t('readinessGaps')
-                                        : t('readinessCurrent')}
-                            </div>
-                            <p className="mt-1 text-xs opacity-80">
-                                {t('readinessSummary', { expired: readinessStats.expired, expiring: readinessStats.expiringSoon, missing: readinessStats.missing })}
-                            </p>
-                        </div>
-                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                            <ReadinessMetric label={t('available')} value={readinessStats.available} />
-                            <ReadinessMetric label={t('missing')} value={readinessStats.missing} urgent={readinessStats.missing > 0} />
-                            <ReadinessMetric label={t('expired')} value={readinessStats.expired} urgent={readinessStats.expired > 0} />
-                            <ReadinessMetric label={t('expiringSoon')} value={readinessStats.expiringSoon} urgent={readinessStats.expiringSoon > 0} />
-                        </div>
-                        {readinessStats.missingTypes.length > 0 && (
-                            <div className="mt-4 text-xs text-zinc-400">
-                                {t('missingList', { items: readinessStats.missingTypes.map((type) => tReadiness(documentTypeMessageKey(type))).join(', ') })}
-                            </div>
-                        )}
-                    </div>
-                </section>
-            </div>
-
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
-                <section className="rounded-md border border-zinc-800 bg-zinc-950">
-                    <SectionHeader
-                        icon={<ShieldCheck className="h-4 w-4" />}
-                        title={t('analysesTitle')}
-                        description={t('analysesHelp')}
-                    />
-                    {state.analyses.length === 0 ? (
-                        <EmptySection
-                            icon={<ShieldAlert className="h-5 w-5" />}
-                            title={t('noAnalyses')}
-                            body={t('noAnalysesHelp')}
-                            actionHref="/dashboard/tenders"
-                            actionLabel={t('reviewTenders')}
-                        />
-                    ) : (
-                        <div className="divide-y divide-zinc-900">
-                            {state.analyses.slice(0, 6).map(({ tender, analysis }) => {
-                                const status = cleanAnalysisStatus(analysis);
-                                const tone = status === 'Failed'
-                                    ? 'danger'
-                                    : status === 'Needs review' || status === 'Partial coverage'
-                                        ? 'warning'
-                                        : 'success';
-                                return (
-                                    <Link
-                                        key={`${tender.id}-${analysis.analysis_id}`}
-                                        href={`/dashboard/tenders/${tender.id}/compliance`}
-                                        className="grid gap-3 px-4 py-3 text-sm hover:bg-zinc-900/60 lg:grid-cols-[minmax(0,1fr)_90px_132px_110px_124px_82px]"
-                                    >
-                                        <div className="min-w-0">
-                                            <BidiText className="block truncate font-medium text-zinc-100">{tender.title}</BidiText>
-                                            <BidiText className="mt-1 block text-xs text-zinc-500">{displayNameForSource(tender.source_system)}</BidiText>
-                                        </div>
-                                        <span className={`w-fit rounded border px-2 py-1 text-xs font-semibold ${statusClasses(tone)}`}>
-                                            {t(analysisStatusMessageKey(status))}
-                                        </span>
-                                        <span className="text-zinc-400">{t(coverageStatusMessageKey(coverageStatus(analysis)))}</span>
-                                        <span className="text-zinc-400">{t('requirementCount', { count: analysisRequirementCount(analysis) })}</span>
-                                        <span className="text-zinc-500">{customerDate(analysis.created_at, locale, t)}</span>
-                                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-300 lg:justify-end">
-                                            {t('open')} <ArrowRight className="rtl-mirror h-3.5 w-3.5" />
-                                        </span>
-                                    </Link>
-                                );
-                            })}
-                        </div>
-                    )}
-                </section>
-
-                <section className="rounded-md border border-zinc-800 bg-zinc-950">
-                    <SectionHeader
-                        icon={<ClipboardCheck className="h-4 w-4" />}
-                        title={t('activityTitle')}
-                        description={t('activityHelp')}
-                    />
-                    {recentActivity.length === 0 ? (
-                        <EmptySection
-                            icon={<Clock className="h-5 w-5" />}
-                            title={t('noActivity')}
-                            body={t('noActivityHelp')}
-                        />
-                    ) : (
-                        <div className="divide-y divide-zinc-900">
-                            {recentActivity.map((event) => (
-                                <Link key={event.key} href={event.href} className="block px-4 py-3 hover:bg-zinc-900/60">
-                                    <p className="text-sm font-medium text-zinc-100">{event.label}</p>
-                                    <p className="mt-1 truncate text-sm text-zinc-400">{event.subject}</p>
-                                    <p className="mt-1 text-xs text-zinc-500">{customerDate(event.when, locale, t)}</p>
-                                </Link>
-                            ))}
-                        </div>
-                    )}
-                </section>
-            </div>
-        </div>
-    );
-}
-
-function SectionHeader({
-    icon,
-    title,
-    description,
-    actionHref,
-    actionLabel,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    description: string;
-    actionHref?: string;
-    actionLabel?: string;
-}) {
-    return (
-        <div className="flex flex-col gap-3 border-b border-zinc-900 px-4 py-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-                <div className="mt-0.5 text-zinc-500">{icon}</div>
-                <div>
-                    <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-200">{title}</h2>
-                    <p className="mt-1 text-sm text-zinc-500">{description}</p>
-                </div>
-            </div>
-            {actionHref && actionLabel && (
-                <Link href={actionHref} className="text-sm font-medium text-zinc-300 hover:text-white">
-                    {actionLabel}
-                </Link>
-            )}
-        </div>
-    );
-}
-
-function EmptySection({
-    icon,
-    title,
-    body,
-    actionHref,
-    actionLabel,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    body: string;
-    actionHref?: string;
-    actionLabel?: string;
-}) {
-    return (
-        <div className="px-4 py-8 text-center">
-            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-zinc-500">
-                {icon}
-            </div>
-            <h3 className="mt-3 text-sm font-semibold text-zinc-200">{title}</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-zinc-500">{body}</p>
-            {actionHref && actionLabel && (
-                <Link
-                    href={actionHref}
-                    className="mt-4 inline-flex items-center gap-2 rounded-md border border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500"
-                >
-                    {actionLabel}
-                    <ArrowRight className="rtl-mirror h-4 w-4" />
-                </Link>
-            )}
-        </div>
-    );
-}
-
-function ReadinessMetric({ label, value, urgent = false }: { label: string; value: number; urgent?: boolean }) {
-    return (
-        <div className="rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2">
-            <div className={`text-lg font-semibold ${urgent ? 'text-amber-200' : 'text-zinc-100'}`}>{value}</div>
-            <div className="text-xs text-zinc-500">{label}</div>
-        </div>
-    );
-}
-
-function NewCompanySteps() {
-    const translate = useTranslations('dashboard');
-    const t = translate as DashboardTranslator;
-    const steps = [
-        { label: t('steps.profile'), href: '/dashboard/settings' },
-        { label: t('steps.readiness'), href: '/dashboard/readiness-vault' },
-        { label: t('steps.tenders'), href: '/dashboard/tenders' },
-        { label: t('steps.analysis'), href: '/dashboard/tenders' },
-    ];
-    return (
-        <section className="rounded-md border border-zinc-800 bg-zinc-950 px-4 py-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-200">{t('gettingStarted')}</h2>
-            <div className="mt-3 grid gap-2 md:grid-cols-4">
-                {steps.map((step) => (
-                    <Link
-                        key={step.label}
-                        href={step.href}
-                        className="rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-sm text-zinc-300 hover:border-zinc-600 hover:text-white"
-                    >
-                        {step.label}
-                    </Link>
+                  </Surface>
                 ))}
-            </div>
-        </section>
-    );
+              </div>
+            </Surface>
+          )}
+          <div className="dashboard-primary">
+            <Surface>
+              <SectionHeader
+                icon={<AlertTriangle aria-hidden />}
+                title={t("actionTitle")}
+                description={t("actionHelp")}
+              />
+              {unavailable("readiness") || unavailable("analyses") ? (
+                missing
+              ) : actionItems.length ? (
+                actionItems.map((item) => (
+                  <Link
+                    prefetch={false}
+                    className="dashboard-action"
+                    key={item.key}
+                    href={item.href}
+                  >
+                    <strong>{item.issue}</strong>
+                    <BidiText className="ds-muted">{item.subject}</BidiText>
+                    <div className="ds-row">
+                      <StatusBadge
+                        tone={item.tone === "review" ? "info" : item.tone}
+                      >
+                        {item.status}
+                      </StatusBadge>
+                      <span className="ds-link">{t("open")}</span>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <EmptyState
+                  icon={<CheckCircle2 aria-hidden />}
+                  title={t("noUrgent")}
+                  description={t("noUrgentHelp")}
+                />
+              )}
+            </Surface>
+            <Surface>
+              <SectionHeader
+                icon={<Radar aria-hidden />}
+                title={t("opportunitiesTitle")}
+                description={copy("opportunitiesHelp")}
+                action={
+                  <ButtonLink
+                    variant="ghost"
+                    size="sm"
+                    href="/dashboard/tenders?view=recommended"
+                  >
+                    {t("open")}
+                  </ButtonLink>
+                }
+              />
+              {unavailable("opportunities") ? (
+                missing
+              ) : state.recommendations.length ? (
+                state.recommendations
+                  .slice(0, 8)
+                  .map(({ tender, recommendation }) => (
+                    <Link
+                      prefetch={false}
+                      className="dashboard-opportunity"
+                      key={tender.id}
+                      href={`/dashboard/tenders/${tender.id}`}
+                    >
+                      <div className="ds-row ds-text-small ds-muted">
+                        <BidiText>
+                          {displayNameForSource(tender.source_system)}
+                        </BidiText>
+                        <BidiText>{tender.country || t("unknown")}</BidiText>
+                      </div>
+                      <h3>
+                        <BidiText>{tender.title}</BidiText>
+                      </h3>
+                      {recommendation && (
+                        <>
+                          <p className="ds-text-small ds-muted">
+                            <BidiText>
+                              {recommendation.rationale_summary}
+                            </BidiText>
+                          </p>
+                          <StatusBadge tone="accent">
+                            {copy("match", {
+                              score: recommendation.match_score,
+                            })}
+                          </StatusBadge>
+                        </>
+                      )}
+                      <span className="ds-text-small ds-muted">
+                        {deadlineState(tender.deadline, t)}
+                      </span>
+                    </Link>
+                  ))
+              ) : (
+                <EmptyState
+                  icon={<FileSearch aria-hidden />}
+                  title={t("noMatches")}
+                  description={t("broadenHelp")}
+                  action={
+                    <ButtonLink variant="secondary" href="/dashboard/tenders">
+                      {t("openExplorer")}
+                    </ButtonLink>
+                  }
+                />
+              )}
+            </Surface>
+            <Surface>
+              <SectionHeader
+                icon={<Archive aria-hidden />}
+                title={t("readinessTitle")}
+                description={t("readinessHelp")}
+              />
+              {unavailable("readiness") ? (
+                missing
+              ) : (
+                <div className="ds-pad ds-stack">
+                  <Alert
+                    tone={readinessTone}
+                    title={
+                      readinessTone === "danger"
+                        ? t("readinessRisk")
+                        : readinessTone === "warning"
+                          ? t("readinessGaps")
+                          : t("readinessCurrent")
+                    }
+                  >
+                    {t("readinessSummary", {
+                      expired: readinessStats.expired,
+                      expiring: readinessStats.expiringSoon,
+                      missing: readinessStats.missing,
+                    })}
+                  </Alert>
+                  <div className="ds-grid-two">
+                    {[
+                      [t("available"), readinessStats.available],
+                      [t("missing"), readinessStats.missing],
+                      [t("expired"), readinessStats.expired],
+                      [t("expiringSoon"), readinessStats.expiringSoon],
+                    ].map(([label, value]) => (
+                      <Metric key={String(label)} label={label} value={value} />
+                    ))}
+                  </div>
+                  {readinessStats.missingTypes.length > 0 && (
+                    <p className="ds-muted ds-text-small">
+                      {t("missingList", {
+                        items: readinessStats.missingTypes
+                          .map((type) =>
+                            tReadiness(documentTypeMessageKey(type)),
+                          )
+                          .join(", "),
+                      })}
+                    </p>
+                  )}
+                  <ButtonLink href="/dashboard/readiness-vault">
+                    {t("readinessVault")}
+                    <ArrowRight className="rtl-mirror" aria-hidden />
+                  </ButtonLink>
+                </div>
+              )}
+            </Surface>
+          </div>
+          <div className="dashboard-secondary">
+            <Surface>
+              <SectionHeader
+                icon={<ShieldCheck aria-hidden />}
+                title={t("analysesTitle")}
+                description={t("analysesHelp")}
+              />
+              {unavailable("analyses") ? (
+                missing
+              ) : state.analyses.length ? (
+                state.analyses.slice(0, 6).map(({ tender, analysis }) => {
+                  const status = cleanAnalysisStatus(analysis);
+                  return (
+                    <Link
+                      prefetch={false}
+                      key={analysis.analysis_id}
+                      href={`/dashboard/tenders/${tender.id}/compliance`}
+                      className="dashboard-action"
+                    >
+                      <strong>
+                        <BidiText>{tender.title}</BidiText>
+                      </strong>
+                      <div className="ds-row">
+                        <StatusBadge
+                          tone={
+                            status === "Failed"
+                              ? "danger"
+                              : status === "Needs review" ||
+                                  status === "Partial coverage"
+                                ? "warning"
+                                : "success"
+                          }
+                        >
+                          {t(analysisStatusMessageKey(status))}
+                        </StatusBadge>
+                        <span className="ds-muted ds-text-small">
+                          {t("requirementCount", {
+                            count: analysisRequirementCount(analysis),
+                          })}
+                        </span>
+                        <span className="ds-muted ds-text-small">
+                          {customerDate(analysis.created_at, locale, t)}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })
+              ) : (
+                <EmptyState
+                  icon={<ShieldAlert aria-hidden />}
+                  title={t("noAnalyses")}
+                  description={t("noAnalysesHelp")}
+                  action={
+                    <ButtonLink variant="secondary" href="/dashboard/tenders">
+                      {t("reviewTenders")}
+                    </ButtonLink>
+                  }
+                />
+              )}
+            </Surface>
+            <Surface>
+              <SectionHeader
+                icon={<Clock aria-hidden />}
+                title={t("activityTitle")}
+                description={t("activityHelp")}
+              />
+              {unavailable("analyses") || unavailable("readiness") ? (
+                missing
+              ) : recentActivity.length ? (
+                recentActivity.map((event) => (
+                  <Link
+                    prefetch={false}
+                    key={event.key}
+                    href={event.href}
+                    className="dashboard-action"
+                  >
+                    <strong>{event.label}</strong>
+                    <BidiText className="ds-muted">{event.subject}</BidiText>
+                    <span className="ds-muted ds-text-small">
+                      {customerDate(event.when, locale, t)}
+                    </span>
+                  </Link>
+                ))
+              ) : (
+                <EmptyState
+                  icon={<ClipboardCheck aria-hidden />}
+                  title={t("noActivity")}
+                  description={t("noActivityHelp")}
+                />
+              )}
+            </Surface>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

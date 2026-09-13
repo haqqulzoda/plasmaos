@@ -46,15 +46,15 @@ class AdminApprovalQueueTests(unittest.TestCase):
         self.assertIn("rejection_reason = _clean_reason(payload.reason)", source)
 
     def test_admin_pages_and_pilot_route_block_exist(self) -> None:
-        dashboard_layout = read_frontend("app/dashboard/layout.tsx")
-        admin_layout = read_frontend("app/admin/layout.tsx")
+        dashboard_layout = read_frontend("app/dashboard/layout.tsx") + read_frontend("components/shell/CustomerShell.tsx")
+        admin_layout = read_frontend("app/admin/layout.tsx") + read_frontend("components/shell/AdminShell.tsx")
         admin_page = read_frontend("app/admin/page.tsx")
         approvals_page = read_frontend("app/admin/approvals/page.tsx")
         legacy_admin_page = read_frontend("app/dashboard/admin/page.tsx")
         legacy_approvals_page = read_frontend("app/dashboard/admin/approvals/page.tsx")
         middleware = read_frontend("middleware.ts")
 
-        self.assertIn("Admin Console", admin_layout)
+        self.assertIn("<PlasmaLogo admin", admin_layout)
         self.assertIn("'/admin'", admin_layout)
         self.assertIn("'/admin/approvals'", admin_layout)
         self.assertIn("role === 'operator'", admin_layout)

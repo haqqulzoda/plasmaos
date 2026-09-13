@@ -35,10 +35,10 @@ test('Arabic activation is atomic across registry, loader, root direction, and s
   assert.match(read('components/i18n/LanguageSelector.tsx'), /CUSTOMER_SELECTABLE_LOCALES\.map/);
 });
 
-test('all 15 Arabic namespaces match the complete 866-key customer contract', () => {
-  assert.equal(MESSAGE_NAMESPACES.length, 15);
-  assert.equal(flattenMessageTree(catalogs.en).size, 866);
-  assert.equal(flattenMessageTree(catalogs.ar).size, 866);
+test('all 16 Arabic namespaces match the complete 1009-key customer contract', () => {
+  assert.equal(MESSAGE_NAMESPACES.length, 16);
+  assert.equal(flattenMessageTree(catalogs.en).size, 1009);
+  assert.equal(flattenMessageTree(catalogs.ar).size, 1009);
   assert.deepEqual(validateMessageCatalogs(catalogs.en, {ar: catalogs.ar}), []);
 });
 
@@ -117,9 +117,9 @@ test('source, user, technical, and analysis content have reusable bidi boundarie
 test('analysis, evidence, identifier, and filename islands are explicit in Compliance', () => {
   const source = read('app/dashboard/tenders/[tenderId]/compliance/page.tsx');
   assert.match(source, /dir=\{analysisContentDirection\(analysisLanguage\)\}/);
-  assert.match(source, /<span dir="auto">&quot;\{quote\}/);
-  assert.match(source, /dir="ltr" className="technical-ltr[^>]*font-mono/);
-  assert.match(source, /dir="auto" className="bidi-auto[^>]*truncate">\{d\.source_filename/);
+  assert.match(source, /<p dir="auto">\{quote\}<\/p>/);
+  assert.match(source, /<TechnicalText>\{contentHash\}<\/TechnicalText>/);
+  assert.match(source, /<BidiText>\{detail\.source_filename/);
 });
 
 test('profile, onboarding, search, proposal, and readiness inputs declare content direction', () => {
@@ -161,6 +161,6 @@ test('canonical query and payload values remain locale-neutral', () => {
   const explorer = read('app/dashboard/tenders/page.tsx');
   const compliance = read('app/dashboard/tenders/[tenderId]/compliance/page.tsx');
   assert.match(explorer, /new URLSearchParams\(\{ view: query\.view \}\)/);
-  assert.match(compliance, /new URLSearchParams\(\{ analysis_language: selectedAnalysisLanguage \}\)/);
+  assert.match(compliance, /new URLSearchParams\(\{\s*analysis_language: selectedAnalysisLanguage,?\s*\}\)/);
   assert.doesNotMatch(compliance, /analysis_language:\s*(?:locale|uiLocale)/);
 });

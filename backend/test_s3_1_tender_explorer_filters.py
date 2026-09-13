@@ -68,8 +68,8 @@ class S31TenderExplorerFilterStaticTests(unittest.TestCase):
         self.assertIn("CENTRAL_ASIA_COUNTRIES", explorer)
         self.assertIn("DEFAULT_SERVICE_OPTIONS", explorer)
         self.assertEqual(translated(explorer, "explorer", "centralAsia"), "Central Asia")
-        self.assertIn('localizeTaxonomyValue("country", country, tCommon)', explorer)
-        self.assertIn('localizeTaxonomyValue("service", service.value, tCommon)', explorer)
+        self.assertRegex(explorer, r'localizeTaxonomyValue\(\s*"country",\s*country,\s*tCommon,?\s*\)')
+        self.assertRegex(explorer, r'localizeTaxonomyValue\(\s*"service",\s*service.value,\s*tCommon,?\s*\)')
         for expected in (
             "Uzbekistan",
             "Kazakhstan",

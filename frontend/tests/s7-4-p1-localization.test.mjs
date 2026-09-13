@@ -26,11 +26,11 @@ test('P1 customer surfaces contain no unexplained literal JSX or accessibility c
 
 test('Compliance localizes chrome while preserving analysis, evidence, and requirement content', () => {
   const source = read('app/dashboard/tenders/[tenderId]/compliance/page.tsx');
-  assert.match(source, /useTranslations\('compliance'\)/);
-  for (const expression of ['hybridCompliance.status_message', 'requirementSnippet', 'detail.raw_text_snippet', 'detail.exact_quote', 'd.matched_credential']) {
+  assert.match(source, /useTranslations\(['"]compliance['"]\)/);
+  for (const expression of ['hybridCompliance.status_message', 'requirementSnippet', 'detail.raw_text_snippet', 'detail.exact_quote', 'detail.matched_credential']) {
     assert.match(source, new RegExp(expression.replaceAll('.', '\\.')));
   }
-  assert.doesNotMatch(source, /(?:^|[^A-Za-z])t\((?:hybridCompliance\.status_message|requirementSnippet|detail\.(?:raw_text_snippet|exact_quote)|d\.matched_credential)/m);
+  assert.doesNotMatch(source, /(?:^|[^A-Za-z])t\((?:hybridCompliance\.status_message|requirementSnippet|detail\.(?:raw_text_snippet|exact_quote)|detail\.matched_credential)/m);
   // Sprint 8.2 adds an explicit analysis_language authority. The Sprint 7
   // regression invariant is that UI locale and report-language guesses are
   // never sent as analysis inputs.

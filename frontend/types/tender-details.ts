@@ -1,3 +1,4 @@
+import type { RecommendationSummary } from './explorer';
 import type {
     EngagementAction,
     EngagementOrigin,
@@ -155,6 +156,7 @@ export interface TenderDetailsBidPreparation {
 }
 
 export interface TenderDetailsResponse {
+    recommendation?: RecommendationSummary | null;
     tender_id: string;
     project_context: DetailsSection<TenderDetailsProjectContext>;
     project_leadership: DetailsSection<TenderDetailsProjectLeadership>;

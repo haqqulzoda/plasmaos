@@ -7,7 +7,7 @@ from alembic.script import ScriptDirectory
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD = "20260904_0001_s8_2_analysis_language"
+HEAD = "20260912_0001_s10_5_communications"
 
 
 def source(relative: str) -> str:
@@ -26,7 +26,7 @@ def test_dead_hunter_frontend_type_is_removed() -> None:
 
 
 def test_customer_runtime_has_no_hunter_product_surface() -> None:
-    layout = source("frontend/app/dashboard/layout.tsx")
+    layout = source("frontend/components/shell/CustomerShell.tsx")
     explorer = source("frontend/app/dashboard/tenders/page.tsx")
     assert "Hunter" not in layout
     assert "Hunter" not in explorer
@@ -79,7 +79,7 @@ def test_canonical_and_legacy_openapi_routes_remain_registered() -> None:
 
 
 def test_navigation_and_customer_copy_are_converged() -> None:
-    layout = source("frontend/app/dashboard/layout.tsx")
+    layout = source("frontend/components/shell/CustomerShell.tsx")
     navigation = source("frontend/messages/en/navigation.json")
     recommendation = source("frontend/components/tenders/RecommendationSummary.tsx")
     explorer_messages = source("frontend/messages/en/explorer.json")

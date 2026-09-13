@@ -96,7 +96,7 @@ def test_no_passive_frontend_proposal_creation_remains():
 
 
 def test_navigation_and_copy_use_bid_preparation():
-    layout = frontend("app/dashboard/layout.tsx")
+    layout = frontend("components/shell/CustomerShell.tsx")
     navigation = frontend("messages/en/navigation.json")
     listing = frontend("app/dashboard/bid-preparation/page.tsx")
     assert "nameKey: 'bidPreparation'" in layout

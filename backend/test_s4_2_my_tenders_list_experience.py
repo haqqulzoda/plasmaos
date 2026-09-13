@@ -13,7 +13,7 @@ from app.services.my_tenders import MyTendersQuery, _base_list_statement, _order
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT = BACKEND_DIR.parent
-HEAD = "20260904_0001_s8_2_analysis_language"
+HEAD = "20260912_0001_s10_5_communications"
 
 
 def source(relative: str) -> str:
@@ -132,7 +132,7 @@ def test_frontend_my_tenders_has_no_legacy_data_source_or_workflow_leakage() -> 
 
 
 def test_frontend_navigation_separates_bid_preparation_and_my_tenders() -> None:
-    layout = source("frontend/app/dashboard/layout.tsx")
+    layout = source("frontend/components/shell/CustomerShell.tsx")
     navigation = source("frontend/messages/en/navigation.json")
     assert "nameKey: 'myTenders'" in layout
     assert "href: '/dashboard/my-tenders'" in layout
@@ -141,7 +141,7 @@ def test_frontend_navigation_separates_bid_preparation_and_my_tenders() -> None:
     assert '"myTenders": "My Tenders"' in navigation
     assert '"bidPreparation": "Bid Preparation"' in navigation
     bids = source("frontend/app/dashboard/bid-preparation/page.tsx")
-    assert 'api.get("/proposals", {params: {limit: 25, offset}})' in bids
+    assert 'api.get("/proposals",{params:{limit:25,offset}})' in ''.join(bids.split())
 
 
 def test_passive_tender_detail_only_reads_and_click_handler_is_the_only_post() -> None:

@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const layout = read("app/dashboard/layout.tsx");
+const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx");
 const list = read("app/dashboard/bid-preparation/page.tsx");
 const detail = read("app/dashboard/bid-preparation/[proposalId]/page.tsx");
 const legacyList = read("app/dashboard/bids/page.tsx");
@@ -60,7 +60,7 @@ test("canonical dynamic route is Proposal-ID-only and passive", () => {
 });
 
 test("legacy detail validates the owned Proposal then redirects without fallback", () => {
-  assert.match(legacyDetail, /api\.get\(`\/proposals\/\$\{id\}`\)/);
+  assert.match(legacyDetail, /api\s*\.get\(`\/proposals\/\$\{id\}`\)/);
   assert.match(
     legacyDetail,
     /router\.replace\(`\/dashboard\/bid-preparation\/\$\{id\}`\)/,
@@ -76,7 +76,7 @@ test("Prepare Bid is an explicit POST with separate Tender and Proposal identifi
 });
 
 test("Bid Preparation list remains Proposal-backed with optional engagement context", () => {
-  assert.match(list, /api\.get\(\s*["']\/proposals["'],\s*\{params: \{limit: 25, offset\}\}\)/);
+  assert.match(list, /api\s*\.get\(\s*["']\/proposals["'],\s*\{\s*params:\s*\{\s*limit: 25, offset\s*\},?\s*\}\)/);
   assert.match(list, /proposal\.engagement_status/);
   assert.match(list, /t\("open"\)/);
   assert.doesNotMatch(list, /\/my-tenders/);

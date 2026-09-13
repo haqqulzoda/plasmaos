@@ -157,11 +157,11 @@ class S23ServiceTests(unittest.TestCase):
         self.assertIn('localizeTaxonomyValue("service", service.value, tCommon)', onboarding)
         self.assertIn("target_services: toggleValue", onboarding)
         self.assertIn("service.value", onboarding)
-        self.assertIn('localizeTaxonomyValue("service", service.value, tCommon)', settings)
+        self.assertIn('localizeTaxonomyValue("service", value, tCommon)', settings)
         self.assertIn("useServiceMeta", settings)
         self.assertIn("useServiceMeta", readiness)
-        self.assertIn("translateServiceLabel(document.related_service", readiness)
-        self.assertIn("labelForService(document.related_service, services)", readiness)
+        self.assertIn("translateServiceLabel(record.related_service", "".join(readiness.split()))
+        self.assertIn("labelForService(record.related_service,services)", "".join(readiness.split()))
 
 
 if __name__ == "__main__":

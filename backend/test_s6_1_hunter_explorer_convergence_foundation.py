@@ -177,7 +177,7 @@ def test_preflight_exposes_count_only_recommendation_foundation_metrics() -> Non
 def test_s6_4_frontend_converges_with_passive_route_retirement() -> None:
     explorer_page = source("frontend/app/dashboard/tenders/page.tsx")
     hunter_page = source("frontend/app/dashboard/hunter/page.tsx")
-    layout = source("frontend/app/dashboard/layout.tsx")
+    layout = source("frontend/components/shell/CustomerShell.tsx")
     assert re.search(r'[\"\']recommended[\"\']\s*,\s*t\(\s*[\"\']views\.recommended[\"\']', explorer_page)
     assert translated(explorer_page, "explorer", "views.recommended") == "Recommended"
     assert "permanentRedirect" not in hunter_page

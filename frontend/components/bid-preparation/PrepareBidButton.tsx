@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { FilePenLine, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
 import type { PrepareBidResponse } from "@/types/bid-preparation";
 
 interface PrepareBidButtonProps {
+  foundation?: boolean;
   tenderId?: string;
   proposalId?: string;
   label?: string;
@@ -18,6 +20,7 @@ interface PrepareBidButtonProps {
 }
 
 export function PrepareBidButton({
+  foundation = false,
   tenderId,
   proposalId,
   label,
@@ -56,6 +59,27 @@ export function PrepareBidButton({
       setSubmitting(false);
     }
   };
+
+  if (foundation)
+    return (
+      <div className="ds-stack">
+        <Button
+          size="sm"
+          loading={submitting}
+          disabled={disabled}
+          title={title}
+          onClick={prepare}
+          leadingIcon={<FilePenLine aria-hidden />}
+        >
+          {submitting ? t("loading") : (label ?? t("prepare"))}
+        </Button>
+        {error && (
+          <p role="alert" className="ds-text-danger ds-text-small">
+            {error}
+          </p>
+        )}
+      </div>
+    );
 
   return (
     <div className="inline-flex flex-col items-end gap-1">

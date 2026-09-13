@@ -36,10 +36,52 @@
   "allStatuses": "Barcha holatlar",
   "allServices": "Barcha xizmatlar",
   "resetFilters": "Filtrlarni tiklash",
-  "table": {"type": "Tur", "name": "Nomi", "number": "Raqam", "issuer": "Beruvchi", "issue": "Berilgan", "expiry": "Muddati", "status": "Holat", "service": "Xizmat", "file": "Fayl", "actions": "Amallar"},
+  "table": {
+    "type": "Tur",
+    "name": "Nomi",
+    "number": "Raqam",
+    "issuer": "Beruvchi",
+    "issue": "Berilgan",
+    "expiry": "Muddati",
+    "status": "Holat",
+    "service": "Xizmat",
+    "file": "Fayl",
+    "actions": "Amallar"
+  },
   "editNamed": "{name} hujjatini tahrirlash",
   "deleteNamed": "{name} hujjatini o‘chirish",
-  "types": {"license": "Litsenziya", "certificate": "Sertifikat", "taxClearance": "Soliq qarzdorligi yo‘qligi ma’lumotnomasi", "financialStatement": "Moliyaviy hisobot", "registrationDocument": "Ro‘yxatdan o‘tish hujjati", "powerOfAttorney": "Ishonchnoma", "personnelDocument": "Xodimlar hujjati", "other": "Boshqa", "unknown": "Boshqa hujjat"},
-  "statuses": {"available": "Mavjud", "missing": "Yetishmaydi", "expired": "Muddati tugagan", "unknown": "Holati noma’lum"},
-  "expiry": {"expired": "Muddati tugagan", "expiringSoon": "Muddati yaqin", "valid": "Amalda", "unknown": "Muddati noma’lum"}
+  "types": {
+    "license": "Litsenziya",
+    "certificate": "Sertifikat",
+    "taxClearance": "Soliq qarzdorligi yo‘qligi ma’lumotnomasi",
+    "financialStatement": "Moliyaviy hisobot",
+    "registrationDocument": "Ro‘yxatdan o‘tish hujjati",
+    "powerOfAttorney": "Ishonchnoma",
+    "personnelDocument": "Xodimlar hujjati",
+    "other": "Boshqa",
+    "unknown": "Boshqa hujjat"
+  },
+  "statuses": {
+    "available": "Mavjud",
+    "missing": "Yetishmaydi",
+    "expired": "Muddati tugagan",
+    "unknown": "Holati noma’lum"
+  },
+  "expiry": {
+    "expired": "Muddati tugagan",
+    "expiringSoon": "Muddati yaqin",
+    "valid": "Amalda",
+    "unknown": "Muddati noma’lum"
+  },
+  "redesign": {
+    "context": "Kompaniya hujjatlari",
+    "description": "Tayyorgarlik yozuvlari va ixtiyoriy fayl havolalarini boshqaring.",
+    "pageEmpty": "Bu sahifada yozuvlar yo‘q.",
+    "viewFile": "Fayl havolasini ochish",
+    "noFile": "Fayl havolasi yo‘q",
+    "fileHelp": "Yozuv fayl havolasisiz ham mavjud bo‘lishi mumkin. Havola qo‘shish faylni tasdiqlamaydi.",
+    "cancel": "Bekor qilish",
+    "delete": "Yozuvni o‘chirish",
+    "retry": "Qayta urinish"
+  }
 }

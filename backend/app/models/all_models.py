@@ -762,6 +762,7 @@ from app.models.taxonomy import (  # noqa: E402,F401
     TaxonomyNode,
     TenderRequirement,
 )
+from app.models.communications import Broadcast, BroadcastRecipient, NotificationDelivery, NotificationEvent, NotificationOutbox  # noqa: E402,F401
 from app.models.user import User  # noqa: E402,F401
 
 

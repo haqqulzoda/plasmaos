@@ -8,33 +8,38 @@ import {
   useRef,
   useState,
 } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  AlertCircle,
   ArrowRight,
   Bookmark,
   Building2,
   CalendarDays,
   FolderKanban,
-  Loader2,
   MapPin,
-  Search,
+  Globe2,
 } from "lucide-react";
-
 import { api } from "@/lib/api";
 import { BidiText } from "@/components/i18n/BidiText";
 import { formatCurrency, formatDate } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
 import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";
-import {
-  engagementStatusClasses,
-  type MyTenderListItem,
-  type MyTendersListResponse,
+import type {
+  MyTenderListItem,
+  MyTendersListResponse,
 } from "@/types/engagement";
-import { sourceBadgeClasses, tenderStatusClasses } from "@/types/tender";
+import {
+  EmptyState,
+  PageHeader,
+  PageSkeleton,
+  Surface,
+  StatusBadge,
+} from "@/components/ui/Display";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { SearchField, Select } from "@/components/ui/Forms";
+import { Tabs, Pagination } from "@/components/ui/Navigation";
+import { Alert } from "@/components/ui/Feedback";
 
 const PAGE_SIZE = 25;
 const STATUS_FILTERS = [
@@ -93,79 +98,110 @@ function MyTenderCard({
       : formatCurrency(item.estimated_value, item.currency, locale, {
           maximumFractionDigits: 2,
         });
+  const copy = useTranslations("myTenders.redesign");
   return (
-    <article className="rounded-xl border border-zinc-800 bg-zinc-950 p-5 shadow-sm">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-        <div className="min-w-0 space-y-3">
-          <div className="flex flex-wrap gap-2" aria-label={t("statusesLabel")}>
-            <span
-              className={`rounded-md border px-2 py-1 text-xs font-semibold ${engagementStatusClasses(item.engagement_status)}`}
-            >
-              {t("engagement", { status: engagementLabel })}
-            </span>
-            <span
-              className={`rounded-md border px-2 py-1 text-xs font-semibold ${tenderStatusClasses(item.tender_status)}`}
-            >
-              {t("tender", { status: tenderLabel })}
-            </span>
-            <span
-              className={`rounded-md border px-2 py-1 text-xs font-semibold ${sourceBadgeClasses(item.source_system)}`}
-            >
-              <BidiText>{sourceDisplayName}</BidiText>
-            </span>
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-white">
-              <BidiText>{item.tender_title}</BidiText>
-            </h2>
-            <p className="mt-1 flex items-center gap-2 text-sm text-zinc-400">
-              <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <BidiText>{item.buyer || t("buyerMissing")}</BidiText>
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-400">
-            <span className="inline-flex items-center gap-2">
-              <CalendarDays className="h-4 w-4" aria-hidden="true" />
-              {t("deadline", { date: deadline })}
-            </span>
-            <span>{value}</span>
-            {(item.country || item.region) && (
-              <span className="inline-flex items-center gap-2">
-                <MapPin className="h-4 w-4" aria-hidden="true" />
-                <BidiText>{[item.country, item.region].filter(Boolean).join(" · ")}</BidiText>
-              </span>
-            )}
-          </div>
-          {item.project_external_id && (
-            <div className="inline-flex items-center gap-2 text-sm text-sky-200">
-              <FolderKanban className="h-4 w-4" aria-hidden="true" />
-              <BidiText>{t("project", {
-                project: item.project_name || item.project_external_id,
-              })}</BidiText>
-            </div>
+    <Surface
+      className="pipeline-row"
+      role="article"
+      aria-label={item.tender_title}
+      data-engagement-id={item.engagement_id}
+    >
+      <div className="pipeline-source" aria-hidden>
+        <Globe2 />
+      </div>
+      <div className="pipeline-summary ds-stack">
+        <div className="ds-row" aria-label={t("statusesLabel")}>
+          <StatusBadge
+            tone={
+              item.engagement_status === "WON"
+                ? "success"
+                : item.engagement_status === "LOST"
+                  ? "danger"
+                  : item.engagement_status === "EVALUATING"
+                    ? "warning"
+                    : item.engagement_status === "DISMISSED"
+                      ? "neutral"
+                      : "info"
+            }
+          >
+            {t("engagement", { status: engagementLabel })}
+          </StatusBadge>
+          <StatusBadge
+            tone={item.tender_status === "OPEN" ? "success" : "neutral"}
+          >
+            {t("tender", { status: tenderLabel })}
+          </StatusBadge>
+          <span className="ds-muted ds-text-small">
+            <BidiText>{sourceDisplayName}</BidiText>
+          </span>
+        </div>
+        <h2>
+          <BidiText>{item.tender_title}</BidiText>
+        </h2>
+        <div className="ds-row ds-muted ds-text-small">
+          <Building2 aria-hidden />
+          <BidiText>{item.buyer || t("buyerMissing")}</BidiText>
+          {(item.country || item.region) && (
+            <>
+              <MapPin aria-hidden />
+              <BidiText>
+                {[item.country, item.region].filter(Boolean).join(" · ")}
+              </BidiText>
+            </>
           )}
         </div>
-        <div className="flex shrink-0 flex-wrap items-start gap-2">
-          <EngagementWorkflowActions
-            engagement={item}
-            tenderId={item.tender_id}
-            onRefresh={onRefresh}
-          />
-          <Link
-            href={`/dashboard/tenders/${item.tender_id}`}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:border-indigo-500 hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            {t("openTender")}
-            <ArrowRight className="rtl-mirror h-4 w-4" aria-hidden="true" />
-          </Link>
-        </div>
+        {item.project_external_id && (
+          <div className="ds-row ds-muted ds-text-small">
+            <FolderKanban aria-hidden />
+            <BidiText>
+              {t("project", {
+                project: item.project_name || item.project_external_id,
+              })}
+            </BidiText>
+          </div>
+        )}
       </div>
-    </article>
+      <dl className="pipeline-facts">
+        <div>
+          <dt>
+            <CalendarDays aria-hidden />
+            {copy("deadline")}
+          </dt>
+          <dd>{deadline}</dd>
+        </div>
+        <div>
+          <dt>{copy("estimatedValue")}</dt>
+          <dd className="ds-numeric">{value}</dd>
+        </div>
+        <div>
+          <dt>{copy("matchScore")}</dt>
+          <dd className="ds-muted">{copy("unavailable")}</dd>
+        </div>
+      </dl>
+      <div className="pipeline-actions">
+        <ButtonLink
+          variant="secondary"
+          size="sm"
+          href={`/dashboard/tenders/${item.tender_id}`}
+        >
+          {t("openTender")}
+          <ArrowRight className="rtl-mirror" aria-hidden />
+        </ButtonLink>
+        <EngagementWorkflowActions
+          foundation
+          menuActions
+          engagement={item}
+          tenderId={item.tender_id}
+          onRefresh={onRefresh}
+        />
+      </div>
+    </Surface>
   );
 }
 
 function MyTendersContent() {
   const t = useTranslations("myTenders");
+  const copy = useTranslations("myTenders.redesign");
   const { catalog, catalogError, displayNameForSource } = useSourceRefresh();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -228,9 +264,7 @@ function MyTendersContent() {
       .catch((requestError: { response?: { status?: number } }) => {
         if (cancelled) return;
         const code = requestError.response?.status;
-        setError(
-          code === 401 || code === 403 ? t("accessDenied") : t("loadFailed"),
-        );
+        setError(code === 401 || code === 403 ? "accessDenied" : "loadFailed");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -238,7 +272,7 @@ function MyTendersContent() {
     return () => {
       cancelled = true;
     };
-  }, [page, refreshVersion, search, sort, source, status, tenderStatus, t]);
+  }, [page, refreshVersion, search, sort, source, status, tenderStatus]);
 
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
   const countFor = useMemo(
@@ -289,211 +323,180 @@ function MyTendersContent() {
             ? t("tenderStatuses.cancelled")
             : t("tenderStatuses.unknown");
 
-  return (
-    <main className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
-      <header>
-        <div className="flex items-center gap-3">
-          <Bookmark className="h-7 w-7 text-sky-300" aria-hidden="true" />
-          <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
-        </div>
-        <p className="mt-2 text-zinc-400">{t("subtitle")}</p>
-      </header>
-
-      <section aria-label={t("filtersLabel")} className="flex flex-wrap gap-2">
-        {STATUS_FILTERS.map((value) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => updateQuery({ status: value, page: "1" })}
-            aria-pressed={status === value}
-            className={`rounded-lg border px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
-              status === value
-                ? "border-sky-400 bg-sky-500/20 text-sky-100"
-                : "border-zinc-700 text-zinc-300 hover:border-zinc-500"
-            }`}
-          >
-            {engagementFilterLabel(value)}{" "}
-            <span className="text-xs text-zinc-400">{countFor[value]}</span>
-          </button>
-        ))}
-      </section>
-
-      <section className="grid grid-cols-1 gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4 md:grid-cols-2 2xl:grid-cols-[minmax(240px,1fr)_180px_190px_180px]">
-        <form onSubmit={submitSearch} className="flex min-w-0 flex-col gap-2 sm:flex-row">
-          <label className="sr-only" htmlFor="my-tenders-search">
-            {t("searchLabel")}
-          </label>
-          <div className="relative min-w-0 flex-1">
-            <Search
-              className="pointer-events-none absolute start-3 top-2.5 h-4 w-4 text-zinc-500"
-              aria-hidden="true"
-            />
-            <input
-              dir="auto"
-              id="my-tenders-search"
-              value={searchDraft}
-              onChange={(event) => setSearchDraft(event.target.value)}
-              placeholder={t("searchLabel")}
-              className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 ps-9 pe-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-            />
-          </div>
-          <button
-            type="submit"
-            className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
-          >
+  const filtered = Boolean(search || source || tenderStatus);
+  const content = (
+    <div className="ds-stack">
+      <Surface className="pipeline-filters">
+        <form onSubmit={submitSearch} className="pipeline-search">
+          <SearchField
+            id="my-tenders-search"
+            label={t("searchLabel")}
+            placeholder={t("searchLabel")}
+            clearLabel={copy("clearSearch")}
+            dir="auto"
+            value={searchDraft}
+            onValueChange={(value) => {
+              setSearchDraft(value);
+              if (!value) updateQuery({ search: "", page: "1" });
+            }}
+          />
+          <Button type="submit" variant="secondary">
             {t("search")}
-          </button>
+          </Button>
         </form>
-        <label className="sr-only" htmlFor="my-tenders-source">
-          {t("source")}
-        </label>
-        <select
+        <Select
           id="my-tenders-source"
+          label={t("source")}
           value={source}
           disabled={Boolean(catalogError)}
           onChange={(event) =>
             updateQuery({ source: event.target.value, page: "1" })
           }
-          className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400 disabled:opacity-60"
         >
           <option value="">{t("allSources")}</option>
-          {source && !catalog.some((item) => item.source_system === source) ? (
-              <option dir="auto" value={source}>{source}</option>
-          ) : null}
+          {source && !catalog.some((item) => item.source_system === source) && (
+            <option dir="auto" value={source}>
+              {source}
+            </option>
+          )}
           {catalog.map((item) => (
-            <option dir="auto" key={item.source_system} value={item.source_system}>
+            <option
+              dir="auto"
+              key={item.source_system}
+              value={item.source_system}
+            >
               {item.display_name}
             </option>
           ))}
-        </select>
-        <label className="sr-only" htmlFor="my-tenders-source-status">
-          {t("sourceStatus")}
-        </label>
-        <select
+        </Select>
+        <Select
           id="my-tenders-source-status"
+          label={t("sourceStatus")}
           value={tenderStatus}
           onChange={(event) =>
             updateQuery({ tender_status: event.target.value, page: "1" })
           }
-          className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400"
         >
           {SOURCE_STATUSES.map((value) => (
             <option key={value} value={value}>
               {tenderFilterLabel(value)}
             </option>
           ))}
-        </select>
-        <label className="sr-only" htmlFor="my-tenders-sort">
-          {t("sort")}
-        </label>
-        <select
+        </Select>
+        <Select
           id="my-tenders-sort"
+          label={t("sort")}
           value={sort}
           onChange={(event) =>
             updateQuery({ sort: event.target.value, page: "1" })
           }
-          className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-sky-400"
         >
           <option value="recently_updated">{t("sortRecentUpdated")}</option>
           <option value="recently_added">{t("sortRecentAdded")}</option>
           <option value="deadline_soonest">{t("sortDeadline")}</option>
-        </select>
-      </section>
-
+        </Select>
+      </Surface>
       {loading ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex min-h-56 items-center justify-center gap-3 text-zinc-300"
-        >
-          <Loader2
-            className="h-6 w-6 animate-spin text-sky-300"
-            aria-hidden="true"
-          />
-          {t("loading")}
-        </div>
+        <PageSkeleton label={t("loading")} />
       ) : error ? (
-        <div
-          role="alert"
-          className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200"
-        >
-          <AlertCircle className="h-5 w-5" aria-hidden="true" />
-          {error}
-        </div>
+        <Alert
+          tone="danger"
+          title={t(error === "accessDenied" ? "accessDenied" : "loadFailed")}
+          action={
+            <Button
+              variant="secondary"
+              onClick={() => setRefreshVersion((v) => v + 1)}
+            >
+              {copy("retry")}
+            </Button>
+          }
+        />
       ) : !data?.items.length ? (
-        <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950 px-6 py-16 text-center">
-          <Bookmark
-            className="mx-auto h-10 w-10 text-zinc-500"
-            aria-hidden="true"
-          />
-          <h2 className="mt-4 text-xl font-semibold text-white">
-            {t("emptyTitle")}
-          </h2>
-          <p className="mt-2 text-zinc-400">{t("emptyHelp")}</p>
-          <Link
-            href="/dashboard/tenders"
-            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
-          >
-            {t("explore")} <ArrowRight className="rtl-mirror h-4 w-4" aria-hidden="true" />
-          </Link>
-        </div>
+        <EmptyState
+          icon={<Bookmark aria-hidden />}
+          title={
+            filtered
+              ? copy("filteredEmpty")
+              : data && data.counts.all > 0
+                ? copy("statusEmpty")
+                : t("emptyTitle")
+          }
+          description={filtered ? copy("filteredHelp") : t("emptyHelp")}
+          action={
+            <ButtonLink href="/dashboard/tenders">
+              {t("explore")}
+              <ArrowRight className="rtl-mirror" aria-hidden />
+            </ButtonLink>
+          }
+        />
       ) : (
-        <div className="space-y-3">
+        <div className="ds-stack" aria-label={t("title")}>
           {data.items.map((item) => (
             <MyTenderCard
               key={item.engagement_id}
               item={item}
               sourceDisplayName={displayNameForSource(item.source_system)}
-              onRefresh={() => setRefreshVersion((value) => value + 1)}
+              onRefresh={() => setRefreshVersion((v) => v + 1)}
             />
           ))}
         </div>
       )}
-
       {!loading && !error && data && data.total > 0 && (
-        <nav
-          aria-label={t("paginationLabel")}
-          className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-800 pt-4"
+        <Pagination
+          label={t("paginationLabel")}
+          previousLabel={t("previous")}
+          nextLabel={t("next")}
+          hasPrevious={page > 1}
+          hasNext={page < totalPages}
+          onPrevious={() => updateQuery({ page: String(page - 1) })}
+          onNext={() => updateQuery({ page: String(page + 1) })}
         >
-          <p className="text-sm text-zinc-400">
+          <span role="status">
             {t("page", { page, totalPages, count: data.total })}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={page <= 1}
-              onClick={() => updateQuery({ page: String(page - 1) })}
-              className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-            >
-              {t("previous")}
-            </button>
-            <button
-              type="button"
-              disabled={page >= totalPages}
-              onClick={() => updateQuery({ page: String(page + 1) })}
-              className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-            >
-              {t("next")}
-            </button>
-          </div>
-        </nav>
+          </span>
+        </Pagination>
       )}
-    </main>
+    </div>
+  );
+  return (
+    <div className="customer-page ds-stack">
+      <PageHeader
+        eyebrow={copy("eyebrow")}
+        title={t("title")}
+        description={t("subtitle")}
+        primaryAction={
+          <ButtonLink href="/dashboard/tenders">
+            {t("explore")}
+            <ArrowRight className="rtl-mirror" aria-hidden />
+          </ButtonLink>
+        }
+      />
+      <Tabs
+        label={t("filtersLabel")}
+        value={status}
+        onChange={(value) => updateQuery({ status: value, page: "1" })}
+        items={STATUS_FILTERS.map((value) => ({
+          value,
+          label: (
+            <>
+              {engagementFilterLabel(value)}
+              {data && !error && (
+                <span className="ds-muted ds-text-small">
+                  {countFor[value]}
+                </span>
+              )}
+            </>
+          ),
+          content: value === status ? content : null,
+        }))}
+      />
+      {!STATUS_FILTERS.some(value => value === status) && content}
+    </div>
   );
 }
-
 export default function MyTendersPage() {
   return (
-    <Suspense
-      fallback={
-        <div role="status" className="p-8">
-          <Loader2
-            className="h-6 w-6 animate-spin text-sky-300"
-            aria-hidden="true"
-          />
-        </div>
-      }
-    >
+    <Suspense fallback={<PageSkeleton label="" />}>
       <MyTendersContent />
     </Suspense>
   );

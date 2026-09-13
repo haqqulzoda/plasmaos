@@ -5,7 +5,7 @@ import { test } from 'node:test';
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const registry = read('i18n/analysisLanguages.ts');
 const settings = read('app/dashboard/settings/page.tsx');
-const compliance = read('app/dashboard/tenders/[tenderId]/compliance/page.tsx');
+const compliance = read('app/dashboard/tenders/[tenderId]/compliance/page.tsx').replaceAll('\"', "'");
 const types = read('types/compliance.ts');
 const catalogs = ['en', 'uz', 'ru'].map((locale) => JSON.parse(read(`messages/${locale}/settings.json`)));
 const complianceCatalogs = ['en', 'uz', 'ru'].map((locale) => JSON.parse(read(`messages/${locale}/compliance.json`)));
@@ -19,15 +19,15 @@ test('analysis registry is independent, canonical, native-labelled, and truthful
 });
 
 test('Settings separates interface and default analysis preferences', () => {
-  assert.ok(settings.includes('<LanguageSelector surface="settings" />'));
+  assert.ok(settings.includes('<LanguageSelector surface="settings" foundation />'));
   assert.ok(settings.includes('analysisLanguage.title'));
   assert.ok(settings.includes('/users/me/preferences'));
-  assert.ok(settings.includes('{ default_analysis_language: analysisLanguage }'));
+  assert.match(settings, /\{\s*default_analysis_language: analysisLanguage,?\s*\}/);
   assert.ok(!settings.includes('{ ui_locale: analysisLanguage }'));
 });
 
 test('Compliance captures one explicit per-run language and preserves default', () => {
-  assert.ok(compliance.includes("new URLSearchParams({ analysis_language: selectedAnalysisLanguage })"));
+  assert.match(compliance, /new URLSearchParams\(\{\s*analysis_language: selectedAnalysisLanguage,?\s*\}\)/);
   assert.ok(compliance.includes("query.set('force', 'true')"));
   assert.ok(!compliance.includes('default_analysis_language: selectedAnalysisLanguage'));
   assert.ok(compliance.includes('setResultAnalysisLanguage(data.analysis_language)'));
@@ -43,7 +43,7 @@ test('version metadata, history, legacy NULL, and exact export version are repre
 
 test('content direction is scoped and evidence remains auto', () => {
   assert.ok(compliance.includes('dir={analysisContentDirection(analysisLanguage)}'));
-  assert.ok(compliance.includes('dir="auto"'));
+  assert.ok(compliance.includes("dir='auto'"));
   assert.ok(!compliance.includes('document.documentElement.dir'));
   assert.ok(!settings.includes('document.documentElement.dir'));
 });

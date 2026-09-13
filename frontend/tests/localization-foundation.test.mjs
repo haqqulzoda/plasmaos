@@ -181,6 +181,7 @@ test("UI locale ownership and required message domains are explicit", () => {
     "explorer",
     "tenderDetails",
     "myTenders",
+    "notifications",
     "bidPreparation",
     "dashboard",
     "compliance",

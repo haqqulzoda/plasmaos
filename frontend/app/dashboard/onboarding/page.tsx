@@ -6,13 +6,14 @@ import {
   Building2,
   Check,
   Globe2,
-  Loader2,
   Phone,
   UserRound,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { LanguageSelector } from "@/components/i18n/LanguageSelector";
+import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Feedback";
 import { localizeTaxonomyValue } from "@/i18n/taxonomy";
 import { api, setApiAccessToken } from "@/lib/api";
 import {
@@ -50,10 +51,9 @@ const initialForm: FormState = {
   notes: "",
 };
 
-const inputClass =
-  "w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-gray-100 text-sm placeholder-gray-600 outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500 transition-all";
+const inputClass = "ds-control";
 
-const labelClass = "text-sm font-medium text-gray-300";
+const labelClass = "ds-field-label";
 
 function toggleValue(values: string[], value: string): string[] {
   if (values.includes(value)) {
@@ -153,44 +153,34 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-          <Building2 className="w-5 h-5 text-cyan-300" />
+    <div className="customer-page onboarding-page ds-container-content ds-stack">
+      <header className="ds-page-header">
+        <div className="onboarding-heading">
+          <span className="onboarding-heading-icon"><Building2 aria-hidden /></span>
+          <div>
+            <span className="ds-eyebrow">Plasma</span>
+            <h1>{t("title")}</h1>
+            <p className="ds-muted">{t("subtitle")}</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">
-            {t("title")}
-          </h1>
-          <p className="text-sm text-gray-400">{t("subtitle")}</p>
-        </div>
-      </div>
+      </header>
 
       <LanguageSelector surface="onboarding" />
 
-      {error && (
-        <div className="border border-red-500/30 bg-red-500/10 text-red-300 rounded-lg px-4 py-3 text-sm">
-          {error}
-        </div>
-      )}
+      {error && <Alert tone="danger" title={error} />}
 
       {submitted && (
-        <div className="border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 rounded-lg px-4 py-3">
-          <p className="font-semibold">{t("submittedTitle")}</p>
-          <p className="mt-1 text-sm text-emerald-100/80">
-            {t("submittedHelp")}
-          </p>
-        </div>
+        <Alert tone="success" title={t("submittedTitle")}>{t("submittedHelp")}</Alert>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <section className="border border-gray-800 bg-gray-950 rounded-lg p-6 space-y-5">
-          <div className="flex items-center gap-2 text-gray-200">
-            <Building2 className="w-4 h-4 text-cyan-300" />
-            <h2 className="text-base font-semibold">{t("company")}</h2>
+      <form onSubmit={handleSubmit} className="ds-stack">
+        <section className="ds-surface onboarding-section">
+          <div className="onboarding-section-heading">
+            <Building2 aria-hidden />
+            <h2>{t("company")}</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <label className="space-y-2">
+          <div className="onboarding-field-grid">
+            <label className="ds-field">
               <span className={labelClass}>{t("companyName")}</span>
               <input
                 dir="auto"
@@ -202,7 +192,7 @@ export default function OnboardingPage() {
                 required
               />
             </label>
-            <label className="space-y-2">
+            <label className="ds-field">
               <span className={labelClass}>{t("industry")}</span>
               <input
                 dir="auto"
@@ -214,7 +204,7 @@ export default function OnboardingPage() {
                 required
               />
             </label>
-            <label className="space-y-2">
+            <label className="ds-field">
               <span className={labelClass}>{t("website")}</span>
               <input
                 dir="ltr"
@@ -225,7 +215,7 @@ export default function OnboardingPage() {
                 type="url"
               />
             </label>
-            <label className="space-y-2">
+            <label className="ds-field">
               <span className={labelClass}>{t("registrationNumber")}</span>
               <input
                 dir="ltr"
@@ -236,7 +226,7 @@ export default function OnboardingPage() {
               />
             </label>
           </div>
-          <label className="space-y-2 block">
+          <label className="ds-field">
             <span className={labelClass}>{t("address")}</span>
             <input
               dir="auto"
@@ -247,14 +237,14 @@ export default function OnboardingPage() {
           </label>
         </section>
 
-        <section className="border border-gray-800 bg-gray-950 rounded-lg p-6 space-y-5">
-          <div className="flex items-center gap-2 text-gray-200">
-            <Globe2 className="w-4 h-4 text-emerald-300" />
-            <h2 className="text-base font-semibold">{t("targets")}</h2>
+        <section className="ds-surface onboarding-section">
+          <div className="onboarding-section-heading">
+            <Globe2 aria-hidden />
+            <h2>{t("targets")}</h2>
           </div>
-          <div className="space-y-3">
-            <span className={labelClass}>{t("targetRegions")}</span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <fieldset className="onboarding-choice-group">
+            <legend className={labelClass}>{t("targetRegions")}</legend>
+            <div className="onboarding-choice-grid">
               {geography.regions.map((region) => {
                 const selected = form.target_regions.includes(region);
                 const isCentralAsia = region === CENTRAL_ASIA_REGION;
@@ -271,39 +261,33 @@ export default function OnboardingPage() {
                         ),
                       }))
                     }
-                    className={`flex items-center justify-between rounded-lg border px-4 py-3 text-sm transition-colors ${
-                      selected
-                        ? isCentralAsia
-                          ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
-                          : "border-cyan-500 bg-cyan-500/10 text-cyan-100"
-                        : isCentralAsia
-                          ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-200"
-                          : "border-gray-800 bg-gray-900 text-gray-300 hover:border-gray-700"
-                    }`}
+                    aria-pressed={selected}
+                    data-emphasis={isCentralAsia || undefined}
+                    className="onboarding-choice"
                   >
                     <span>
                       {localizeTaxonomyValue("region", region, tCommon)}
                     </span>
-                    {selected && <Check className="w-4 h-4" />}
+                    {selected && <Check aria-hidden />}
                   </button>
                 );
               })}
             </div>
-          </div>
+          </fieldset>
 
-          <div className="space-y-3">
-            <span className={labelClass}>{t("targetCountries")}</span>
-            <button
-              type="button"
+          <fieldset className="onboarding-choice-group">
+            <legend className={labelClass}>{t("targetCountries")}</legend>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={toggleCentralAsiaCountries}
-              className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition-colors hover:border-emerald-300"
+              leadingIcon={<Check aria-hidden />}
             >
-              <Check className="h-3.5 w-3.5" />
               {allCentralAsiaCountriesSelected
                 ? t("clearCentralAsia")
                 : t("selectCentralAsia")}
-            </button>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            </Button>
+            <div className="onboarding-choice-grid">
               {centralAsiaCountries.map((country) => {
                 const selected = form.target_countries.includes(country);
                 return (
@@ -319,42 +303,36 @@ export default function OnboardingPage() {
                         ),
                       }))
                     }
-                    className={`flex items-center justify-between rounded-lg border px-4 py-3 text-sm transition-colors ${
-                      selected
-                        ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
-                        : "border-gray-800 bg-gray-900 text-gray-300 hover:border-gray-700"
-                    }`}
+                    aria-pressed={selected}
+                    className="onboarding-choice"
                   >
                     <span>
                       {localizeTaxonomyValue("country", country, tCommon)}
                     </span>
-                    {selected && <Check className="w-4 h-4" />}
+                    {selected && <Check aria-hidden />}
                   </button>
                 );
               })}
             </div>
-            <span className="text-xs text-gray-500">
+            <span className="ds-field-help">
               {t("countriesSelected", { count: countryCount })}
             </span>
-          </div>
+          </fieldset>
 
-          <div className="space-y-3">
-            <span className={labelClass}>{t("targetServices")}</span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <fieldset className="onboarding-choice-group">
+            <legend className={labelClass}>{t("targetServices")}</legend>
+            <div className="onboarding-choice-grid">
               {services.map((service) => {
                 const selected = form.target_services.includes(service.value);
                 return (
                   <label
                     key={service.value}
-                    className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm transition-colors ${
-                      selected
-                        ? "border-amber-400 bg-amber-500/10 text-amber-100"
-                        : "border-gray-800 bg-gray-900 text-gray-300"
-                    }`}
+                    data-selected={selected}
+                    className="onboarding-check"
                   >
                     <input
                       type="checkbox"
-                      className="h-4 w-4 accent-amber-400"
+                      className="ds-checkbox"
                       checked={selected}
                       onChange={() =>
                         setForm((current) => ({
@@ -373,16 +351,16 @@ export default function OnboardingPage() {
                 );
               })}
             </div>
-          </div>
+          </fieldset>
         </section>
 
-        <section className="border border-gray-800 bg-gray-950 rounded-lg p-6 space-y-5">
-          <div className="flex items-center gap-2 text-gray-200">
-            <UserRound className="w-4 h-4 text-sky-300" />
-            <h2 className="text-base font-semibold">{t("contact")}</h2>
+        <section className="ds-surface onboarding-section">
+          <div className="onboarding-section-heading">
+            <UserRound aria-hidden />
+            <h2>{t("contact")}</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <label className="space-y-2">
+          <div className="onboarding-field-grid">
+            <label className="ds-field">
               <span className={labelClass}>{t("directorName")}</span>
               <input
                 dir="auto"
@@ -394,13 +372,13 @@ export default function OnboardingPage() {
                 required
               />
             </label>
-            <label className="space-y-2">
+            <label className="ds-field">
               <span className={labelClass}>{t("phone")}</span>
-              <div className="relative">
-                <Phone className="w-4 h-4 text-gray-500 absolute start-4 top-1/2 -translate-y-1/2" />
+              <div className="onboarding-phone">
+                <Phone aria-hidden />
                 <input
                   dir="ltr"
-                  className={`${inputClass} ps-11`}
+                  className={`${inputClass} onboarding-phone-control`}
                   value={form.phone_contact}
                   onChange={(event) =>
                     updateField("phone_contact", event.target.value)
@@ -410,30 +388,25 @@ export default function OnboardingPage() {
               </div>
             </label>
           </div>
-          <label className="space-y-2 block">
+          <label className="ds-field">
             <span className={labelClass}>{t("notes")}</span>
             <textarea
               dir="auto"
-              className={`${inputClass} min-h-28 resize-y`}
+              className={inputClass}
               value={form.notes}
               onChange={(event) => updateField("notes", event.target.value)}
             />
           </label>
         </section>
 
-        <div className="flex justify-end">
-          <button
+        <div className="onboarding-submit">
+          <Button
             type="submit"
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-3 text-sm font-semibold text-white hover:bg-cyan-500 disabled:bg-gray-700 disabled:text-gray-400 transition-colors"
+            loading={saving}
+            leadingIcon={<Check aria-hidden />}
           >
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Check className="w-4 h-4" />
-            )}
             {saving ? t("submitting") : t("submit")}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

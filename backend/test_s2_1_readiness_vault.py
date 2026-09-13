@@ -135,14 +135,14 @@ class S21ReadinessVaultTests(unittest.TestCase):
     def test_frontend_pages_exist_for_profile_and_readiness_vault(self) -> None:
         settings_page = read("../frontend/app/dashboard/settings/page.tsx")
         readiness_page = read("../frontend/app/dashboard/readiness-vault/page.tsx")
-        layout = read("../frontend/app/dashboard/layout.tsx")
+        layout = read("../frontend/components/shell/CustomerShell.tsx")
 
         self.assertEqual(translated(settings_page, "settings", "title"), "Company profile")
         self.assertEqual(translated(readiness_page, "readiness", "title"), "Readiness Vault")
         self.assertIn("optional_file_url", readiness_page)
-        self.assertIn("nameKey: 'companyProfile', href: '/dashboard/settings'", layout)
+        self.assertRegex(layout, r"nameKey: 'companyProfile',\s*href: '/dashboard/settings'")
         self.assertEqual(catalog_message("navigation", "companyProfile"), "Company Profile")
-        self.assertIn("nameKey: 'readinessVault', href: '/dashboard/readiness-vault'", layout)
+        self.assertRegex(layout, r"nameKey: 'readinessVault',\s*href: '/dashboard/readiness-vault'")
         self.assertEqual(catalog_message("navigation", "readinessVault"), "Readiness Vault")
 
 

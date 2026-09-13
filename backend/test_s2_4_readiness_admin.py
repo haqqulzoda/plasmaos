@@ -47,8 +47,8 @@ class S24ReadinessAdminTests(unittest.TestCase):
             "filters.status",
             "filters.related_service",
             "filteredDocuments",
-            "documentTypeMessageKey(document.document_type)",
-            "documentStatusMessageKey(document.status)",
+            "documentTypeMessageKey(record.document_type)",
+            "documentStatusMessageKey(record.status)",
             "labelForService",
             "expiryMessageKey(expiry)",
             "optional_file_url: form.optional_file_url || null",
@@ -61,13 +61,14 @@ class S24ReadinessAdminTests(unittest.TestCase):
     def test_company_settings_shows_status_and_clean_target_summary(self) -> None:
         settings_page = read("../frontend/app/dashboard/settings/page.tsx")
 
-        self.assertIn("TargetSummary", settings_page)
+        self.assertIn("persistedProfile", settings_page)
+        self.assertIn("profile-summary", settings_page)
         translated(settings_page, "settings", "approvalStatus", placeholder="status")
         self.assertIn("status: accountStatusLabel(profile.approval_status)", settings_page)
         translated(settings_page, "settings", "pilotStatus", placeholder="status")
-        self.assertIn("status: accountStatusLabel(profile.pilot_status)", settings_page)
-        self.assertIn("labelForService", settings_page)
-        self.assertIn("CENTRAL_ASIA_REGION", settings_page)
+        self.assertIn("status: pilotStatusLabel(profile.pilot_status)", settings_page)
+        self.assertIn("localizeTaxonomyValue", settings_page)
+        self.assertIn("geography.central_asia_countries", settings_page)
 
     def test_admin_company_detail_page_is_read_only_and_linked_from_approvals(self) -> None:
         detail_page = read("../frontend/app/admin/companies/[companyProfileId]/page.tsx")

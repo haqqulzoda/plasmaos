@@ -5,9 +5,15 @@
   "bidPreparation": "Taklif tayyorlash",
   "companyProfile": "Kompaniya profili",
   "readinessVault": "Tayyorgarlik hujjatlari",
+  "notifications": "Bildirishnomalar",
   "dashboardLabel": "Plasma AI boshqaruv paneli",
   "navigationLabel": "Boshqaruv paneli navigatsiyasi",
   "logout": "Chiqish",
   "commandCenter": "Boshqaruv markazi",
-  "adminConsole": "Administrator paneli"
+  "adminConsole": "Administrator paneli",
+  "settings": "Sozlamalar",
+  "accountMenu": "Hisob menyusi",
+  "openNavigation": "Navigatsiyani ochish",
+  "closeNavigation": "Navigatsiyani yopish",
+  "skipToContent": "Asosiy mazmunga o‘tish"
 }

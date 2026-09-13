@@ -36,10 +36,52 @@
   "allStatuses": "Все статусы",
   "allServices": "Все услуги",
   "resetFilters": "Сбросить фильтры",
-  "table": {"type": "Тип", "name": "Название", "number": "Номер", "issuer": "Кем выдан", "issue": "Выдача", "expiry": "Срок", "status": "Статус", "service": "Услуга", "file": "Файл", "actions": "Действия"},
+  "table": {
+    "type": "Тип",
+    "name": "Название",
+    "number": "Номер",
+    "issuer": "Кем выдан",
+    "issue": "Выдача",
+    "expiry": "Срок",
+    "status": "Статус",
+    "service": "Услуга",
+    "file": "Файл",
+    "actions": "Действия"
+  },
   "editNamed": "Изменить документ «{name}»",
   "deleteNamed": "Удалить документ «{name}»",
-  "types": {"license": "Лицензия", "certificate": "Сертификат", "taxClearance": "Справка об отсутствии налоговой задолженности", "financialStatement": "Финансовая отчётность", "registrationDocument": "Регистрационный документ", "powerOfAttorney": "Доверенность", "personnelDocument": "Кадровый документ", "other": "Другое", "unknown": "Другой документ"},
-  "statuses": {"available": "Доступен", "missing": "Отсутствует", "expired": "Срок истёк", "unknown": "Статус неизвестен"},
-  "expiry": {"expired": "Срок истёк", "expiringSoon": "Срок скоро истечёт", "valid": "Действителен", "unknown": "Срок неизвестен"}
+  "types": {
+    "license": "Лицензия",
+    "certificate": "Сертификат",
+    "taxClearance": "Справка об отсутствии налоговой задолженности",
+    "financialStatement": "Финансовая отчётность",
+    "registrationDocument": "Регистрационный документ",
+    "powerOfAttorney": "Доверенность",
+    "personnelDocument": "Кадровый документ",
+    "other": "Другое",
+    "unknown": "Другой документ"
+  },
+  "statuses": {
+    "available": "Доступен",
+    "missing": "Отсутствует",
+    "expired": "Срок истёк",
+    "unknown": "Статус неизвестен"
+  },
+  "expiry": {
+    "expired": "Срок истёк",
+    "expiringSoon": "Срок скоро истечёт",
+    "valid": "Действителен",
+    "unknown": "Срок неизвестен"
+  },
+  "redesign": {
+    "context": "Документы компании",
+    "description": "Управляйте записями готовности и необязательными ссылками на файлы.",
+    "pageEmpty": "На этой странице нет записей.",
+    "viewFile": "Открыть ссылку на файл",
+    "noFile": "Нет ссылки на файл",
+    "fileHelp": "Запись может существовать без ссылки на файл. Добавление ссылки не подтверждает файл.",
+    "cancel": "Отмена",
+    "delete": "Удалить запись",
+    "retry": "Повторить"
+  }
 }

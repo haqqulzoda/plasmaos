@@ -214,6 +214,6 @@ test("source and status semantics are accessible and responsive", () => {
   assert.match(pageSource, /<SectionShell\s+id="project-context"/);
   assert.match(pageSource, /aria-labelledby=\{`\$\{id\}-heading`\}/);
   assert.match(projectSectionSource, /role="status"/);
-  assert.match(projectSectionSource, /sm:grid-cols-2/);
-  assert.match(projectSectionSource, /lg:grid-cols-4/);
+  assert.match(projectSectionSource, /details-fields/);
+  assert.match(readFileSync(new URL("../components/customer/pages.css", import.meta.url), "utf8"), /@container/);
 });

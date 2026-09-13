@@ -11,18 +11,27 @@ import {
   useState,
 } from "react";
 import {
-  AlertCircle,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   FileText,
-  Filter,
-  Loader2,
   MapPin,
-  Search,
   SlidersHorizontal,
   X,
+  Globe2,
 } from "lucide-react";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import {
+  Surface,
+  PageHeader,
+  EmptyState,
+  StatusBadge,
+  Badge,
+  PageSkeleton,
+} from "@/components/ui/Display";
+import { Input, Select, SearchField, Checkbox } from "@/components/ui/Forms";
+import { Alert } from "@/components/ui/Feedback";
+import { Tabs, Pagination } from "@/components/ui/Navigation";
+import { Drawer } from "@/components/ui/Overlay";
+import { SaveTenderButton } from "@/components/customer/SaveTenderButton";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
@@ -57,19 +66,13 @@ import {
 } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { localizeTaxonomyValue } from "@/i18n/taxonomy";
-import { engagementStatusClasses } from "@/types/engagement";
 import type {
   ExplorerItem,
   ExplorerResponse,
   ExplorerView,
 } from "@/types/explorer";
 import type { TenderStatus } from "@/types/tender";
-import {
-  documentStatusClasses,
-  isTenderActionable,
-  sourceBadgeClasses,
-  tenderStatusClasses,
-} from "@/types/tender";
+import { isTenderActionable } from "@/types/tender";
 
 const PAGE_SIZE = 25;
 const LIFECYCLE_STATUSES: ReadonlyArray<TenderStatus | "ALL"> = [
@@ -208,6 +211,9 @@ function TendersPageContent() {
   );
   const { catalog, catalogError, displayNameForSource, latestActivityBatch } =
     useSourceRefresh();
+  const copy = useTranslations("explorer.redesign");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [response, setResponse] = useState<ExplorerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -463,397 +469,448 @@ function TendersPageContent() {
     navigate({ newOnly: true, source });
   };
 
+  const selected =
+    response?.items.find((item) => item.tender.id === selectedId) ?? null;
+  const remember = (tenderId: string) =>
+    writeExplorerReturnState({
+      explorerUrl: explorerHref,
+      tenderId,
+      scrollY: window.scrollY,
+      page: query.page,
+      createdAt: Date.now(),
+    });
+  const choose = (item: ExplorerItem) => {
+    setSelectedId(item.tender.id);
+    if (!window.matchMedia("(min-width: 1200px)").matches) setPreviewOpen(true);
+  };
+  const chips: { key: string; label: string; clear: () => void }[] = [
+    ...query.countries.map((v) => ({
+      key: `country-${v}`,
+      label: localizeTaxonomyValue("country", v, tCommon),
+      clear: () => toggleList("countries", v),
+    })),
+    ...query.services.map((v) => ({
+      key: `service-${v}`,
+      label: localizeTaxonomyValue("service", v, tCommon),
+      clear: () => toggleList("services", v),
+    })),
+    ...(
+      [
+        "source",
+        "region",
+        "deadlineStatus",
+        "documentStatus",
+        "category",
+        "priceMin",
+        "priceMax",
+        "keyword",
+      ] as const
+    )
+      .filter((key) => query[key])
+      .map((key) => ({
+        key,
+        label: `${t(({ source: "source", region: "centralAsia", deadlineStatus: "deadlineFilter", documentStatus: "documentStatus", category: "category", priceMin: "minimumValue", priceMax: "maximumValue", keyword: "search" } as const)[key])}: ${key === "source" ? displayNameForSource(query[key]) : key === "deadlineStatus" ? t(query[key] === "active" ? "deadlineActive" : query[key] === "expired" ? "deadlineExpired" : "deadlineUnknown") : key === "documentStatus" ? documents.find(([value]) => value === query[key])?.[1] ?? query[key] : query[key]}`,
+        clear: () => navigate({ [key]: "" }),
+      })),
+    ...(query.newOnly
+      ? [
+          {
+            key: "new",
+            label: t("newLast24"),
+            clear: () => navigate({ newOnly: false }),
+          },
+        ]
+      : []),
+    ...(query.lifecycleStatus !== "OPEN"
+      ? [
+          {
+            key: "status",
+            label:
+              statuses.find(([v]) => v === query.lifecycleStatus)?.[1] ?? "",
+            clear: () => navigate({ lifecycleStatus: "OPEN" }),
+          },
+        ]
+      : []),
+  ];
+  const preview = selected ? (
+    <ExplorerPreview
+      item={selected}
+      source={displayNameForSource(selected.tender.source_system)}
+      remember={remember}
+      pending={pendingRecommendation}
+      onDismiss={(id) => void mutateRecommendation(id, false)}
+      onRestore={(id) => void mutateRecommendation(id, true)}
+    />
+  ) : (
+    <EmptyState
+      icon={<FileText aria-hidden />}
+      title={copy("selectTitle")}
+      description={copy("selectHelp")}
+    />
+  );
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-5 p-4 sm:p-6">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
-          <p className="mt-1 text-sm text-zinc-400">{t("subtitle")}</p>
-        </div>
-        <SourceRefreshMenu />
-      </header>
-      {newArrival ? (
-        <section
-          role="status"
-          aria-live="polite"
-          className="flex flex-col gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-50 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <p>
-            <span className="font-semibold">
-              {t("newArrivals", { count: newArrival.total_created })}
-            </span>
-            <span className="ms-2 text-cyan-100/70">{t("resultsStable")}</span>
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={showNewArrivals}
-              className="rounded-lg bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-cyan-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+    <div className="customer-page ds-stack" data-page="explorer">
+      <PageHeader
+        eyebrow={copy("eyebrow")}
+        title={t("title")}
+        description={t("subtitle")}
+        secondaryAction={<SourceRefreshMenu foundation />}
+      />
+      <div className="explorer-layout">
+        <div className="ds-stack">
+          {newArrival && (
+            <Alert
+              tone="success"
+              title={t("newArrivals", { count: newArrival.total_created })}
+              onDismiss={() => setDismissedBatchId(newArrival.id)}
+              dismissLabel={t("dismissNew")}
+              action={
+                <Button size="sm" onClick={showNewArrivals}>
+                  {t("show")}
+                </Button>
+              }
             >
-              {t("show")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDismissedBatchId(newArrival.id)}
-              aria-label={t("dismissNew")}
-              className="rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+              {t("resultsStable")}
+            </Alert>
+          )}
+          {profileRequired && !loading && (
+            <Alert
+              tone="warning"
+              title={t("profileTitle")}
+              action={
+                <ButtonLink
+                  variant="secondary"
+                  size="sm"
+                  href="/dashboard/settings"
+                >
+                  {t("openProfile")}
+                </ButtonLink>
+              }
             >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      <div
-        role="tablist"
-        aria-label={t("viewsLabel")}
-        className="flex flex-wrap max-w-full gap-1 rounded-xl border border-zinc-800 bg-zinc-950 p-1"
-      >
-        {modes.map(([value, label, count]) => (
-          <button
-            key={value}
-            role="tab"
-            type="button"
-            aria-selected={query.view === value}
-            onClick={() => navigate({ view: value, sort: defaultSort(value) })}
-            className={`min-w-fit flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-indigo-400 ${query.view === value ? "bg-indigo-600 text-white" : "text-zinc-400 hover:bg-zinc-900"}`}
-          >
-            {label}{" "}
-            <span
-              className="ms-1 tabular-nums"
-              aria-label={t("itemCount", { count })}
-            >
-              {count}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      <section
-        aria-label={t("filtersLabel")}
-        className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4"
-      >
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <label className="relative min-w-0 xl:col-span-2">
-            <span className="sr-only">{t("search")}</span>
-            <Search className="pointer-events-none absolute start-3 top-2.5 h-4 w-4 text-zinc-500" />
-            <input
-              dir="auto"
-              value={searchDraft}
-              onChange={(event) => setSearchDraft(event.target.value)}
-              placeholder={t("search")}
-              className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 py-2 ps-9 pe-3 text-sm text-white focus:border-indigo-400"
-            />
-          </label>
-          <select
-            aria-label={t("source")}
-            value={query.source}
-            disabled={Boolean(catalogError)}
-            onChange={(event) => navigate({ source: event.target.value })}
-            className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white disabled:opacity-60"
-          >
-            <option value="">{t("allSources")}</option>
-            {query.source &&
-            !catalog.some((source) => source.source_system === query.source) ? (
-              <option dir="auto" value={query.source}>{query.source}</option>
-            ) : null}
-            {catalog.map((source) => (
-              <option dir="auto" key={source.source_system} value={source.source_system}>
-                {source.display_name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={t("lifecycle")}
-            value={query.lifecycleStatus}
-            onChange={(event) =>
+              {t("profileHelp")}
+            </Alert>
+          )}
+          <Tabs
+            label={t("viewsLabel")}
+            value={query.view}
+            onChange={(value) =>
               navigate({
-                lifecycleStatus: event.target.value as TenderStatus | "ALL",
+                view: value as ExplorerView,
+                sort: defaultSort(value as ExplorerView),
               })
             }
-            className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
-          >
-            {statuses.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={t("sort")}
-            value={query.sort}
-            onChange={(event) => navigate({ sort: event.target.value })}
-            className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
-          >
-            {(query.view === "all" ? tenderSorts : recommendationSorts).map(
-              ([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
+            items={modes.map(([value, label, count]) => ({
+              value,
+              label: (
+                <>
+                  {label}{" "}
+                  <span className="ds-numeric">{response ? count : "—"}</span>
+                </>
               ),
-            )}
-          </select>
-        </div>
-        <button
-          type="button"
-          aria-pressed={query.newOnly}
-          onClick={() => navigate({ newOnly: !query.newOnly })}
-          title={t("newRecent")}
-          className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${query.newOnly ? "border-cyan-400 bg-cyan-400/10 text-cyan-200" : "border-zinc-700 text-zinc-300"}`}
-        >
-          {t("newLast24")}
-        </button>
-        <details>
-          <summary className="flex w-fit cursor-pointer list-none items-center gap-2 rounded px-2 py-1 text-sm font-semibold text-zinc-300 focus-visible:ring-2 focus-visible:ring-indigo-400">
-            <SlidersHorizontal className="h-4 w-4" />
-            {t("moreFilters")}
-          </summary>
-          <div className="mt-3 space-y-4 border-t border-zinc-800 pt-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <select
-                aria-label={t("deadlineFilter")}
-                value={query.deadlineStatus}
-                onChange={(event) =>
-                  navigate({ deadlineStatus: event.target.value })
-                }
-                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
+              content: null,
+            }))}
+          />
+          <Surface
+            className="explorer-filters ds-stack"
+            role="region"
+            aria-label={t("filtersLabel")}
+          >
+            <SearchField
+              label={t("search")}
+              clearLabel={copy("clearSearch")}
+              dir="auto"
+              value={searchDraft}
+              onValueChange={setSearchDraft}
+              placeholder={t("search")}
+            />
+            <div className="explorer-filter-grid">
+              <Select
+                label={t("source")}
+                value={query.source}
+                disabled={Boolean(catalogError)}
+                onChange={(e) => navigate({ source: e.target.value })}
               >
-                <option value="">{t("deadlineAny")}</option>
-                <option value="active">{t("deadlineActive")}</option>
-                <option value="expired">{t("deadlineExpired")}</option>
-                <option value="unknown">{t("deadlineUnknown")}</option>
-              </select>
-              <select
-                aria-label={t("documentStatus")}
-                value={query.documentStatus}
-                onChange={(event) =>
-                  navigate({ documentStatus: event.target.value })
-                }
-                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
-              >
-                {documents.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
+                <option value="">{t("allSources")}</option>
+                {query.source &&
+                  !catalog.some((s) => s.source_system === query.source) && (
+                    <option dir="auto" value={query.source}>
+                      {query.source}
+                    </option>
+                  )}
+                {catalog.map((source) => (
+                  <option
+                    dir="auto"
+                    key={source.source_system}
+                    value={source.source_system}
+                  >
+                    {source.display_name}
                   </option>
                 ))}
-              </select>
-              <input
-                dir="auto"
-                aria-label={t("category")}
-                value={categoryDraft}
-                onChange={(event) => setCategoryDraft(event.target.value)}
-                onBlur={commitDrafts}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") commitDrafts();
-                }}
-                placeholder={t("category")}
-                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
-              />
-              <button
-                type="button"
-                aria-pressed={query.region === CENTRAL_ASIA_REGION}
-                onClick={() =>
+              </Select>
+              <Select
+                label={t("lifecycle")}
+                value={query.lifecycleStatus}
+                onChange={(e) =>
                   navigate({
-                    region:
-                      query.region === CENTRAL_ASIA_REGION
-                        ? ""
-                        : CENTRAL_ASIA_REGION,
+                    lifecycleStatus: e.target.value as TenderStatus | "ALL",
                   })
                 }
-                className={`rounded-lg border px-3 py-2 text-sm ${query.region === CENTRAL_ASIA_REGION ? "border-indigo-400 text-indigo-200" : "border-zinc-700 text-zinc-300"}`}
               >
-                {t("centralAsia")}
-              </button>
-              <input
-                type="number"
-                min="0"
-                aria-label={t("minimumValue")}
-                value={minimumDraft}
-                onChange={(event) => setMinimumDraft(event.target.value)}
-                onBlur={commitDrafts}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") commitDrafts();
-                }}
-                placeholder={t("minimumValue")}
-                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
-              />
-              <input
-                type="number"
-                min="0"
-                aria-label={t("maximumValue")}
-                value={maximumDraft}
-                onChange={(event) => setMaximumDraft(event.target.value)}
-                onBlur={commitDrafts}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") commitDrafts();
-                }}
-                placeholder={t("maximumValue")}
-                className="min-w-0 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white"
-              />
+                {statuses.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                label={t("sort")}
+                value={query.sort}
+                onChange={(e) => navigate({ sort: e.target.value })}
+              >
+                {(query.view === "all" ? tenderSorts : recommendationSorts).map(
+                  ([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ),
+                )}
+              </Select>
             </div>
-            <fieldset>
-              <legend className="mb-2 text-xs font-semibold uppercase text-zinc-500">
-                {t("countries")}
-              </legend>
-              <div className="flex flex-wrap gap-2">
-                {CENTRAL_ASIA_COUNTRIES.map((country) => (
-                  <button
-                    key={country}
-                    type="button"
-                    aria-pressed={query.countries.includes(country)}
-                    onClick={() => toggleList("countries", country)}
-                    className={`rounded-full border px-3 py-1 text-xs ${query.countries.includes(country) ? "border-indigo-400 text-indigo-200" : "border-zinc-700 text-zinc-400"}`}
+            <Checkbox
+              label={t("newLast24")}
+              checked={query.newOnly}
+              onChange={() => navigate({ newOnly: !query.newOnly })}
+            />
+            <details>
+              <summary className="ds-button ds-button-ghost ds-button-sm">
+                <SlidersHorizontal aria-hidden />
+                {t("moreFilters")}
+              </summary>
+              <div className="ds-stack ds-divider">
+                <div className="explorer-filter-grid">
+                  <Select
+                    label={t("deadlineFilter")}
+                    value={query.deadlineStatus}
+                    onChange={(e) =>
+                      navigate({ deadlineStatus: e.target.value })
+                    }
                   >
-                    {localizeTaxonomyValue("country", country, tCommon)}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset>
-              <legend className="mb-2 text-xs font-semibold uppercase text-zinc-500">
-                {t("services")}
-              </legend>
-              <div className="flex flex-wrap gap-2">
-                {DEFAULT_SERVICE_OPTIONS.map((service) => (
-                  <button
-                    key={service.value}
-                    type="button"
-                    aria-pressed={query.services.includes(service.value)}
-                    onClick={() => toggleList("services", service.value)}
-                    className={`rounded-full border px-3 py-1 text-xs ${query.services.includes(service.value) ? "border-indigo-400 text-indigo-200" : "border-zinc-700 text-zinc-400"}`}
+                    <option value="">{t("deadlineAny")}</option>
+                    <option value="active">{t("deadlineActive")}</option>
+                    <option value="expired">{t("deadlineExpired")}</option>
+                    <option value="unknown">{t("deadlineUnknown")}</option>
+                  </Select>
+                  <Select
+                    label={t("documentStatus")}
+                    value={query.documentStatus}
+                    onChange={(e) =>
+                      navigate({ documentStatus: e.target.value })
+                    }
                   >
-                    {localizeTaxonomyValue("service", service.value, tCommon)}
-                  </button>
-                ))}
+                    {documents.map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    label={t("category")}
+                    dir="auto"
+                    value={categoryDraft}
+                    onChange={(e) => setCategoryDraft(e.target.value)}
+                    onBlur={commitDrafts}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitDrafts();
+                    }}
+                  />
+                  <Input
+                    label={t("minimumValue")}
+                    type="number"
+                    min="0"
+                    value={minimumDraft}
+                    onChange={(e) => setMinimumDraft(e.target.value)}
+                    onBlur={commitDrafts}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitDrafts();
+                    }}
+                  />
+                  <Input
+                    label={t("maximumValue")}
+                    type="number"
+                    min="0"
+                    value={maximumDraft}
+                    onChange={(e) => setMaximumDraft(e.target.value)}
+                    onBlur={commitDrafts}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitDrafts();
+                    }}
+                  />
+                </div>
+                <Checkbox
+                  label={t("centralAsia")}
+                  checked={query.region === CENTRAL_ASIA_REGION}
+                  onChange={() =>
+                    navigate({
+                      region:
+                        query.region === CENTRAL_ASIA_REGION
+                          ? ""
+                          : CENTRAL_ASIA_REGION,
+                    })
+                  }
+                />
+                <fieldset className="ds-stack">
+                  <legend>{t("countries")}</legend>
+                  <div className="ds-row">
+                    {CENTRAL_ASIA_COUNTRIES.map((country) => (
+                      <Checkbox
+                        key={country}
+                        label={localizeTaxonomyValue(
+                          "country",
+                          country,
+                          tCommon,
+                        )}
+                        checked={query.countries.includes(country)}
+                        onChange={() => toggleList("countries", country)}
+                      />
+                    ))}
+                  </div>
+                </fieldset>
+                <fieldset className="ds-stack">
+                  <legend>{t("services")}</legend>
+                  <div className="ds-row">
+                    {DEFAULT_SERVICE_OPTIONS.map((service) => (
+                      <Checkbox
+                        key={service.value}
+                        label={localizeTaxonomyValue(
+                          "service",
+                          service.value,
+                          tCommon,
+                        )}
+                        checked={query.services.includes(service.value)}
+                        onChange={() => toggleList("services", service.value)}
+                      />
+                    ))}
+                  </div>
+                </fieldset>
               </div>
-            </fieldset>
-          </div>
-        </details>
-      </section>
-
-      {mutationError ? (
-        <div
-          role="alert"
-          className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"
-        >
-          <AlertCircle className="h-4 w-4" />
-          {mutationError}
-        </div>
-      ) : null}
-      {profileRequired && query.view !== "all" && !loading ? (
-        <section className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-8 text-center">
-          <h2 className="text-lg font-semibold text-white">
-            {t("profileTitle")}
-          </h2>
-          <p className="mt-2 text-sm text-zinc-300">{t("profileHelp")}</p>
-          <Link
-            href="/dashboard/settings"
-            className="mt-4 inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
-          >
-            {t("openProfile")}
-          </Link>
-        </section>
-      ) : loading ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex min-h-52 items-center justify-center gap-3 rounded-xl border border-zinc-800 text-sm text-zinc-300"
-        >
-          <Loader2 className="h-5 w-5 animate-spin" />
-          {t("loading")}
-        </div>
-      ) : error ? (
-        <div
-          role="alert"
-          className="rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center"
-        >
-          <p className="text-sm text-red-200">{error}</p>
-          <button
-            type="button"
-            onClick={() => setRefreshVersion((value) => value + 1)}
-            className="mt-4 rounded-lg border border-red-400/40 px-4 py-2 text-sm text-red-100"
-          >
-            {t("retry")}
-          </button>
-        </div>
-      ) : response && !response.items.length ? (
-        <section className="rounded-xl border border-zinc-800 p-10 text-center">
-          <Filter className="mx-auto h-7 w-7 text-zinc-500" />
-          <h2 className="mt-3 text-base font-semibold text-white">
-            {query.view === "all"
-              ? t("empty.all")
-              : query.view === "dismissed"
-                ? t("empty.dismissed")
-                : allDismissed
-                  ? t("empty.active")
-                  : t("empty.recommended")}
-          </h2>
-        </section>
-      ) : response ? (
-        <section aria-label={t("resultsLabel")} className="space-y-3">
-          <p className="text-xs text-zinc-500">
-            {t("showing", {
-              start: response.offset + 1,
-              end: Math.min(
-                response.offset + response.items.length,
-                response.total,
-              ),
-              total: response.total,
-            })}
-          </p>
-          {response.items.map((item) => (
-            <ExplorerCard
-              key={item.tender.id}
-              item={item}
-              sourceDisplayName={displayNameForSource(
-                item.tender.source_system,
-              )}
-              clock={serverClock}
-              monotonicNow={monotonicNow}
-              pendingRecommendation={pendingRecommendation}
-              onDismiss={(id) => void mutateRecommendation(id, false)}
-              onRestore={(id) => void mutateRecommendation(id, true)}
-              onRefresh={() => setRefreshVersion((value) => value + 1)}
-              onOpen={(tenderId) =>
-                writeExplorerReturnState({
-                  explorerUrl: explorerHref,
-                  tenderId,
-                  scrollY: window.scrollY,
-                  page: query.page,
-                  createdAt: Date.now(),
-                })
+            </details>
+          </Surface>
+          {chips.length > 0 && (
+            <div className="ds-row" aria-label={copy("activeFilters")}>
+              {chips.map((chip) => (
+                <Button
+                  key={chip.key}
+                  size="sm"
+                  variant="secondary"
+                  onClick={chip.clear}
+                  aria-label={copy("removeFilter", { filter: chip.label })}
+                >
+                  <BidiText>{chip.label}</BidiText>
+                  <X aria-hidden />
+                </Button>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  navigate({
+                    ...parseExplorerQuery(new URLSearchParams()),
+                    view: query.view,
+                    sort: defaultSort(query.view),
+                  })
+                }
+              >
+                {copy("clearAll")}
+              </Button>
+            </div>
+          )}
+          {mutationError && <Alert tone="danger" title={mutationError} />}
+          {loading ? (
+            <PageSkeleton label={t("loading")} />
+          ) : error ? (
+            <Alert
+              tone="danger"
+              title={error}
+              action={
+                <Button
+                  variant="secondary"
+                  onClick={() => setRefreshVersion((v) => v + 1)}
+                >
+                  {t("retry")}
+                </Button>
               }
             />
-          ))}
-          <nav
-            aria-label={t("pagesLabel")}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 p-3"
-          >
-            <button
-              type="button"
-              disabled={query.page <= 1}
-              onClick={() => navigate({ page: query.page - 1 }, false)}
-              className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40"
-            >
-              <ChevronLeft className="rtl-mirror h-4 w-4" />
-              {t("previous")}
-            </button>
-            <span className="text-sm text-zinc-400">
-              {t("page", { page: query.page, totalPages: lastPage })}
-            </span>
-            <button
-              type="button"
-              disabled={query.page >= lastPage}
-              onClick={() => navigate({ page: query.page + 1 }, false)}
-              className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-40"
-            >
-              {t("next")}
-              <ChevronRight className="rtl-mirror h-4 w-4" />
-            </button>
-          </nav>
-        </section>
-      ) : null}
-    </main>
+          ) : response && !response.items.length ? (
+            <Surface>
+              <EmptyState
+                title={
+                  query.view === "all"
+                    ? t("empty.all")
+                    : query.view === "dismissed"
+                      ? t("empty.dismissed")
+                      : allDismissed
+                        ? t("empty.active")
+                        : t("empty.recommended")
+                }
+              />
+            </Surface>
+          ) : response ? (
+            <section aria-label={t("resultsLabel")} className="ds-stack">
+              <p className="ds-muted ds-text-small">
+                {t("showing", {
+                  start: response.offset + 1,
+                  end: Math.min(
+                    response.offset + response.items.length,
+                    response.total,
+                  ),
+                  total: response.total,
+                })}
+              </p>
+              {response.items.map((item) => (
+                <ExplorerCard
+                  key={item.tender.id}
+                  item={item}
+                  selected={selectedId === item.tender.id}
+                  sourceDisplayName={displayNameForSource(
+                    item.tender.source_system,
+                  )}
+                  clock={serverClock}
+                  monotonicNow={monotonicNow}
+                  pendingRecommendation={pendingRecommendation}
+                  onDismiss={(id) => void mutateRecommendation(id, false)}
+                  onRestore={(id) => void mutateRecommendation(id, true)}
+                  onRefresh={() => setRefreshVersion((v) => v + 1)}
+                  onOpen={remember}
+                  onPreview={() => choose(item)}
+                />
+              ))}
+              <Pagination
+                label={t("pagesLabel")}
+                previousLabel={t("previous")}
+                nextLabel={t("next")}
+                hasPrevious={query.page > 1}
+                hasNext={query.page < lastPage}
+                onPrevious={() => navigate({ page: query.page - 1 }, false)}
+                onNext={() => navigate({ page: query.page + 1 }, false)}
+              >
+                {t("page", { page: query.page, totalPages: lastPage })}
+              </Pagination>
+            </section>
+          ) : null}
+        </div>
+        <aside className="explorer-rail" aria-label={copy("preview")}>
+          <Surface className="ds-pad">{preview}</Surface>
+        </aside>
+      </div>
+      <Drawer
+        open={previewOpen && Boolean(selected)}
+        onClose={() => setPreviewOpen(false)}
+        title={copy("preview")}
+        closeLabel={copy("closePreview")}
+      >
+        <div className="customer-page">{preview}</div>
+      </Drawer>
+    </div>
   );
 }
 
@@ -867,6 +924,8 @@ function ExplorerCard({
   onRestore,
   onRefresh,
   onOpen,
+  onPreview,
+  selected,
 }: {
   item: ExplorerItem;
   sourceDisplayName: string;
@@ -876,7 +935,9 @@ function ExplorerCard({
   onDismiss: (id: string) => void;
   onRestore: (id: string) => void;
   onRefresh: () => void;
-  onOpen: (tenderId: string) => void;
+  onOpen: (id: string) => void;
+  onPreview: () => void;
+  selected: boolean;
 }) {
   const t = useTranslations("explorer");
   const tMy = useTranslations("myTenders");
@@ -885,148 +946,127 @@ function ExplorerCard({
   const { tender, recommendation, pursuit } = item;
   const actionable = isTenderActionable(tender.status);
   const expired = isExpiredDeadline(tender.deadline);
-  const remember = () => onOpen(tender.id);
-  const tenderStatus =
-    tender.status === "OPEN"
-      ? t("status.open")
-      : tender.status === "CLOSED"
-        ? t("status.closed")
-        : tender.status === "CANCELLED"
-          ? t("status.cancelled")
-          : t("status.unknown");
-  const documentStatus =
-    tender.document_status === "documents_available"
-      ? t("documents.ready")
-      : tender.document_status === "files_missing"
-        ? t("documents.preparationFailed")
-        : tender.document_status === "metadata_only"
-          ? t("documents.discovered")
-          : tender.document_status === "access_required"
-            ? t("documents.accessRequired")
-            : tender.document_status === "processing"
-              ? t("documents.processing")
-              : tender.document_status === "failed"
-                ? t("documents.failed")
-                : t("documents.unavailable");
-  const pursuitStatus = pursuit
-    ? pursuit.status === "SAVED"
-      ? tMy("statuses.saved")
-      : pursuit.status === "EVALUATING"
-        ? tMy("statuses.evaluating")
-        : pursuit.status === "PREPARING"
-          ? tMy("statuses.preparing")
-          : pursuit.status === "SUBMITTED"
-            ? tMy("statuses.submitted")
-            : pursuit.status === "WON"
-              ? tMy("statuses.won")
-              : pursuit.status === "LOST"
-                ? tMy("statuses.lost")
-                : tMy("statuses.dismissed")
-    : "";
-  const deadline = tender.deadline
-    ? formatRelativeTime(
-        tender.deadline,
-        clock ? adjustedServerNow(clock, monotonicNow) : initialNow,
-        locale,
-      )
-    : t("deadlineMissing");
-  const value =
-    tender.budget > 0
-      ? formatCurrency(tender.budget, tender.currency || "USD", locale, {
-          maximumFractionDigits: 0,
-        })
-      : t("valueMissing");
+  const status = t(
+    `status.${tender.status === "OPEN" ? "open" : tender.status === "CLOSED" ? "closed" : tender.status === "CANCELLED" ? "cancelled" : "unknown"}`,
+  );
+  const documentStatus = t(
+    `documents.${tender.document_status === "documents_available" ? "ready" : tender.document_status === "files_missing" ? "preparationFailed" : tender.document_status === "metadata_only" ? "discovered" : tender.document_status === "access_required" ? "accessRequired" : tender.document_status === "processing" ? "processing" : tender.document_status === "failed" ? "failed" : "unavailable"}`,
+  );
   return (
-    <article
+    <Surface
+      className="explorer-card"
       data-tender-id={tender.id}
-      className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4"
+      data-selected={selected}
     >
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(12rem,0.7fr)_minmax(13rem,auto)]">
-        <div className="min-w-0">
-          <div className="flex flex-wrap gap-2">
-            <NewTenderBadge
-              isNew={tender.is_new}
-              newUntil={tender.new_until}
-              clock={clock}
-              monotonicNow={monotonicNow}
-            />
-            <span
-              className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${sourceBadgeClasses(tender.source_system)}`}
+      <div className="ds-row">
+        <NewTenderBadge
+          foundation
+          isNew={tender.is_new}
+          newUntil={tender.new_until}
+          clock={clock}
+          monotonicNow={monotonicNow}
+        />
+        <Badge icon={<Globe2 aria-hidden />}>
+          <BidiText>{sourceDisplayName}</BidiText>
+        </Badge>
+        <StatusBadge tone={tender.status === "OPEN" ? "success" : "neutral"}>
+          {t("sourceStatus", { status })}
+        </StatusBadge>
+        <StatusBadge
+          tone={
+            tender.document_status === "documents_available"
+              ? "success"
+              : "warning"
+          }
+        >
+          {t("documentCount", {
+            status: documentStatus,
+            count: tender.document_count,
+          })}
+        </StatusBadge>
+      </div>
+      <div className="explorer-card-top">
+        <div className="ds-stack">
+          <h2>
+            <Link
+              prefetch={false}
+              onClick={() => onOpen(tender.id)}
+              href={`/dashboard/tenders/${tender.id}`}
             >
-              <BidiText>{sourceDisplayName}</BidiText>
-            </span>
-            <span
-              className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${tenderStatusClasses(tender.status)}`}
-            >
-              {t("sourceStatus", { status: tenderStatus })}
-            </span>
-            <span
-              className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${documentStatusClasses(tender.document_status)}`}
-            >
-              {t("documentCount", {
-                status: documentStatus,
-                count: tender.document_count,
-              })}
-            </span>
-          </div>
-          <Link
-            onClick={remember}
-            href={`/dashboard/tenders/${tender.id}`}
-            className="mt-3 block text-base font-semibold text-white hover:text-indigo-300"
-          >
-            <BidiText>{tender.title}</BidiText>
-          </Link>
-          <p className="mt-1 text-xs text-zinc-500">
-            <BidiText>{tender.buyer || t("buyerMissing")}</BidiText>{" · "}<TechnicalText>{tender.external_id}</TechnicalText>
+              <BidiText>{tender.title}</BidiText>
+            </Link>
+          </h2>
+          <p className="ds-muted ds-text-small">
+            <BidiText>{tender.buyer || t("buyerMissing")}</BidiText> ·{" "}
+            <TechnicalText>{tender.external_id}</TechnicalText>
           </p>
-          <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-400">
-            <span className="inline-flex gap-1">
-              <MapPin className="h-3.5 w-3.5" />
-              <BidiText>{tender.country || tender.region || t("locationMissing")}</BidiText>
+          <div className="explorer-card-metadata">
+            <span className="ds-row">
+              <MapPin aria-hidden />
+              <BidiText>
+                {tender.country || tender.region || t("locationMissing")}
+              </BidiText>
             </span>
-            <span>
-              <BidiText>{tender.sector || tender.category || t("uncategorized")}</BidiText>
-            </span>
+            <BidiText>
+              {tender.sector || tender.category || t("uncategorized")}
+            </BidiText>
           </div>
         </div>
-        <div className="space-y-2 text-sm">
-          <p
-            className={
-              tender.budget > 0
-                ? "font-semibold text-emerald-300"
-                : "text-zinc-500"
-            }
-          >
-            {value}
+        <div className="ds-stack">
+          <p className="explorer-value">
+            {tender.budget > 0
+              ? formatCurrency(
+                  tender.budget,
+                  tender.currency || "USD",
+                  locale,
+                  { maximumFractionDigits: 0 },
+                )
+              : t("valueMissing")}
           </p>
-          <p
-            className={`inline-flex gap-1.5 ${expired ? "text-zinc-500" : "text-zinc-300"}`}
-          >
-            <Clock className="h-3.5 w-3.5" />
-            {deadline}
+          <p className="ds-row ds-text-small">
+            <Clock aria-hidden />
+            {tender.deadline
+              ? formatRelativeTime(
+                  tender.deadline,
+                  clock ? adjustedServerNow(clock, monotonicNow) : initialNow,
+                  locale,
+                )
+              : t("deadlineMissing")}
           </p>
-          <p className="text-xs text-zinc-500">
+          <p className="ds-muted ds-text-small">
             {formatDate(tender.deadline, locale)}
           </p>
-          {pursuit ? (
-            <span
-              className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${engagementStatusClasses(pursuit.status)}`}
-            >
-              {t("pursuit", { status: pursuitStatus })}
-            </span>
-          ) : null}
         </div>
-        <div className="flex flex-wrap gap-2 xl:justify-end">
-          <Link
-            onClick={remember}
-            href={`/dashboard/tenders/${tender.id}`}
-            className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200"
-          >
-            <FileText className="h-3.5 w-3.5" />
-            {t("viewTender")}
-          </Link>
-          {pursuit ? (
+      </div>
+      <div className="ds-row">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onPreview}
+          aria-pressed={selected}
+        >
+          {t("redesign.preview")}
+        </Button>
+        <ButtonLink
+          variant="secondary"
+          size="sm"
+          onClick={() => onOpen(tender.id)}
+          href={`/dashboard/tenders/${tender.id}`}
+        >
+          <FileText aria-hidden />
+          {t("viewTender")}
+        </ButtonLink>
+        {pursuit ? (
+          <>
+            <StatusBadge>
+              {t("pursuit", {
+                status: tMy(
+                  `statuses.${pursuit.status.toLowerCase() as "saved" | "evaluating" | "preparing" | "submitted" | "won" | "lost" | "dismissed"}`,
+                ),
+              })}
+            </StatusBadge>
             <EngagementWorkflowActions
+              foundation
               engagement={{
                 engagement_id: pursuit.engagement_id,
                 engagement_status: pursuit.status,
@@ -1035,8 +1075,16 @@ function ExplorerCard({
               tenderId={tender.id}
               onRefresh={onRefresh}
             />
-          ) : (
+          </>
+        ) : (
+          <>
+            <SaveTenderButton
+              tenderId={tender.id}
+              disabled={!actionable || expired}
+              onSaved={onRefresh}
+            />
             <PrepareBidButton
+              foundation
               tenderId={tender.id}
               disabled={!actionable || expired}
               title={
@@ -1047,30 +1095,99 @@ function ExplorerCard({
                     : t("startBid")
               }
             />
-          )}
-        </div>
+          </>
+        )}
       </div>
-      {recommendation ? (
+      {recommendation && (
         <RecommendationSummary
+          compact
+          foundation
           recommendation={recommendation}
           pending={pendingRecommendation === recommendation.recommendation_id}
           onDismiss={onDismiss}
           onRestore={onRestore}
         />
-      ) : null}
-    </article>
+      )}
+    </Surface>
   );
 }
 
-export default function TendersPage() {
+function ExplorerPreview({
+  item,
+  source,
+  remember,
+  pending,
+  onDismiss,
+  onRestore,
+}: {
+  item: ExplorerItem;
+  source: string;
+  remember: (id: string) => void;
+  pending: string | null;
+  onDismiss: (id: string) => void;
+  onRestore: (id: string) => void;
+}) {
+  const t = useTranslations("explorer");
+  const locale = useLocale() as CustomerSelectableLocale;
+  const { tender, recommendation } = item;
   return (
-    <Suspense
-      fallback={
-        <div role="status" className="flex h-64 items-center justify-center">
-          <Loader2 className="h-7 w-7 animate-spin text-indigo-500" />
-        </div>
-      }
-    >
+    <div className="explorer-preview">
+      <Badge icon={<Globe2 aria-hidden />}>
+        <BidiText>{source}</BidiText>
+      </Badge>
+      <h2>
+        <BidiText>{tender.title}</BidiText>
+      </h2>
+      <TechnicalText>{tender.external_id}</TechnicalText>
+      <dl>
+        {[
+          [t("source"), source],
+          [
+            t("countries"),
+            tender.country || tender.region || t("locationMissing"),
+          ],
+          [
+            t("category"),
+            tender.sector || tender.category || t("uncategorized"),
+          ],
+          [t("deadlineFilter"), formatDate(tender.deadline, locale)],
+          [
+            t("redesign.value"),
+            tender.budget > 0
+              ? formatCurrency(tender.budget, tender.currency || "USD", locale)
+              : t("valueMissing"),
+          ],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>
+              <BidiText>{value}</BidiText>
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <ButtonLink
+        href={`/dashboard/tenders/${tender.id}`}
+        onClick={() => remember(tender.id)}
+      >
+        {t("viewTender")}
+      </ButtonLink>
+      {recommendation && (
+        <RecommendationSummary
+          foundation
+          recommendation={recommendation}
+          pending={pending === recommendation.recommendation_id}
+          onDismiss={onDismiss}
+          onRestore={onRestore}
+        />
+      )}
+    </div>
+  );
+}
+export default function TendersPage() {
+  const t = useTranslations("explorer");
+  return (
+    <Suspense fallback={<PageSkeleton label={t("loading")} />}>
       <TendersPageContent />
     </Suspense>
   );

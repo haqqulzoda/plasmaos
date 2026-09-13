@@ -142,7 +142,7 @@ class ExplorerAndDashboardTests(unittest.TestCase):
     def test_12_dashboard_current_logic_uses_actionability_contract(self) -> None:
         dashboard = read_frontend("app/dashboard/page.tsx")
         block = dashboard.split("function isCurrentTender", 1)[1].split("\n}", 1)[0]
-        self.assertIn("isTenderActionable(tender)", block)
+        self.assertIn("isTenderActionable(tender.status)", block)
 
 
 class HunterTests(unittest.TestCase):

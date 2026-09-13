@@ -5,6 +5,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Surface, SectionHeader } from "@/components/ui/Display";
+import { Radio } from "@/components/ui/Forms";
+import { Alert } from "@/components/ui/Feedback";
+
 import { applyUiLocale } from "@/i18n/userLocale";
 import {
   CUSTOMER_SELECTABLE_LOCALES,
@@ -13,7 +17,8 @@ import {
 } from "@/i18n/locales";
 
 type LanguageSelectorProps = Readonly<{
-  surface: "onboarding" | "settings";
+  surface: "auth" | "onboarding" | "settings";
+  foundation?: boolean;
 }>;
 
 /**
@@ -21,7 +26,10 @@ type LanguageSelectorProps = Readonly<{
  * next-intl locale and delegates persistence to the Sprint 7.2 transaction.
  * A failed write therefore cannot create an optimistic language flash.
  */
-export function LanguageSelector({ surface }: LanguageSelectorProps) {
+export function LanguageSelector({
+  surface,
+  foundation = false,
+}: LanguageSelectorProps) {
   const router = useRouter();
   const activeLocale = useLocale() as CustomerSelectableLocale;
   const t = useTranslations("settings.language");
@@ -43,27 +51,55 @@ export function LanguageSelector({ surface }: LanguageSelectorProps) {
     }
   };
 
+  if (foundation)
+    return (
+      <Surface className="profile-section" data-language-selector={surface}>
+        <SectionHeader title={t("title")} description={t(`${surface}Help`)} />
+        <div
+          className="ds-row"
+          role="radiogroup"
+          aria-label={t("optionsLabel")}
+        >
+          {CUSTOMER_SELECTABLE_LOCALES.map((locale) => (
+            <Radio
+              key={locale}
+              name="interface-language"
+              label={LOCALE_REGISTRY[locale].displayNameNative}
+              aria-label={t("optionLabel", {
+                language: LOCALE_REGISTRY[locale].displayNameNative,
+              })}
+              checked={activeLocale === locale}
+              disabled={pendingLocale !== null}
+              onChange={() => void selectLocale(locale)}
+            />
+          ))}
+        </div>
+        <div role="status">{pendingLocale ? t("saving") : null}</div>
+        {error && <Alert tone="danger" title={t("saveFailed")} />}
+      </Surface>
+    );
+
   return (
     <section
       aria-labelledby={`${surface}-interface-language-heading`}
-      className="space-y-4 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4 sm:p-5"
+      className={`language-selector language-selector-${surface}`}
       data-language-selector={surface}
     >
       <div>
         <h2
           id={`${surface}-interface-language-heading`}
-          className="text-base font-semibold text-white"
+          className="language-selector-title"
         >
           {t("title")}
         </h2>
-        <p className="mt-1 text-sm leading-5 text-zinc-400">
+        <p className="ds-muted language-selector-help">
           {t(`${surface}Help`)}
         </p>
       </div>
       <div
         role="radiogroup"
         aria-label={t("optionsLabel")}
-        className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+        className="language-selector-options"
       >
         {CUSTOMER_SELECTABLE_LOCALES.map((locale) => {
           const selected = activeLocale === locale;
@@ -79,28 +115,24 @@ export function LanguageSelector({ surface }: LanguageSelectorProps) {
               })}
               disabled={pendingLocale !== null}
               onClick={() => void selectLocale(locale)}
-              className={`flex min-h-12 items-center justify-between gap-3 rounded-lg border px-4 py-3 text-start text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-wait disabled:opacity-70 ${
-                selected
-                  ? "border-cyan-400 bg-cyan-500/15 text-cyan-100"
-                  : "border-zinc-700 bg-zinc-950 text-zinc-200 hover:border-zinc-500"
-              }`}
+              className="language-selector-option"
             >
               <span>{LOCALE_REGISTRY[locale].displayNameNative}</span>
               {pending ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                <Loader2 className="ds-spin" aria-hidden="true" />
               ) : selected ? (
-                <Check className="h-4 w-4" aria-hidden="true" />
+                <Check aria-hidden="true" />
               ) : null}
             </button>
           );
         })}
       </div>
-      <div className="min-h-5 text-xs" aria-live="polite">
+      <div className="language-selector-status" aria-live="polite">
         {pendingLocale ? (
-          <span className="text-cyan-200">{t("saving")}</span>
+          <span>{t("saving")}</span>
         ) : null}
         {!pendingLocale && error ? (
-          <span role="alert" className="text-red-300">
+          <span role="alert" className="ds-field-error">
             {t("saveFailed")}
           </span>
         ) : null}

@@ -132,6 +132,7 @@ export const MESSAGE_NAMESPACES = [
     'explorer',
     'tenderDetails',
     'myTenders',
+    'notifications',
     'bidPreparation',
     'dashboard',
     'compliance',

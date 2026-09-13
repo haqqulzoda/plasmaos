@@ -35,6 +35,7 @@ celery_app = Celery(
         "app.workers.source_refresh_tasks",
         "app.workers.project_enrichment_tasks",
         "app.workers.hunter_tasks",
+        "app.workers.communications_tasks",
     ],
 )
 
@@ -58,6 +59,8 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
     worker_max_tasks_per_child=int(os.getenv("CELERY_WORKER_MAX_TASKS_PER_CHILD", "10")),
     beat_schedule={
+        "publish-committed-notifications": {"task": "app.workers.communications_tasks.publish_notifications", "schedule": timedelta(seconds=10)},
+        "dispatch-durable-broadcasts": {"task": "app.workers.communications_tasks.dispatch_broadcasts", "schedule": timedelta(seconds=10)},
         "run-hunter-sweep-every-30-minutes": {
             "task": "app.workers.hunter_tasks.run_hunter_sweep",
             "schedule": crontab(minute="*/30"),

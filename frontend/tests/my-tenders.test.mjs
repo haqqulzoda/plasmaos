@@ -16,7 +16,7 @@ const pursuitPanel = readFileSync(
   "utf8",
 );
 const layout = readFileSync(
-  new URL("../app/dashboard/layout.tsx", import.meta.url),
+  new URL("../components/shell/CustomerShell.tsx", import.meta.url),
   "utf8",
 );
 
@@ -58,9 +58,10 @@ test("engagement and source status are separately labeled and accessible", () =>
   assert.match(page, /t\("engagement", \{\s*status: engagementLabel/);
   assert.match(page, /t\("tender", \{ status: tenderLabel \}\)/);
   assert.match(page, /aria-label=\{t\("statusesLabel"\)\}/);
-  assert.match(page, /focus-visible:ring/);
+  assert.match(page, /<Tabs/);
+  assert.match(readFileSync(new URL("../components/ui/foundation.css", import.meta.url), "utf8"), /focus-visible/);
   assert.match(page, /role="status"/);
-  assert.match(page, /role="alert"/);
+  assert.match(page, /<Alert\s+tone="danger"/);
 });
 
 test("empty state is truthful and never imports legacy bids", () => {

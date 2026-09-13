@@ -5,6 +5,9 @@ import { AlertCircle, Loader2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { Dialog, Dropdown } from "@/components/ui/Overlay";
+import { Alert } from "@/components/ui/Feedback";
 import { api } from "@/lib/api";
 import type {
   EngagementAction,
@@ -75,12 +78,16 @@ const buttonClasses = (tone: ActionDefinition["tone"]) => {
 };
 
 export function EngagementWorkflowActions({
+  foundation = false,
+  menuActions = false,
   engagement,
   tenderId,
   proposalId,
   onChanged,
   onRefresh,
 }: {
+  foundation?: boolean;
+  menuActions?: boolean;
   engagement: TenderEngagementActionContext;
   tenderId: string;
   proposalId?: string | null;
@@ -92,22 +99,35 @@ export function EngagementWorkflowActions({
   const [submitting, setSubmitting] = useState<CommandAction | "SAVE" | null>(
     null,
   );
+  const [updated, setUpdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const actionRoot = useRef<HTMLDivElement>(null);
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (menuActions && wasPending.current && !pending)
+      requestAnimationFrame(() =>
+        actionRoot.current
+          ?.querySelector<HTMLButtonElement>("button[aria-expanded]")
+          ?.focus(),
+      );
+    wasPending.current = Boolean(pending);
+  }, [pending, menuActions]);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!pending) return;
+    if (!pending || foundation) return;
     cancelRef.current?.focus();
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !submitting) setPending(null);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [pending, submitting]);
+  }, [pending, submitting, foundation]);
 
   const invoke = async (definition: ActionDefinition) => {
     setSubmitting(definition.action);
     setError(null);
+    setUpdated(false);
     try {
       const response = await api.post<TenderEngagementActionResponse>(
         `/my-tenders/${engagement.engagement_id}/actions/${definition.path}`,
@@ -116,6 +136,7 @@ export function EngagementWorkflowActions({
       setPending(null);
       onChanged?.(response.data.engagement);
       await onRefresh?.();
+      setUpdated(true);
     } catch (requestError: unknown) {
       const response = (
         requestError as {
@@ -141,12 +162,14 @@ export function EngagementWorkflowActions({
   const saveAgain = async () => {
     setSubmitting("SAVE");
     setError(null);
+    setUpdated(false);
     try {
       const response = await api.post<SaveToMyTendersResponse>(
         `/tenders/${tenderId}/engagement`,
       );
       onChanged?.(response.data.engagement);
       await onRefresh?.();
+      setUpdated(true);
     } catch (requestError: unknown) {
       const response = (requestError as { response?: { status?: number } })
         .response;
@@ -251,6 +274,132 @@ export function EngagementWorkflowActions({
                 : action === "CORRECT_TO_WON"
                   ? t("correctWonConfirm")
                   : t("correctLostConfirm");
+
+  const foundationActions = (
+    <>
+      {available.includes("SAVE") && (
+        <Button
+          size="sm"
+          onClick={() => void saveAgain()}
+          loading={submitting === "SAVE"}
+          disabled={submitting !== null}
+        >
+          {t("saveAgain")}
+        </Button>
+      )}
+      {normal.map((action) => (
+        <Button
+          variant={ACTIONS[action].tone ?? "secondary"}
+          size="sm"
+          key={action}
+          onClick={() => request(ACTIONS[action])}
+          disabled={submitting !== null}
+        >
+          {actionLabel(action)}
+        </Button>
+      ))}
+      {(available.includes("PREPARE_BID") ||
+        engagement.engagement_status === "PREPARING") &&
+        (proposalId ? (
+          <ButtonLink
+            size="sm"
+            href={`/dashboard/bid-preparation/${proposalId}`}
+          >
+            {t("openBid")}
+          </ButtonLink>
+        ) : (
+          <PrepareBidButton
+            foundation
+            tenderId={tenderId}
+            label={
+              engagement.engagement_status === "PREPARING"
+                ? t("openBid")
+                : undefined
+            }
+          />
+        ))}
+      {secondary.length > 0 &&
+        (menuActions ? (
+          <>
+            {secondary.map((action) => (
+              <Button
+                variant="ghost"
+                size="sm"
+                key={action}
+                disabled={submitting !== null}
+                onClick={() => request(ACTIONS[action])}
+              >
+                {actionLabel(action)}
+              </Button>
+            ))}
+          </>
+        ) : (
+          <Dropdown label={t("more")} trigger={t("more")}>
+            {secondary.map((action) => (
+              <Button
+                variant="ghost"
+                size="sm"
+                key={action}
+                disabled={submitting !== null}
+                onClick={() => request(ACTIONS[action])}
+              >
+                {actionLabel(action)}
+              </Button>
+            ))}
+          </Dropdown>
+        ))}
+    </>
+  );
+  if (foundation)
+    return (
+      <div className="ds-stack" ref={actionRoot}>
+        <div className="ds-row">
+          {menuActions ? (
+            <Dropdown label={t("more")} trigger={t("more")}>
+              {foundationActions}
+            </Dropdown>
+          ) : (
+            foundationActions
+          )}
+        </div>
+        {updated && !error && (
+          <span className="ds-muted ds-text-small" role="status">
+            {t("statusChanged")}
+          </span>
+        )}
+        {error && <Alert tone="danger" title={error} />}
+        <Dialog
+          open={Boolean(pending)}
+          onClose={() => {
+            if (!submitting) setPending(null);
+          }}
+          title={pending ? confirmationTitle(pending.action) : ""}
+          description={pending ? confirmationCopy(pending.action) : ""}
+          closeLabel={t("closeConfirmation")}
+          initialFocusRef={cancelRef}
+        >
+          <div className="ds-row">
+            <Button
+              ref={cancelRef}
+              variant="secondary"
+              disabled={submitting !== null}
+              onClick={() => setPending(null)}
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              variant={pending?.tone ?? "primary"}
+              loading={submitting !== null}
+              onClick={() => {
+                if (pending) void invoke(pending);
+              }}
+            >
+              {pending ? actionLabel(pending.action) : ""}
+            </Button>
+          </div>
+        </Dialog>
+      </div>
+    );
 
   return (
     <div className="space-y-2">

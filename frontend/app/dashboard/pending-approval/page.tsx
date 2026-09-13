@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, CheckCircle2, Clock3, Loader2, LogOut, RefreshCw } from 'lucide-react';
+import { Building2, CheckCircle2, Clock3, LogOut, RefreshCw } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { api, setApiAccessToken } from '@/lib/api';
+import { Button } from '@/components/ui/Button';
+import { Alert } from '@/components/ui/Feedback';
 
 type AccessStatus = {
     user_approval_status: string;
@@ -77,89 +79,71 @@ export default function PendingApprovalPage() {
     };
 
     return (
-        <div className="min-h-[60vh] flex items-center justify-center">
-            <section className="w-full max-w-xl border border-gray-800 bg-gray-950 rounded-lg p-8 space-y-6">
+        <div className="customer-page customer-state-page">
+            <section className="ds-surface customer-state-card">
                 {approved ? (
-                    <div className="text-center space-y-4">
-                        <div className="mx-auto w-12 h-12 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                            <CheckCircle2 className="w-6 h-6 text-emerald-300" />
+                    <div className="customer-state-copy" role="status" aria-live="polite">
+                        <div className="customer-state-icon ds-tone-success">
+                            <CheckCircle2 aria-hidden />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-semibold text-white">{t('accessApproved')}</h1>
-                            <p className="mt-2 text-gray-300">{t('redirecting')}</p>
+                            <h1>{t('accessApproved')}</h1>
+                            <p className="ds-muted">{t('redirecting')}</p>
                         </div>
                     </div>
                 ) : (
                     <>
-                        <div className="text-center space-y-4">
-                            <div className="mx-auto w-12 h-12 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                                <Clock3 className="w-6 h-6 text-amber-300" />
+                        <div className="customer-state-copy">
+                            <div className="customer-state-icon ds-tone-warning">
+                                <Clock3 aria-hidden />
                             </div>
-                            <div className="space-y-2">
-                                <h1 className="text-2xl font-semibold text-white">{t('accessPending')}</h1>
-                                <p className="text-gray-300 leading-6">{t('pendingHelp')}</p>
+                            <div>
+                                <span className="ds-eyebrow">{t('pending')}</span>
+                                <h1>{t('accessPending')}</h1>
+                                <p className="ds-muted">{t('pendingHelp')}</p>
                             </div>
                         </div>
 
-                        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
-                            <div className="flex items-center gap-2 text-emerald-200 font-medium">
-                                <Building2 className="w-4 h-4" />
-                                {t('profileSubmitted')}
-                            </div>
-                            <p className="mt-1 text-sm text-emerald-100/70">
-                                {t('approvedHelp')}
-                            </p>
-                        </div>
+                        <Alert tone="success" title={t('profileSubmitted')}><Building2 aria-hidden />{t('approvedHelp')}</Alert>
 
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-3">
-                                <p className="text-gray-500">{t('userApproval')}</p>
-                                <p className="mt-1 font-medium text-gray-200">
+                        <dl className="customer-state-facts">
+                            <div className="ds-surface-subtle">
+                                <dt className="ds-muted">{t('userApproval')}</dt>
+                                <dd>
                                     {statusLabel(access?.user_approval_status ?? 'pending')}
-                                </p>
+                                </dd>
                             </div>
-                            <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-3">
-                                <p className="text-gray-500">{t('companyApproval')}</p>
-                                <p className="mt-1 font-medium text-gray-200">
+                            <div className="ds-surface-subtle">
+                                <dt className="ds-muted">{t('companyApproval')}</dt>
+                                <dd>
                                     {statusLabel(access?.company_approval_status ?? 'pending')}
-                                </p>
+                                </dd>
                             </div>
-                        </div>
+                        </dl>
 
-                        <div className="text-sm text-gray-400 space-y-1">
+                        <div className="customer-state-guidance ds-muted">
                             <p>{t('nextReview')}</p>
                             <p>{t('nextSignin')}</p>
                             <p>{t('help')}</p>
                         </div>
 
-                        {error && (
-                            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                                {error}
-                            </div>
-                        )}
+                        {error && <Alert tone="danger" title={error} />}
 
-                        <div className="flex flex-wrap justify-center gap-3">
-                            <button
-                                type="button"
+                        <div className="ds-row customer-state-actions">
+                            <Button
                                 onClick={() => void refreshStatus()}
-                                disabled={checking}
-                                className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-500 disabled:opacity-60"
+                                loading={checking}
+                                leadingIcon={<RefreshCw aria-hidden />}
                             >
-                                {checking ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <RefreshCw className="w-4 h-4" />
-                                )}
                                 {t('refreshStatus')}
-                            </button>
-                            <button
-                                type="button"
+                            </Button>
+                            <Button
+                                variant="secondary"
                                 onClick={handleLogout}
-                                className="inline-flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-900 hover:text-white transition-colors"
+                                leadingIcon={<LogOut aria-hidden />}
                             >
-                                <LogOut className="w-4 h-4" />
                                 {t('logout')}
-                            </button>
+                            </Button>
                         </div>
                     </>
                 )}

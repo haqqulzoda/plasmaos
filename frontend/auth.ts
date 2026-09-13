@@ -96,7 +96,9 @@ function applyBackendClaims(
 export const { handlers, auth } = NextAuth({
   secret: process.env.AUTH_SECRET,
   trustHost: true,
-  useSecureCookies: process.env.NODE_ENV === 'production',
+  useSecureCookies:
+    (process.env.AUTH_URL ?? process.env.NEXTAUTH_URL)?.startsWith('https://') ??
+    process.env.NODE_ENV === 'production',
   session: { strategy: 'jwt', maxAge: 60 * 60 * 8 },
   pages: {
     signIn: '/',

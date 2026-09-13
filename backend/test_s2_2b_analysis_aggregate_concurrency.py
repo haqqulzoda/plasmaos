@@ -16,7 +16,7 @@ SERVICE = BACKEND_DIR / "app/services/analysis_aggregates.py"
 ENDPOINT = BACKEND_DIR / "app/api/endpoints/tenders.py"
 PROPOSALS = BACKEND_DIR / "app/api/endpoints/proposals.py"
 PREFLIGHT = BACKEND_DIR / "scripts/report_analysis_aggregate_concurrency.py"
-HEAD = "20260904_0001_s8_2_analysis_language"
+HEAD = "20260912_0001_s10_5_communications"
 
 
 def source(path: Path) -> str:

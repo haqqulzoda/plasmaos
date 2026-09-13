@@ -1,21 +1,11 @@
 'use client';
 
 import { ReactNode, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-    Archive,
-    Bookmark,
-    Building2,
-    LayoutDashboard,
-    ScrollText,
-    FileText,
-    LogOut,
-    Sparkles,
-    Loader2,
-    ShieldCheck,
-} from 'lucide-react';
-import { clsx } from 'clsx';
+import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { PlasmaLogo } from '@/components/brand/PlasmaLogo';
+import { CustomerShell } from '@/components/shell/CustomerShell';
 import { signOut, useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { api, setApiAccessToken } from '@/lib/api';
@@ -24,21 +14,7 @@ import {
     GlobalRefreshIndicator,
     SourceRefreshProvider,
 } from '@/components/source-refresh/SourceRefreshProvider';
-
-interface NavItem {
-    nameKey: 'dashboard' | 'tenders' | 'myTenders' | 'bidPreparation' | 'companyProfile' | 'readinessVault';
-    href: string;
-    icon: ReactNode;
-}
-
-const baseNavItems: NavItem[] = [
-    { nameKey: 'dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { nameKey: 'tenders', href: '/dashboard/tenders', icon: <ScrollText className="w-5 h-5" /> },
-    { nameKey: 'myTenders', href: '/dashboard/my-tenders', icon: <Bookmark className="w-5 h-5" /> },
-    { nameKey: 'bidPreparation', href: '/dashboard/bid-preparation', icon: <FileText className="w-5 h-5" /> },
-    { nameKey: 'companyProfile', href: '/dashboard/settings', icon: <Building2 className="w-5 h-5" /> },
-    { nameKey: 'readinessVault', href: '/dashboard/readiness-vault', icon: <Archive className="w-5 h-5" /> },
-];
+import { NotificationBell, NotificationProvider } from '@/components/notifications/NotificationProvider';
 
 export type AccessStatus = {
     company_profile_id?: string | null;
@@ -60,8 +36,8 @@ const CONTROL_PATHS = new Set([
 ]);
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-    const t = useTranslations('navigation');
     const common = useTranslations('common');
+    const [companyName, setCompanyName] = useState<string | null>(null);
     const [accessError, setAccessError] = useState(false);
     const [retryVersion, setRetryVersion] = useState(0);
     const pathname = usePathname();
@@ -93,6 +69,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             try {
                 const response = await api.get<AccessStatus>('/users/me/access-status');
                 const access = response.data;
+                if (!cancelled) setCompanyName(access.company_name ?? null);
                 if (!cancelled) setAccessError(false);
 
                 if (access.state === 'rejected' || access.state === 'disabled') {
@@ -153,16 +130,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     ]);
 
     if (accessError) {
-        return <div role="alert" className="min-h-screen bg-gray-950 text-white p-6 break-words">
+        return <div role="alert" className="ds-theme shell-state">
             <p>{common('states.unavailable')}</p>
-            <button className="mt-4 rounded border px-4 py-2 focus-visible:ring-2" onClick={() => {setAccessError(false); setRetryVersion(value => value + 1);}}>{common('actions.retry')}</button>
+            <Button variant="secondary" onClick={() => {setAccessError(false); setRetryVersion(value => value + 1);}}>{common('actions.retry')}</Button>
         </div>;
     }
 
     if (status === 'loading' || (accessReadyPath !== pathname && workspaceAccessAllowed !== true)) {
         return (
-            <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+            <div className="ds-theme shell-state" role="status">
+                <PlasmaLogo /><Loader2 className="ds-spin" aria-hidden /><span>{common('states.loading')}</span>
             </div>
         );
     }
@@ -172,87 +149,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         session?.is_admin === true ||
         role === 'admin' ||
         role === 'operator';
-    const navItems = baseNavItems;
 
-    const dashboardShell = (
-        <div className="flex h-screen bg-gray-900 text-white">
-            {/* Sidebar */}
-            <aside className="w-16 shrink-0 bg-gray-950 border-e border-gray-800 flex flex-col sm:w-64">
-                {/* Logo */}
-                <div className="border-b border-gray-800 p-3 sm:p-6">
-                    <Link href="/dashboard" aria-label={t('dashboardLabel')} className="flex items-center justify-center gap-3 sm:justify-start">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                            <Sparkles className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="hidden text-xl font-bold text-white tracking-tight sm:inline">Plasma AI</span>
-                    </Link>
-                </div>
 
-                {/* Navigation */}
-                <nav aria-label={t('navigationLabel')} className="flex-1 space-y-1 p-2 sm:p-4">
-                    {navItems.map((item) => {
-                        const isActive = pathname === item.href;
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                prefetch={false}
-                                aria-label={t(item.nameKey)}
-                                className={clsx(
-                                    'flex items-center justify-center gap-3 rounded-lg px-2 py-3 transition-all duration-200 sm:justify-start sm:px-4',
-                                    isActive
-                                        ? 'bg-indigo-900/20 text-indigo-400 border-s-2 border-indigo-500'
-                                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
-                                )}
-                            >
-                                {item.icon}
-                                <span className="hidden font-medium sm:inline">{t(item.nameKey)}</span>
-                            </Link>
-                        );
-                    })}
-                </nav>
-
-                {/* Logout */}
-                <div className="border-t border-gray-800 p-2 sm:p-4">
-                    <button
-                        onClick={handleLogout}
-                        aria-label={t('logout')}
-                        className="flex w-full items-center justify-center gap-3 rounded-lg px-2 py-3 text-gray-400 transition-all duration-200 hover:bg-gray-800/50 hover:text-red-400 sm:justify-start sm:px-4"
-                    >
-                        <LogOut className="w-5 h-5" />
-                        <span className="hidden font-medium sm:inline">{t('logout')}</span>
-                    </button>
-                </div>
-            </aside>
-
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Top Header */}
-                <header className="h-16 border-b border-gray-800 bg-gray-950/50 backdrop-blur-sm flex items-center justify-between px-3 shrink-0 sm:px-8">
-                    <h2 className="text-sm font-medium text-gray-400 tracking-wide uppercase">{t('commandCenter')}</h2>
-                    <div className="flex items-center gap-3">
-                        {workspaceAccessAllowed ? <GlobalRefreshIndicator /> : null}
-                        {isOperatorOrAdmin && (
-                            <Link
-                                href="/admin"
-                                className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 px-3 py-2 text-sm font-medium text-cyan-200 hover:bg-cyan-500/10 hover:text-cyan-100 transition-colors"
-                            >
-                                <ShieldCheck className="w-4 h-4" />
-                                {t('adminConsole')}
-                            </Link>
-                        )}
-                      
-                    </div>
-                </header>
-
-                {/* Page Content */}
-                <main className="flex-1 overflow-auto">
-                    <div className="p-3 sm:p-8">
-                        {children}
-                    </div>
-                </main>
-            </div>
-        </div>
+    const dashboardShell = workspaceAccessAllowed ? (
+        <NotificationProvider>
+            <CustomerShell name={session?.user?.name} email={session?.user?.email}
+                company={companyName} canAdmin={isOperatorOrAdmin} onLogout={handleLogout}
+                refresh={<GlobalRefreshIndicator />} notifications={<NotificationBell />}>
+                {children}
+            </CustomerShell>
+        </NotificationProvider>
+    ) : (
+        <CustomerShell name={session?.user?.name} email={session?.user?.email}
+            company={companyName} canAdmin={isOperatorOrAdmin} onLogout={handleLogout}>
+            {children}
+        </CustomerShell>
     );
 
     return workspaceAccessAllowed

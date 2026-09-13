@@ -103,5 +103,17 @@
     "recommendedOn": "{date} kuni tavsiya qilingan",
     "restore": "Tavsiyani tiklash",
     "dismiss": "Tavsiyani rad etish"
+  },
+  "redesign": {
+    "eyebrow": "Global imkoniyatlarni o‘rganing",
+    "preview": "Tenderni ko‘rish",
+    "selectTitle": "Tenderni tanlang",
+    "selectHelp": "Qisqacha ma’lumotni ko‘rish uchun natijadagi oldindan ko‘rish tugmasini tanlang.",
+    "closePreview": "Ko‘rishni yopish",
+    "clearSearch": "Qidiruvni tozalash",
+    "activeFilters": "Faol filtrlar",
+    "removeFilter": "{filter} filtrini olib tashlash",
+    "clearAll": "Barchasini tozalash",
+    "value": "Taxminiy qiymat"
   }
 }

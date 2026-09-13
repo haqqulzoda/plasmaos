@@ -46,7 +46,13 @@
   "documentForbidden": "You do not have access to this source document.",
   "documentUnavailable": "The source document file is unavailable. Re-sync documents for this Tender.",
   "documentOpenFailed": "The source document could not be opened. Try again or re-sync documents for this Tender.",
-  "verdict": {"notEligible": "Requirements not met", "withReview": "Review required", "needsReview": "Needs review", "compliant": "No recorded gaps", "pending": "Not assessed"},
+  "verdict": {
+    "notEligible": "Requirements not met",
+    "withReview": "Review required",
+    "needsReview": "Needs review",
+    "compliant": "No recorded gaps",
+    "pending": "Not assessed"
+  },
   "manualOnly": "No requirements have been verified; manual review is required.",
   "sourceDocument": "source document",
   "documentLevel": "Document-level provenance",
@@ -105,5 +111,25 @@
   "sealNotice": "This override is sealed with SHA-256 and permanently recorded in the audit ledger.",
   "hide": "hide",
   "show": "show",
-  "verdictLabels": {"satisfied": "Satisfied", "failed": "Failed", "manualReview": "Manual review", "unknown": "Review required"}
+  "verdictLabels": {
+    "satisfied": "Satisfied",
+    "failed": "Failed",
+    "manualReview": "Manual review",
+    "unknown": "Review required"
+  },
+  "redesign": {
+    "loadResultFailed": "The saved analysis could not be loaded.",
+    "versionFailed": "This version could not be loaded. Your previous selection is preserved.",
+    "historyFailed": "Version history could not be loaded.",
+    "loadingVersion": "Loading saved analysis",
+    "partialCoverage": "Partial analysis coverage — review the available evidence.",
+    "incompleteSnapshot": "This historical snapshot is incomplete.",
+    "arabicPdfGate": "PDF export is unavailable for Arabic analysis versions.",
+    "runningHelp": "The previous saved result remains available until the new analysis completes.",
+    "assessment": "Recorded assessment",
+    "evidenceHelp": "Open a requirement’s evidence to review its original quote and source document.",
+    "rationale": "Analysis explanation",
+    "recordedCredential": "Recorded credential",
+    "retry": "Retry"
+  }
 }

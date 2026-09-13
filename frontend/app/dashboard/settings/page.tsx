@@ -1,7 +1,18 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Building2, Check, Globe2, Loader2, Phone, Save } from "lucide-react";
+import { Building2, Save } from "lucide-react";
+import {
+  PageHeader,
+  SectionHeader,
+  Surface,
+  StatusBadge,
+  PageSkeleton,
+} from "@/components/ui/Display";
+import { Button } from "@/components/ui/Button";
+import { Input, Select, Checkbox } from "@/components/ui/Forms";
+import { Alert } from "@/components/ui/Feedback";
+import { BidiText, TechnicalText } from "@/components/i18n/BidiText";
 import { useTranslations } from "next-intl";
 import { LanguageSelector } from "@/components/i18n/LanguageSelector";
 import {
@@ -12,9 +23,8 @@ import {
 } from "@/i18n/analysisLanguages";
 import { localizeTaxonomyValue } from "@/i18n/taxonomy";
 import { api } from "@/lib/api";
-import { CENTRAL_ASIA_REGION, useGeographyMeta } from "@/lib/geography";
-import type { ServiceOption } from "@/lib/services";
-import { labelForService, useServiceMeta } from "@/lib/services";
+import { useGeographyMeta } from "@/lib/geography";
+import { useServiceMeta } from "@/lib/services";
 
 type CompanyProfile = {
   company_name: string;
@@ -42,22 +52,6 @@ const emptyProfile: CompanyProfile = {
   target_services: [],
   pilot_status: "",
   approval_status: "",
-};
-
-const inputClass =
-  "w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-gray-100 text-sm placeholder-gray-600 outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500 transition-all";
-
-const labelClass = "text-sm font-medium text-gray-300";
-
-const statusClass = (status: string) => {
-  if (status === "approved")
-    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-200";
-  if (status === "pending")
-    return "border-amber-500/20 bg-amber-500/10 text-amber-200";
-  if (status === "rejected")
-    return "border-red-500/20 bg-red-500/10 text-red-200";
-  if (status === "disabled") return "border-gray-700 bg-gray-900 text-gray-300";
-  return "border-cyan-500/20 bg-cyan-500/10 text-cyan-200";
 };
 
 function toggleValue(values: string[], value: string): string[] {
@@ -93,19 +87,41 @@ export default function CompanyProfilePage() {
     if (status === "disabled") return t("status.disabled");
     return t("status.unknown");
   };
+  const pilotStatusLabel = (status: string) => {
+    const labels = {
+      lead: "pilotStates.lead",
+      scoped_pilot: "pilotStates.scoped_pilot",
+      active_pilot: "pilotStates.active_pilot",
+      at_risk: "pilotStates.at_risk",
+      converted: "pilotStates.converted",
+      paused: "pilotStates.paused",
+    } as const;
+    return status in labels
+      ? t(labels[status as keyof typeof labels])
+      : accountStatusLabel(status);
+  };
   const geography = useGeographyMeta();
   const services = useServiceMeta();
   const [profile, setProfile] = useState<CompanyProfile>(emptyProfile);
+  const [persistedProfile, setPersistedProfile] =
+    useState<CompanyProfile>(emptyProfile);
+  const dirty = JSON.stringify(profile) !== JSON.stringify(persistedProfile);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [analysisLanguage, setAnalysisLanguage] = useState<CustomerAnalysisLanguage>(DEFAULT_ANALYSIS_LANGUAGE);
-  const [savedAnalysisLanguage, setSavedAnalysisLanguage] = useState<CustomerAnalysisLanguage>(DEFAULT_ANALYSIS_LANGUAGE);
-  const [isLoadingAnalysisLanguage, setIsLoadingAnalysisLanguage] = useState(true);
-  const [isSavingAnalysisLanguage, setIsSavingAnalysisLanguage] = useState(false);
+  const [error, setError] = useState<"loadFailed" | "saveFailed" | null>(null);
+  const [analysisLanguage, setAnalysisLanguage] =
+    useState<CustomerAnalysisLanguage>(DEFAULT_ANALYSIS_LANGUAGE);
+  const [savedAnalysisLanguage, setSavedAnalysisLanguage] =
+    useState<CustomerAnalysisLanguage>(DEFAULT_ANALYSIS_LANGUAGE);
+  const [isLoadingAnalysisLanguage, setIsLoadingAnalysisLanguage] =
+    useState(true);
+  const [isSavingAnalysisLanguage, setIsSavingAnalysisLanguage] =
+    useState(false);
   const [analysisLanguageSaved, setAnalysisLanguageSaved] = useState(false);
-  const [analysisLanguageError, setAnalysisLanguageError] = useState<string | null>(null);
+  const [analysisLanguageError, setAnalysisLanguageError] = useState<
+    "analysisLanguage.loadFailed" | "analysisLanguage.saveFailed" | null
+  >(null);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -114,13 +130,14 @@ export default function CompanyProfilePage() {
       const response =
         await api.get<Partial<CompanyProfile>>("/users/me/company");
       setProfile(normalizeProfile(response.data));
+      setPersistedProfile(normalizeProfile(response.data));
     } catch {
       console.error("Failed to load company profile:");
-      setError(t("loadFailed"));
+      setError("loadFailed");
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     loadProfile();
@@ -128,46 +145,55 @@ export default function CompanyProfilePage() {
 
   useEffect(() => {
     let active = true;
-    api.get<{ default_analysis_language?: string | null }>("/users/me")
+    api
+      .get<{ default_analysis_language?: string | null }>("/users/me")
       .then(({ data }) => {
         if (active) {
-          const loadedLanguage = normalizeCustomerAnalysisLanguage(data.default_analysis_language);
+          const loadedLanguage = normalizeCustomerAnalysisLanguage(
+            data.default_analysis_language,
+          );
           setAnalysisLanguage(loadedLanguage);
           setSavedAnalysisLanguage(loadedLanguage);
         }
       })
       .catch(() => {
-        if (active) setAnalysisLanguageError(t("analysisLanguage.loadFailed"));
+        if (active) setAnalysisLanguageError("analysisLanguage.loadFailed");
       })
       .finally(() => {
         if (active) setIsLoadingAnalysisLanguage(false);
       });
-    return () => { active = false; };
-  }, [t]);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const saveAnalysisLanguage = async () => {
     setIsSavingAnalysisLanguage(true);
     setAnalysisLanguageSaved(false);
     setAnalysisLanguageError(null);
     try {
-      const { data } = await api.patch<{ default_analysis_language: string | null }>(
-        "/users/me/preferences",
-        { default_analysis_language: analysisLanguage },
+      const { data } = await api.patch<{
+        default_analysis_language: string | null;
+      }>("/users/me/preferences", {
+        default_analysis_language: analysisLanguage,
+      });
+      const persistedLanguage = normalizeCustomerAnalysisLanguage(
+        data.default_analysis_language,
       );
-      const persistedLanguage = normalizeCustomerAnalysisLanguage(data.default_analysis_language);
       setAnalysisLanguage(persistedLanguage);
       setSavedAnalysisLanguage(persistedLanguage);
       setAnalysisLanguageSaved(true);
       window.setTimeout(() => setAnalysisLanguageSaved(false), 2500);
     } catch {
       setAnalysisLanguage(savedAnalysisLanguage);
-      setAnalysisLanguageError(t("analysisLanguage.saveFailed"));
+      setAnalysisLanguageError("analysisLanguage.saveFailed");
     } finally {
       setIsSavingAnalysisLanguage(false);
     }
   };
 
   const updateField = (field: keyof CompanyProfile, value: string) => {
+    setSaved(false);
     setProfile((current) => ({ ...current, [field]: value }));
   };
 
@@ -226,303 +252,288 @@ export default function CompanyProfilePage() {
         },
       );
       setProfile(normalizeProfile(response.data));
+      setPersistedProfile(normalizeProfile(response.data));
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2500);
     } catch {
       console.error("Failed to save company profile:");
-      setError(t("saveFailed"));
+      setError("saveFailed");
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  if (loading)
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />
+      <div className="customer-page">
+        <PageSkeleton label={t("title")} />
       </div>
     );
-  }
-
+  const tone = (status: string) =>
+    status === "approved"
+      ? ("success" as const)
+      : status === "rejected"
+        ? ("danger" as const)
+        : status === "pending"
+          ? ("warning" as const)
+          : ("neutral" as const);
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-cyan-500/20 bg-cyan-500/10">
-            <Building2 className="h-5 w-5 text-cyan-300" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold text-white">{t("title")}</h1>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              <span
-                className={`rounded border px-2 py-1 ${statusClass(profile.pilot_status)}`}
-              >
+    <div className="customer-page profile-page">
+      <PageHeader
+        eyebrow={t("redesign.context")}
+        title={t("title")}
+        description={t("redesign.description")}
+      />
+      {error && (
+        <Alert
+          tone="danger"
+          title={t(error)}
+          action={
+            error === "loadFailed" ? (
+              <Button onClick={loadProfile}>{t("redesign.retry")}</Button>
+            ) : undefined
+          }
+        />
+      )}
+      <LanguageSelector surface="settings" foundation />
+      <div className="profile-layout">
+        <form
+          id="company-profile-form"
+          onSubmit={handleSubmit}
+          className="profile-form"
+        >
+          <Surface className="profile-section">
+            <SectionHeader
+              title={t("company")}
+              description={t("redesign.identityHelp")}
+            />
+            <div className="profile-fields">
+              {(
+                [
+                  ["company_name", "companyName"],
+                  ["industry", "industry"],
+                  ["inn", "registrationNumber"],
+                  ["website", "website"],
+                  ["phone_contact", "phone"],
+                  ["address", "address"],
+                ] as const
+              ).map(([field, label]) => (
+                <Input
+                  key={field}
+                  label={t(label)}
+                  dir={
+                    ["inn", "website", "phone_contact"].includes(field)
+                      ? "ltr"
+                      : "auto"
+                  }
+                  type={
+                    field === "website"
+                      ? "url"
+                      : field === "phone_contact"
+                        ? "tel"
+                        : "text"
+                  }
+                  value={profile[field]}
+                  disabled={saving}
+                  onChange={(event) => updateField(field, event.target.value)}
+                />
+              ))}
+            </div>
+          </Surface>
+          <Surface className="profile-section">
+            <SectionHeader
+              title={t("marketsServices")}
+              description={t("redesign.marketsHelp")}
+            />
+            <OptionGrid
+              label={t("targetRegions")}
+              options={geography.regions.map((value) => ({
+                value,
+                label: localizeTaxonomyValue("region", value, tCommon),
+              }))}
+              values={profile.target_regions}
+              onToggle={(value) => toggleListField("target_regions", value)}
+              disabled={saving}
+            />
+            <OptionGrid
+              label={t("centralAsiaCountries")}
+              options={geography.central_asia_countries.map((value) => ({
+                value,
+                label: localizeTaxonomyValue("country", value, tCommon),
+              }))}
+              values={profile.target_countries}
+              onToggle={(value) => toggleListField("target_countries", value)}
+              disabled={saving}
+              actionLabel={
+                geography.central_asia_countries.every((value) =>
+                  profile.target_countries.includes(value),
+                )
+                  ? t("clearCentralAsia")
+                  : t("selectCentralAsia")
+              }
+              onAction={toggleCentralAsiaCountries}
+            />
+            <OptionGrid
+              label={t("targetServices")}
+              options={services.map(({ value }) => ({
+                value,
+                label: localizeTaxonomyValue("service", value, tCommon),
+              }))}
+              values={profile.target_services}
+              onToggle={(value) => toggleListField("target_services", value)}
+              disabled={saving}
+            />
+          </Surface>
+          <Surface className="profile-save ds-row">
+            <span role="status" className="ds-muted">
+              {dirty
+                ? t("redesign.unsaved")
+                : saved
+                  ? t("profileSaved")
+                  : t("redesign.upToDate")}
+            </span>
+            <Button
+              variant="secondary"
+              disabled={!dirty || saving}
+              onClick={() => {
+                setProfile(persistedProfile);
+                setError(null);
+                setSaved(false);
+              }}
+            >
+              {t("redesign.cancel")}
+            </Button>
+            <Button
+              type="submit"
+              loading={saving}
+              disabled={saving || error === "loadFailed"}
+            >
+              <Save aria-hidden />
+              {t("saveProfile")}
+            </Button>
+          </Surface>
+        </form>
+        <aside className="profile-summary" aria-label={t("redesign.overview")}>
+          <Surface className="profile-section">
+            <SectionHeader title={t("redesign.overview")} />
+            <Building2 aria-hidden />
+            <h2>
+              <BidiText>
+                {persistedProfile.company_name || t("noneSelected")}
+              </BidiText>
+            </h2>
+            <p className="ds-muted">
+              <BidiText>{persistedProfile.industry}</BidiText>
+            </p>
+            <p>
+              <BidiText>{persistedProfile.address}</BidiText>
+            </p>
+            <div className="ds-row">
+              <StatusBadge tone={tone(profile.pilot_status)}>
                 {t("pilotStatus", {
-                  status: accountStatusLabel(profile.pilot_status),
+                  status: pilotStatusLabel(profile.pilot_status),
                 })}
-              </span>
-              <span
-                className={`rounded border px-2 py-1 ${statusClass(profile.approval_status)}`}
-              >
+              </StatusBadge>
+              <StatusBadge tone={tone(profile.approval_status)}>
                 {t("approvalStatus", {
                   status: accountStatusLabel(profile.approval_status),
                 })}
-              </span>
+              </StatusBadge>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <LanguageSelector surface="settings" />
-
-      <section className="space-y-4 rounded-lg border border-gray-800 bg-gray-950 p-6" aria-labelledby="analysis-language-title">
-        <div className="flex items-center gap-2 text-gray-200">
-          <Globe2 className="h-4 w-4 text-indigo-300" />
-          <h2 id="analysis-language-title" className="text-base font-semibold">
-            {t("analysisLanguage.title")}
-          </h2>
-        </div>
-        <p className="max-w-2xl text-sm leading-relaxed text-gray-400">
-          {t("analysisLanguage.help")}
-        </p>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="w-full max-w-sm space-y-2">
-            <span className={labelClass}>{t("analysisLanguage.label")}</span>
-            <select
-              className={inputClass}
-              value={analysisLanguage}
-              disabled={isLoadingAnalysisLanguage || isSavingAnalysisLanguage}
-              onChange={(event) => setAnalysisLanguage(event.target.value as CustomerAnalysisLanguage)}
-            >
-              {CUSTOMER_ANALYSIS_LANGUAGES.map((language) => (
-                <option key={language.code} value={language.code}>{language.nativeLabel}</option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={saveAnalysisLanguage}
-            disabled={isLoadingAnalysisLanguage || isSavingAnalysisLanguage}
-            className="inline-flex h-[46px] items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
-          >
-            {isSavingAnalysisLanguage ? <Loader2 className="h-4 w-4 animate-spin" /> : analysisLanguageSaved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-            {analysisLanguageSaved ? t("analysisLanguage.saved") : t("analysisLanguage.save")}
-          </button>
-        </div>
-        {analysisLanguageError && <p className="text-sm text-red-300">{analysisLanguageError}</p>}
-        <p className="text-xs text-gray-500">{t("analysisLanguage.arabicGate")}</p>
-      </section>
-
-      {error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          {error}
-        </div>
-      )}
-
-      <TargetSummary
-        profile={profile}
-        services={services.map((service) => ({
-          ...service,
-          label: localizeTaxonomyValue("service", service.value, tCommon),
-        }))}
-      />
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <section className="space-y-5 rounded-lg border border-gray-800 bg-gray-950 p-6">
-          <div className="flex items-center gap-2 text-gray-200">
-            <Building2 className="h-4 w-4 text-cyan-300" />
-            <h2 className="text-base font-semibold">{t("company")}</h2>
-          </div>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className={labelClass}>{t("companyName")}</span>
-              <input
-                dir="auto"
-                className={inputClass}
-                value={profile.company_name}
-                onChange={(event) =>
-                  updateField("company_name", event.target.value)
-                }
-              />
-            </label>
-            <label className="space-y-2">
-              <span className={labelClass}>{t("industry")}</span>
-              <input
-                dir="auto"
-                className={inputClass}
-                value={profile.industry}
-                onChange={(event) =>
-                  updateField("industry", event.target.value)
-                }
-              />
-            </label>
-            <label className="space-y-2">
-              <span className={labelClass}>{t("registrationNumber")}</span>
-              <input
-                dir="ltr"
-                className={inputClass}
-                value={profile.inn}
-                onChange={(event) => updateField("inn", event.target.value)}
-              />
-            </label>
-            <label className="space-y-2">
-              <span className={labelClass}>{t("website")}</span>
-              <input
-                dir="ltr"
-                className={inputClass}
-                value={profile.website}
-                onChange={(event) => updateField("website", event.target.value)}
-                placeholder="https://"
-                type="url"
-              />
-            </label>
-            <label className="space-y-2">
-              <span className={labelClass}>{t("phone")}</span>
-              <div className="relative">
-                <Phone className="absolute start-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                <input
-                  dir="ltr"
-                  className={`${inputClass} ps-11`}
-                  value={profile.phone_contact}
-                  onChange={(event) =>
-                    updateField("phone_contact", event.target.value)
-                  }
-                />
-              </div>
-            </label>
-            <label className="space-y-2">
-              <span className={labelClass}>{t("address")}</span>
-              <input
-                dir="auto"
-                className={inputClass}
-                value={profile.address}
-                onChange={(event) => updateField("address", event.target.value)}
-              />
-            </label>
-          </div>
-        </section>
-
-        <section className="space-y-5 rounded-lg border border-gray-800 bg-gray-950 p-6">
-          <div className="flex items-center gap-2 text-gray-200">
-            <Globe2 className="h-4 w-4 text-emerald-300" />
-            <h2 className="text-base font-semibold">{t("marketsServices")}</h2>
-          </div>
-          <OptionGrid
-            label={t("targetRegions")}
-            options={geography.regions.map((region) => ({
-              value: region,
-              label: localizeTaxonomyValue("region", region, tCommon),
-            }))}
-            values={profile.target_regions}
-            onToggle={(value) => toggleListField("target_regions", value)}
-          />
-          <OptionGrid
-            label={t("centralAsiaCountries")}
-            options={geography.central_asia_countries.map((country) => ({
-              value: country,
-              label: localizeTaxonomyValue("country", country, tCommon),
-            }))}
-            values={profile.target_countries}
-            onToggle={(value) => toggleListField("target_countries", value)}
-            actionLabel={
-              geography.central_asia_countries.every((country) =>
-                profile.target_countries.includes(country),
-              )
-                ? t("clearCentralAsia")
-                : t("selectCentralAsia")
-            }
-            onAction={toggleCentralAsiaCountries}
-          />
-          <OptionGrid
-            label={t("targetServices")}
-            options={services.map((service) => ({
-              ...service,
-              label: localizeTaxonomyValue("service", service.value, tCommon),
-            }))}
-            values={profile.target_services}
-            onToggle={(value) => toggleListField("target_services", value)}
-          />
-        </section>
-
-        <div className="flex items-center justify-end gap-3">
-          {saved && (
-            <span className="inline-flex items-center gap-2 text-sm text-emerald-300">
-              <Check className="h-4 w-4" />
-              {t("profileSaved")}
-            </span>
-          )}
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-cyan-500 disabled:bg-gray-700 disabled:text-gray-400"
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
+            {persistedProfile.inn && (
+              <p>
+                <TechnicalText>{persistedProfile.inn}</TechnicalText>
+              </p>
             )}
-            {t("saveProfile")}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function TargetSummary({
-  profile,
-  services,
-}: {
-  profile: CompanyProfile;
-  services: ServiceOption[];
-}) {
-  const t = useTranslations("settings");
-  return (
-    <section className="grid grid-cols-1 gap-4 rounded-lg border border-gray-800 bg-gray-950 p-5 md:grid-cols-3">
-      <SummaryGroup
-        label={t("targetRegions")}
-        values={profile.target_regions}
-      />
-      <SummaryGroup
-        label={t("targetCountries")}
-        values={profile.target_countries}
-      />
-      <SummaryGroup
-        label={t("targetServices")}
-        values={profile.target_services.map((service) =>
-          labelForService(service, services),
-        )}
-      />
-    </section>
-  );
-}
-
-function SummaryGroup({ label, values }: { label: string; values: string[] }) {
-  const t = useTranslations("settings");
-  return (
-    <div className="space-y-3">
-      <div className={labelClass}>{label}</div>
-      <div className="flex flex-wrap gap-2">
-        {values.length > 0 ? (
-          values.map((value) => {
-            const isCentralAsia = value === CENTRAL_ASIA_REGION;
-            return (
-              <span
-                key={value}
-                className={`rounded border px-2 py-1 text-xs ${
-                  isCentralAsia
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                    : "border-gray-700 bg-gray-900 text-gray-300"
-                }`}
-              >
-                {value}
-              </span>
-            );
-          })
-        ) : (
-          <span className="text-sm text-gray-500">{t("noneSelected")}</span>
-        )}
+            {persistedProfile.website && (
+              <p>
+                <TechnicalText>{persistedProfile.website}</TechnicalText>
+              </p>
+            )}
+          </Surface>
+          {(
+            ["target_regions", "target_countries", "target_services"] as const
+          ).map((field, index) => (
+            <Surface className="profile-section" key={field}>
+              <SectionHeader
+                title={t(
+                  (
+                    [
+                      "targetRegions",
+                      "targetCountries",
+                      "targetServices",
+                    ] as const
+                  )[index],
+                )}
+              />
+              <div className="ds-row">
+                {persistedProfile[field].length ? (
+                  persistedProfile[field].map((value) => (
+                    <StatusBadge key={value}>
+                      {localizeTaxonomyValue(
+                        (["region", "country", "service"] as const)[index],
+                        value,
+                        tCommon,
+                      )}
+                    </StatusBadge>
+                  ))
+                ) : (
+                  <span className="ds-muted">{t("noneSelected")}</span>
+                )}
+              </div>
+            </Surface>
+          ))}
+        </aside>
       </div>
+      <Surface
+        className="profile-section"
+        aria-labelledby="analysis-language-title"
+      >
+        <h2 id="analysis-language-title">{t("analysisLanguage.title")}</h2>
+        <p className="ds-muted">{t("analysisLanguage.help")}</p>
+        <div className="profile-preference ds-row">
+          <Select
+            label={t("analysisLanguage.label")}
+            value={analysisLanguage}
+            disabled={isLoadingAnalysisLanguage || isSavingAnalysisLanguage}
+            onChange={(event) => {
+              setAnalysisLanguage(
+                event.target.value as CustomerAnalysisLanguage,
+              );
+              setAnalysisLanguageSaved(false);
+            }}
+          >
+            {CUSTOMER_ANALYSIS_LANGUAGES.map((language) => (
+              <option key={language.code} value={language.code}>
+                {language.nativeLabel}
+              </option>
+            ))}
+          </Select>
+          <Button
+            onClick={saveAnalysisLanguage}
+            loading={isSavingAnalysisLanguage}
+            disabled={isLoadingAnalysisLanguage || isSavingAnalysisLanguage}
+          >
+            {t("analysisLanguage.save")}
+          </Button>
+        </div>
+        {analysisLanguageSaved && (
+          <Alert tone="success" title={t("analysisLanguage.saved")} />
+        )}
+        {analysisLanguageError && (
+          <Alert tone="danger" title={t(analysisLanguageError)} />
+        )}
+        <p className="ds-muted">{t("analysisLanguage.arabicGate")}</p>
+      </Surface>
     </div>
   );
 }
@@ -534,54 +545,34 @@ function OptionGrid({
   onToggle,
   actionLabel,
   onAction,
+  disabled,
 }: {
   label: string;
-  options: ServiceOption[];
+  options: { value: string; label: string }[];
   values: string[];
   onToggle: (value: string) => void;
   actionLabel?: string;
   onAction?: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className={labelClass}>{label}</span>
-        {actionLabel && onAction && (
-          <button
-            type="button"
-            onClick={onAction}
-            className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition-colors hover:border-emerald-300"
-          >
-            <Check className="h-3.5 w-3.5" />
-            {actionLabel}
-          </button>
-        )}
+    <fieldset className="profile-options" disabled={disabled}>
+      <legend>{label}</legend>
+      {actionLabel && (
+        <Button variant="secondary" onClick={onAction}>
+          {actionLabel}
+        </Button>
+      )}
+      <div className="profile-choices">
+        {options.map((option) => (
+          <Checkbox
+            key={option.value}
+            label={option.label}
+            checked={values.includes(option.value)}
+            onChange={() => onToggle(option.value)}
+          />
+        ))}
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {options.map((option) => {
-          const selected = values.includes(option.value);
-          const isCentralAsia = option.value === CENTRAL_ASIA_REGION;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onToggle(option.value)}
-              className={`flex min-h-12 items-center justify-between rounded-lg border px-4 py-3 text-start text-sm transition-colors ${
-                selected
-                  ? isCentralAsia
-                    ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
-                    : "border-cyan-400 bg-cyan-500/10 text-cyan-100"
-                  : isCentralAsia
-                    ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-200 hover:border-emerald-400"
-                    : "border-gray-800 bg-gray-900 text-gray-300 hover:border-gray-700"
-              }`}
-            >
-              <span className="break-words">{option.label}</span>
-              {selected && <Check className="ms-3 h-4 w-4 shrink-0" />}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    </fieldset>
   );
 }

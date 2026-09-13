@@ -99,5 +99,17 @@
     "loadFailed": "Ishtirok holatini yuklab bo‘lmadi.",
     "changed": "Holat o‘zgardi. Eng so‘nggi holat yangilandi.",
     "saveFailed": "Tenderni saqlab bo‘lmadi. Qayta urinib ko‘ring."
+  },
+  "redesign": {
+    "eyebrow": "Ishtirok jarayoni",
+    "deadline": "Muddat",
+    "estimatedValue": "Taxminiy qiymat",
+    "matchScore": "Moslik bahosi",
+    "unavailable": "Mavjud emas",
+    "clearSearch": "Qidiruvni tozalash",
+    "retry": "Qayta urinish",
+    "filteredEmpty": "Mos tenderlar topilmadi",
+    "filteredHelp": "Filtrlarni o‘zgartiring yoki boshqa tenderlarni ko‘ring.",
+    "statusEmpty": "Bu holatda tenderlar yo‘q"
   }
 }

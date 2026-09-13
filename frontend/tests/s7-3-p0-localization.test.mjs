@@ -78,7 +78,7 @@ test("onboarding and settings expose one selector before editable form content",
     ["app/dashboard/settings/page.tsx", "settings"],
   ]) {
     const source = read(path);
-    const selector = `<LanguageSelector surface="${surface}" />`;
+    const selector = surface === "settings" ? `<LanguageSelector surface="settings" foundation />` : `<LanguageSelector surface="${surface}" />`;
     assert.equal(source.split(selector).length - 1, 1);
     assert.ok(source.indexOf(selector) < source.indexOf("<form"));
   }

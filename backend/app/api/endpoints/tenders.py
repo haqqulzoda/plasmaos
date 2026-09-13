@@ -7579,6 +7579,7 @@ async def get_latest_analysis(
     tender_id: UUID,
     current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
+    summary_only: bool = False,
 ) -> dict:
     """
     Return the most recent TenderAnalysis for this tender and the
@@ -7657,6 +7658,39 @@ async def get_latest_analysis(
 
     analysis_data = version.result_snapshot or {}
     analysis_status = str(analysis_data.get("analysis_status") or "completed")
+    if summary_only:
+        # Opt-in Dashboard projection: retain the same ownership/version checks,
+        # but do not transfer requirement, evaluation or evidence snapshots.
+        requirements = analysis_data.get("requirements") or {}
+        hybrid = analysis_data.get("hybrid_compliance") or {}
+        evaluation = analysis_data.get("evaluation") or {}
+        # Historical versions may store an extracted requirement list rather
+        # than the later mapped/unmapped object. Neither shape is transferred.
+        requirement_count = len(requirements) if isinstance(requirements, list) else (
+            len(requirements.get("mapped_requirement_uuids") or [])
+            + len(requirements.get("unmapped_custom_requirements") or [])
+        )
+        return {
+            "analysis_id": str(analysis.id),
+            "version_number": version.version_number,
+            "analysis_language": version.analysis_language,
+            "analysis_direction": analysis_direction(version.analysis_language).value,
+            "analysis_status": analysis_status,
+            "requirement_count": hybrid.get("total_requirements")
+                if isinstance(hybrid.get("total_requirements"), int)
+                else requirement_count,
+            "manual_review_count": max(
+                int(hybrid.get("manual_review_count") or 0),
+                len(evaluation.get("unmapped_requirements") or []),
+            ),
+            "coverage_metadata": {
+                "coverage_status": (analysis_data.get("coverage_metadata") or {}).get("coverage_status"),
+                "source_document_coverage": {
+                    "coverage_status": ((analysis_data.get("coverage_metadata") or {}).get("source_document_coverage") or {}).get("coverage_status"),
+                },
+            },
+            "created_at": version.created_at.isoformat() if version.created_at else None,
+        }
     evaluation_payload = analysis_data.get("evaluation")
     hybrid_payload = sanitize_internal_requirement_diagnostics(
         analysis_data.get("hybrid_compliance")

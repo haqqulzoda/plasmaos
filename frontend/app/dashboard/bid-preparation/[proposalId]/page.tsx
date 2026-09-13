@@ -3,7 +3,6 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowLeft,
@@ -27,13 +26,12 @@ import {
 } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { BidiText } from "@/components/i18n/BidiText";
+import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Feedback";
 import { TenderEngagementPanel } from "@/components/tenders/TenderEngagementPanel";
-import {
-  engagementStatusClasses,
-  type EngagementStatus,
-} from "@/types/engagement";
+import type { EngagementStatus } from "@/types/engagement";
 import type { TenderDocument, TenderStatus } from "@/types/tender";
-import { isTenderActionable, tenderStatusClasses } from "@/types/tender";
+import { isTenderActionable } from "@/types/tender";
 
 interface StrategicLineItem {
   name: string;
@@ -610,25 +608,21 @@ export default function BidPreparationWorkspacePage({
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      <div className="customer-page proposal-state" role="status">
+        <Loader2 className="ds-spin" aria-hidden />
+        {t("loadingDocuments")}
       </div>
     );
   }
 
   if (error || !proposal) {
     return (
-      <div className="space-y-4">
-        <Link
-          href="/dashboard/tenders"
-          className="inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-white"
-        >
-          <ArrowLeft className="rtl-mirror h-4 w-4" />
+      <div className="customer-page ds-container-content ds-stack">
+        <Link href="/dashboard/tenders" className="ds-button ds-button-ghost proposal-back">
+          <ArrowLeft className="rtl-mirror" aria-hidden />
           {t("backExplorer")}
         </Link>
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
-          {error || t("notAvailable")}
-        </div>
+        <Alert tone="danger" title={error || t("notAvailable")} />
       </div>
     );
   }
@@ -636,20 +630,20 @@ export default function BidPreparationWorkspacePage({
   const actionable = isTenderActionable(proposal.tender_status);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="customer-page proposal-page ds-container-data ds-stack">
+      <header className="ds-page-header proposal-header">
         <div>
           <Link
             href={`/dashboard/tenders/${proposal.tender_id}`}
-            className="mb-2 inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-white"
+            className="ds-button ds-button-ghost proposal-back"
           >
-            <ArrowLeft className="rtl-mirror h-4 w-4" />
+            <ArrowLeft className="rtl-mirror" aria-hidden />
             {t("backDetails")}
           </Link>
-          <h1 className="text-2xl font-bold text-white">
+          <h1>
             <BidiText>{proposal.tender_title}</BidiText>
           </h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className="ds-muted">
             {t("summaryLine", {
               budget: formatLocaleCurrency(
                 proposal.tender_budget,
@@ -660,18 +654,14 @@ export default function BidPreparationWorkspacePage({
               region: proposal.tender_region || t("noRegion"),
             })}
           </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span
-              className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${tenderStatusClasses(proposal.tender_status)}`}
-            >
+          <div className="ds-row proposal-statuses">
+            <span className={`ds-badge ${proposal.tender_status === "OPEN" ? "ds-tone-success" : "ds-tone-warning"}`}>
               {t("tenderStatus", {
                 status: localizedTenderStatus(proposal.tender_status),
               })}
             </span>
             {proposal.engagement_status ? (
-              <span
-                className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${engagementStatusClasses(proposal.engagement_status)}`}
-              >
+              <span className="ds-badge ds-tone-info">
                 {t("engagement", {
                   status: localizedEngagementStatus(proposal.engagement_status),
                 })}
@@ -679,95 +669,41 @@ export default function BidPreparationWorkspacePage({
             ) : null}
           </div>
         </div>
-        <button
+        <Button
           onClick={handleGenerateStrategicProposal}
           disabled={isGenerating || !actionable}
           title={!actionable ? t("actionUnavailable") : t("generateStrategic")}
-          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          loading={isGenerating}
+          leadingIcon={<Sparkles aria-hidden />}
         >
-          {isGenerating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
           {t("generateStrategic")}
-        </button>
-      </div>
+        </Button>
+      </header>
 
       <TenderEngagementPanel tenderId={proposal.tender_id} proposalContext />
 
       {isGenerating && (
-        <motion.div
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-5 text-indigo-200"
-        >
-          <p className="font-semibold">{t("generatingStrategic")}</p>
-        </motion.div>
+        <Alert tone="info" title={t("generatingStrategic")} />
       )}
 
       {generationError && (
-        <motion.div
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-          className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 shadow-lg shadow-amber-500/5"
-        >
-          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/20">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="h-4 w-4 text-amber-400"
-            >
-              <path
-                fillRule="evenodd"
-                d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-200">
-              {generationError}
-            </p>
-            <button
-              onClick={() => setGenerationError(null)}
-              className="mt-2 text-xs font-medium text-amber-400/80 underline decoration-amber-400/30 underline-offset-2 transition hover:text-amber-300 hover:decoration-amber-300/50"
-            >
-              {t("dismiss")}
-            </button>
-          </div>
-        </motion.div>
+        <Alert tone="warning" title={generationError} action={<Button size="sm" variant="ghost" onClick={() => setGenerationError(null)}>{t("dismiss")}</Button>} />
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-sky-400" />
-                <h2 className="text-lg font-semibold text-white">
-                  {t("executiveSummary")}
-                </h2>
-              </div>
-              <button
+      <div className="proposal-layout">
+        <div className="ds-stack">
+          <section className="ds-surface proposal-section">
+            <div className="proposal-section-heading">
+              <div><FileText aria-hidden /><h2>{t("executiveSummary")}</h2></div>
+              <Button
+                size="sm"
+                variant="secondary"
                 onClick={handleCopySummary}
                 disabled={!strategicSummary}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-zinc-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                leadingIcon={isCopied ? <Check aria-hidden /> : <Copy aria-hidden />}
               >
-                {isCopied ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
-                    {t("copied")}
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3.5 w-3.5" />
-                    {t("copy")}
-                  </>
-                )}
-              </button>
+                {isCopied ? t("copied") : t("copy")}
+              </Button>
             </div>
             <textarea
               dir="auto"
@@ -775,41 +711,31 @@ export default function BidPreparationWorkspacePage({
               onChange={(e) => setStrategicSummary(e.target.value)}
               rows={14}
               placeholder={t("summaryPlaceholder")}
-              className="w-full resize-y min-h-[200px] bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-sm leading-6 text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-500"
+              className="ds-control proposal-summary"
             />
-          </div>
+          </section>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <FileOutput className="h-5 w-5 text-emerald-400" />
-              <h2 className="text-lg font-semibold text-white">
-                {t("lineItems")}
-              </h2>
+          <section className="ds-surface proposal-section">
+            <div className="proposal-section-heading">
+              <div><FileOutput aria-hidden /><h2>{t("lineItems")}</h2></div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[620px] text-sm">
+            <div className="proposal-table-scroll">
+              <table className="proposal-table">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-start text-zinc-400">
-                    <th className="px-3 py-2">{t("item")}</th>
-                    <th className="px-3 py-2 text-end">{t("quantity")}</th>
-                    <th className="px-3 py-2 text-end">{t("unitPrice")}</th>
-                    <th className="px-3 py-2 text-end">{t("total")}</th>
+                  <tr><th scope="col">{t("item")}</th><th scope="col">{t("quantity")}</th><th scope="col">{t("unitPrice")}</th><th scope="col">{t("total")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lineItems.map((item, index) => (
-                    <tr
-                      key={`${item.name}-${index}`}
-                      className="border-b border-zinc-900"
-                    >
-                      <td className="px-3 py-2 text-zinc-200"><BidiText>{item.name}</BidiText></td>
-                      <td className="px-3 py-2 text-end text-zinc-300">
+                    <tr key={`${item.name}-${index}`}>
+                      <td><BidiText>{item.name}</BidiText></td>
+                      <td className="ds-numeric">
                         {item.quantity} {item.unit}
                       </td>
-                      <td className="px-3 py-2 text-end text-zinc-300">
+                      <td className="ds-numeric">
                         {formatNumber(item.unit_price, locale)}
                       </td>
-                      <td className="px-3 py-2 text-end font-medium text-emerald-300">
+                      <td className="ds-numeric proposal-total">
                         {formatNumber(item.total, locale)}
                       </td>
                     </tr>
@@ -818,10 +744,10 @@ export default function BidPreparationWorkspacePage({
               </table>
             </div>
             {lineItems.length === 0 && (
-              <p className="text-sm text-zinc-500">{t("noLineItems")}</p>
+              <p className="ds-muted proposal-empty">{t("noLineItems")}</p>
             )}
             {lineItems.length > 0 && (
-              <p className="mt-4 text-end text-sm font-semibold text-zinc-200">
+              <p className="proposal-computed-total ds-numeric">
                 {t("computedTotal", {
                   value: formatLocaleCurrency(
                     computedTotal,
@@ -831,31 +757,23 @@ export default function BidPreparationWorkspacePage({
                 })}
               </p>
             )}
-          </div>
+          </section>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">
-              {t("commercialInputs")}
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
-                  {t("companyName")}
-                </label>
+        <aside className="ds-stack">
+          <section className="ds-surface proposal-section">
+            <div className="proposal-section-heading"><h2>{t("commercialInputs")}</h2></div>
+            <div className="proposal-fields">
+              <label className="ds-field"><span className="ds-field-label">{t("companyName")}</span>
                 <input
                   dir="auto"
                   type="text"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                  className="ds-control"
                 />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
-                  {t("suggestedPrice", { currency: proposal.tender_currency })}
-                </label>
+              </label>
+              <label className="ds-field"><span className="ds-field-label">{t("suggestedPrice", { currency: proposal.tender_currency })}</span>
                 <input
                   dir="ltr"
                   type="text"
@@ -865,86 +783,61 @@ export default function BidPreparationWorkspacePage({
                     setSuggestedPrice(stripNonDigits(e.target.value))
                   }
                   placeholder="21,890,000,000"
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                  className="ds-control technical-ltr"
                 />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400">
-                  {t("deliveryWindow")}
-                </label>
+              </label>
+              <label className="ds-field"><span className="ds-field-label">{t("deliveryWindow")}</span>
                 <input
                   dir="auto"
                   type="text"
                   value={deliveryDays}
                   onChange={(e) => setDeliveryDays(e.target.value)}
                   placeholder={t("deliveryPlaceholder")}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-gray-100 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                  className="ds-control"
                 />
-              </div>
+              </label>
             </div>
-            <div className="mt-5">
-              <button
+            <div className="proposal-actions">
+              <Button
                 onClick={handleSave}
-                disabled={isSaving}
-                className="w-full inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                loading={isSaving}
+                leadingIcon={<Save aria-hidden />}
               >
-                {isSaving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
                 {t("saveDraft")}
-              </button>
-            </div>
-            <div className="mt-3 flex gap-3">
-              <button
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={handleGeneratePdf}
                 disabled={isGeneratingPdf || !suggestedPrice}
-                className="flex-1 inline-flex items-center justify-center gap-2 border border-gray-700 hover:bg-gray-800 text-gray-300 font-medium px-4 py-2.5 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                loading={isGeneratingPdf}
+                leadingIcon={<FileOutput aria-hidden />}
               >
-                {isGeneratingPdf ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileOutput className="h-4 w-4" />
-                )}
                 {t("downloadPdf")}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={handleGenerateDocx}
                 disabled={isGeneratingDocx || !suggestedPrice}
-                className="flex-1 inline-flex items-center justify-center gap-2 border border-gray-700 hover:bg-gray-800 text-gray-300 font-medium px-4 py-2.5 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                loading={isGeneratingDocx}
+                leadingIcon={<FileType aria-hidden />}
               >
-                {isGeneratingDocx ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileType className="h-4 w-4" />
-                )}
                 {t("downloadWord")}
-              </button>
+              </Button>
             </div>
-          </div>
+          </section>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">
-              {t("documents")}
-            </h2>
+          <section className="ds-surface proposal-section">
+            <div className="proposal-section-heading"><h2>{t("documents")}</h2></div>
             {isLoadingDocs && (
-              <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {t("loadingDocuments")}
-              </div>
+              <Alert tone="info" title={t("loadingDocuments")} />
             )}
             {documentsError && (
-              <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                {documentsError}
-              </div>
+              <Alert tone="warning" title={documentsError} />
             )}
             {!isLoadingDocs && !documentsError && documents.length === 0 && (
-              <p className="text-sm text-zinc-500">
-                {t("noPreparedDocuments")}
-              </p>
+              <p className="ds-muted proposal-empty">{t("noPreparedDocuments")}</p>
             )}
-            <div className="space-y-2">
+            <div className="proposal-documents">
               {documents.map((doc) => {
                 const filename = getDocumentFilename(doc);
                 const ext = getFileExtension(filename || doc.file_type);
@@ -988,39 +881,35 @@ export default function BidPreparationWorkspacePage({
                         ? handleDocumentPreview(doc.id)
                         : handleDocumentDownload(doc.id, filename)
                     }
-                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-start text-sm text-zinc-200 transition hover:border-zinc-700 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="proposal-document"
                   >
-                    <span className="flex min-w-0 items-center gap-2 truncate">
+                    <span className="proposal-document-name">
                       {isBusy ? (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" />
+                        <Loader2 className="ds-spin" aria-hidden />
                       ) : isArchive ? (
-                        <FileArchive className="h-4 w-4 shrink-0 text-amber-400" />
+                        <FileArchive aria-hidden />
                       ) : isPdf ? (
-                        <FileText className="h-4 w-4 shrink-0 text-sky-400" />
+                        <FileText aria-hidden />
                       ) : (
-                        <FileType className="h-4 w-4 shrink-0 text-zinc-300" />
+                        <FileType aria-hidden />
                       )}
-                      <span className="truncate">
+                      <span>
                         {typeLabel} | {filename}
                       </span>
                     </span>
-                    <span className="inline-flex items-center gap-1 text-zinc-400">
+                    <span className="proposal-document-action ds-muted">
                       {!isAvailable ? (
-                        <span className="max-w-[180px] text-end text-xs font-medium text-amber-300">
-                          {statusLabel}
-                        </span>
+                        <span>{statusLabel}</span>
                       ) : isBusy ? (
-                        <span className="text-xs font-medium text-sky-300">
-                          {t("opening")}
-                        </span>
+                        <span>{t("opening")}</span>
                       ) : isPreviewAction ? (
                         <>
-                          <FileText className="h-4 w-4" />
+                          <FileText aria-hidden />
                           {t("preview")}
                         </>
                       ) : (
                         <>
-                          <Download className="h-4 w-4" />
+                          <Download aria-hidden />
                           {t("download")}
                         </>
                       )}
@@ -1029,17 +918,17 @@ export default function BidPreparationWorkspacePage({
                 );
               })}
             </div>
-          </div>
-        </div>
+          </section>
+        </aside>
       </div>
 
-      <div className="flex justify-end">
-        <button
+      <div className="proposal-footer">
+        <Button
+          variant="ghost"
           onClick={() => router.push("/dashboard/bid-preparation")}
-          className="text-sm text-zinc-400 transition hover:text-zinc-200"
         >
           {t("back")}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -103,5 +103,17 @@
     "recommendedOn": "Recommended on {date}",
     "restore": "Restore recommendation",
     "dismiss": "Dismiss recommendation"
+  },
+  "redesign": {
+    "eyebrow": "Explore global opportunities",
+    "preview": "Preview tender",
+    "selectTitle": "Select a tender",
+    "selectHelp": "Choose Preview on a result to see its summary here.",
+    "closePreview": "Close preview",
+    "clearSearch": "Clear search",
+    "activeFilters": "Active filters",
+    "removeFilter": "Remove {filter}",
+    "clearAll": "Clear all",
+    "value": "Estimated value"
   }
 }

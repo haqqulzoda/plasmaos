@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { Surface, Metric, StatusBadge } from "@/components/ui/Display";
+import { BidiText } from "@/components/i18n/BidiText";
 import { Loader2, RotateCcw, Sparkles, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -8,11 +11,15 @@ import { formatDate } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 
 export function RecommendationSummary({
+  foundation = false,
+  compact = false,
   recommendation,
   pending,
   onDismiss,
   onRestore,
 }: {
+  foundation?: boolean;
+  compact?: boolean;
   recommendation: RecommendationData;
   pending: boolean;
   onDismiss: (recommendationId: string) => void;
@@ -22,6 +29,76 @@ export function RecommendationSummary({
   const locale = useLocale() as CustomerSelectableLocale;
   const dismissed = recommendation.is_dismissed;
 
+  if (foundation && compact)
+    return (
+      <Surface className="recommendation-compact" aria-label={t("label")}>
+        <Metric
+          label={t("matchScore")}
+          value={`${recommendation.match_score}/100`}
+        />
+        <div className="ds-stack">
+          <h3>{t("why")}</h3>
+          <p className="ds-muted">
+            <BidiText>{recommendation.rationale_summary}</BidiText>
+          </p>
+          {dismissed && <StatusBadge>{t("dismissed")}</StatusBadge>}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          loading={pending}
+          onClick={() =>
+            dismissed
+              ? onRestore(recommendation.recommendation_id)
+              : onDismiss(recommendation.recommendation_id)
+          }
+        >
+          {dismissed ? t("restore") : t("dismiss")}
+        </Button>
+      </Surface>
+    );
+  if (foundation)
+    return (
+      <Surface
+        variant="subtle"
+        className="ds-pad ds-stack"
+        aria-label={t("label")}
+      >
+        <div className="ds-row">
+          <Metric
+            label={t("matchScore")}
+            value={`${recommendation.match_score}/100`}
+          />
+          {dismissed && <StatusBadge>{t("dismissed")}</StatusBadge>}
+        </div>
+        <h3 className="ds-row">
+          <Sparkles aria-hidden />
+          {t("why")}
+        </h3>
+        {recommendation.rationale_summary && (
+          <p className="ds-muted">
+            <BidiText>{recommendation.rationale_summary}</BidiText>
+          </p>
+        )}
+        <p className="ds-muted ds-text-small">
+          {t("recommendedOn", {
+            date: formatDate(recommendation.created_at, locale),
+          })}
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          loading={pending}
+          onClick={() =>
+            dismissed
+              ? onRestore(recommendation.recommendation_id)
+              : onDismiss(recommendation.recommendation_id)
+          }
+        >
+          {dismissed ? t("restore") : t("dismiss")}
+        </Button>
+      </Surface>
+    );
   return (
     <section
       aria-label={t("label")}

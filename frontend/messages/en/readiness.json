@@ -36,10 +36,52 @@
   "allStatuses": "All statuses",
   "allServices": "All services",
   "resetFilters": "Reset filters",
-  "table": {"type": "Type", "name": "Name", "number": "Number", "issuer": "Issuer", "issue": "Issue", "expiry": "Expiry", "status": "Status", "service": "Service", "file": "File", "actions": "Actions"},
+  "table": {
+    "type": "Type",
+    "name": "Name",
+    "number": "Number",
+    "issuer": "Issuer",
+    "issue": "Issue",
+    "expiry": "Expiry",
+    "status": "Status",
+    "service": "Service",
+    "file": "File",
+    "actions": "Actions"
+  },
   "editNamed": "Edit {name}",
   "deleteNamed": "Delete {name}",
-  "types": {"license": "License", "certificate": "Certificate", "taxClearance": "Tax clearance", "financialStatement": "Financial statement", "registrationDocument": "Registration document", "powerOfAttorney": "Power of attorney", "personnelDocument": "Personnel document", "other": "Other", "unknown": "Other document"},
-  "statuses": {"available": "Available", "missing": "Missing", "expired": "Expired", "unknown": "Unknown status"},
-  "expiry": {"expired": "Expired", "expiringSoon": "Expiring soon", "valid": "Valid", "unknown": "Expiry unknown"}
+  "types": {
+    "license": "License",
+    "certificate": "Certificate",
+    "taxClearance": "Tax clearance",
+    "financialStatement": "Financial statement",
+    "registrationDocument": "Registration document",
+    "powerOfAttorney": "Power of attorney",
+    "personnelDocument": "Personnel document",
+    "other": "Other",
+    "unknown": "Other document"
+  },
+  "statuses": {
+    "available": "Available",
+    "missing": "Missing",
+    "expired": "Expired",
+    "unknown": "Unknown status"
+  },
+  "expiry": {
+    "expired": "Expired",
+    "expiringSoon": "Expiring soon",
+    "valid": "Valid",
+    "unknown": "Expiry unknown"
+  },
+  "redesign": {
+    "context": "Company records",
+    "description": "Manage readiness records and their optional file references.",
+    "pageEmpty": "No records on this page.",
+    "viewFile": "Open file reference",
+    "noFile": "No file reference",
+    "fileHelp": "A record can exist without a file reference. Adding a reference does not verify the file.",
+    "cancel": "Cancel",
+    "delete": "Delete record",
+    "retry": "Retry"
+  }
 }

@@ -3,10 +3,17 @@
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { Button } from "@/components/ui/Button";
+import { Popover } from "@/components/ui/Overlay";
+import { Alert } from "@/components/ui/Feedback";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
 import { BidiText } from "@/components/i18n/BidiText";
 
-export function SourceRefreshMenu() {
+export function SourceRefreshMenu({
+  foundation = false,
+}: {
+  foundation?: boolean;
+}) {
   const t = useTranslations("refresh");
   const {
     catalog,
@@ -22,13 +29,74 @@ export function SourceRefreshMenu() {
     statusItems.map((item) => [item.source_system, item]),
   );
 
+  if (foundation)
+    return (
+      <Popover
+        label={t("sourceRefresh")}
+        trigger={
+          <>
+            <RefreshCw aria-hidden />
+            {t("sourceRefresh")}
+          </>
+        }
+      >
+        <div className="ds-stack">
+          {catalogLoading ? (
+            <p role="status">{t("loadingSources")}</p>
+          ) : catalogError ? (
+            <Alert
+              tone="warning"
+              title={t("unavailable")}
+              action={
+                <Button variant="secondary" onClick={retryCatalog}>
+                  {t("retry")}
+                </Button>
+              }
+            />
+          ) : (
+            catalog.map((source) => {
+              const active = statusBySource.get(
+                source.source_system,
+              )?.active_job;
+              const pending = pendingSources.has(source.source_system);
+              const state = !source.can_refresh
+                ? t("unavailable")
+                : active?.status === "queued"
+                  ? t("queued")
+                  : active?.status === "running"
+                    ? t("refreshing")
+                    : t("refresh");
+              return (
+                <Button
+                  key={source.source_system}
+                  variant="ghost"
+                  disabled={!source.can_refresh || pending}
+                  loading={pending}
+                  onClick={() => void requestRefresh(source.source_system)}
+                  aria-label={t("actionLabel", {
+                    state,
+                    source: source.display_name,
+                  })}
+                >
+                  <BidiText>{source.display_name}</BidiText>
+                  <span className="ds-muted">
+                    {pending ? t("requesting") : state}
+                  </span>
+                </Button>
+              );
+            })
+          )}
+        </div>
+      </Popover>
+    );
+
   return (
     <details className="relative w-fit">
       <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-semibold text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
         <RefreshCw className="h-4 w-4" aria-hidden="true" />
         {t("sourceRefresh")}
       </summary>
-      <div className="absolute start-0 sm:start-auto sm:end-0 z-40 mt-2 w-[min(19rem,calc(100vw-8rem))] rounded-xl border border-zinc-700 bg-zinc-950 p-2 shadow-2xl">
+      <div className="absolute start-0 lg:start-auto lg:end-0 z-40 mt-2 w-[min(19rem,calc(100vw-8rem))] rounded-xl border border-zinc-700 bg-zinc-950 p-2 shadow-2xl">
         {catalogLoading ? (
           <p
             role="status"

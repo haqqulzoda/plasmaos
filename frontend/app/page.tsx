@@ -1,9 +1,13 @@
 'use client';
 
+import { PlasmaLogo } from '@/components/brand/PlasmaLogo';
+import { LanguageSelector } from '@/components/i18n/LanguageSelector';
+import { Button } from '@/components/ui/Button';
 import { getSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { CheckCircle2 } from 'lucide-react';
 
 /* ── SVG: Google "G" icon ─────────────────────────────────────────────── */
 function GoogleIcon({ className }: { className?: string }) {
@@ -29,41 +33,11 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
-/* ── SVG: Spinner ─────────────────────────────────────────────────────── */
-function Spinner({ className }: { className?: string }) {
-  return (
-    <svg
-      className={`animate-spin ${className ?? ''}`}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 0 1 8-8V0C5.37 0 0 5.37 0 12h4Z"
-      />
-    </svg>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════════ */
-/*  LOGIN PAGE                                                          */
-/* ══════════════════════════════════════════════════════════════════════ */
 export default function LoginPage() {
   const t = useTranslations('auth');
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
-  /* ── Existing session-hydration logic (untouched) ──────────────────── */
   useEffect(() => {
     const hydrate = async () => {
       const session = await getSession();
@@ -74,124 +48,45 @@ export default function LoginPage() {
     hydrate().catch(() => undefined);
   }, [router]);
 
-  /* ── Sign-in handler ─────────────────────────────────────────────── */
   const handleSignIn = () => {
     setIsLoading(true);
     signIn('google', { callbackUrl: '/dashboard' });
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* ─── Left Panel · Auth ────────────────────────────────────────── */}
-      <div className="w-full lg:w-1/2 bg-gray-950 flex items-center justify-center px-6 py-12">
-        <div className="max-w-md w-full space-y-10">
-          {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">P</span>
-            </div>
-            <span className="text-white text-xl font-semibold tracking-tight">
-              Plasma AI
-            </span>
-          </div>
-
-          {/* Headlines */}
-          <div className="space-y-3">
-            <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
-              {t('welcomeBack')}
-            </h1>
-            <p className="text-gray-400 text-base leading-relaxed">
-              Sign in to your workspace to continue managing tenders, compliance, and strategic proposals.
-            </p>
-          </div>
-
-          {/* Google Button */}
-          <div className="space-y-6">
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={handleSignIn}
-              className="flex items-center justify-center gap-3 w-full px-4 py-3.5 border border-gray-700/80 rounded-xl bg-gray-900 text-white font-medium text-sm hover:bg-gray-800 hover:border-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <Spinner className="h-5 w-5 text-gray-400" />
-              ) : (
-                <GoogleIcon className="h-5 w-5" />
-              )}
-              {isLoading ? t('connecting') : t('continueWithGoogle')}
-            </button>
-
-            <p className="text-center text-xs text-gray-600">
-              By continuing you agree to our{' '}
-              <span className="text-gray-500 hover:text-gray-400 cursor-pointer transition-colors">
-                Terms of Service
-              </span>{' '}
-              and{' '}
-              <span className="text-gray-500 hover:text-gray-400 cursor-pointer transition-colors">
-                Privacy Policy
-              </span>
-            </p>
-          </div>
-
-          {/* Footer */}
-          <div className="pt-8 border-t border-gray-800/60">
-            <p className="text-xs text-gray-600">
-              © {new Date().getFullYear()} Plasma AI · Enterprise Tender Intelligence
-            </p>
-          </div>
+    <main className="ds-theme auth-page">
+      <header className="auth-header">
+        <PlasmaLogo />
+        <LanguageSelector surface="auth" />
+      </header>
+      <section className="auth-layout" aria-labelledby="auth-title">
+        <div className="auth-copy">
+          <span className="ds-eyebrow">{t('platformLabel')}</span>
+          <h1 id="auth-title">{t('welcomeBack')}</h1>
+          <p className="ds-muted">{t('workspaceHelp')}</p>
+          <ul className="auth-benefits">
+            <li><CheckCircle2 aria-hidden />{t('benefitExplorer')}</li>
+            <li><CheckCircle2 aria-hidden />{t('benefitReadiness')}</li>
+            <li><CheckCircle2 aria-hidden />{t('benefitCompliance')}</li>
+          </ul>
         </div>
-      </div>
-
-      {/* ─── Right Panel · Branding ───────────────────────────────────── */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-indigo-950 via-purple-950 to-black items-center justify-center">
-        {/* Decorative glows */}
-        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-indigo-600/20 blur-[120px]" />
-        <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
-
-        {/* Grid pattern overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.04]"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)',
-            backgroundSize: '60px 60px',
-          }}
-        />
-
-        {/* Value prop content */}
-        <div className="relative z-10 max-w-lg px-12 space-y-8">
-          <div className="space-y-4">
-            <p className="text-indigo-300 text-sm font-semibold tracking-widest uppercase">
-              Enterprise Platform
-            </p>
-            <h2 className="text-4xl xl:text-5xl font-bold text-white leading-[1.15]">
-              Tender Intelligence,{' '}
-              <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                Automated.
-              </span>
-            </h2>
-            <p className="text-gray-400 text-lg leading-relaxed">
-              From document parsing to compliance scoring — one agentic pipeline that handles the heavy lifting so your team can focus on winning.
-            </p>
-          </div>
-
-          {/* Stats row */}
-          <div className="grid grid-cols-3 gap-6 pt-4">
-            {[
-              { value: '95%', label: 'Accuracy' },
-              { value: '10×', label: 'Faster' },
-              { value: '24/7', label: 'Monitoring' },
-            ].map((stat) => (
-              <div key={stat.label} className="space-y-1">
-                <p className="text-2xl font-bold text-white">{stat.value}</p>
-                <p className="text-xs text-gray-500 uppercase tracking-wider">
-                  {stat.label}
-                </p>
-              </div>
-            ))}
-          </div>
+        <div className="ds-surface auth-card">
+          <h2>{t('signInTitle')}</h2>
+          <p className="ds-muted">{t('signInHelp')}</p>
+          <Button
+            type="button"
+            size="lg"
+            loading={isLoading}
+            disabled={isLoading}
+            onClick={handleSignIn}
+            leadingIcon={!isLoading ? <GoogleIcon /> : undefined}
+          >
+            {isLoading ? t('connecting') : t('continueWithGoogle')}
+          </Button>
+          <p className="auth-privacy ds-muted">{t('privacyNote')}</p>
         </div>
-      </div>
-    </div>
+      </section>
+      <footer className="auth-footer ds-muted">© {new Date().getFullYear()} Plasma AI</footer>
+    </main>
   );
 }

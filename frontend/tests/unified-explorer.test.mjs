@@ -15,7 +15,7 @@ const page = read("app/dashboard/tenders/page.tsx");
 const client = read("lib/explorer.ts");
 const types = read("types/explorer.ts");
 const recommendation = read("components/tenders/RecommendationSummary.tsx");
-const layout = read("app/dashboard/layout.tsx");
+const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx");
 const hunter = read("app/dashboard/hunter/page.tsx");
 const detail = read("app/dashboard/tenders/[tenderId]/page.tsx");
 const returnState = read("lib/explorerReturnState.ts");
@@ -66,7 +66,7 @@ test("URL-backed modes, filters, reset, and pagination", () => {
   assert.match(page, /total \/ response\.limit/);
   assert.match(
     page,
-    /t\("page", \{ page: query\.page, totalPages: lastPage \}\)/,
+    /t\("page",\s*\{\s*page: query\.page,\s*totalPages: lastPage,?\s*\}\)/,
   );
   assert.match(page, /defaultSort\(view\)/);
 });
@@ -173,7 +173,7 @@ test("empty and profile-required states are truthful", () => {
 });
 
 test("pursuit is independent and uses shared workflow actions", () => {
-  assert.match(page, /t\("pursuit", \{ status: pursuitStatus \}\)/);
+  assert.match(page, /t\("pursuit",\s*\{\s*status: tMy/);
   assert.match(page, /EngagementWorkflowActions/);
   assert.match(page, /allowed_actions: pursuit\.allowed_actions/);
   assert.match(page, /PrepareBidButton/);
@@ -192,20 +192,22 @@ test("canonical navigation converges while Hunter compatibility remains", () => 
 });
 
 test("accessibility and responsive contracts are present", () => {
+  const shared = page + read("components/ui/Navigation.tsx") + read("components/ui/Feedback.tsx") + read("components/ui/Display.tsx") + read("components/ui/foundation.css") + read("components/customer/pages.css");
+  assert.match(shared, /role=\{tone === ['"]danger['"] \? ['"]alert['"] : ['"]status['"]\}/);
+  assert.match(page, /<Tabs/);
+  assert.match(page, /<Pagination/);
+  assert.match(page, /label=\{t\("pagesLabel"\)\}/);
   for (const token of [
     'role="tablist"',
     'role="tab"',
     "aria-selected",
-    'aria-live="polite"',
-    'role="alert"',
-    'aria-label={t("pagesLabel")}',
+
     "focus-visible",
     "flex-wrap",
-    "sm:",
-    "xl:",
+    "@media",
   ])
     assert.match(
-      page,
+      shared,
       new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
     );
   assert.match(recommendation, /type="button"/);

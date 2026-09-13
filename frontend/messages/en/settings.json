@@ -2,6 +2,7 @@
   "language": {
     "title": "Interface language",
     "onboardingHelp": "Choose your language first. The rest of onboarding will use it immediately.",
+    "authHelp": "Choose the language for sign-in and your customer workspace.",
     "settingsHelp": "Choose the language used for product navigation, labels, and actions. Your company and tender content will not be translated.",
     "optionsLabel": "Available interface languages",
     "optionLabel": "Use {language}",
@@ -46,5 +47,24 @@
     "rejected": "Rejected",
     "disabled": "Disabled",
     "unknown": "Unknown"
+  },
+  "redesign": {
+    "context": "Company settings",
+    "description": "Keep your company information and target markets up to date.",
+    "identityHelp": "Company identity and contact information.",
+    "marketsHelp": "Choose where your company operates and the services it provides.",
+    "overview": "Saved company profile",
+    "unsaved": "Unsaved changes",
+    "upToDate": "No unsaved changes",
+    "cancel": "Cancel changes",
+    "retry": "Retry"
+  },
+  "pilotStates": {
+    "lead": "Lead",
+    "scoped_pilot": "Scoped pilot",
+    "active_pilot": "Active pilot",
+    "at_risk": "At risk",
+    "converted": "Converted",
+    "paused": "Paused"
   }
 }

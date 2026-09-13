@@ -8,6 +8,11 @@ import { PERSISTED_UI_LOCALE_HEADER } from '@/i18n/requestLocale';
 const PUBLIC_PATHS = ['/', '/api/auth', '/api/build', '/_next', '/favicon.ico'];
 const PUBLIC_EXACT_PATHS = ['/api/v1/health/version'];
 
+function shouldUseSecureCookies(): boolean {
+  const authUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;
+  return authUrl ? authUrl.startsWith('https://') : process.env.NODE_ENV === 'production';
+}
+
 function isPublicPath(pathname: string): boolean {
     if (PUBLIC_EXACT_PATHS.includes(pathname)) {
         return true;
@@ -49,7 +54,7 @@ export async function middleware(request: NextRequest) {
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,
-    secureCookie: process.env.NODE_ENV === 'production',
+    secureCookie: shouldUseSecureCookies(),
   });
 
   if (!token) {
@@ -93,7 +98,7 @@ export async function middleware(request: NextRequest) {
     if (persistedLocale && request.cookies.get(UI_LOCALE_COOKIE_NAME)?.value !== persistedLocale) {
       nextResponse.cookies.set(UI_LOCALE_COOKIE_NAME, persistedLocale, {
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
+        secure: shouldUseSecureCookies(),
         path: '/',
         maxAge: 60 * 60 * 24 * 365,
       });

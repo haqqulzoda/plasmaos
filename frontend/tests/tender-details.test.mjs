@@ -132,9 +132,10 @@ test("DTOs are explicit and prohibit loose any or derived browser persistence", 
 });
 
 test("responsive and keyboard-accessible controls are present", () => {
-  assert.match(pageSource, /overflow-x-auto/);
+  assert.match(readFileSync(new URL("../components/customer/pages.css", import.meta.url), "utf8"), /overflow-x: auto/);
   assert.match(pageSource, /focus-visible:ring-2/);
   assert.match(pageSource, /sm:grid-cols|lg:grid-cols/);
-  assert.match(pageSource, /aria-live="polite"/);
+  assert.match(readFileSync(new URL("../components/ui/Display.tsx", import.meta.url), "utf8"), /role="status"/);
+  assert.match(pageSource, /<PageSkeleton/);
   assert.match(pageSource, /role="alert"/);
 });

@@ -103,5 +103,17 @@
     "recommendedOn": "تمت التوصية في {date}",
     "restore": "استعادة التوصية",
     "dismiss": "تجاهل التوصية"
+  },
+  "redesign": {
+    "eyebrow": "استكشف الفرص العالمية",
+    "preview": "معاينة المناقصة",
+    "selectTitle": "اختر مناقصة",
+    "selectHelp": "اختر المعاينة من إحدى النتائج لعرض ملخصها هنا.",
+    "closePreview": "إغلاق المعاينة",
+    "clearSearch": "مسح البحث",
+    "activeFilters": "عوامل التصفية النشطة",
+    "removeFilter": "إزالة {filter}",
+    "clearAll": "مسح الكل",
+    "value": "القيمة التقديرية"
   }
 }

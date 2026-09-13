@@ -99,5 +99,17 @@
     "loadFailed": "Pursuit status could not be loaded.",
     "changed": "Status changed. We refreshed the latest state.",
     "saveFailed": "Tender could not be saved. Please try again."
+  },
+  "redesign": {
+    "eyebrow": "Pursuit pipeline",
+    "deadline": "Deadline",
+    "estimatedValue": "Estimated value",
+    "matchScore": "Match score",
+    "unavailable": "Unavailable",
+    "clearSearch": "Clear search",
+    "retry": "Try again",
+    "filteredEmpty": "No matching tenders",
+    "filteredHelp": "Adjust your filters or explore more tenders.",
+    "statusEmpty": "No tenders in this status"
   }
 }

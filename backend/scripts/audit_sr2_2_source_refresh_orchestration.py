@@ -35,7 +35,7 @@ from app.services.source_refresh_jobs import (
 )
 from scripts import bootstrap_database as bootstrap
 
-HEAD = "20260904_0001_s8_2_analysis_language"
+HEAD = "20260912_0001_s10_5_communications"
 PREVIOUS_HEAD = "20260828_0003_s4_1_tender_engagement_foundation"
 PREFIX = "plasma_sr22_"
 

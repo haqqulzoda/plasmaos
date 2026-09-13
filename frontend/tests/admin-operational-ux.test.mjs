@@ -11,7 +11,8 @@ import {
 
 const accounts = fs.readFileSync(new URL('../app/admin/approvals/page.tsx', import.meta.url), 'utf8');
 const audit = fs.readFileSync(new URL('../app/admin/audit/page.tsx', import.meta.url), 'utf8');
-const layout = fs.readFileSync(new URL('../app/admin/layout.tsx', import.meta.url), 'utf8');
+const layout = fs.readFileSync(new URL('../components/shell/AdminShell.tsx', import.meta.url), 'utf8');
+const overlay = fs.readFileSync(new URL('../components/ui/Overlay.tsx', import.meta.url), 'utf8');
 
 test('canonical lifecycle language and restore consequence are truthful', () => {
     assert.equal(statusLabel('pending'), 'Pending');
@@ -50,8 +51,9 @@ test('accounts use backend capabilities, stable identity, confirmations, and bou
     assert.match(accounts, /account\.is_current_actor/);
     assert.doesNotMatch(accounts, /session\?\.user\?\.email/);
     assert.doesNotMatch(accounts, /window\.prompt/);
-    assert.match(accounts, /role="dialog"/);
-    assert.match(accounts, /aria-modal="true"/);
+    assert.match(accounts, /<Dialog/);
+    assert.match(overlay, /<dialog/);
+    assert.match(overlay, /showModal\(\)/);
     assert.match(accounts, /PAGE_SIZE = 25/);
     assert.match(accounts, /await loadAccounts\(\)/);
     assert.doesNotMatch(accounts, /auth_version|pre_disabled_approval_status|google_id/);

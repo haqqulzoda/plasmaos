@@ -33,7 +33,7 @@ from app.services.tender_sources.base import NormalizedTender, persist_tender_ba
 from scripts import bootstrap_database as bootstrap
 
 
-HEAD = "20260904_0001_s8_2_analysis_language"
+HEAD = "20260912_0001_s10_5_communications"
 PREFIX = "plasma_sr21_"
 DEFAULT_BATCH_SIZE = 500
 DOMAIN_TABLES = (

@@ -93,13 +93,7 @@ function readStoredSession(): StoredRefreshSession | null {
 }
 
 function noticeClasses(notice: RefreshNotice): string {
-  if (notice.tone === "danger")
-    return "border-red-500/40 bg-red-950/95 text-red-50";
-  if (notice.tone === "warning")
-    return "border-amber-500/40 bg-amber-950/95 text-amber-50";
-  if (notice.tone === "success")
-    return "border-emerald-500/40 bg-emerald-950/95 text-emerald-50";
-  return "border-sky-500/40 bg-sky-950/95 text-sky-50";
+  return `ds-tone-${notice.tone || "info"}`;
 }
 
 function NoticeIcon({ notice }: { notice: RefreshNotice }) {
@@ -577,13 +571,13 @@ export function SourceRefreshProvider({
         aria-label={translateRefresh("notifications")}
         aria-live="polite"
         aria-relevant="additions"
-        className="pointer-events-none fixed inset-x-3 bottom-3 z-[100] flex flex-col items-end gap-2 sm:start-auto sm:end-5 sm:w-[25rem]"
+        className="ds-theme ds-toast-stack"
       >
         {notices.map((notice) => (
           <article
             key={notice.id}
             role={notice.tone === "danger" ? "alert" : "status"}
-            className={`pointer-events-auto w-full rounded-xl border p-4 shadow-2xl ${noticeClasses(notice)}`}
+            className={`ds-toast ${noticeClasses(notice)}`}
           >
             <div className="flex items-start gap-3">
               <NoticeIcon notice={notice} />
@@ -597,7 +591,7 @@ export function SourceRefreshProvider({
                 type="button"
                 onClick={() => dismissNotice(notice.id)}
                 aria-label={translateRefresh("dismiss")}
-                className="rounded p-1 opacity-70 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                className="ds-button ds-button-icon"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -606,7 +600,7 @@ export function SourceRefreshProvider({
               <Link
                 href={notice.href}
                 onClick={() => dismissNotice(notice.id)}
-                className="mt-3 inline-flex rounded-lg border border-current/30 px-3 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                className="ds-button ds-button-secondary mt-3"
               >
                 {notice.action_label}
               </Link>
@@ -633,7 +627,7 @@ export function GlobalRefreshIndicator() {
   if (!activeSources.length && !statusError) return null;
   if (!activeSources.length)
     return (
-      <span role="status" className="text-xs text-amber-300">
+      <span role="status" className="ds-field-help">
         {t("statusUnavailable")}
       </span>
     );
@@ -649,20 +643,20 @@ export function GlobalRefreshIndicator() {
       <summary
         role="status"
         aria-live="polite"
-        className="flex cursor-pointer list-none items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+        className="ds-button ds-button-secondary shell-refresh-control"
       >
         <span
-          className="h-2 w-2 rounded-full bg-indigo-400 motion-safe:animate-pulse"
+          className="h-2 w-2 rounded-full bg-ds-accent motion-safe:animate-pulse"
           aria-hidden="true"
         />
         {label}
       </summary>
-      <div className="absolute end-0 z-40 mt-2 w-64 rounded-xl border border-zinc-700 bg-zinc-950 p-3 shadow-2xl">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+      <div className="ds-popover shell-refresh-panel">
+        <p className="ds-field-label ds-muted">
           {t("sourceRefreshes")}
         </p>
         {activeSources.map((item) => (
-          <p key={item.source_system} className="py-1 text-xs text-zinc-200">
+          <p key={item.source_system} className="ds-field-help">
             <BidiText>{item.display_name}</BidiText> ·{" "}
             {item.active_job?.status === "queued"
               ? t("queued")

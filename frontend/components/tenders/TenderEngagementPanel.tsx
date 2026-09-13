@@ -7,6 +7,9 @@ import { useTranslations } from "next-intl";
 
 import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
 import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { Surface, SectionHeader, StatusBadge } from "@/components/ui/Display";
+import { Alert } from "@/components/ui/Feedback";
 import { api } from "@/lib/api";
 import {
   engagementStatusClasses,
@@ -16,6 +19,7 @@ import {
 } from "@/types/engagement";
 
 interface TenderEngagementPanelProps {
+  foundation?: boolean;
   tenderId: string;
   proposalContext?: boolean;
   engagementData?: TenderEngagementActionContext | null;
@@ -26,6 +30,7 @@ interface TenderEngagementPanelProps {
 }
 
 export function TenderEngagementPanel({
+  foundation = false,
   tenderId,
   proposalContext = false,
   engagementData,
@@ -110,6 +115,69 @@ export function TenderEngagementPanel({
               : engagement?.engagement_status === "LOST"
                 ? t("statuses.lost")
                 : t("statuses.dismissed");
+
+  if (foundation)
+    return (
+      <Surface>
+        <SectionHeader
+          title={t("panel.title")}
+          icon={<Bookmark aria-hidden />}
+        />
+        <div className="ds-pad ds-stack">
+          {loading ? (
+            <p role="status">{t("panel.loading")}</p>
+          ) : engagement ? (
+            <StatusBadge>
+              {t("panel.status", { status: engagementLabel })}
+            </StatusBadge>
+          ) : (
+            <p className="ds-muted">{t("panel.none")}</p>
+          )}
+          {!loading && engagement ? (
+            <EngagementWorkflowActions
+              foundation
+              engagement={engagement}
+              tenderId={tenderId}
+              proposalId={proposalId}
+              onChanged={setEngagement}
+              onRefresh={load}
+            />
+          ) : !loading && proposalContext && proposalId ? (
+            <PrepareBidButton foundation proposalId={proposalId} />
+          ) : !loading && canStartNew ? (
+            <div className="ds-row">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={save}
+                loading={saving}
+                leadingIcon={<Bookmark aria-hidden />}
+              >
+                {saving ? t("panel.saving") : t("panel.save")}
+              </Button>
+              <PrepareBidButton foundation tenderId={tenderId} />
+            </div>
+          ) : !loading ? (
+            <p className="ds-muted">{t("panel.noAction")}</p>
+          ) : null}
+          <div className="ds-row">
+            <ButtonLink variant="ghost" size="sm" href="/dashboard/my-tenders">
+              {t("panel.openMy")}
+            </ButtonLink>
+            {proposalId && (
+              <ButtonLink
+                variant="ghost"
+                size="sm"
+                href={`/dashboard/bid-preparation/${proposalId}`}
+              >
+                {t("panel.openBid")}
+              </ButtonLink>
+            )}
+          </div>
+          {error && <Alert tone="danger" title={error} />}
+        </div>
+      </Surface>
+    );
 
   return (
     <section

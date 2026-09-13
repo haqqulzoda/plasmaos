@@ -75,8 +75,9 @@ def main():
     server = ThreadingHTTPServer(("127.0.0.1", 8114), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     env = os.environ.copy()
+    release_dist = os.environ.get("PLASMA_RELEASE_BROWSER_DIST", ".next-release-test")
     env.update(AUTH_SECRET="s72-browser-secret", AUTH_URL=BASE, NEXTAUTH_URL=BASE,
-        AUTH_TRUST_HOST="true", NODE_ENV="production", NEXT_DIST_DIR=".next-release-test",
+        AUTH_TRUST_HOST="true", NODE_ENV="production", NEXT_DIST_DIR=release_dist,
         BACKEND_INTERNAL_URL="http://127.0.0.1:8114/api/v1")
     log = (OUT / "frontend.log").open("w")
     proc = subprocess.Popen(["npm", "run", "start", "--", "-p", "3114"], cwd=FRONT, env=env, stdout=log, stderr=log, start_new_session=os.name == "posix")
@@ -103,12 +104,12 @@ def main():
                 time.sleep(1)
         else:
             raise RuntimeError("Local production frontend did not start")
-        token_js = """import {encode} from 'next-auth/jwt'; console.log(await encode({secret:'s72-browser-secret',salt:'__Secure-authjs.session-token',token:{name:'Synthetic Pilot',email:'pilot@example.invalid',sub:'72000000-0000-4000-8000-000000000001',accessToken:process.env.TEST_ACCESS_TOKEN||'s72-token-a',approval_status:'approved',platform_role:'pilot_user'},maxAge:3600}));"""
+        token_js = """import {encode} from 'next-auth/jwt'; console.log(await encode({secret:'s72-browser-secret',salt:'authjs.session-token',token:{name:'Synthetic Pilot',email:'pilot@example.invalid',sub:'72000000-0000-4000-8000-000000000001',accessToken:process.env.TEST_ACCESS_TOKEN||'s72-token-a',approval_status:'approved',platform_role:'pilot_user'},maxAge:3600}));"""
         token = subprocess.check_output(["node", "--input-type=module", "-e", token_js], cwd=FRONT, env=env, text=True).strip()
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
             context = browser.new_context(viewport={"width":390,"height":844})
-            context.add_cookies([{"name":"__Secure-authjs.session-token","value":token,"domain":"localhost","path":"/","secure":True}])
+            context.add_cookies([{"name":"authjs.session-token","value":token,"url":BASE,"httpOnly":True,"sameSite":"Lax"}])
             def network(route):
                 if urlparse(route.request.url).hostname not in {"localhost", "127.0.0.1"}:
                     external.append(route.request.url.split("?")[0])
@@ -156,10 +157,10 @@ def main():
                             for control in evidence["dom"]["controls"]:
                                 assert control["left"] >= -1 and control["right"] <= width + 1, control
                             if name == "explorer":
-                                menu = page.locator('details').first
-                                menu.locator('summary').click()
+                                menu = page.locator('.customer-page .ds-popover-wrap').first
+                                menu.locator('button[aria-expanded]').click()
                                 assert menu.evaluate("""x => [...x.querySelectorAll('button')].filter(b=>b.checkVisibility()).every(b=>{const r=b.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth;})""")
-                                menu.locator('summary').click()
+                                menu.locator('button[aria-expanded]').click()
                             if name == "bid-preparation":
                                 assert page.evaluate("""() => {const h=document.querySelector('h1').getBoundingClientRect();const badges=[...document.querySelectorAll('.rounded-full')];return badges.every(b=>{const r=b.getBoundingClientRect();return r.right<=h.left||r.left>=h.right||r.bottom<=h.top||r.top>=h.bottom;});}""")
                             if width == 320:
@@ -187,7 +188,8 @@ def main():
                 def navigate(path=path):
                     load("settings","en",390)
                     before = len(requests)
-                    page.locator(f'aside a[href="/dashboard/{path.split("?")[0]}"]').click()
+                    page.get_by_role("button", name="Open navigation", exact=True).click()
+                    page.locator(f'dialog[open] a[href="/dashboard/{path.split("?")[0]}"]').first.click()
                     page.wait_for_load_state("networkidle")
                     page.wait_for_timeout(300)
                     counts = Counter(str(item) for item in requests[before:])
@@ -230,7 +232,7 @@ def main():
                 other_token = subprocess.check_output(['node','--input-type=module','-e',token_js],cwd=FRONT,env={**env,'TEST_ACCESS_TOKEN':'s72-token-b'},text=True).strip()
                 other = browser.new_context(viewport={'width':390,'height':844})
                 other.route('**/*',network)
-                other.add_cookies([{'name':'__Secure-authjs.session-token','value':other_token,'domain':'localhost','path':'/','secure':True}])
+                other.add_cookies([{'name':'authjs.session-token','value':other_token,'url':BASE,'httpOnly':True,'sameSite':'Lax'}])
                 try:
                     other_page = other.new_page()
                     other_page.goto(BASE+'/dashboard/settings',wait_until='networkidle')
@@ -393,7 +395,7 @@ def main():
         server.shutdown(); server.server_close(); log.close()
         result = {"method":"Real Chromium against local production Next.js and controlled HTTP API fixtures; backend security cases execute real route/dependency code with synthetic DB and signed assertion fixtures", "cases":rows,"external_requests":external,
                   "passed":sum(row['status']=='PASS' for row in rows),"failed":sum(row['status']=='FAIL' for row in rows)}
-        (OUT/'results.json').write_text(json.dumps(result,indent=2,ensure_ascii=False))
+        (OUT/'results.json').write_text(json.dumps(result,indent=2,ensure_ascii=False), encoding='utf-8')
     return 0 if len(rows) >= 100 and all(row['status']=='PASS' for row in rows) and not external else 1
 
 

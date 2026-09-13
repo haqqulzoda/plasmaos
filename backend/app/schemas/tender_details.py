@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.explorer import ExplorerRecommendationSummary
 from app.models.base import ProposalStatus, TenderEngagementOrigin, TenderEngagementStatus
 
 
@@ -208,6 +209,7 @@ class BidPreparationSection(BaseModel):
 
 
 class TenderDetailsResponse(BaseModel):
+    recommendation: ExplorerRecommendationSummary | None = None
     tender_id: UUID
     project_context: ProjectContextSection
     project_leadership: ProjectLeadershipSection

@@ -12,6 +12,8 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.audit import TenderRecommendation
+from app.schemas.explorer import ExplorerRecommendationSummary
 from app.models.all_models import (
     Project,
     ProjectRoleAssignment,
@@ -597,7 +599,26 @@ async def compose_tender_details(
         if procurement_contacts is not None
         else _empty(ProcurementContactsSection, "PROCUREMENT_CONTACTS_NOT_AVAILABLE")
     )
+    # One bounded owned Recommendation read reuses the Explorer projection;
+    # the page needs no extra list scan or generation request for its side rail.
+    recommendation = await db.scalar(
+        select(TenderRecommendation)
+        .join(CompanyProfile, CompanyProfile.id == TenderRecommendation.company_profile_id)
+        .where(
+            TenderRecommendation.tender_id == tender.id,
+            CompanyProfile.user_id == user_id,
+        )
+        .order_by(TenderRecommendation.created_at.desc(), TenderRecommendation.id.asc())
+        .limit(1)
+    ) if profile is not None else None
     return TenderDetailsResponse(
+        recommendation=ExplorerRecommendationSummary(
+            recommendation_id=recommendation.id,
+            match_score=recommendation.match_score,
+            rationale_summary=(recommendation.strategic_rationale or "")[:280],
+            is_dismissed=recommendation.is_dismissed,
+            created_at=recommendation.created_at,
+        ) if recommendation is not None else None,
         tender_id=tender.id,
         project_context=project_context,
         project_leadership=project_leadership,

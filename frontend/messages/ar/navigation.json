@@ -5,9 +5,15 @@
   "bidPreparation": "إعداد العطاء",
   "companyProfile": "ملف الشركة",
   "readinessVault": "سجل الجاهزية",
+  "notifications": "الإشعارات",
   "dashboardLabel": "لوحة تحكم Plasma AI",
   "navigationLabel": "تنقل لوحة التحكم",
   "logout": "تسجيل الخروج",
   "commandCenter": "مركز القيادة",
-  "adminConsole": "وحدة تحكم المسؤول"
+  "adminConsole": "وحدة تحكم المسؤول",
+  "settings": "الإعدادات",
+  "accountMenu": "قائمة الحساب",
+  "openNavigation": "فتح التنقل",
+  "closeNavigation": "إغلاق التنقل",
+  "skipToContent": "الانتقال إلى المحتوى"
 }

@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
+from app.api.endpoints.communications import notifications_router, broadcasts_router
 from app.api.endpoints import operations, admin, auth, explorer, hunter, meta, my_tenders, proposals, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
@@ -78,6 +79,8 @@ app.add_middleware(HardenedHTTPMiddleware)
 app.add_exception_handler(RequestValidationError, validation_error)
 
 # Include routers
+app.include_router(notifications_router, prefix='/api/v1/notifications', tags=['Notifications'])
+app.include_router(broadcasts_router, prefix='/api/v1/admin/broadcasts', tags=['Broadcasts'])
 app.include_router(operations.router, tags=["Operations"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])

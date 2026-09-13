@@ -90,5 +90,18 @@
   "actionUnavailable": "This Tender status does not allow bid preparation.",
   "legacyOpening": "Opening Bid Preparation…",
   "legacyInvalid": "This legacy bookmark is not an owned Bid Preparation artifact.",
-  "legacyList": "Open Bid Preparation list"
+  "legacyList": "Open Bid Preparation list",
+  "redesign": {
+    "description": "Prepare proposals and review your saved work.",
+    "total": "{count, plural, one {# preparation} other {# preparations}}",
+    "denied": "Your session no longer has access to these preparations. Please sign in again.",
+    "retry": "Try again",
+    "price": "Your price",
+    "notSet": "Not set",
+    "deadline": "Deadline",
+    "generating": "This proposal is marked as generating. Open it to review the available work.",
+    "pagination": "Bid Preparation pagination",
+    "page": "Page {page} · {count, plural, one {# preparation} other {# preparations}}",
+    "pageEmpty": "No preparations on this page"
+  }
 }

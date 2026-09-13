@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Building2, Database, FileBarChart, Loader2, RefreshCw, ShieldCheck, Users } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Button } from '@/components/ui/Button';
+import { Alert } from '@/components/ui/Feedback';
 
 type AdminActivity = {
     total_users: number;
@@ -63,26 +65,26 @@ export default function AdminPage() {
             {
                 label: 'Pending users',
                 value: activity?.pending_users,
-                icon: <Users className="h-5 w-5 text-amber-300" />,
-                tone: 'border-amber-500/20 bg-amber-500/10',
+                Icon: Users,
+                tone: 'warning',
             },
             {
                 label: 'Pending companies',
                 value: activity?.pending_companies,
-                icon: <Building2 className="h-5 w-5 text-cyan-300" />,
-                tone: 'border-cyan-500/20 bg-cyan-500/10',
+                Icon: Building2,
+                tone: 'info',
             },
             {
                 label: 'Analyses',
                 value: activity?.analyses_count,
-                icon: <FileBarChart className="h-5 w-5 text-emerald-300" />,
-                tone: 'border-emerald-500/20 bg-emerald-500/10',
+                Icon: FileBarChart,
+                tone: 'success',
             },
             {
                 label: 'Vault records',
                 value: activity?.vault_records_count,
-                icon: <Database className="h-5 w-5 text-indigo-300" />,
-                tone: 'border-indigo-500/20 bg-indigo-500/10',
+                Icon: Database,
+                tone: 'info',
             },
         ],
         [activity],
@@ -97,57 +99,52 @@ export default function AdminPage() {
     ];
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-3">
-                    <ShieldCheck className="w-6 h-6 text-cyan-300" />
+        <div className="admin-page admin-overview ds-container-data ds-stack">
+            <header className="admin-page-header">
+                <div className="admin-heading-with-icon">
+                    <ShieldCheck aria-hidden />
                     <div>
-                        <h1 className="text-2xl font-semibold text-white">Admin Console</h1>
-                        <p className="text-sm text-gray-400">Account operations and corpus visibility</p>
+                        <span className="ds-eyebrow">Operations</span>
+                        <h1>Admin Console</h1>
+                        <p className="ds-muted">Account operations and corpus visibility</p>
                     </div>
                 </div>
-                <button
-                    type="button"
+                <Button
+                    variant="secondary"
                     onClick={loadOverview}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-900 hover:text-white transition-colors"
+                    loading={loading}
+                    leadingIcon={<RefreshCw aria-hidden />}
                 >
-                    <RefreshCw className="h-4 w-4" />
                     Refresh
-                </button>
-            </div>
+                </Button>
+            </header>
 
-            {error && (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                    {error}
-                </div>
-            )}
+            {error && <Alert tone="danger" title={error} />}
 
             {loading ? (
-                <div className="h-64 rounded-lg border border-gray-800 bg-gray-950 flex items-center justify-center">
-                    <Loader2 className="h-7 w-7 animate-spin text-cyan-300" />
+                <div className="ds-surface admin-loading" role="status">
+                    <Loader2 className="ds-spin" aria-hidden /> Loading overview…
                 </div>
             ) : (
                 <>
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <section className="admin-stat-grid" aria-label="Operational metrics">
                         {activityCards.map((card) => (
-                            <div key={card.label} className={`rounded-lg border p-5 ${card.tone}`}>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm text-gray-300">{card.label}</span>
-                                    {card.icon}
+                            <div key={card.label} className={`ds-surface admin-stat ds-tone-${card.tone}`}>
+                                <div>
+                                    <span>{card.label}</span>
+                                    <card.Icon aria-hidden />
                                 </div>
-                                <div className="mt-4 text-3xl font-semibold text-white">
+                                <strong className="ds-numeric">
                                     {formatCount(card.value)}
-                                </div>
+                                </strong>
                             </div>
                         ))}
-                    </div>
+                    </section>
 
-                    <div className="grid gap-6 xl:grid-cols-[1fr_1.2fr]">
-                        <div className="rounded-lg border border-gray-800 bg-gray-950 overflow-hidden">
-                            <div className="border-b border-gray-800 px-5 py-4">
-                                <h2 className="text-base font-semibold text-white">Activity</h2>
-                            </div>
-                            <div className="divide-y divide-gray-800 text-sm">
+                    <div className="admin-overview-grid">
+                        <section className="ds-surface admin-metric-list">
+                            <header><h2>Activity</h2></header>
+                            <dl>
                                 {([
                                     ['Total users', activity?.total_users],
                                     ['Approved users', activity?.approved_users],
@@ -155,37 +152,36 @@ export default function AdminPage() {
                                     ['Approved companies', activity?.approved_companies],
                                     ['Reports', activity?.reports_count],
                                 ] satisfies CountRow[]).map(([label, value]) => (
-                                    <div key={label} className="flex items-center justify-between px-5 py-3">
-                                        <span className="text-gray-400">{label}</span>
-                                        <span className="font-medium text-white">{formatCount(value)}</span>
+                                    <div key={label}>
+                                        <dt className="ds-muted">{label}</dt>
+                                        <dd className="ds-numeric">{formatCount(value)}</dd>
                                     </div>
                                 ))}
-                            </div>
-                        </div>
+                            </dl>
+                        </section>
 
-                        <div className="rounded-lg border border-gray-800 bg-gray-950 overflow-hidden">
-                            <div className="border-b border-gray-800 px-5 py-4">
-                                <h2 className="text-base font-semibold text-white">Corpus health</h2>
-                            </div>
-                            <table className="w-full text-sm">
-                                <tbody className="divide-y divide-gray-800">
+                        <section className="ds-surface admin-table-surface">
+                            <header className="admin-section-heading"><h2>Corpus health</h2></header>
+                            <table className="admin-table">
+                                <thead><tr><th scope="col">Source cohort</th><th scope="col">Visible records</th></tr></thead>
+                                <tbody>
                                     {corpusRows.map(([label, value]) => (
                                         <tr key={label}>
-                                            <td className="px-5 py-3 text-gray-400">{label}</td>
-                                            <td className="px-5 py-3 text-right font-medium text-white">
+                                            <th scope="row">{label}</th>
+                                            <td className="ds-numeric">
                                                 {formatCount(value)}
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
+                        </section>
                     </div>
 
-                    <div className="rounded-lg border border-gray-800 bg-gray-950 p-5">
+                    <div className="ds-surface admin-overview-action">
                         <Link
                             href="/admin/approvals"
-                            className="inline-flex items-center rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors"
+                            className="ds-button ds-button-primary"
                         >
                             Open accounts
                         </Link>

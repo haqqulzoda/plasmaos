@@ -7,7 +7,7 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 const redirectPage = read("app/dashboard/hunter/page.tsx");
 const explorerPage = read("app/dashboard/tenders/page.tsx");
 const explorerClient = read("lib/explorer.ts");
-const layout = read("app/dashboard/layout.tsx");
+const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx");
 const backendHunter = read("../backend/app/api/endpoints/hunter.py");
 const worker = read("../backend/app/workers/hunter_tasks.py");
 const celery = read("../backend/app/core/celery_app.py");

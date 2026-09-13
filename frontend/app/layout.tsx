@@ -16,7 +16,6 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const [locale, messages] = await Promise.all([getLocale(), getMessages()]);
-
   return (
     <html lang={locale} dir={directionForLocale(locale)}>
       <body className="antialiased">

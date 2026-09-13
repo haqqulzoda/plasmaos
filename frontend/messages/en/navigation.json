@@ -5,9 +5,15 @@
   "bidPreparation": "Bid Preparation",
   "companyProfile": "Company Profile",
   "readinessVault": "Readiness Vault",
+  "notifications": "Notifications",
   "dashboardLabel": "Plasma AI dashboard",
   "navigationLabel": "Dashboard navigation",
   "logout": "Logout",
   "commandCenter": "Command Center",
-  "adminConsole": "Admin Console"
+  "adminConsole": "Admin Console",
+  "settings": "Settings",
+  "accountMenu": "Account menu",
+  "openNavigation": "Open navigation",
+  "closeNavigation": "Close navigation",
+  "skipToContent": "Skip to content"
 }
