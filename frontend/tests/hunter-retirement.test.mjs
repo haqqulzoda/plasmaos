@@ -89,11 +89,11 @@ test("legacy backend APIs remain compatibility-only and share mutation authority
   assert.doesNotMatch(backendHunter, /restore/);
 });
 
-test("generation owner and document dispatch stay internal and unchanged", () => {
+test("generation stays internal while document acquisition remains explicit", () => {
   assert.match(worker, /def run_hunter_sweep/);
   assert.match(worker, /evaluate_tenders_batch/);
   assert.match(worker, /TenderRecommendation\(/);
-  assert.match(worker, /process_tender_docs\.delay/);
+  assert.doesNotMatch(worker, /process_tender_docs/);
   assert.match(celery, /run-hunter-sweep-every-30-minutes/);
   assert.match(celery, /app\.workers\.hunter_tasks\.run_hunter_sweep/);
 });

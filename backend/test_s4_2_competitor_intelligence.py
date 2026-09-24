@@ -184,7 +184,7 @@ class S42CompetitorIntelligenceBehaviorTests(unittest.TestCase):
 
         self.assertEqual(records, [])
 
-    def test_repeated_similar_market_actor_is_medium_confidence(self) -> None:
+    def test_repeated_unevidenced_market_actor_is_rejected(self) -> None:
         assert tender_endpoints is not None
 
         target = _tender()
@@ -208,14 +208,7 @@ class S42CompetitorIntelligenceBehaviorTests(unittest.TestCase):
 
         groups = tender_endpoints._group_competitor_records(records)
 
-        self.assertEqual(len(groups), 1)
-        self.assertEqual(groups[0].service_category, "medical")
-        self.assertEqual(len(groups[0].competitors), 1)
-        competitor = groups[0].competitors[0]
-        self.assertEqual(competitor.company_name, "Clinic Systems LLC")
-        self.assertEqual(competitor.participation_type, "similar_market_actor")
-        self.assertEqual(competitor.confidence, "medium")
-        self.assertTrue(competitor.reason)
+        self.assertEqual(groups, [])
 
     def test_empty_response_message_is_clean(self) -> None:
         assert TenderCompetitorIntelligenceResponse is not None
@@ -229,7 +222,7 @@ class S42CompetitorIntelligenceBehaviorTests(unittest.TestCase):
         self.assertEqual(response.groups, [])
         self.assertEqual(
             response.message,
-            "No historical competitor intelligence available yet.",
+            "Not enough verified procurement history is available to identify relevant competitors for this tender.",
         )
 
 

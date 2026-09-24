@@ -92,7 +92,7 @@
   "expired": "{days, plural, other {# kun oldin tugagan}}",
   "remaining": "{days, plural, other {# kun qoldi}}",
   "pursuit": "Ishtirok holati: {status}",
-  "viewTender": "Tenderni ko‘rish",
+  "viewTender": "Batafsil",
   "deadlinePassed": "Tender muddati o‘tgan",
   "startBid": "Taklif tayyorlashni boshlash",
   "recommendation": {
@@ -105,8 +105,8 @@
     "dismiss": "Tavsiyani rad etish"
   },
   "redesign": {
-    "eyebrow": "Global imkoniyatlarni o‘rganing",
-    "preview": "Tenderni ko‘rish",
+    "eyebrow": "Kashfiyot",
+    "preview": "Batafsil",
     "selectTitle": "Tenderni tanlang",
     "selectHelp": "Qisqacha ma’lumotni ko‘rish uchun natijadagi oldindan ko‘rish tugmasini tanlang.",
     "closePreview": "Ko‘rishni yopish",
@@ -114,6 +114,23 @@
     "activeFilters": "Faol filtrlar",
     "removeFilter": "{filter} filtrini olib tashlash",
     "clearAll": "Barchasini tozalash",
-    "value": "Taxminiy qiymat"
+    "value": "Taxminiy qiymat",
+    "budget": "Byudjet",
+    "searchPlaceholder": "Kalit so‘z, nom, manba yoki hudud bo‘yicha qidiring…",
+    "sourceLabel": "Manba",
+    "sortBy": "Saralash",
+    "regionCountry": "Hudud / mamlakat",
+    "statusLabel": "Holat",
+    "allRegions": "Barcha hududlar",
+    "categorySector": "Toifa / soha",
+    "allCategories": "Barcha toifalar",
+    "resultsToolbar": "Tender natijalarini boshqarish",
+    "resultCount": "{count} ta tender topildi",
+    "deadlineUnavailable": "Muddat mavjud emas",
+    "match": "{score}% moslik",
+    "openSource": "Manbani ochish",
+    "openSourceFor": "{title} manbasini yangi oynada ochish",
+    "partialTitle": "Ayrim manbalar to‘liq bo‘lmasligi mumkin",
+    "partialHelp": "{sources} uchun so‘nggi yangilanish qisman yoki muvaffaqiyatsiz tugadi. Faqat mavjud yozuvlar ko‘rsatilgan."
   }
 }

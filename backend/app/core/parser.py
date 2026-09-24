@@ -18,9 +18,9 @@ from urllib.parse import urlparse
 from zipfile import BadZipFile, ZipFile
 
 import docx
-import fitz
 import httpx
 import pkgutil
+import pymupdf as fitz
 from google import genai
 
 # --- Python 3.14 compatibility shim ---

@@ -37,7 +37,8 @@
     "test:s10-4-browser": "python tests/s10-4-browser-acceptance.py",
     "test:s10-6": "node --no-warnings --experimental-strip-types --test tests/s10-6-communications.test.mjs",
     "test:s10-6-browser": "python tests/s10-6-browser-acceptance.py",
-    "test:s10-7-browser": "python tests/s10-7-browser-acceptance.py"
+    "test:s10-7-browser": "python tests/s10-7-browser-acceptance.py",
+    "test:dashboard": "node --no-warnings --experimental-strip-types --test tests/s14-1-dashboard.test.mjs"
   },
   "dependencies": {
     "axios": "1.18.0",

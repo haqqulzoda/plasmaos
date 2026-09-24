@@ -61,8 +61,9 @@ def test_legacy_list_is_owned_and_read_only() -> None:
 def test_generation_worker_contract_is_preserved() -> None:
     worker = source("backend/app/workers/hunter_tasks.py")
     celery = source("backend/app/core/celery_app.py")
-    for contract in ("MIN_MATCH_SCORE = 10", "evaluate_tenders_batch", "process_tender_docs.delay", "TenderRecommendation("):
+    for contract in ("MIN_MATCH_SCORE = 10", "evaluate_tenders_batch", "TenderRecommendation("):
         assert contract in worker
+    assert "process_tender_docs" not in worker
     assert "run-hunter-sweep-every-30-minutes" in celery
     assert '"app.workers.hunter_tasks.*": {"queue": "ai_fast_queue"}' in celery
 

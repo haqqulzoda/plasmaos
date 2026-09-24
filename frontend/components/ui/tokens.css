@@ -22,8 +22,13 @@
   --ds-on-accent: #ffffff;
   --ds-success: #126743;
   --ds-success-subtle: #e8f6ee;
-  --ds-warning: #835000;
-  --ds-warning-subtle: #fff4df;
+  --ds-warning: #D97706;
+  --ds-warning-subtle: #FEF9F0;
+  --warning-bg: #FEF9F0;
+  --warning-border: #FEE6BE;
+  --warning-accent: #D97706;
+  --warning-text: #6F3306;
+  --warning-text-muted: #8E572A;
   --ds-danger: #ae2638;
   --ds-danger-subtle: #ffedf0;
   --ds-info: #245b9a;

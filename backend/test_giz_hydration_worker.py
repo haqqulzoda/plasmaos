@@ -10,8 +10,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
+import httpx
+
 try:
-    import fitz
+    import pymupdf as fitz
 
     from app.models.all_models import TenderDocument
     from app.services import giz_document_hydration
@@ -19,7 +21,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover - local minimal env
     if exc.name in {
         "celery",
         "fastapi",
-        "fitz",
+        "pymupdf",
         "google",
         "httpx",
         "playwright",
@@ -240,6 +242,101 @@ class GizHydrationWorkerTests(unittest.TestCase):
         self.assertEqual(coverage["coverage_status"], "complete")
         self.assertEqual(coverage["extracted_file_count"], 1)
         self.assertEqual(coverage["parsed_file_count"], 1)
+
+    def test_invalid_signature_is_rejected_and_partial_file_is_cleaned(self) -> None:
+        assert TenderDocument is not None
+        assert giz_document_hydration is not None
+
+        tender_id = uuid4()
+        tender = _giz_tender(tender_id)
+        doc = TenderDocument(
+            id=uuid4(),
+            tender_id=tender_id,
+            file_url="https://www.giz.de/sites/default/files/spoofed.pdf",
+            file_type="pdf",
+            source_document_url="https://www.giz.de/sites/default/files/spoofed.pdf",
+            download_status="metadata_only",
+        )
+
+        async def scenario() -> bool:
+            transport = httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    headers={"content-type": "application/pdf"},
+                    content=b"This is not a PDF despite its content type." * 2,
+                    request=request,
+                )
+            )
+            async with httpx.AsyncClient(transport=transport) as client:
+                return await giz_document_hydration.download_giz_document_into_storage(
+                    client=client,
+                    tender=tender,
+                    doc=doc,
+                    max_bytes=1024,
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            previous_root = giz_document_hydration.DOCUMENTS_ROOT
+            giz_document_hydration.DOCUMENTS_ROOT = Path(tmp) / "documents"
+            try:
+                downloaded = asyncio.run(scenario())
+                stored_files = list(giz_document_hydration.DOCUMENTS_ROOT.rglob("*"))
+            finally:
+                giz_document_hydration.DOCUMENTS_ROOT = previous_root
+
+        self.assertFalse(downloaded)
+        self.assertEqual(doc.download_status, "failed")
+        self.assertFalse(any(path.is_file() for path in stored_files))
+
+    def test_zip_path_traversal_and_oversized_download_are_rejected(self) -> None:
+        assert TenderDocument is not None
+        assert giz_document_hydration is not None
+
+        traversal = zipfile.ZipInfo("../outside.pdf")
+        self.assertEqual(
+            giz_document_hydration._giz_zip_member_rejection_reason(
+                traversal,
+                safe_name=giz_document_hydration._giz_zip_member_name(
+                    traversal.filename
+                ),
+                current_depth=0,
+            ),
+            "Rejected unsafe ZIP member path.",
+        )
+
+        tender_id = uuid4()
+        tender = _giz_tender(tender_id)
+        doc = TenderDocument(
+            id=uuid4(),
+            tender_id=tender_id,
+            file_url="https://www.giz.de/sites/default/files/large.pdf",
+            file_type="pdf",
+            source_document_url="https://www.giz.de/sites/default/files/large.pdf",
+            download_status="metadata_only",
+        )
+
+        async def scenario() -> bool:
+            transport = httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    headers={
+                        "content-type": "application/pdf",
+                        "content-length": "4096",
+                    },
+                    content=b"%PDF-1.4" + b"x" * 128,
+                    request=request,
+                )
+            )
+            async with httpx.AsyncClient(transport=transport) as client:
+                return await giz_document_hydration.download_giz_document_into_storage(
+                    client=client,
+                    tender=tender,
+                    doc=doc,
+                    max_bytes=1024,
+                )
+
+        self.assertFalse(asyncio.run(scenario()))
+        self.assertEqual(doc.download_status, "failed")
 
 
 if __name__ == "__main__":

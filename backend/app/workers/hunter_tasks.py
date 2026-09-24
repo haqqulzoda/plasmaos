@@ -21,7 +21,6 @@ from app.core.agents.hunter import evaluate_tenders_batch
 from app.core.celery_app import celery_app
 from app.db.session import AsyncSessionLocal, engine
 from app.models.audit import TenderRecommendation
-from app.workers.tender_tasks import process_tender_docs
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +70,6 @@ async def _run_hunter_sweep_async() -> dict[str, int]:
         "profiles_processed": 0,
         "tenders_evaluated": 0,
         "recommendations_saved": 0,
-        "documents_dispatched": 0,
     }
     window_start = datetime.now(timezone.utc) - timedelta(hours=24)
 
@@ -80,26 +78,11 @@ async def _run_hunter_sweep_async() -> dict[str, int]:
             try:
                 profiles_result = await db.execute(_active_company_profiles_stmt())
                 profiles = profiles_result.scalars().all()
-                dispatched_docs: set[UUID] = set()
-
                 for profile in profiles:
                     stats["profiles_processed"] += 1
 
                     tenders_result = await db.execute(_pending_tenders_stmt(profile.id, window_start))
                     tenders = tenders_result.scalars().all()
-
-                    for tender in tenders:
-                        if tender.source_system != "uzex":
-                            continue
-                        if tender.id in dispatched_docs:
-                            continue
-
-                        try:
-                            process_tender_docs.delay(str(tender.id))
-                            dispatched_docs.add(tender.id)
-                            stats["documents_dispatched"] += 1
-                        except Exception as exc:
-                            logger.error("operation_failed event=hunter_tasks:102 error_type=%s", type(exc).__name__)
 
                     if not tenders:
                         continue

@@ -25,7 +25,7 @@ from app.models.all_models import User
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20260828_0003_s4_1_tender_engagement_foundation"
+HEAD = "20260912_0001_s10_5_communications"
 
 
 async def seed_user(
@@ -380,6 +380,16 @@ async def run_matrix(database: str) -> dict[str, Any]:
         assert profile_a and profile_b and profile_c
 
         full_tender = await seed_tender(connection, "all-domains")
+        competitor_history = await seed_tender(connection, "competitor-history")
+        await connection.execute(
+            """
+            UPDATE tenders
+            SET source_metadata_json = (source_metadata_json::jsonb || $2::jsonb)::json
+            WHERE id=$1
+            """,
+            competitor_history,
+            json.dumps({"awarded_supplier_name": "Canonical Builder LLC"}),
+        )
         project_id = await seed_project(connection, full_tender)
         await add_role(connection, project_id, 0)
         await add_document(connection, full_tender, 0)
@@ -447,6 +457,12 @@ async def run_matrix(database: str) -> dict[str, Any]:
         assert initial.documents.data is not None
         assert initial.documents.data.omitted_unknown_count == 1
         assert initial.documents.data.download_authorization_separate is True
+        assert initial.competitor_intelligence.state.value == "AVAILABLE"
+        assert initial.competitor_intelligence.data is not None
+        assert (
+            initial.competitor_intelligence.data.groups[0].competitors[0].company_name
+            == "Canonical Builder LLC"
+        )
 
         connection = await support.database_connection(database)
         try:
@@ -473,6 +489,8 @@ async def run_matrix(database: str) -> dict[str, Any]:
             sessions, user_a, full_tender
         )
         assert expanded_queries == initial_queries, (initial_queries, expanded_queries)
+        # Includes the harness's explicit User lookup plus the bounded details read.
+        assert expanded_queries <= 15, expanded_queries
         assert expanded.project_leadership.data is not None
         assert expanded.project_leadership.data.total_count == 10
         assert expanded.documents.data is not None

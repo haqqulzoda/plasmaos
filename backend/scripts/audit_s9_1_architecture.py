@@ -111,7 +111,7 @@ def main() -> None:
     for p, targets in edges.items():
         for target in targets:
             incoming[target].append(p)
-    roots = [p for p in frontend if p.startswith('frontend/app/') and Path(p).stem in {'page', 'route', 'layout', 'not-found', 'error', 'loading'}] + ['frontend/middleware.ts', 'frontend/auth.ts']
+    roots = [p for p in frontend if p.startswith('frontend/app/') and Path(p).stem in {'page', 'route', 'layout', 'not-found', 'error', 'loading'}] + ['frontend/proxy.ts', 'frontend/auth.ts']
     reachable = set()
     def walk(p):
         if p in reachable:

@@ -117,6 +117,76 @@
     "manualReview": "Manual review",
     "unknown": "Review required"
   },
+  "workspace": {
+    "beta": "Beta",
+    "betaHelp": "Compliance Analysis is in Beta. Review source documents before making final bid decisions.",
+    "closes": "Closes {date}",
+    "openOriginalSource": "Open original source",
+    "requirementsReviewed": "Requirements reviewed",
+    "criticalGaps": "Critical gaps",
+    "readinessSupported": "Supported by readiness evidence",
+    "referencedDocuments": "Referenced source documents",
+    "searchLabel": "Search requirements",
+    "clearSearch": "Clear requirement search",
+    "searchPlaceholder": "Search requirements, keywords, sections, or documents…",
+    "statusFilter": "Status",
+    "allStatuses": "All statuses",
+    "categoryFilter": "Category",
+    "allCategories": "All categories",
+    "documentFilter": "Source document",
+    "allDocuments": "All source documents",
+    "reset": "Reset",
+    "reviewWorkspace": "Compliance review",
+    "requirements": "Requirements",
+    "showingCount": "Showing {visible} of {total}",
+    "noResults": "No requirements match these filters",
+    "noResultsHelp": "Reset the filters or try a broader search.",
+    "requirementDetails": "Requirement details",
+    "selectRequirement": "Select a requirement",
+    "selectRequirementHelp": "Choose a requirement to inspect its source evidence and analysis.",
+    "closeInspector": "Close requirement details",
+    "auditDetails": "Analysis audit details",
+    "analysisId": "Analysis ID",
+    "showMatched": "Show {count} satisfied requirements",
+    "hideMatched": "Hide satisfied requirements",
+    "requirementNumber": "Requirement {number}",
+    "category": "Category",
+    "requirementId": "Requirement ID",
+    "sourceEvidenceLabel": "Source evidence",
+    "plasmaAnalysisLabel": "Plasma analysis",
+    "resolvingDocument": "Resolving the source document…",
+    "openDocument": "Open document",
+    "evidenceUnavailable": "Source evidence is unavailable.",
+    "analysisUnavailable": "Analysis explanation is unavailable.",
+    "readinessEvidence": "Readiness evidence",
+    "readinessEvidenceHelp": "Readiness records provide supporting evidence and do not independently guarantee compliance.",
+    "openReadinessVault": "Open Readiness Vault",
+    "groups": {
+      "critical": {
+        "title": "Critical gaps",
+        "description": "Verified bid-stage requirements recorded as failed dealbreakers."
+      },
+      "review": {
+        "title": "Manual review required",
+        "description": "Requirements that could not be resolved deterministically."
+      },
+      "matched": {
+        "title": "Satisfied requirements",
+        "description": "Requirements confirmed as met by recorded company evidence."
+      },
+      "recorded": {
+        "title": "Recorded obligations",
+        "description": "Verified obligations recorded for awareness, not as credential matches."
+      }
+    },
+    "sourceSystems": {
+      "worldBank": "World Bank",
+      "adb": "Asian Development Bank",
+      "giz": "GIZ",
+      "ebrd": "EBRD",
+      "uzex": "UZEX"
+    }
+  },
   "redesign": {
     "loadResultFailed": "The saved analysis could not be loaded.",
     "versionFailed": "This version could not be loaded. Your previous selection is preserved.",

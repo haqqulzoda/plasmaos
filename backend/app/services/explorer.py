@@ -282,6 +282,12 @@ async def _page_rows(
     ).all()
 
 
+def _bounded_tender_summary(value: str | None) -> str | None:
+    """Project only a short, normalized excerpt of canonical Tender description."""
+    description = " ".join((value or "").split())
+    return (description[:237] + "…") if len(description) > 240 else (description or None)
+
+
 async def list_explorer_tenders(
     db: AsyncSession,
     *,
@@ -328,6 +334,7 @@ async def list_explorer_tenders(
                     canonical_source_key=serialized.canonical_source_key,
                     source_url=serialized.source_url,
                     title=serialized.title,
+                    summary=_bounded_tender_summary(tender.description),
                     buyer=serialized.buyer,
                     budget=serialized.budget,
                     currency=serialized.currency,

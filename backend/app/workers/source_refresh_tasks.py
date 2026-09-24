@@ -104,10 +104,39 @@ async def _execute_source_refresh(source_system: str, job_id: UUID) -> dict[str,
             if job is None:
                 raise ValueError("Source refresh job disappeared")
             try:
+                job_options = dict(getattr(job, "options_json", {}) or {})
                 raw_result = await _run_source_refresh(
                     source_system, execution_db,
-                    options=dict(getattr(job, "options_json", {}) or {}),
+                    options=job_options,
                 )
+                if not job_options.get("dry_run"):
+                    try:
+                        from app.api.endpoints.tenders import (
+                            _refresh_source_competitor_cache,
+                        )
+
+                        async with AsyncSessionLocal() as cache_db:
+                            cache_result = await _refresh_source_competitor_cache(
+                                db=cache_db,
+                                source_system=source_system,
+                            )
+                        logger.info(
+                            "competitor_cache_refresh source_system=%s "
+                            "targets_considered=%s targets_updated=%s records_cached=%s",
+                            source_system,
+                            cache_result["targets_considered"],
+                            cache_result["targets_updated"],
+                            cache_result["records_cached"],
+                        )
+                    except Exception as exc:
+                        # Competitor enrichment is additive. A public award source
+                        # outage must not roll back or misreport the source refresh.
+                        logger.error(
+                            "operation_failed event=competitor_cache_refresh "
+                            "source_system=%s error_type=%s",
+                            source_system,
+                            type(exc).__name__,
+                        )
                 if isinstance(raw_result, SourceExecutionResult):
                     return raw_result
                 return adapt_execution_result(source_system, raw_result)

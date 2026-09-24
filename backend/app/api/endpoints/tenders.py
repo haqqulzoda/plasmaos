@@ -15,6 +15,7 @@ import re
 import xml.etree.ElementTree as ET
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path, PurePosixPath
 from time import monotonic
 from types import SimpleNamespace
@@ -157,9 +158,13 @@ from app.services.compliance_engine import (
     RequirementMatchDetail,
     evaluate_tender_compliance,
 )
-from app.services.giz_document_hydration import (
-    hydrate_giz_tender_documents as hydrate_giz_tender_documents_inline,
+from app.services.competitor_cache import (
+    COMPETITOR_CACHE_METADATA_KEY,
+    cached_competitor_records,
+    competitor_cache_was_evaluated,
+    metadata_with_competitor_cache,
 )
+from app.services.notifications import stage_document_acquisition_notification
 from app.schemas.analysis_version import (
     AnalysisVersionDetailResponse,
     AnalysisVersionDocumentResponse,
@@ -448,6 +453,9 @@ class SyncMarkerDiagnostics(BaseModel):
     documents_parsed: int = 0
     documents_markerized: int = 0
     documents_markerless: int = 0
+    documents_ready: int = 0
+    documents_failed: int = 0
+    documents_processing: int = 0
 
 
 class SyncStatusResponse(BaseModel):
@@ -460,6 +468,12 @@ class SyncStatusResponse(BaseModel):
     source_system: str | None = None
     coverage_status: str | None = None
     diagnostics: SyncMarkerDiagnostics | None = None
+    acquisition_state: str = "AVAILABLE_REMOTE"
+    documents_total: int = 0
+    documents_ready: int = 0
+    documents_failed: int = 0
+    documents_processing: int = 0
+    job_id: str | None = None
 
 
 class TestScrapeRequest(BaseModel):
@@ -604,6 +618,12 @@ SERVICE_SEARCH_TERMS: dict[str, tuple[str, ...]] = {
         "лекар",
         "диагност",
         "лаборатор",
+        "gematolog",
+        "гематолог",
+        "onkogematolog",
+        "онкогематолог",
+        "immunoglobulin",
+        "иммуноглобулин",
     ),
     "IT": (
         "IT",
@@ -678,7 +698,8 @@ SERVICE_SEARCH_TERMS: dict[str, tuple[str, ...]] = {
     ),
     "other": ("other", "miscellaneous"),
 }
-COMPETITOR_EMPTY_MESSAGE = "No historical competitor intelligence available yet."
+COMPETITOR_EMPTY_MESSAGE = "Not enough verified procurement history is available to identify relevant competitors for this tender."
+COMPETITOR_UNAVAILABLE_MESSAGE = "Verified competitor evidence has not been evaluated for this tender."
 COMPETITOR_AVAILABLE_MESSAGE = (
     "Historical competitor intelligence is available from public source metadata."
 )
@@ -687,10 +708,16 @@ COMPETITOR_MAX_RESULTS = 30
 COMPETITOR_NAME_MAX_LENGTH = 180
 COMPETITOR_SOURCE_FETCH_TIMEOUT_SECONDS = 8.0
 COMPETITOR_LIVE_SOURCE_ROWS = 80
+COMPETITOR_REFRESH_FETCH_CONCURRENCY = 8
+COMPETITOR_TARGETED_LOOKUP_STRATEGY = "targeted-awards-v2"
+COMPETITOR_TARGETED_LOOKUP_TTL = timedelta(hours=6)
 COMPETITOR_LIVE_CACHE_TTL_SECONDS = 15 * 60
+COMPETITOR_CACHE_REFRESH_TARGET_LIMIT = 2000
+COMPETITOR_CACHE_REFRESH_SOURCE_SYSTEMS = frozenset({"adb", "uzex", "world_bank"})
+COMPETITOR_VERIFIED_METADATA_SOURCES = COMPETITOR_CACHE_REFRESH_SOURCE_SYSTEMS
 UZEX_DEALS_LIST_URL = "https://apietender.uzex.uz/api/common/DealsList"
 ADB_CONTRACTS_AWARDED_RSS_URL = "http://feeds.feedburner.com/adb-contracts-awarded"
-CompetitorLiveCacheKey = tuple[str, str, str]
+CompetitorLiveCacheKey = tuple[str, str, str, str, str]
 _COMPETITOR_LIVE_CACHE: dict[
     CompetitorLiveCacheKey,
     tuple[float, list[TenderCompetitorResponse]],
@@ -903,12 +930,14 @@ def _infer_tender_service_category(tender: Tender) -> str:
         ],
         reject_invalid=False,
     )
-    if explicit_services:
+    if explicit_services and explicit_services[0] != "other":
         return explicit_services[0]
 
     blob = _tender_service_text(tender)
     for service, terms in SERVICE_SEARCH_TERMS.items():
-        if service == "other":
+        # A source's generic "Other" bucket cannot prove that two unrelated
+        # purchases compete merely because both say "purchase" or "goods".
+        if service == "other" or (explicit_services and service == "equipment supply"):
             continue
         if any(_text_matches_service_term(blob, term) for term in terms):
             return service
@@ -917,6 +946,169 @@ def _infer_tender_service_category(tender: Tender) -> str:
 
 def _same_text(left: str | None, right: str | None) -> bool:
     return bool(left and right and left.strip().casefold() == right.strip().casefold())
+
+
+COMPETITOR_EVIDENCE_DOMAINS = {
+    "world_bank": "worldbank.org",
+    "uzex": "uzex.uz",
+    "adb": "adb.org",
+    "giz": "giz.de",
+    "ebrd": "ebrd.com",
+}
+
+
+def _safe_competitor_evidence_url(value: str | None, source_system: str | None = None) -> str | None:
+    """Evidence is a public HTTPS notice, never a local file or active URL."""
+    candidate = str(value or "").strip()
+    try:
+        parsed = urlparse(candidate)
+    except ValueError:
+        return None
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or _safe_source_notice_url(candidate) is None
+    ):
+        return None
+    expected_domain = COMPETITOR_EVIDENCE_DOMAINS.get(str(source_system or ""))
+    if expected_domain and not (
+        parsed.hostname == expected_domain
+        or parsed.hostname.endswith(f".{expected_domain}")
+    ):
+        return None
+    return candidate
+
+
+def _competitor_evidence_date(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            try:
+                parsed = parsedate_to_datetime(value)
+                return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                try:
+                    # World Bank procurement notices use e.g. 15-Sep-2026.
+                    return datetime.strptime(value.strip(), "%d-%b-%Y").replace(tzinfo=timezone.utc)
+                except ValueError:
+                    return None
+    return None
+
+
+COMPETITOR_TITLE_STOPWORDS = frozenset({
+    "and", "for", "the", "with", "services", "supply", "procurement",
+    "хизмат", "хизмати", "учун", "асосида", "харид", "қилиш", "буйича",
+    "услуги", "для", "поставка", "закупка", "работы", "работ",
+})
+
+
+def _same_competitor_work(left: str | None, right: str | None) -> bool:
+    """Require distinctive shared work terms, never just a generic category."""
+    def terms(value: str | None) -> set[str]:
+        return {
+            token for token in re.findall(r"[^\W_]{4,}", str(value or "").casefold())
+            if not token.isdigit() and token not in COMPETITOR_TITLE_STOPWORDS
+        }
+
+    left_terms, right_terms = terms(left), terms(right)
+    if min(len(left_terms), len(right_terms)) < 2:
+        return False
+    shared = left_terms & right_terms
+    return len(shared) >= 2 and len(shared) / min(len(left_terms), len(right_terms)) >= 0.5
+
+
+def _competitor_relevance(
+    *, target_tender: Tender, record: TenderCompetitorResponse,
+    target_service_category: str,
+) -> tuple[str, str] | None:
+    """Qualify public historical evidence against this Tender, never by name/title alone."""
+    if (
+        record.source not in COMPETITOR_VERIFIED_METADATA_SOURCES
+        or record.participation_type not in {"winner", "participant"}
+        or not _safe_competitor_evidence_url(record.evidence_source, record.source)
+        or record.source != getattr(target_tender, "source_system", None)
+    ):
+        # Cross-source organization identity is not resolved in the canonical model.
+        return None
+    target_country = _meaningful_competitor_filter_text(getattr(target_tender, "country", None))
+    evidence_country = _meaningful_competitor_filter_text(record.country)
+    if target_country and evidence_country and not _same_text(target_country, evidence_country):
+        return None
+    target_project = _meaningful_competitor_filter_text(getattr(target_tender, "project_id", None))
+    related_project = _meaningful_competitor_filter_text(record.related_project_id)
+    same_project = bool(target_project and related_project and _same_text(target_project, related_project))
+    same_buyer = _same_text(
+        _meaningful_competitor_filter_text(getattr(target_tender, "buyer", None)),
+        _meaningful_competitor_filter_text(record.buyer),
+    )
+    same_service = (
+        target_service_category != "other"
+        and record.service_category == target_service_category
+    )
+    same_country = bool(target_country and evidence_country and _same_text(target_country, evidence_country))
+    target_procurement = _meaningful_competitor_filter_text(
+        getattr(target_tender, "procurement_category", None)
+    )
+    same_procurement = _same_text(target_procurement, record.category)
+    same_sector = _same_text(
+        _meaningful_competitor_filter_text(getattr(target_tender, "sector", None)),
+        _meaningful_competitor_filter_text(record.sector),
+    )
+    target_method = _meaningful_competitor_filter_text(getattr(target_tender, "procurement_method", None))
+    same_method = _same_text(target_method, record.procurement_method)
+    dated = _competitor_evidence_date(record.evidence_date)
+    age = datetime.now(timezone.utc) - dated if dated else None
+    recent = bool(age is not None and timedelta(0) <= age <= timedelta(days=365 * 5))
+    history = record.related_tender_title or record.source_reference or "a linked public procurement record"
+    outcome = "won" if record.participation_type == "winner" else "participated in"
+    if same_project and (
+        same_service or (target_service_category == "other" and same_buyer and same_procurement)
+    ):
+        return "DIRECT", f"{outcome.capitalize()} {history} in the same project ({target_project})."
+    if same_buyer and same_service and (same_country or not target_country or not evidence_country):
+        return "DIRECT", (
+            f"{outcome.capitalize()} {history} for the same buyer, "
+            f"{record.buyer}, in the {service_label(target_service_category)} service area"
+            + (f" in {record.country}." if same_country else ".")
+        )
+    if (
+        same_buyer and same_country and recent
+        and _same_competitor_work(getattr(target_tender, "title", None), record.related_tender_title)
+        and not _same_text(getattr(target_tender, "source_url", None), record.evidence_source)
+    ):
+        return "DIRECT", (
+            f"{outcome.capitalize()} recent {history} for the same buyer, "
+            f"{record.buyer}, involving closely matching work."
+        )
+    if same_service and same_country and (same_procurement or same_sector) and (same_sector or same_method) and recent:
+        return "STRONG", (
+            f"{outcome.capitalize()} recent {history} in {record.country}; "
+            f"the {service_label(target_service_category)} service, "
+            + ("sector" if same_sector else "procurement category and method")
+            + " match this tender."
+        )
+    return None
+
+
+def _qualified_competitor_record(
+    *, target_tender: Tender, record: TenderCompetitorResponse,
+    target_service_category: str,
+) -> TenderCompetitorResponse | None:
+    relevance = _competitor_relevance(
+        target_tender=target_tender,
+        record=record,
+        target_service_category=target_service_category,
+    )
+    if relevance is None:
+        return None
+    tier, reason = relevance
+    return record.model_copy(update={"relevance_tier": tier, "reason": reason})
 
 
 def _meaningful_competitor_filter_text(value: str | None) -> str | None:
@@ -1021,6 +1213,10 @@ def _extract_public_competitor_records(
     target_service_category: str,
 ) -> list[TenderCompetitorResponse]:
     metadata = getattr(related_tender, "source_metadata_json", None)
+    if getattr(related_tender, "source_system", None) not in COMPETITOR_VERIFIED_METADATA_SOURCES:
+        # GIZ document discovery and EBRD listing metadata have no verified
+        # participant/award adapter in this release.
+        return []
     if not isinstance(metadata, dict):
         return []
 
@@ -1036,11 +1232,19 @@ def _extract_public_competitor_records(
         related_tender=related_tender,
         service_category=service_category,
     )
-    evidence_source = _safe_source_notice_url(getattr(related_tender, "source_url", None))
+    evidence_source = _safe_competitor_evidence_url(
+        getattr(related_tender, "source_url", None),
+        getattr(related_tender, "source_system", None),
+    )
+    if not evidence_source:
+        return []
     records: list[TenderCompetitorResponse] = []
     seen: set[tuple[str, str]] = set()
 
     for participation_type, keys in COMPETITOR_KEY_LOOKUP.items():
+        if participation_type == "similar_market_actor":
+            # A bare source label is not public bid/award evidence.
+            continue
         for metadata_value in _metadata_values_for_keys(metadata, keys):
             for raw_name in _competitor_name_values(metadata_value):
                 company_name = _clean_competitor_name(
@@ -1060,8 +1264,7 @@ def _extract_public_competitor_records(
                     if participation_type in {"winner", "participant"}
                     else "low"
                 )
-                records.append(
-                    TenderCompetitorResponse(
+                candidate = TenderCompetitorResponse(
                         company_name=company_name,
                         industry=industry,
                         service_category=service_category,
@@ -1081,8 +1284,22 @@ def _extract_public_competitor_records(
                             match_summary=match_summary,
                         ),
                         evidence_source=evidence_source,
+                        related_tender_title=getattr(related_tender, "title", None),
+                        related_project_id=getattr(related_tender, "project_id", None),
+                        source_reference=getattr(related_tender, "external_id", None),
+                        procurement_method=getattr(related_tender, "procurement_method", None),
+                        evidence_date=(
+                            getattr(related_tender, "publication_date", None)
+                            or getattr(related_tender, "created_at", None)
+                        ),
                     )
+                qualified = _qualified_competitor_record(
+                    target_tender=target_tender,
+                    record=candidate,
+                    target_service_category=target_service_category,
                 )
+                if qualified is not None:
+                    records.append(qualified)
 
     return records
 
@@ -1098,32 +1315,10 @@ def _competitor_participation_rank(value: str) -> int:
 def _group_competitor_records(
     records: list[TenderCompetitorResponse],
 ) -> list[TenderCompetitorGroup]:
-    history_keys: dict[tuple[str, str], set[str]] = {}
-    for record in records:
-        key = (record.company_name.casefold(), record.service_category.casefold())
-        history_keys.setdefault(key, set()).add(
-            str(record.related_tender_id or record.evidence_source or record.source)
-        )
-
     deduped: dict[tuple[str, str], TenderCompetitorResponse] = {}
     for record in records:
-        key = (record.company_name.casefold(), record.service_category.casefold())
-        history_count = len(history_keys.get(key, set()))
+        key = (re.sub(r"[^\w]+", "", record.company_name.casefold()), record.service_category.casefold())
         candidate = record
-        if (
-            record.participation_type == "similar_market_actor"
-            and record.confidence == "low"
-            and history_count >= 2
-        ):
-            candidate = record.model_copy(
-                update={
-                    "confidence": "medium",
-                    "reason": (
-                        f"Repeated similar tender history appears in {history_count} "
-                        f"public records for {record.industry}."
-                    ),
-                }
-            )
 
         existing = deduped.get(key)
         if existing is None:
@@ -1131,10 +1326,12 @@ def _group_competitor_records(
             continue
 
         candidate_rank = (
+            {"DIRECT": 3, "STRONG": 2, "CONTEXTUAL": 1}.get(candidate.relevance_tier, 0),
             _competitor_confidence_rank(candidate.confidence),
             _competitor_participation_rank(candidate.participation_type),
         )
         existing_rank = (
+            {"DIRECT": 3, "STRONG": 2, "CONTEXTUAL": 1}.get(existing.relevance_tier, 0),
             _competitor_confidence_rank(existing.confidence),
             _competitor_participation_rank(existing.participation_type),
         )
@@ -1176,6 +1373,11 @@ def _live_competitor_record(
     country: str | None = None,
     sector: str | None = None,
     category: str | None = None,
+    related_tender_title: str | None = None,
+    related_project_id: str | None = None,
+    source_reference: str | None = None,
+    procurement_method: str | None = None,
+    evidence_date: datetime | None = None,
 ) -> TenderCompetitorResponse:
     return TenderCompetitorResponse(
         company_name=company_name,
@@ -1191,6 +1393,11 @@ def _live_competitor_record(
         confidence=confidence,
         reason=reason,
         evidence_source=evidence_source,
+        related_tender_title=related_tender_title,
+        related_project_id=related_project_id,
+        source_reference=source_reference,
+        procurement_method=procurement_method,
+        evidence_date=evidence_date,
     )
 
 
@@ -1258,32 +1465,41 @@ async def _live_uzex_competitor_records(
     *,
     target_tender: Tender,
     target_service_category: str,
+    strict_source: bool = False,
 ) -> list[TenderCompetitorResponse]:
     if getattr(target_tender, "source_system", None) != "uzex":
         return []
 
+    buyer = _meaningful_competitor_filter_text(getattr(target_tender, "buyer", None))
+    query = {
+        "From": 1,
+        "To": COMPETITOR_LIVE_SOURCE_ROWS,
+        "TypeId": UZEX_ENTERPRISE_TYPE_ID,
+        "System_Id": 0,
+    }
+    if buyer:
+        query["CustomerName"] = buyer
     try:
         payload = await _fetch_json_payload(
             method="POST",
             url=UZEX_DEALS_LIST_URL,
-            json_payload={
-                "From": 1,
-                "To": COMPETITOR_LIVE_SOURCE_ROWS,
-                "TypeId": UZEX_ENTERPRISE_TYPE_ID,
-                "System_Id": 0,
-            },
+            json_payload=query,
             referer="https://etender.uzex.uz/",
         )
     except Exception:
+        if strict_source:
+            raise
         logger.error("operation_failed event=tenders:1278 error_type=%s", "unavailable")
         return []
 
     if not isinstance(payload, list):
+        if strict_source:
+            raise ValueError("UzEx deals payload is not a list")
         return []
 
     records: list[TenderCompetitorResponse] = []
     broad_records: list[TenderCompetitorResponse] = []
-    for row in payload:
+    for row in payload[:COMPETITOR_LIVE_SOURCE_ROWS]:
         if not isinstance(row, dict):
             continue
         company_name = _clean_competitor_name(
@@ -1342,6 +1558,9 @@ async def _live_uzex_competitor_records(
             country="Uzbekistan",
             sector=category,
             category=category,
+            related_tender_title=category,
+            source_reference=str(trade_id) if trade_id else None,
+            evidence_date=_competitor_evidence_date(row.get("deal_date") or row.get("date")),
         )
         if exact_service_match:
             records.append(record)
@@ -1349,8 +1568,8 @@ async def _live_uzex_competitor_records(
             broad_records.append(record)
 
     if target_service_category != "other":
-        return records[:COMPETITOR_MAX_RESULTS]
-    return (records or broad_records)[:COMPETITOR_MAX_RESULTS]
+        return records[:COMPETITOR_LIVE_SOURCE_ROWS]
+    return (records + broad_records)[:COMPETITOR_LIVE_SOURCE_ROWS]
 
 
 WORLD_BANK_AWARD_SECTION_LABELS = (
@@ -1434,8 +1653,16 @@ def _world_bank_award_names(
     for section in sections:
         for match in re.finditer(r"<b>\s*(?P<name>[^<]{2,220})\s*</b>\s*<br\s*/?>", section, flags=re.IGNORECASE):
             raw_name = _strip_html_tags(match.group("name"))
+            # Award templates contain headings and price fields in the same
+            # section. A bidder row carries a country after its name; a
+            # heading such as "Beneficial Ownership Details" does not.
+            following = section[match.end():match.end() + 300]
+            country_at = re.search(r"\bCountry\s*:", following, flags=re.IGNORECASE)
+            next_block = following.find("</div>")
+            if country_at is None or (next_block >= 0 and country_at.start() > next_block):
+                continue
             if re.search(
-                r"\b(?:awarded|evaluated|rejected|price|contract|project|method|scope|duration|currency|amount)\b",
+                r"\b(?:awarded|evaluated|rejected|price|contract|project|method|scope|duration|currency|amount|individual consultant|beneficial ownership)\b",
                 raw_name,
                 flags=re.IGNORECASE,
             ):
@@ -1455,36 +1682,52 @@ async def _live_world_bank_competitor_records(
     *,
     target_tender: Tender,
     target_service_category: str,
+    strict_source: bool = False,
 ) -> list[TenderCompetitorResponse]:
     if getattr(target_tender, "source_system", None) != "world_bank":
         return []
 
+    project_id = _meaningful_competitor_filter_text(getattr(target_tender, "project_id", None))
+    country = _meaningful_competitor_filter_text(getattr(target_tender, "country", None))
+    query = {
+        "format": "json",
+        "apilang": "en",
+        "fl": "*",
+        "rows": COMPETITOR_LIVE_SOURCE_ROWS,
+        "os": 0,
+        "notice_type": "Contract Award",
+        "srt": "noticedate desc,id asc",
+    }
+    if project_id:
+        query["project_id"] = project_id
+    elif country:
+        query["project_ctry_name"] = country
     try:
         payload = await _fetch_json_payload(
             method="GET",
             url=WORLD_BANK_PROC_NOTICES_URL,
-            params={
-                "format": "json",
-                "apilang": "en",
-                "fl": "*",
-                "rows": COMPETITOR_LIVE_SOURCE_ROWS,
-                "os": 0,
-                "notice_type": "Contract Award",
-                "srt": "noticedate desc,id asc",
-            },
+            params=query,
         )
     except Exception:
+        if strict_source:
+            raise
         logger.error("operation_failed event=tenders:1480 error_type=%s", "unavailable")
         return []
 
     rows = payload.get("procnotices") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
+        if strict_source:
+            raise ValueError("World Bank award payload has no procurement notices")
         return []
 
     records: list[TenderCompetitorResponse] = []
     broad_records: list[TenderCompetitorResponse] = []
-    for row in rows:
+    for row in rows[:COMPETITOR_LIVE_SOURCE_ROWS]:
         if not isinstance(row, dict):
+            continue
+        if project_id and not _same_text(project_id, row.get("project_id")):
+            continue
+        if not project_id and country and not _same_text(country, row.get("project_ctry_name")):
             continue
         source_like = _source_record_as_tender_like(
             title=row.get("noticetitle") or row.get("bid_description"),
@@ -1548,13 +1791,20 @@ async def _live_world_bank_competitor_records(
                     country=_clean_contact_text(row.get("project_ctry_name"), max_length=120),
                     sector=_world_bank_sector_text(row),
                     category=_clean_contact_text(row.get("procurement_group_desc"), max_length=120),
+                    related_tender_title=_clean_contact_text(
+                        row.get("noticetitle") or row.get("bid_description"), max_length=220
+                    ),
+                    related_project_id=_clean_contact_text(row.get("project_id"), max_length=100),
+                    source_reference=str(row.get("id")) if row.get("id") else None,
+                    procurement_method=_clean_contact_text(row.get("procurement_method_name"), max_length=120),
+                    evidence_date=_competitor_evidence_date(row.get("noticedate")),
                 )
                 if exact_service_match or same_country:
                     records.append(record)
                 else:
                     broad_records.append(record)
 
-    return (records or broad_records)[:COMPETITOR_MAX_RESULTS]
+    return (records or broad_records)[:COMPETITOR_LIVE_SOURCE_ROWS]
 
 
 def _adb_title_company_candidate(title: str | None) -> str | None:
@@ -1575,6 +1825,7 @@ async def _live_adb_competitor_records(
     *,
     target_tender: Tender,
     target_service_category: str,
+    strict_source: bool = False,
 ) -> list[TenderCompetitorResponse]:
     if getattr(target_tender, "source_system", None) != "adb":
         return []
@@ -1582,16 +1833,22 @@ async def _live_adb_competitor_records(
     try:
         rss_text = await _fetch_text_payload(url=ADB_CONTRACTS_AWARDED_RSS_URL)
     except Exception:
+        if strict_source:
+            raise
         logger.error("operation_failed event=tenders:1591 error_type=%s", "unavailable")
         return []
 
     try:
         root = ET.fromstring(rss_text)
     except ET.ParseError:
+        if strict_source:
+            raise
         return []
 
     channel = root.find("channel")
     if channel is None:
+        if strict_source:
+            raise ValueError("ADB award RSS has no channel")
         return []
 
     records: list[TenderCompetitorResponse] = []
@@ -1606,6 +1863,12 @@ async def _live_adb_competitor_records(
             if category.text
         ]
         category_text = " | ".join(categories)
+        category_fields = {
+            key.strip().casefold(): value.strip()
+            for part in category_text.split("|")
+            if ":" in part
+            for key, value in [part.split(":", 1)]
+        }
         source_like = _source_record_as_tender_like(
             title=title,
             description=category_text,
@@ -1643,11 +1906,18 @@ async def _live_adb_competitor_records(
                     match_summary=match_summary,
                 ),
                 evidence_source=item.findtext("link"),
-                category="ADB awarded contract RSS",
+                country=category_fields.get("countries") or category_fields.get("country"),
+                sector=category_fields.get("sectors") or category_fields.get("sector"),
+                category=category_fields.get("procurement category"),
+                related_tender_title=title,
+                source_reference=item.findtext("guid"),
+                evidence_date=_competitor_evidence_date(
+                    item.findtext("pubDate") or category_fields.get("date")
+                ),
             )
         )
 
-    return records[:COMPETITOR_MAX_RESULTS]
+    return records[:COMPETITOR_LIVE_SOURCE_ROWS]
 
 
 def _competitor_live_cache_key(
@@ -1660,6 +1930,8 @@ def _competitor_live_cache_key(
         str(getattr(target_tender, "source_system", "") or "").strip().casefold(),
         target_service_category.strip().casefold(),
         country,
+        str(getattr(target_tender, "project_id", "") or "").strip().casefold(),
+        str(getattr(target_tender, "buyer", "") or "").strip().casefold(),
     )
 
 
@@ -1695,14 +1967,17 @@ async def _live_source_competitor_records(
     *,
     target_tender: Tender,
     target_service_category: str,
+    use_cache: bool = True,
+    strict_source: bool = False,
 ) -> list[TenderCompetitorResponse]:
     cache_key = _competitor_live_cache_key(
         target_tender=target_tender,
         target_service_category=target_service_category,
     )
-    cached = _get_live_competitor_cache(cache_key)
-    if cached is not None:
-        return cached
+    if use_cache:
+        cached = _get_live_competitor_cache(cache_key)
+        if cached is not None:
+            return cached
 
     source_system = getattr(target_tender, "source_system", None)
     try:
@@ -1710,28 +1985,259 @@ async def _live_source_competitor_records(
             records = await _live_uzex_competitor_records(
                 target_tender=target_tender,
                 target_service_category=target_service_category,
+                strict_source=strict_source,
             )
         elif source_system == "world_bank":
             records = await _live_world_bank_competitor_records(
                 target_tender=target_tender,
                 target_service_category=target_service_category,
+                strict_source=strict_source,
             )
         elif source_system == "adb":
             records = await _live_adb_competitor_records(
                 target_tender=target_tender,
                 target_service_category=target_service_category,
+                strict_source=strict_source,
             )
         else:
             records = []
     except Exception:
+        if strict_source:
+            raise
         logger.error("operation_failed event=tenders:1736 error_type=%s", "unavailable")
-        return _get_live_competitor_cache(cache_key, allow_stale=True) or []
+        return (
+            _get_live_competitor_cache(cache_key, allow_stale=True) or []
+            if use_cache
+            else []
+        )
 
-    if records:
+    if records and use_cache:
         _set_live_competitor_cache(cache_key, records)
+    if records:
         return records
 
-    return _get_live_competitor_cache(cache_key, allow_stale=True) or []
+    return (
+        _get_live_competitor_cache(cache_key, allow_stale=True) or []
+        if use_cache
+        else []
+    )
+
+
+def _competitor_cache_projection_target(target_tender: Tender) -> SimpleNamespace:
+    """Build a lookup target; every returned award is still qualified per tender."""
+    return SimpleNamespace(
+        id=target_tender.id,
+        external_id=target_tender.external_id,
+        source_system=target_tender.source_system,
+        source_url=target_tender.source_url,
+        title=target_tender.title,
+        description=target_tender.description,
+        country=target_tender.country,
+        project_id=getattr(target_tender, "project_id", None),
+        sector=target_tender.sector,
+        buyer=target_tender.buyer,
+        procurement_category=target_tender.procurement_category,
+        procurement_method=target_tender.procurement_method,
+        notice_type=target_tender.notice_type,
+        category=target_tender.category,
+    )
+
+
+async def _hydrate_uzex_competitor_buyer(target: Tender) -> bool:
+    """Recover the customer for older UzEx rows from their official lot record."""
+    if _meaningful_competitor_filter_text(getattr(target, "buyer", None)):
+        return False
+    trade_id = str(getattr(target, "external_id", "") or "").strip()
+    if not re.fullmatch(r"\d{1,12}", trade_id):
+        return False
+    try:
+        payload = await _fetch_json_payload(
+            method="GET",
+            url=f"https://apietender.uzex.uz/api/common/GetTrade/{trade_id}/0",
+            referer=f"https://etender.uzex.uz/lot/{trade_id}",
+        )
+    except Exception:
+        logger.warning("competitor_buyer_lookup_failed source_system=uzex trade_id=%s", trade_id)
+        return False
+    if not isinstance(payload, dict):
+        return False
+    buyer = _clean_contact_text(payload.get("customer_name"), max_length=220)
+    if not _meaningful_competitor_filter_text(buyer):
+        return False
+    target.buyer = buyer
+    return True
+
+
+def _competitor_refresh_group_key(target: Tender, service_category: str) -> tuple[str, str, str]:
+    source = getattr(target, "source_system", None)
+    if source == "world_bank":
+        project = _meaningful_competitor_filter_text(getattr(target, "project_id", None))
+        if project:
+            return "project", project.casefold(), "other"
+        country = _meaningful_competitor_filter_text(getattr(target, "country", None))
+        if country:
+            return "country", country.casefold(), "other"
+    if source == "uzex":
+        buyer = _meaningful_competitor_filter_text(getattr(target, "buyer", None))
+        if buyer:
+            return "buyer", buyer.casefold(), "other"
+    return "service", service_category, service_category
+
+
+def _competitor_targeted_lookup_is_fresh(target: Tender) -> bool:
+    metadata = getattr(target, "source_metadata_json", None)
+    payload = metadata.get(COMPETITOR_CACHE_METADATA_KEY) if isinstance(metadata, dict) else None
+    if not isinstance(payload, dict) or payload.get("lookup_strategy") != COMPETITOR_TARGETED_LOOKUP_STRATEGY:
+        return False
+    if not competitor_cache_was_evaluated(metadata):
+        return False
+    timestamp = _competitor_evidence_date(payload.get("refreshed_at"))
+    if timestamp is None:
+        return False
+    age = datetime.now(timezone.utc) - timestamp
+    return timedelta(0) <= age < COMPETITOR_TARGETED_LOOKUP_TTL
+
+
+async def _refresh_source_competitor_cache(
+    *,
+    db: AsyncSession,
+    source_system: str,
+    target_limit: int = COMPETITOR_CACHE_REFRESH_TARGET_LIMIT,
+    force: bool = False,
+) -> dict[str, int]:
+    """Populate stored competitor evidence during an explicit source refresh.
+
+    Official award queries are grouped by WB project or UzEx customer, with
+    bounded concurrency. Empty results never erase valid prior evidence.
+    """
+    normalized_source = str(source_system or "").strip().casefold().replace("-", "_")
+    if normalized_source not in COMPETITOR_CACHE_REFRESH_SOURCE_SYSTEMS:
+        return {"targets_considered": 0, "targets_updated": 0, "records_cached": 0}
+    bounded_limit = max(1, min(int(target_limit), COMPETITOR_CACHE_REFRESH_TARGET_LIMIT))
+    result = await db.execute(
+        select(Tender)
+        .options(
+            load_only(
+                Tender.id,
+                Tender.external_id,
+                Tender.source_system,
+                Tender.source_url,
+                Tender.title,
+                Tender.description,
+                Tender.country,
+                Tender.sector,
+                Tender.buyer,
+                Tender.procurement_category,
+                Tender.procurement_method,
+                Tender.notice_type,
+                Tender.category,
+                Tender.source_metadata_json,
+                Tender.project_id,
+                Tender.publication_date,
+            )
+        )
+        .where(
+            Tender.source_system == normalized_source,
+            customer_visible_tender_condition(Tender),
+        )
+        .order_by(Tender.created_at.desc(), Tender.id.asc())
+        .limit(bounded_limit)
+    )
+    targets = list(result.scalars().all())
+    buyer_hydrated = False
+    if normalized_source == "uzex":
+        semaphore = asyncio.Semaphore(COMPETITOR_REFRESH_FETCH_CONCURRENCY)
+
+        async def hydrate(target: Tender) -> bool:
+            async with semaphore:
+                return await _hydrate_uzex_competitor_buyer(target)
+
+        buyer_hydrated = any(await asyncio.gather(*(hydrate(target) for target in targets)))
+
+    targets_by_group: dict[tuple[str, str, str], list[Tender]] = {}
+    for target in targets:
+        if not force and _competitor_targeted_lookup_is_fresh(target):
+            continue
+        service = _infer_tender_service_category(target)
+        targets_by_group.setdefault(_competitor_refresh_group_key(target, service), []).append(target)
+
+    semaphore = asyncio.Semaphore(COMPETITOR_REFRESH_FETCH_CONCURRENCY)
+
+    async def fetch_group(
+        group_key: tuple[str, str, str], service_targets: list[Tender]
+    ) -> list[TenderCompetitorResponse] | Exception:
+        projection_target = _competitor_cache_projection_target(service_targets[0])
+        try:
+            async with semaphore:
+                return await _live_source_competitor_records(
+                    target_tender=projection_target,
+                    target_service_category=group_key[2],
+                    # Never persist an in-process stale response as a new observation.
+                    use_cache=False,
+                    strict_source=True,
+                )
+        except Exception as exc:
+            logger.warning(
+                "competitor_award_lookup_failed source_system=%s group_type=%s error_type=%s",
+                normalized_source, group_key[0], type(exc).__name__,
+            )
+            return exc
+
+    groups = list(targets_by_group.items())
+    group_results = await asyncio.gather(*(fetch_group(key, rows) for key, rows in groups))
+
+    targets_updated = 0
+    records_cached = 0
+    successful_groups = 0
+    first_error: Exception | None = None
+    for (group_key, service_targets), records in zip(groups, group_results):
+        if isinstance(records, Exception):
+            first_error = first_error or records
+            continue
+        successful_groups += 1
+        # Qualify against each target before applying its 30-company response cap.
+        # Otherwise a valid target match after the first 30 source candidates is lost.
+        bounded_records = records[:COMPETITOR_LIVE_SOURCE_ROWS]
+        for target in service_targets:
+            service_category = _infer_tender_service_category(target)
+            qualified = [
+                item for record in bounded_records
+                if (item := _qualified_competitor_record(
+                    target_tender=target,
+                    record=record,
+                    target_service_category=service_category,
+                )) is not None
+            ][:COMPETITOR_MAX_RESULTS]
+            previous = [
+                item for record in cached_competitor_records(target.source_metadata_json)
+                if (item := _qualified_competitor_record(
+                    target_tender=target,
+                    record=record,
+                    target_service_category=service_category,
+                )) is not None
+            ]
+            # A valid prior result survives an empty source window. An invalid
+            # legacy cache does not masquerade as authoritative evidence.
+            if not qualified and previous:
+                continue
+            target.source_metadata_json = metadata_with_competitor_cache(
+                target.source_metadata_json,
+                qualified,
+                source_system=normalized_source,
+                lookup_strategy=COMPETITOR_TARGETED_LOOKUP_STRATEGY,
+            )
+            targets_updated += 1
+            records_cached += len(qualified)
+
+    if not successful_groups and first_error is not None:
+        raise first_error
+    if targets_updated or buyer_hydrated:
+        await db.commit()
+    return {
+        "targets_considered": len(targets),
+        "targets_updated": targets_updated,
+        "records_cached": records_cached,
+    }
 
 
 def _normalize_tender_source_filter(source_system: str | None) -> str | None:
@@ -2294,12 +2800,14 @@ async def _batched_tender_summaries(
             )
         elif status == "processing":
             summary["processing"] = True
-        if row["has_parsed_text"]:
+        if row["has_parsed_text"] and status == "available":
             summary["parsed_document_count"] = (
                 int(summary.get("parsed_document_count") or 0) + 1
             )
 
     for summary in summaries.values():
+        if int(summary.get("parsed_document_count") or 0) == 0:
+            summary["has_compiled_text"] = False
         summary["document_status"] = _document_status_from_summary(summary)
 
     return summaries
@@ -3849,7 +4357,7 @@ async def analyze_tender(
         )
     except (TypeError, ValueError) as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Unsupported customer analysis language",
         ) from exc
 
@@ -3889,11 +4397,30 @@ async def analyze_tender(
             detail=TENDER_NOT_ACTIONABLE_DETAIL,
         )
 
-    tender_text = (tender.compiled_master_text or "").strip()
+    documents_result = await session.execute(
+        select(TenderDocument)
+        .where(TenderDocument.tender_id == tender.id)
+        .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
+    )
+    tender_documents = [
+        document
+        for document in documents_result.scalars().all()
+        if storage_file_exists(document.storage_path)
+        and document.parsed_text
+        and document.parsed_text.strip()
+        and (document.download_status or "").strip().casefold()
+        not in {"failed", "unavailable", "missing", "missing_file", "access_required"}
+    ]
+    tender_text = "\n\n".join(
+        document.parsed_text.strip() for document in tender_documents
+    ).strip()
     if not tender_text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tender has no compiled master text. Documents may not be parsed yet.",
+            detail=(
+                "Tender has no locally stored, processed documents ready for analysis. "
+                "Acquire and prepare documents first."
+            ),
         )
 
     try:
@@ -3944,11 +4471,6 @@ async def analyze_tender(
             )
             for node in taxonomy_nodes
         }
-
-        documents_result = await session.execute(
-            select(TenderDocument).where(TenderDocument.tender_id == tender.id)
-        )
-        tender_documents = documents_result.scalars().all()
 
         sorted_cred_str = ",".join(sorted(credential_uuids))
         sorted_tax_str = ",".join(sorted(taxonomy_lookup.keys()))
@@ -4877,9 +5399,18 @@ async def get_tender_details(
                 Tender.id,
                 Tender.source_system,
                 Tender.source_url,
+                Tender.title,
+                Tender.description,
+                Tender.country,
+                Tender.sector,
                 Tender.buyer,
                 Tender.deadline,
+                Tender.procurement_category,
+                Tender.procurement_method,
+                Tender.notice_type,
+                Tender.category,
                 Tender.source_metadata_json,
+                Tender.project_id,
             )
         )
         .where(
@@ -4922,11 +5453,19 @@ async def get_tender_details(
         if has_contact_summary
         else None
     )
+    competitor_intelligence = await _build_tender_competitor_intelligence(
+        db=db,
+        target_tender=tender,
+        # Tender Details is a passive read. Explicit source-refresh jobs own
+        # population of the persisted competitor cache.
+        include_live_sources=False,
+    )
     return await compose_tender_details(
         db,
         tender=tender,
         user_id=current_user.id,
         procurement_contacts=procurement_contacts,
+        competitor_intelligence=competitor_intelligence,
     )
 
 
@@ -5051,8 +5590,28 @@ async def _build_tender_competitor_intelligence(
     *,
     db: AsyncSession,
     target_tender: Tender,
+    include_live_sources: bool = False,
 ) -> TenderCompetitorIntelligenceResponse:
+    # No verified award/participant adapter exists for these source systems.
+    # Even an old cache marker cannot turn an unaudited source into a negative finding.
+    if getattr(target_tender, "source_system", None) not in COMPETITOR_VERIFIED_METADATA_SOURCES:
+        return TenderCompetitorIntelligenceResponse(
+            tender_id=target_tender.id,
+            state="UNAVAILABLE",
+            message=COMPETITOR_UNAVAILABLE_MESSAGE,
+            groups=[],
+        )
     target_service_category = _infer_tender_service_category(target_tender)
+    cache_metadata = getattr(target_tender, "source_metadata_json", None)
+    records = [
+        item for record in cached_competitor_records(cache_metadata)
+        if (item := _qualified_competitor_record(
+            target_tender=target_tender,
+            record=record,
+            target_service_category=target_service_category,
+        )) is not None
+    ]
+    evidence_evaluated = competitor_cache_was_evaluated(cache_metadata)
     related_query = (
         select(Tender)
         .options(
@@ -5073,10 +5632,12 @@ async def _build_tender_competitor_intelligence(
                 Tender.publication_date,
                 Tender.created_at,
                 Tender.source_metadata_json,
+                Tender.project_id,
             )
         )
         .where(
             Tender.id != target_tender.id,
+            Tender.source_system == target_tender.source_system,
             Tender.source_metadata_json.is_not(None),
             customer_visible_tender_condition(Tender),
         )
@@ -5105,10 +5666,12 @@ async def _build_tender_competitor_intelligence(
                 )
             )
         if not fallback_predicates:
+            groups = _group_competitor_records(records)
             return TenderCompetitorIntelligenceResponse(
                 tender_id=target_tender.id,
-                message=COMPETITOR_EMPTY_MESSAGE,
-                groups=[],
+                state=("AVAILABLE" if groups else "INSUFFICIENT_EVIDENCE" if evidence_evaluated else "UNAVAILABLE"),
+                message=(COMPETITOR_AVAILABLE_MESSAGE if groups else COMPETITOR_EMPTY_MESSAGE if evidence_evaluated else COMPETITOR_UNAVAILABLE_MESSAGE),
+                groups=groups,
             )
         related_query = related_query.where(or_(*fallback_predicates))
 
@@ -5118,8 +5681,15 @@ async def _build_tender_competitor_intelligence(
             Tender.created_at.desc(),
         ).limit(COMPETITOR_MAX_RELATED_TENDERS)
     )
-    records: list[TenderCompetitorResponse] = []
     for related_tender in related_result.scalars().all():
+        metadata = getattr(related_tender, "source_metadata_json", None)
+        if (getattr(related_tender, "source_system", None) in COMPETITOR_VERIFIED_METADATA_SOURCES
+            and isinstance(metadata, dict) and any(
+            True for participation_type, keys in COMPETITOR_KEY_LOOKUP.items()
+            if participation_type != "similar_market_actor"
+            for _ in _metadata_values_for_keys(metadata, keys)
+        )):
+            evidence_evaluated = True
         records.extend(
             _extract_public_competitor_records(
                 target_tender=target_tender,
@@ -5127,17 +5697,30 @@ async def _build_tender_competitor_intelligence(
                 target_service_category=target_service_category,
             )
         )
-    records.extend(
-        await _live_source_competitor_records(
-            target_tender=target_tender,
-            target_service_category=target_service_category,
+    if include_live_sources:
+        records.extend(
+            await _live_source_competitor_records(
+                target_tender=target_tender,
+                target_service_category=target_service_category,
+            )
         )
-    )
 
+    # Source adapters may return broad category results. Qualify every record
+    # again before presentation, including records from legacy caches.
+    records = [
+        item for record in records
+        if (item := _qualified_competitor_record(
+            target_tender=target_tender,
+            record=record,
+            target_service_category=target_service_category,
+        )) is not None
+    ]
     groups = _group_competitor_records(records)
+    state = "AVAILABLE" if groups else "INSUFFICIENT_EVIDENCE" if evidence_evaluated else "UNAVAILABLE"
     return TenderCompetitorIntelligenceResponse(
         tender_id=target_tender.id,
-        message=COMPETITOR_AVAILABLE_MESSAGE if groups else COMPETITOR_EMPTY_MESSAGE,
+        state=state,
+        message=(COMPETITOR_AVAILABLE_MESSAGE if groups else COMPETITOR_EMPTY_MESSAGE if evidence_evaluated else COMPETITOR_UNAVAILABLE_MESSAGE),
         groups=groups,
     )
 
@@ -5247,6 +5830,8 @@ async def get_tender_competitors(
                 Tender.procurement_method,
                 Tender.notice_type,
                 Tender.category,
+                Tender.project_id,
+                Tender.source_metadata_json,
             )
         )
         .where(
@@ -5748,6 +6333,14 @@ async def sync_giz_tenders(
     """
     Import GIZ country-office tenders from official public giz.de tender pages.
     """
+    if download_documents:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "GIZ source refresh is metadata-only. Use the explicit tender "
+                "document acquisition command after refresh."
+            ),
+        )
     sync_started = monotonic()
     source = GizTenderSource(
         source_pages=DEFAULT_GIZ_TENDER_PAGES[:max_pages],
@@ -5829,15 +6422,6 @@ async def sync_giz_tenders(
                             documents=documents,
                         )
                         await db.flush()
-                    if download_documents and documents:
-                        hydration_result = await hydrate_giz_tender_documents_inline(
-                            db,
-                            tender=item.tender,
-                            force=False,
-                        )
-                        documents_downloaded += int(
-                            hydration_result.get("documents_downloaded") or 0
-                        )
                 except Exception as exc:
                     failed_count += 1
                     if len(errors) < 10:
@@ -5970,7 +6554,7 @@ async def hydrate_giz_tenders(
 
     if not external_ids:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="At least one exact GIZ external_id is required.",
         )
 
@@ -7292,6 +7876,29 @@ async def _get_sync_marker_diagnostics(
         for doc in documents
         if doc.parsed_text and doc.parsed_text.strip()
     ]
+    ready_documents = [
+        doc
+        for doc in documents
+        if storage_file_exists(doc.storage_path)
+        and (
+            (doc.parsed_text and doc.parsed_text.strip())
+            or (doc.download_status or "").strip().casefold()
+            in {"processed", "parsed", "usable"}
+        )
+    ]
+    failed_documents = [
+        doc
+        for doc in documents
+        if (doc.download_status or "").strip().casefold()
+        in {"failed", "unavailable", "missing", "missing_file", "access_required"}
+    ]
+    processing_documents = [
+        doc
+        for doc in documents
+        if storage_file_exists(doc.storage_path)
+        and doc not in ready_documents
+        and doc not in failed_documents
+    ]
 
     return SyncMarkerDiagnostics(
         compiled_master_text_length=len(compiled_text or ""),
@@ -7305,7 +7912,34 @@ async def _get_sync_marker_diagnostics(
         documents_markerless=sum(
             1 for doc in parsed_documents if not _has_real_trace_markers(doc.parsed_text)
         ),
+        documents_ready=len(ready_documents),
+        documents_failed=len(failed_documents),
+        documents_processing=len(processing_documents),
     )
+
+
+def _sync_acquisition_state(
+    job: TenderSyncJob | None,
+    diagnostics: SyncMarkerDiagnostics,
+) -> str:
+    if job is not None and job.status == TenderSyncStatus.PENDING:
+        return "QUEUED"
+    if job is not None and job.status == TenderSyncStatus.IN_PROGRESS:
+        return "PROCESSING" if job.progress >= 60 else "DOWNLOADING"
+    if (
+        diagnostics.documents_total > 0
+        and diagnostics.documents_ready == diagnostics.documents_total
+    ):
+        return "READY"
+    if diagnostics.documents_ready > 0:
+        return "PARTIAL"
+    if job is not None and job.status == TenderSyncStatus.FAILED:
+        return "FAILED"
+    if diagnostics.documents_failed > 0:
+        return "FAILED"
+    if diagnostics.documents_processing > 0:
+        return "PROCESSING"
+    return "AVAILABLE_REMOTE"
 
 
 @router.post(
@@ -7339,6 +7973,7 @@ async def sync_tender_documents(
         select(Tender)
         .options(load_only(Tender.source_system, Tender.status))
         .where(Tender.id == tender_id)
+        .with_for_update()
     )
     tender = tender_result.scalar_one_or_none()
     if tender is None:
@@ -7346,16 +7981,15 @@ async def sync_tender_documents(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tender not found",
         )
-    if tender.source_system != "uzex":
+    if tender.source_system not in {"uzex", "giz"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Document sync worker is UzEx-only for this source.",
+            detail="On-demand document acquisition is supported for UzEx and GIZ tenders.",
         )
 
-    existing_job = await _get_active_sync_job_for_user_tender(
+    existing_job = await _get_active_sync_job_for_tender(
         db=db,
         tender_id=tender_id,
-        user_id=current_user.id,
     )
     if existing_job is not None:
         return _serialize_sync_job(
@@ -7386,10 +8020,9 @@ async def sync_tender_documents(
         await db.refresh(new_job)
     except IntegrityError:
         await db.rollback()
-        existing_job = await _get_active_sync_job_for_user_tender(
+        existing_job = await _get_active_sync_job_for_tender(
             db=db,
             tender_id=tender_id,
-            user_id=current_user.id,
         )
         if existing_job is not None:
             return _serialize_sync_job(
@@ -7410,9 +8043,17 @@ async def sync_tender_documents(
         ) from exc
 
     try:
-        task_result = process_tender_docs.apply_async(
+        acquisition_task = (
+            hydrate_giz_documents if tender.source_system == "giz" else process_tender_docs
+        )
+        task_kwargs = (
+            {"force": False}
+            if tender.source_system == "giz"
+            else {"reparse_markerless": reparse_markerless}
+        )
+        task_result = acquisition_task.apply_async(
             args=[str(tender_id), new_job.job_id],
-            kwargs={"reparse_markerless": reparse_markerless},
+            kwargs=task_kwargs,
             task_id=new_job.job_id,
             queue="heavy_dl_queue",
             routing_key="heavy_dl_queue",
@@ -7425,7 +8066,8 @@ async def sync_tender_documents(
             },
         )
         logger.info(
-            "Enqueued tender document sync task tender_id=%s job_id=%s celery_task_id=%s queue=%s",
+            "Enqueued tender document acquisition task source=%s tender_id=%s job_id=%s celery_task_id=%s queue=%s",
+            tender.source_system,
             tender_id,
             new_job.job_id,
             task_result.id,
@@ -7437,7 +8079,25 @@ async def sync_tender_documents(
         try:
             new_job.status = TenderSyncStatus.FAILED
             new_job.progress = 0
-            new_job.error_message = "Failed to enqueue worker task."
+            new_job.error_message = "Failed to enqueue document acquisition worker task."
+            total_documents = int(
+                await db.scalar(
+                    select(func.count(TenderDocument.id)).where(
+                        TenderDocument.tender_id == tender_id
+                    )
+                )
+                or 0
+            )
+            await stage_document_acquisition_notification(
+                db,
+                user_id=current_user.id,
+                tender_id=tender_id,
+                job_id=new_job.job_id,
+                outcome="failed",
+                ready_count=0,
+                total_count=total_documents,
+                failed_count=0,
+            )
             await db.commit()
         except SQLAlchemyError:
             await db.rollback()
@@ -7445,7 +8105,7 @@ async def sync_tender_documents(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=(
-                "Failed to enqueue tender document sync task "
+                "Failed to enqueue tender document acquisition task "
                 f"({error_type}). Check Redis and the heavy document worker."
             ),
         ) from exc
@@ -7453,9 +8113,9 @@ async def sync_tender_documents(
     return _serialize_sync_job(
         new_job,
         message=(
-            "Sync started with markerless reparse"
-            if reparse_markerless
-            else "Sync started"
+            "Document acquisition started with markerless reparse"
+            if reparse_markerless and tender.source_system == "uzex"
+            else "Document acquisition started"
         ),
         reparse_markerless=reparse_markerless,
     )
@@ -7494,17 +8154,10 @@ async def get_sync_status(
         if source_system == "giz"
         else None
     )
-    if source_system == "giz":
-        latest_job = await _get_latest_sync_job_for_tender(
-            db=db,
-            tender_id=tender_id,
-        )
-    else:
-        latest_job = await _get_latest_sync_job_for_user_tender(
-            db=db,
-            tender_id=tender_id,
-            user_id=current_user.id,
-        )
+    latest_job = await _get_latest_sync_job_for_tender(
+        db=db,
+        tender_id=tender_id,
+    )
     docs_parsed = await _count_parsed_documents(
         db=db,
         tender_id=tender_id,
@@ -7513,6 +8166,7 @@ async def get_sync_status(
         db=db,
         tender_id=tender_id,
     )
+    acquisition_state = _sync_acquisition_state(latest_job, diagnostics)
 
     if latest_job is None:
         return SyncStatusResponse(
@@ -7523,6 +8177,12 @@ async def get_sync_status(
             source_system=source_system,
             coverage_status=coverage_status,
             diagnostics=diagnostics,
+            acquisition_state=acquisition_state,
+            documents_total=diagnostics.documents_total,
+            documents_ready=diagnostics.documents_ready,
+            documents_failed=diagnostics.documents_failed,
+            documents_processing=diagnostics.documents_processing,
+            job_id=None,
         )
 
     return SyncStatusResponse(
@@ -7533,6 +8193,12 @@ async def get_sync_status(
         source_system=source_system,
         coverage_status=coverage_status,
         diagnostics=diagnostics,
+        acquisition_state=acquisition_state,
+        documents_total=diagnostics.documents_total,
+        documents_ready=diagnostics.documents_ready,
+        documents_failed=diagnostics.documents_failed,
+        documents_processing=diagnostics.documents_processing,
+        job_id=latest_job.job_id,
     )
 
 
@@ -7982,7 +8648,7 @@ async def get_analysis_version_detail(
     """Return one historical version without consulting mutable parent mirrors."""
     if version_number < 1:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="version_number must be at least 1.",
         )
     _parent, profile = await _owned_analysis_parent_for_version_route(

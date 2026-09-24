@@ -106,10 +106,11 @@ class TenderDocumentStatusStaticTests(unittest.TestCase):
         # availability contract is deliberately source-neutral and does not
         # expose format/parser-specific preparation state.
         self.assertIn('item.availability === "AVAILABLE"', tender_detail_page)
-        self.assertIn('item.availability === "UNAVAILABLE"', tender_detail_page)
-        self.assertIn('t("sectionState.available")', tender_detail_page)
-        self.assertIn('t("sectionState.unavailable")', tender_detail_page)
-        self.assertIn('t("metadataOnly")', tender_detail_page)
+        self.assertIn('item.acquisition_state === "READY"', tender_detail_page)
+        self.assertIn("documentAcquisition.states.${item.acquisition_state}", tender_detail_page)
+        self.assertIn('t("documentAcquisition.failed")', tender_detail_page)
+        self.assertIn('details.documents.state', tender_detail_page)
+        self.assertIn('t("documentsUnavailable")', tender_detail_page)
         self.assertNotIn("Unsupported format", tender_detail_page)
         self.assertIn("return 'Documents unavailable'", tender_types)
 

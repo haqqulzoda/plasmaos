@@ -14,6 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.all_models import Tender, TenderDocument, TenderStatus
+from app.services.competitor_cache import COMPETITOR_CACHE_METADATA_KEY
 from app.services.tender_sources.keys import (
     canonical_source_key,
     normalize_source_system,
@@ -354,6 +355,14 @@ def _canonical_semantic_value(value: Any) -> Any:
 def _normalized_source_values(normalized_tender: NormalizedTender) -> dict[str, Any]:
     source_system = normalized_tender.normalized_source_system
     external_id = str(normalized_tender.external_id).strip()
+    source_metadata = (
+        dict(normalized_tender.source_metadata_json)
+        if normalized_tender.source_metadata_json is not None
+        else None
+    )
+    if source_metadata is not None:
+        # Public source payloads never own Plasma's persisted projection cache.
+        source_metadata.pop(COMPETITOR_CACHE_METADATA_KEY, None)
     return {
         "source_system": source_system,
         "external_id": external_id,
@@ -375,11 +384,7 @@ def _normalized_source_values(normalized_tender: NormalizedTender) -> dict[str, 
         "procurement_method": _clean_optional(normalized_tender.procurement_method),
         "notice_type": _clean_optional(normalized_tender.notice_type),
         "project_id": _clean_optional(normalized_tender.project_id),
-        "source_metadata_json": (
-            dict(normalized_tender.source_metadata_json)
-            if normalized_tender.source_metadata_json is not None
-            else None
-        ),
+        "source_metadata_json": source_metadata,
         "scrape_status": _clean_optional(normalized_tender.scrape_status) or "success",
         "status": normalized_tender.status,
         "category": normalized_tender.category,
@@ -391,7 +396,14 @@ def _source_values_for_existing(
     normalized_tender: NormalizedTender,
 ) -> dict[str, Any]:
     values = _normalized_source_values(normalized_tender)
-    preserved = normalized_tender.preserve_source_metadata_keys
+    preserved = tuple(
+        dict.fromkeys(
+            (
+                *normalized_tender.preserve_source_metadata_keys,
+                COMPETITOR_CACHE_METADATA_KEY,
+            )
+        )
+    )
     if preserved:
         incoming = dict(values.get("source_metadata_json") or {})
         existing = dict(tender.source_metadata_json or {})

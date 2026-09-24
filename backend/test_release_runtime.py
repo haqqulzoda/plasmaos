@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
-from fastapi.testclient import TestClient
+import httpx
 import pytest
 from redis.asyncio import Redis
 
@@ -65,12 +65,20 @@ def test_cookie_origin_and_security_headers_without_weakening_bearer_access():
     app.add_middleware(HardenedHTTPMiddleware)
     @app.post('/command')
     async def command(): return {'ok':True}
-    with patch('app.core.http_hardening.settings.BACKEND_CORS_ORIGINS',['https://console.example.invalid']), TestClient(app,base_url='https://api.example.invalid') as client:
-        denied = client.post('/command',headers={'Cookie':'plasma_api_token=synthetic','Origin':'https://evil.invalid'})
-        assert denied.status_code == 403
-        allowed = client.post('/command',headers={'Cookie':'plasma_api_token=synthetic','Origin':'https://console.example.invalid'})
-        assert allowed.status_code == 200
-        bearer = client.post('/command',headers={'Authorization':'Bearer synthetic'})
-        assert bearer.status_code == 200
-        for header in ('X-Request-ID','X-Content-Type-Options','Content-Security-Policy','Strict-Transport-Security'):
-            assert allowed.headers[header]
+    async def exercise():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url='https://api.example.invalid',
+        ) as client:
+            denied = await client.post('/command',headers={'Cookie':'plasma_api_token=synthetic','Origin':'https://evil.invalid'})
+            allowed = await client.post('/command',headers={'Cookie':'plasma_api_token=synthetic','Origin':'https://console.example.invalid'})
+            bearer = await client.post('/command',headers={'Authorization':'Bearer synthetic'})
+            return denied, allowed, bearer
+
+    with patch('app.core.http_hardening.settings.BACKEND_CORS_ORIGINS',['https://console.example.invalid']):
+        denied, allowed, bearer = asyncio.run(exercise())
+    assert denied.status_code == 403
+    assert allowed.status_code == 200
+    assert bearer.status_code == 200
+    for header in ('X-Request-ID','X-Content-Type-Options','Content-Security-Policy','Strict-Transport-Security'):
+        assert allowed.headers[header]

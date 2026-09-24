@@ -96,7 +96,7 @@ class LocaleContractTests(TestCase):
         for source_root in ("app", "components", "i18n", "lib", "types"):
             source_files.extend((FRONTEND / source_root).rglob("*.ts"))
             source_files.extend((FRONTEND / source_root).rglob("*.tsx"))
-        source_files.extend((FRONTEND / name) for name in ("middleware.ts", "auth.ts"))
+        source_files.extend((FRONTEND / name) for name in ("proxy.ts", "auth.ts"))
         combined = "\n".join(path.read_text(encoding="utf-8") for path in source_files)
         self.assertEqual(combined.count("export const PRODUCT_LOCALE_CODES"), 1)
         self.assertNotIn("localStorage.setItem('ui_locale'", combined)

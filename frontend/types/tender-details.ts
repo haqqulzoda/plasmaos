@@ -6,7 +6,7 @@ import type {
 } from '@/types/engagement';
 import type { SourceSystem } from '@/types/tender';
 
-export type DetailsSectionState = 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE';
+export type DetailsSectionState = 'AVAILABLE' | 'EMPTY' | 'INSUFFICIENT_EVIDENCE' | 'UNAVAILABLE';
 
 export interface DetailsSection<T> {
     state: DetailsSectionState;
@@ -49,6 +49,48 @@ export interface TenderDetailsProjectLeadership {
     truncated: boolean;
 }
 
+export type TenderCompetitorParticipation =
+    | 'winner'
+    | 'participant'
+    | 'similar_market_actor';
+
+export type TenderCompetitorConfidence = 'high' | 'medium' | 'low';
+
+export interface TenderDetailsCompetitor {
+    company_name: string;
+    industry: string;
+    service_category: string;
+    source: string;
+    related_tender_id: string | null;
+    buyer: string | null;
+    country: string | null;
+    sector: string | null;
+    category: string | null;
+    participation_type: TenderCompetitorParticipation;
+    confidence: TenderCompetitorConfidence;
+    reason: string;
+    evidence_source: string | null;
+    related_tender_title?: string | null;
+    related_project_id?: string | null;
+    source_reference?: string | null;
+    procurement_method?: string | null;
+    evidence_date?: string | null;
+    relevance_tier?: 'DIRECT' | 'STRONG' | 'CONTEXTUAL' | null;
+}
+
+export interface TenderDetailsCompetitorGroup {
+    industry: string;
+    service_category: string;
+    competitors: TenderDetailsCompetitor[];
+}
+
+export interface TenderDetailsCompetitorIntelligence {
+    tender_id: string;
+    message: string;
+    state?: 'AVAILABLE' | 'INSUFFICIENT_EVIDENCE' | 'UNAVAILABLE';
+    groups: TenderDetailsCompetitorGroup[];
+}
+
 export interface TenderDetailsProcurementContacts {
     buyer_agency: string | null;
     contact_person: string | null;
@@ -87,6 +129,15 @@ export type TenderDetailsDocumentAvailability =
     | 'UNAVAILABLE'
     | 'METADATA_ONLY';
 
+export type TenderDocumentAcquisitionState =
+    | 'AVAILABLE_REMOTE'
+    | 'QUEUED'
+    | 'DOWNLOADING'
+    | 'PROCESSING'
+    | 'READY'
+    | 'PARTIAL'
+    | 'FAILED';
+
 export interface TenderDetailsDocumentItem {
     document_id: string;
     display_name: string;
@@ -94,6 +145,7 @@ export interface TenderDetailsDocumentItem {
     metadata_classification: 'PUBLIC_SOURCE_METADATA';
     source_system: SourceSystem;
     availability: TenderDetailsDocumentAvailability;
+    acquisition_state: Exclude<TenderDocumentAcquisitionState, 'PARTIAL'>;
     file_size: number | null;
     content_type: string | null;
     created_at: string;
@@ -106,6 +158,14 @@ export interface TenderDetailsDocuments {
     omitted_unknown_count: number;
     truncated: boolean;
     download_authorization_separate: true;
+    acquisition_supported: boolean;
+    acquisition_state: TenderDocumentAcquisitionState;
+    job_id: string | null;
+    job_state: string | null;
+    ready_count: number;
+    failed_count: number;
+    processing_count: number;
+    remote_count: number;
 }
 
 export interface TenderDetailsCompliance {
@@ -160,6 +220,7 @@ export interface TenderDetailsResponse {
     tender_id: string;
     project_context: DetailsSection<TenderDetailsProjectContext>;
     project_leadership: DetailsSection<TenderDetailsProjectLeadership>;
+    competitor_intelligence: DetailsSection<TenderDetailsCompetitorIntelligence>;
     procurement_contacts: DetailsSection<TenderDetailsProcurementContacts>;
     requirements: DetailsSection<TenderDetailsRequirements>;
     documents: DetailsSection<TenderDetailsDocuments>;

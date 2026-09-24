@@ -10,11 +10,13 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.explorer import ExplorerRecommendationSummary
+from app.schemas.tender import TenderCompetitorIntelligenceResponse
 from app.models.base import ProposalStatus, TenderEngagementOrigin, TenderEngagementStatus
 
 
 class DetailsSectionState(str, Enum):
     AVAILABLE = "AVAILABLE"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
     EMPTY = "EMPTY"
     UNAVAILABLE = "UNAVAILABLE"
 
@@ -94,6 +96,14 @@ class TenderDocumentSummaryItem(BaseModel):
     metadata_classification: Literal["PUBLIC_SOURCE_METADATA"]
     source_system: str
     availability: Literal["AVAILABLE", "UNAVAILABLE", "METADATA_ONLY"]
+    acquisition_state: Literal[
+        "AVAILABLE_REMOTE",
+        "QUEUED",
+        "DOWNLOADING",
+        "PROCESSING",
+        "READY",
+        "FAILED",
+    ] = "AVAILABLE_REMOTE"
     file_size: int | None = None
     content_type: str | None = None
     created_at: datetime
@@ -106,6 +116,22 @@ class TenderDocumentsSummary(BaseModel):
     omitted_unknown_count: int
     truncated: bool
     download_authorization_separate: Literal[True] = True
+    acquisition_supported: bool = False
+    acquisition_state: Literal[
+        "AVAILABLE_REMOTE",
+        "QUEUED",
+        "DOWNLOADING",
+        "PROCESSING",
+        "READY",
+        "PARTIAL",
+        "FAILED",
+    ] = "AVAILABLE_REMOTE"
+    job_id: str | None = None
+    job_state: str | None = None
+    ready_count: int = 0
+    failed_count: int = 0
+    processing_count: int = 0
+    remote_count: int = 0
 
 
 class ComplianceSummary(BaseModel):
@@ -208,11 +234,18 @@ class BidPreparationSection(BaseModel):
     reason_code: str | None = None
 
 
+class CompetitorIntelligenceSection(BaseModel):
+    state: DetailsSectionState
+    data: TenderCompetitorIntelligenceResponse | None = None
+    reason_code: str | None = None
+
+
 class TenderDetailsResponse(BaseModel):
     recommendation: ExplorerRecommendationSummary | None = None
     tender_id: UUID
     project_context: ProjectContextSection
     project_leadership: ProjectLeadershipSection
+    competitor_intelligence: CompetitorIntelligenceSection
     procurement_contacts: ProcurementContactsSection
     requirements: RequirementsSection
     documents: TenderDocumentsSection

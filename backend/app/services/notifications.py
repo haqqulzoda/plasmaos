@@ -36,6 +36,21 @@ SYSTEM_TEMPLATES = {
         "notifications.account_approved",
         {"approval_event_id"},
     ),
+    "DOCUMENTS_READY": (
+        "TENDER_ALERT",
+        "notifications.documents_ready",
+        {"tender_id", "job_id", "ready_count", "total_count", "failed_count"},
+    ),
+    "DOCUMENTS_PARTIAL": (
+        "TENDER_ALERT",
+        "notifications.documents_partial",
+        {"tender_id", "job_id", "ready_count", "total_count", "failed_count"},
+    ),
+    "DOCUMENTS_FAILED": (
+        "TENDER_ALERT",
+        "notifications.documents_failed",
+        {"tender_id", "job_id", "ready_count", "total_count", "failed_count"},
+    ),
 }
 
 
@@ -93,6 +108,18 @@ def validate_system_event(*, event_type, category, template_key, payload, dedupe
             elif key == "analysis_language":
                 if value not in ("en", "uz", "ru", "ar", None):
                     raise ValueError()
+            elif key in {"ready_count", "total_count", "failed_count"}:
+                if type(value) is not int or value < 0:
+                    raise ValueError()
+        if {
+            "ready_count",
+            "total_count",
+            "failed_count",
+        }.issubset(payload) and (
+            payload["ready_count"] > payload["total_count"]
+            or payload["failed_count"] > payload["total_count"]
+        ):
+            raise ValueError()
         if len(json.dumps(payload).encode()) > 4096:
             raise ValueError()
     except (ValueError, TypeError):
@@ -192,6 +219,59 @@ async def emit_notification(
             ],
         )
     )[0]
+
+
+async def stage_document_acquisition_notification(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    tender_id: UUID,
+    job_id: str,
+    outcome: str,
+    ready_count: int,
+    total_count: int,
+    failed_count: int,
+) -> None:
+    """Atomically stage one persistent job-level acquisition notification."""
+    contracts = {
+        "ready": ("DOCUMENTS_READY", "notifications.documents_ready"),
+        "partial": ("DOCUMENTS_PARTIAL", "notifications.documents_partial"),
+        "failed": ("DOCUMENTS_FAILED", "notifications.documents_failed"),
+    }
+    try:
+        event_type, template_key = contracts[outcome]
+        UUID(job_id)
+    except (KeyError, ValueError, TypeError):
+        raise CommunicationsError("communications_invalid_event") from None
+    payload = {
+        "tender_id": str(tender_id),
+        "job_id": job_id,
+        "ready_count": max(0, int(ready_count)),
+        "total_count": max(0, int(total_count)),
+        "failed_count": max(0, int(failed_count)),
+    }
+    validate_system_event(
+        event_type=event_type,
+        category="TENDER_ALERT",
+        template_key=template_key,
+        payload=payload,
+        dedupe_key=f"document-acquisition:{job_id}",
+    )
+    dedupe_key = f"document-acquisition:{job_id}"
+    existing = await db.scalar(
+        select(NotificationOutbox.id).where(NotificationOutbox.dedupe_key == dedupe_key)
+    )
+    if existing is None:
+        db.add(
+            NotificationOutbox(
+                user_id=user_id,
+                dedupe_key=dedupe_key,
+                event_type=event_type,
+                category="TENDER_ALERT",
+                template_key=template_key,
+                payload=payload,
+            )
+        )
 
 
 async def publish_outbox_batch(db: AsyncSession) -> int:

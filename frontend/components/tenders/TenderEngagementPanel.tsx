@@ -20,6 +20,7 @@ import {
 
 interface TenderEngagementPanelProps {
   foundation?: boolean;
+  decisionCard?: boolean;
   tenderId: string;
   proposalContext?: boolean;
   engagementData?: TenderEngagementActionContext | null;
@@ -31,6 +32,7 @@ interface TenderEngagementPanelProps {
 
 export function TenderEngagementPanel({
   foundation = false,
+  decisionCard = false,
   tenderId,
   proposalContext = false,
   engagementData,
@@ -114,7 +116,41 @@ export function TenderEngagementPanel({
               ? t("statuses.won")
               : engagement?.engagement_status === "LOST"
                 ? t("statuses.lost")
-                : t("statuses.dismissed");
+              : t("statuses.dismissed");
+
+  if (decisionCard)
+    return (
+      <section className="s143-decision-card" aria-labelledby="s143-pursuit-title">
+        <h2 id="s143-pursuit-title"><Bookmark aria-hidden="true" />{t("panel.title")}</h2>
+        <p className="s143-decision-copy">
+          {loading ? t("panel.loading") : engagement
+            ? t("panel.status", { status: engagementLabel })
+            : t("panel.none")}
+        </p>
+        <div className="s143-pursuit-actions">
+          {!loading && engagement ? (
+            <EngagementWorkflowActions
+              foundation
+              engagement={engagement}
+              tenderId={tenderId}
+              proposalId={proposalId}
+              onChanged={setEngagement}
+              onRefresh={load}
+            />
+          ) : !loading && proposalContext && proposalId ? (
+            <PrepareBidButton foundation proposalId={proposalId} />
+          ) : !loading && canStartNew ? (
+            <>
+              <Button variant="secondary" onClick={save} loading={saving} leadingIcon={<Bookmark aria-hidden="true" />}>
+                {saving ? t("panel.saving") : t("panel.save")}
+              </Button>
+              <PrepareBidButton foundation tenderId={tenderId} />
+            </>
+          ) : !loading ? <p className="ds-muted">{t("panel.noAction")}</p> : null}
+        </div>
+        {error && <Alert tone="danger" title={error} />}
+      </section>
+    );
 
   if (foundation)
     return (

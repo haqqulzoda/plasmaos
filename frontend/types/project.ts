@@ -111,9 +111,9 @@ export const projectMetadataRows = (project: ProjectContextProject): ProjectMeta
     const agencies = (project.implementing_agencies ?? []).filter((agency) => agency.trim()).join(', ');
 
     if (geography) rows.push({ label: 'Country / Region', value: geography });
-    if (project.status?.trim()) rows.push({ label: 'Project Status', value: project.status });
-    if (approvalDate) rows.push({ label: 'Project Approval', value: approvalDate });
-    if (closingDate) rows.push({ label: 'Project Closing', value: closingDate });
+    if (project.status?.trim()) rows.push({ label: 'Status', value: project.status });
+    if (approvalDate) rows.push({ label: 'Approval date', value: approvalDate });
+    if (closingDate) rows.push({ label: 'Closing date', value: closingDate });
     if (project.borrower?.trim()) rows.push({ label: 'Borrower', value: project.borrower });
     if (agencies) rows.push({ label: 'Implementing Agency', value: agencies });
     return rows;

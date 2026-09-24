@@ -1,1 +1,79 @@
-{"eyebrow":"Inbox","title":"Notifications","description":"Account, tender and administrative updates in one place.","bell":"Notifications","bellWithCount":"Notifications, {count} unread","filterLabel":"Filter notifications","listLabel":"Notification inbox","markAllRead":"Mark all as read","loadMore":"Load more","retry":"Try again","read":"Read","unread":"Unread","test":"Test","version":"Analysis version {versionNumber}","filters":{"ALL":"All","UNREAD":"Unread","SYSTEM":"System","TENDER_ALERT":"Tender alerts","ADMIN":"Announcements"},"categories":{"SYSTEM":"System","TENDER_ALERT":"Tender alert","ADMIN":"Announcement"},"actions":{"markRead":"Mark as read","markUnread":"Mark as unread","openTender":"Open tender","openCompliance":"View analysis","openDashboard":"Open dashboard"},"templates":{"recommendationCreated":{"title":"New tender recommendation","body":"A new tender recommendation is ready for your review."},"analysisCompleted":{"title":"Analysis completed","body":"Analysis version {versionNumber} is ready to review."},"accountApproved":{"title":"Account approved","body":"Your account has been approved. You can now use your workspace."}},"fallback":{"title":"Account update","body":"This update is still available, but its original destination is no longer supported."},"states":{"loading":"Loading notifications…","empty":"You’re all caught up","emptyHelp":"New updates will appear here.","filteredEmpty":"No notifications match this filter","filteredEmptyHelp":"Choose another filter to see more updates.","failure":"Notifications could not be loaded.","mutationFailure":"The read state could not be changed. Your inbox has been restored."},"feedback":{"markedRead":"Notification marked as read.","markedUnread":"Notification marked as unread.","allRead":"All notifications marked as read."}}
+{
+  "eyebrow": "Inbox",
+  "title": "Notifications",
+  "description": "Account, tender and administrative updates in one place.",
+  "bell": "Notifications",
+  "bellWithCount": "Notifications, {count} unread",
+  "filterLabel": "Filter notifications",
+  "listLabel": "Notification inbox",
+  "markAllRead": "Mark all as read",
+  "loadMore": "Load more",
+  "retry": "Try again",
+  "read": "Read",
+  "unread": "Unread",
+  "test": "Test",
+  "version": "Analysis version {versionNumber}",
+  "filters": {
+    "ALL": "All",
+    "UNREAD": "Unread",
+    "SYSTEM": "System",
+    "TENDER_ALERT": "Tender alerts",
+    "ADMIN": "Announcements"
+  },
+  "categories": {
+    "SYSTEM": "System",
+    "TENDER_ALERT": "Tender alert",
+    "ADMIN": "Announcement"
+  },
+  "actions": {
+    "markRead": "Mark as read",
+    "markUnread": "Mark as unread",
+    "openTender": "Open tender",
+    "openCompliance": "View analysis",
+    "openDashboard": "Open dashboard"
+  },
+  "templates": {
+    "recommendationCreated": {
+      "title": "New tender recommendation",
+      "body": "A new tender recommendation is ready for your review."
+    },
+    "analysisCompleted": {
+      "title": "Analysis completed",
+      "body": "Analysis version {versionNumber} is ready to review."
+    },
+    "accountApproved": {
+      "title": "Account approved",
+      "body": "Your account has been approved. You can now use your workspace."
+    },
+    "documentsReady": {
+      "title": "Tender documents ready",
+      "body": "{readyCount} of {totalCount} documents are ready for compliance analysis."
+    },
+    "documentsPartial": {
+      "title": "Tender documents partially ready",
+      "body": "{readyCount} of {totalCount} documents are ready; {failedCount} could not be prepared."
+    },
+    "documentsFailed": {
+      "title": "Tender document acquisition failed",
+      "body": "The tender documents could not be prepared. Open the tender to try again."
+    }
+  },
+  "fallback": {
+    "title": "Account update",
+    "body": "This update is still available, but its original destination is no longer supported."
+  },
+  "states": {
+    "loading": "Loading notifications…",
+    "empty": "You’re all caught up",
+    "emptyHelp": "New updates will appear here.",
+    "filteredEmpty": "No notifications match this filter",
+    "filteredEmptyHelp": "Choose another filter to see more updates.",
+    "failure": "Notifications could not be loaded.",
+    "mutationFailure": "The read state could not be changed. Your inbox has been restored."
+  },
+  "feedback": {
+    "markedRead": "Notification marked as read.",
+    "markedUnread": "Notification marked as unread.",
+    "allRead": "All notifications marked as read."
+  }
+}

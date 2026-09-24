@@ -35,10 +35,10 @@ test('Arabic activation is atomic across registry, loader, root direction, and s
   assert.match(read('components/i18n/LanguageSelector.tsx'), /CUSTOMER_SELECTABLE_LOCALES\.map/);
 });
 
-test('all 16 Arabic namespaces match the complete 1009-key customer contract', () => {
+test('all 16 Arabic namespaces match the base customer contract plus additive copy', () => {
   assert.equal(MESSAGE_NAMESPACES.length, 16);
-  assert.equal(flattenMessageTree(catalogs.en).size, 1009);
-  assert.equal(flattenMessageTree(catalogs.ar).size, 1009);
+  assert.ok(flattenMessageTree(catalogs.en).size >= 1090);
+  assert.equal(flattenMessageTree(catalogs.ar).size, flattenMessageTree(catalogs.en).size);
   assert.deepEqual(validateMessageCatalogs(catalogs.en, {ar: catalogs.ar}), []);
 });
 

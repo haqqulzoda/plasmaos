@@ -125,6 +125,8 @@ CompetitorParticipationType = Literal[
     "similar_market_actor",
 ]
 CompetitorConfidence = Literal["high", "medium", "low"]
+CompetitorRelevanceTier = Literal["DIRECT", "STRONG", "CONTEXTUAL"]
+CompetitorAuthorityState = Literal["AVAILABLE", "INSUFFICIENT_EVIDENCE", "UNAVAILABLE"]
 DeadlineUrgency = Literal["expired", "urgent", "soon", "normal", "unknown"]
 ContactAvailability = Literal["available", "partial", "missing"]
 AvailabilityStatus = Literal["available", "unavailable"]
@@ -170,6 +172,12 @@ class TenderCompetitorResponse(BaseModel):
     confidence: CompetitorConfidence
     reason: str
     evidence_source: str | None = None
+    related_tender_title: str | None = None
+    related_project_id: str | None = None
+    source_reference: str | None = None
+    procurement_method: str | None = None
+    evidence_date: datetime | None = None
+    relevance_tier: CompetitorRelevanceTier | None = None
 
 
 class TenderCompetitorGroup(BaseModel):
@@ -185,4 +193,5 @@ class TenderCompetitorIntelligenceResponse(BaseModel):
 
     tender_id: UUID
     message: str
+    state: CompetitorAuthorityState = "UNAVAILABLE"
     groups: list[TenderCompetitorGroup] = Field(default_factory=list)

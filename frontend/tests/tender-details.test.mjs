@@ -2,140 +2,156 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const pageSource = readFileSync(
-  new URL("../app/dashboard/tenders/[tenderId]/page.tsx", import.meta.url),
-  "utf8",
-);
-const panelSource = readFileSync(
-  new URL("../components/tenders/TenderEngagementPanel.tsx", import.meta.url),
-  "utf8",
-);
-const dtoSource = readFileSync(
-  new URL("../types/tender-details.ts", import.meta.url),
-  "utf8",
-);
+const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+const page = read("../app/dashboard/tenders/[tenderId]/page.tsx");
+const panel = read("../components/tenders/TenderEngagementPanel.tsx");
+const dto = read("../types/tender-details.ts");
+const css = read("../components/customer/pages.css");
+const messages = Object.fromEntries(["en", "uz", "ru", "ar"].map((locale) => [
+  locale, JSON.parse(read(`../messages/${locale}/tenderDetails.json`)),
+]));
 
-test("initial render has exactly the two approved passive reads", () => {
-  assert.match(pageSource, /api\.get<Tender>\(`\/tenders\/\$\{tenderId\}`\)/);
-  assert.match(
-    pageSource,
-    /api\.get<TenderDetailsResponse>\(\s*`\/tenders\/\$\{tenderId\}\/details`,?\s*\)/,
-  );
-  assert.equal((pageSource.match(/api\.get</g) ?? []).length, 2);
-  assert.doesNotMatch(
-    pageSource,
-    /decision-snapshot|\/competitors|\/engagement|`\/tenders\/\$\{tenderId\}\/project`/,
-  );
+test("initial detail load is exactly two composed passive reads", () => {
+  assert.match(page, /api\.get<Tender>\(`\/tenders\/\$\{tenderId\}`\)/);
+  assert.match(page, /api\.get<TenderDetailsResponse>\(`\/tenders\/\$\{tenderId\}\/details`\)/);
+  assert.equal((page.match(/api\.get</g) ?? []).length, 3); // third is bounded acquisition-status polling
+  assert.match(page, /if \(!activeAcquisitionState\(acquisitionState\) \|\| !acquisitionJobId\) return/);
+  assert.match(page, /attempts < 150/);
+  assert.doesNotMatch(page, /decision-snapshot|`\/tenders\/\$\{tenderId\}\/competitors`|`\/tenders\/\$\{tenderId\}\/project`/);
 });
 
-test("document content is fetched only from an explicit user action", () => {
-  assert.match(pageSource, /onClick=\{\(\) => void openDocument\(item\)\}/);
-  assert.match(
-    pageSource,
-    /`\/tenders\/documents\/\$\{item\.document_id\}\/download`/,
-  );
-  assert.doesNotMatch(pageSource, /useEffect\([\s\S]{0,250}openDocument/);
-});
-
-test("base and consolidated detail loading are independent", () => {
-  assert.match(pageSource, /const \[detailsError, setDetailsError\]/);
-  assert.match(pageSource, /t\("detailsFailed"\)/);
-  assert.match(pageSource, /t\("retryDetails"\)/);
-  assert.match(pageSource, /void loadTender\(\)/);
-  assert.match(pageSource, /void loadDetails\(\)/);
-});
-
-test("sections and anchors follow the locked information hierarchy", () => {
-  const anchors = [
-    "#pursuit",
-    "#project-context",
-    "#requirements-documents",
-    "#compliance-readiness",
-    "#contacts",
-    "#bid-preparation",
+test("decision-first hierarchy follows mockup without legacy tabs or description", () => {
+  const order = [
+    "decisionCard tenderId={tender.id}", 'id="s143-compliance-title"',
+    'id="s143-recommendation-title"', 'id="project-context"',
+    'id="project-leadership"', 'id="tender-documents"',
+    'id="competitors"', 'id="contacts"', 'id="bid-preparation"',
   ];
   let cursor = -1;
-  for (const anchor of anchors) {
-    const next = pageSource.search(new RegExp(`href:\\s*["']${anchor}["']`));
-    assert.ok(next > cursor, `${anchor} must be present and ordered`);
+  for (const marker of order) {
+    const next = page.indexOf(marker);
+    assert.ok(next > cursor, `${marker} must be present and ordered`);
     cursor = next;
   }
-  assert.match(pageSource, /aria-label=\{t\("sectionsLabel"\)\}/);
-  assert.match(pageSource, /scroll-mt-28/);
+  assert.doesNotMatch(page, /details-anchors|tender\.description/);
 });
 
-test("Tender, Pursuit, Project Leadership, and Procurement Contacts remain distinct", () => {
-  assert.match(pageSource, /t\("status", \{ status:/);
-  assert.match(panelSource, /t\("panel\.title"\)/);
-  assert.match(pageSource, /t\("leadership"\)/);
-  assert.match(pageSource, /title=\{t\("contactsTitle"\)\}/);
-  assert.match(pageSource, /t\("contactsHelp"\)/);
+test("Explorer return state and source URL stay safe", () => {
+  assert.match(page, /readExplorerReturnState\(\)/);
+  assert.match(page, /href=\{returnHref\}/);
+  assert.match(page, /safeSourceUrl\(tender\.source_url\)/);
+  assert.match(page, /rel="noopener noreferrer"/);
 });
 
-test("the pursuit panel consumes consolidated state without its legacy passive GET", () => {
-  assert.match(pageSource, /engagementData=\{pursuit\}/);
-  assert.match(pageSource, /proposalIdData=\{bidPreparation\?\.proposal_id/);
-  assert.match(panelSource, /const controlled = engagementData !== undefined/);
-  assert.match(panelSource, /if \(controlled\) \{[\s\S]{0,100}return;/);
-  assert.match(panelSource, /onRefresh/);
+test("pursuit remains TenderEngagement with explicit actions", () => {
+  assert.match(page, /engagementData=\{pursuit\}/);
+  assert.match(page, /canStartNew=\{actionable\}/);
+  assert.match(panel, /decisionCard/);
+  assert.match(panel, /api\.post<SaveToMyTendersResponse>/);
+  assert.match(panel, /EngagementWorkflowActions/);
+  assert.match(dto, /allowed_actions: EngagementAction\[\]/);
 });
 
-test("existing mutation authorities and backend-provided allowed actions are reused", () => {
-  assert.match(panelSource, /EngagementWorkflowActions/);
-  assert.match(dtoSource, /allowed_actions: EngagementAction\[\]/);
-  assert.match(pageSource, /const actionable = isTenderActionable\(tender\)/);
-  assert.match(pageSource, /canStartNew=\{actionable\}/);
-  assert.doesNotMatch(pageSource, /api\.(post|put|patch|delete)/);
+test("Compliance and readiness use separate facts without invented percentages", () => {
+  assert.match(page, /details\.compliance\.state/);
+  assert.match(page, /details\.company_readiness\.state/);
+  assert.match(page, /complianceFailed/);
+  assert.match(page, /compliancePartial/);
+  assert.match(page, /complianceLegacy/);
+  assert.match(page, /readiness\.readiness_documents_missing/);
+  assert.match(page, /\/dashboard\/readiness-vault/);
+  assert.doesNotMatch(page, /readiness_score|readiness_percentage|critical records/i);
 });
 
-test("requirements are bounded and provenance-labelled", () => {
-  assert.match(pageSource, /t\("aiRequirement"\)/);
-  assert.match(pageSource, /document_name/);
-  assert.match(pageSource, /item\.section/);
-  assert.match(pageSource, /item\.page/);
+test("recommendation is stored-only and never generated on page load", () => {
+  assert.match(page, /details\.recommendation\.match_score/);
+  assert.match(page, /details\.recommendation\.rationale_summary/);
+  assert.match(page, /copy\("noRecommendation"\)/);
+  assert.doesNotMatch(page, /api\.post.*recommendation|generateRecommendation/);
 });
 
-test("compliance presentation distinguishes failed, partial, and legacy analysis", () => {
-  assert.match(pageSource, /complianceFailed/);
-  assert.match(pageSource, /compliancePartial/);
-  assert.match(pageSource, /complianceLegacy/);
-  assert.match(pageSource, /version_origin === ["']LEGACY_BACKFILL["']/);
-  assert.match(pageSource, /t\("openCompliance"\)/);
+test("Project Context exposes only canonical DTO fields", () => {
+  assert.match(page, /project\.name/);
+  assert.match(page, /project\.project_status/);
+  assert.match(page, /project\.country/);
+  assert.match(page, /project\.approval_date/);
+  assert.doesNotMatch(page, /project\.objective|project\.sector|enrichProject/);
 });
 
-test("readiness shows factual counts and does not invent a score", () => {
-  assert.match(pageSource, /t\("readinessHelp"\)/);
-  assert.match(pageSource, /t\("certifications"\)/);
-  assert.match(pageSource, /t\("missingEvidence"\)/);
-  assert.doesNotMatch(pageSource, /readiness_score|readiness_percentage/);
+test("Project Leadership is names-only and separate from contacts", () => {
+  assert.match(page, /s143\.leadershipSource/);
+  assert.match(page, /role\.display_name/);
+  assert.match(page, /id="project-leadership"/);
+  assert.match(page, /id="contacts"/);
+  assert.doesNotMatch(page, /leadershipRoleLabel|role\.native_role|role\.canonical_role/);
 });
 
-test("bid preparation uses the proposal-backed route identifier", () => {
-  assert.match(
-    pageSource,
-    /`\/dashboard\/bid-preparation\/\$\{bidPreparation\.detail_route_id\}`/,
-  );
-  assert.doesNotMatch(
-    pageSource,
-    /`\/dashboard\/bid-preparation\/\$\{tender\.id\}`/,
-  );
+test("documents retain one explicit bulk acquisition command and bounded poller", () => {
+  assert.match(page, /api\.post<DocumentSyncAccepted>\(`\/tenders\/\$\{tenderId\}\/sync-docs`\)/);
+  assert.match(page, /onClick=\{\(\) => void acquireDocuments\(\)\}/);
+  assert.match(page, /attempts < 150/);
+  assert.equal((page.match(/api\.post</g) ?? []).length, 1);
+  assert.doesNotMatch(page, /api\.(put|patch|delete)/);
 });
 
-test("DTOs are explicit and prohibit loose any or derived browser persistence", () => {
-  assert.match(dtoSource, /export interface TenderDetailsResponse/);
-  assert.match(dtoSource, /interface DetailsSection<T>/);
-  assert.doesNotMatch(dtoSource, /\bany\b|localStorage|sessionStorage/);
-  assert.doesNotMatch(
-    pageSource,
-    /localStorage\.setItem|sessionStorage\.setItem/,
-  );
+test("per-row binary download is available only for READY local files", () => {
+  assert.match(page, /item\.availability !== "AVAILABLE" \|\| item\.acquisition_state !== "READY"/);
+  assert.match(page, /item\.availability === "AVAILABLE" && item\.acquisition_state === "READY"/);
+  assert.match(page, /`\/tenders\/documents\/\$\{item\.document_id\}\/download`/);
+  assert.match(page, /onClick=\{\(\) => void openDocument\(item\)\}/);
+  assert.doesNotMatch(page, /useEffect\([\s\S]{0,250}openDocument/);
 });
 
-test("responsive and keyboard-accessible controls are present", () => {
-  assert.match(readFileSync(new URL("../components/customer/pages.css", import.meta.url), "utf8"), /overflow-x: auto/);
-  assert.match(pageSource, /focus-visible:ring-2/);
-  assert.match(pageSource, /sm:grid-cols|lg:grid-cols/);
-  assert.match(readFileSync(new URL("../components/ui/Display.tsx", import.meta.url), "utf8"), /role="status"/);
-  assert.match(pageSource, /<PageSkeleton/);
-  assert.match(pageSource, /role="alert"/);
+test("requirements retain bounded analysis-derived provenance in disclosure", () => {
+  assert.match(page, /<details className="s143-disclosure">/);
+  assert.match(page, /t\("aiRequirement"\)/);
+  assert.match(page, /requirements\?\.truncated/);
+  assert.match(page, /item\.document_name/);
+});
+
+test("competitors use the stored composed DTO and safe evidence links", () => {
+  assert.match(dto, /competitor_intelligence: DetailsSection<TenderDetailsCompetitorIntelligence>/);
+  assert.match(page, /competitor_intelligence\.data\?\.groups\.flatMap/);
+  assert.match(page, /item\.participation_type/);
+  assert.match(page, /t\("s143\.whyRelevant"\)/);
+  assert.match(page, /<BidiText>\{item\.reason\}<\/BidiText>/);
+  assert.match(dto, /INSUFFICIENT_EVIDENCE/);
+  assert.match(page, /safeSourceUrl\(item\.evidence_source\)/);
+  assert.match(page, /details\.competitor_intelligence\.state/);
+  assert.match(page, /competitorsEmpty/);
+  assert.match(page, /competitorsUnavailable/);
+  assert.doesNotMatch(page, /current bidder|confirmed competitor|market share/i);
+});
+
+test("contacts are source-backed and Proposal action remains explicit", () => {
+  assert.match(page, /contacts\.contact_person/);
+  assert.match(page, /contacts\.address/);
+  assert.match(page, /contacts\.submission_method/);
+  assert.match(page, /`\/dashboard\/bid-preparation\/\$\{bidPreparation\.detail_route_id\}`/);
+  assert.match(page, /<PrepareBidButton foundation tenderId=\{tender\.id\}/);
+});
+
+test("section-level loading, failures and previous successful data are retained", () => {
+  assert.match(page, /<SectionPlaceholder/);
+  assert.match(page, /setDetailsError\("detailsFailed"\)/);
+  assert.match(page, /Retain a previously successful composed projection/);
+  assert.match(page, /role="alert"/);
+  assert.match(page, /<StateMessage/);
+});
+
+test("responsive tables degrade to stacked rows without page overflow", () => {
+  assert.match(css, /\.s143-table-wrap[^}]*overflow-x: auto/);
+  assert.match(css, /@media \(max-width: 559px\)/);
+  assert.match(css, /\.s143-document-table td::before/);
+  assert.match(css, /\.s143-project-grid/);
+});
+
+test("EN, UZ, RU and AR have exact Sprint 14.3 copy parity", () => {
+  const keys = Object.keys(messages.en.s143).sort();
+  for (const locale of ["en", "uz", "ru", "ar"]) {
+    assert.deepEqual(Object.keys(messages[locale].s143).sort(), keys);
+    assert.ok(messages[locale].competitorsHelp);
+    assert.ok(messages[locale].competitorParticipation.winner);
+  }
+  assert.notEqual(messages.ar.s143.leadershipSource, messages.en.s143.leadershipSource);
 });

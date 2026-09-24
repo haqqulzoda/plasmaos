@@ -38,6 +38,7 @@ from app.core.storage_paths import normalize_storage_path, storage_file_exists
 from app.db.session import AsyncSessionLocal, engine
 from app.services.tender_sources.base import CanonicalDocument, assert_source_scope
 from app.services.giz_document_hydration import hydrate_giz_tender_documents
+from app.services.notifications import stage_document_acquisition_notification
 from app.services.tender_sources.uzex import UzExTenderSource
 
 logger = logging.getLogger(__name__)
@@ -372,6 +373,82 @@ async def _persist_sync_job_state(
             logger.error("operation_failed event=tender_tasks:372 error_type=%s", "unavailable")
 
 
+async def _persist_terminal_acquisition_state(
+    *,
+    job_id: str,
+    status: TenderSyncStatus,
+    error_message: str | None = None,
+) -> None:
+    """Commit terminal job state and its single notification intent atomically."""
+    async with AsyncSessionLocal() as terminal_db:
+        try:
+            job = (
+                await terminal_db.execute(
+                    select(TenderSyncJob)
+                    .where(TenderSyncJob.job_id == job_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if job is None:
+                raise ValueError("Document acquisition job not found")
+            documents = list(
+                (
+                    await terminal_db.execute(
+                        select(TenderDocument).where(
+                            TenderDocument.tender_id == job.tender_id
+                        )
+                    )
+                ).scalars()
+            )
+            ready_count = sum(
+                1
+                for document in documents
+                if storage_file_exists(document.storage_path)
+                and (
+                    (document.parsed_text and document.parsed_text.strip())
+                    or (document.download_status or "").strip().casefold()
+                    in {"processed", "parsed", "usable"}
+                )
+            )
+            failed_count = sum(
+                1
+                for document in documents
+                if (document.download_status or "").strip().casefold()
+                in {"failed", "unavailable", "missing", "missing_file", "access_required"}
+            )
+            total_count = len(documents)
+            outcome = (
+                "ready"
+                if status == TenderSyncStatus.SUCCESS
+                and total_count > 0
+                and ready_count == total_count
+                else "partial"
+                if ready_count > 0
+                else "failed"
+            )
+            job.status = status
+            job.progress = 100
+            job.error_message = _bounded_error_message(error_message)
+            await stage_document_acquisition_notification(
+                terminal_db,
+                user_id=job.user_id,
+                tender_id=job.tender_id,
+                job_id=job.job_id,
+                outcome=outcome,
+                ready_count=ready_count,
+                total_count=total_count,
+                failed_count=failed_count,
+            )
+            await terminal_db.commit()
+        except Exception:
+            await terminal_db.rollback()
+            logger.exception(
+                "document_acquisition_terminal_state_failed job_id=%s",
+                job_id,
+            )
+            raise
+
+
 def _extract_file_path(file_url: str) -> str:
     parsed = urlparse(file_url)
     query_path = parse_qs(parsed.query).get("path", [None])[0]
@@ -558,6 +635,7 @@ def _mark_document_download_failed(
     display_name = _extract_file_name(scraped_url) or "download"
     resolved_file_type = _resolved_file_type(display_name, scraped_file_type)
     created = doc is None
+    preserve_stored_file = doc is not None and _stored_file_exists(doc)
 
     if doc is None:
         doc = TenderDocument(
@@ -574,10 +652,11 @@ def _mark_document_download_failed(
     doc.source_document_type = scraped_file_type or None
     doc.download_status = "failed"
     doc.download_error = failure_message
-    doc.storage_path = None
-    doc.file_size = None
-    doc.mime_type = None
-    doc.sha256 = None
+    if not preserve_stored_file:
+        doc.storage_path = None
+        doc.file_size = None
+        doc.mime_type = None
+        doc.sha256 = None
     return doc, created
 
 
@@ -764,9 +843,11 @@ def _register_existing_doc(
 async def _process_tender_docs_async(
     tender_uuid: UUID,
     *,
-    job_id: str | None = None,
+    job_id: str,
     reparse_markerless: bool = False,
 ) -> dict[str, int | str]:
+    if not job_id:
+        raise ValueError("Explicit document acquisition job_id is required")
     task_started_at = time.monotonic()
     _log_sync_event(
         logging.INFO,
@@ -920,6 +1001,8 @@ async def _process_tender_docs_async(
                         doc.file_type = scraped_file_type
 
                     if doc and _parsed_text_present(doc) and _stored_file_exists(doc):
+                        doc.download_status = "processed"
+                        doc.download_error = None
                         _store_compiled_text_entry(
                             parsed_text_by_identity,
                             _document_identity_key(scraped_url),
@@ -1049,8 +1132,12 @@ async def _process_tender_docs_async(
                                         document_id=doc.id,
                                         parsed_chars=len(doc.parsed_text),
                                     )
+                                else:
+                                    raise RuntimeError("Stored document parsed to empty text")
 
                             if _parsed_text_present(doc):
+                                doc.download_status = "processed"
+                                doc.download_error = None
                                 _store_compiled_text_entry(
                                     parsed_text_by_identity,
                                     _document_identity_key(scraped_url),
@@ -1172,8 +1259,12 @@ async def _process_tender_docs_async(
                                     document_id=doc.id,
                                     parsed_chars=len(doc.parsed_text),
                                 )
+                            else:
+                                raise RuntimeError("Downloaded document parsed to empty text")
 
                         if _parsed_text_present(doc):
+                            doc.download_status = "processed"
+                            doc.download_error = None
                             _store_compiled_text_entry(
                                 parsed_text_by_identity,
                                 _document_identity_key(scraped_url),
@@ -1307,10 +1398,9 @@ async def _process_tender_docs_async(
                         compiled_page_markers=after_compiled_counts["page_marker_count"],
                         elapsed_ms=int((time.monotonic() - task_started_at) * 1000),
                     )
-                    await _persist_sync_job_state(
+                    await _persist_terminal_acquisition_state(
                         job_id=job_id,
                         status=TenderSyncStatus.FAILED,
-                        progress=100,
                         error_message=failure_message,
                     )
                     return {
@@ -1331,10 +1421,9 @@ async def _process_tender_docs_async(
                         "message": failure_message,
                     }
 
-                await _persist_sync_job_state(
+                await _persist_terminal_acquisition_state(
                     job_id=job_id,
                     status=TenderSyncStatus.SUCCESS,
-                    progress=100,
                     error_message=None,
                 )
 
@@ -1382,8 +1471,9 @@ async def _process_tender_docs_async(
                     error=exc,
                     elapsed_ms=int((time.monotonic() - task_started_at) * 1000),
                 )
-                await _mark_sync_job_failed(
+                await _persist_terminal_acquisition_state(
                     job_id=job_id,
+                    status=TenderSyncStatus.FAILED,
                     error_message=str(exc) or "Tender document sync failed.",
                 )
                 raise
@@ -1395,7 +1485,7 @@ async def _process_tender_docs_async(
 def process_tender_docs(
     self,
     tender_id: str,
-    job_id: str | None = None,
+    job_id: str,
     reparse_markerless: bool = False,
 ) -> dict[str, int | str]:
     try:
@@ -1421,9 +1511,11 @@ def process_tender_docs(
 async def _hydrate_giz_documents_async(
     tender_uuid: UUID,
     *,
-    job_id: str | None = None,
+    job_id: str,
     force: bool = False,
 ) -> dict[str, Any]:
+    if not job_id:
+        raise ValueError("Explicit document acquisition job_id is required")
     task_started_at = time.monotonic()
     _log_sync_event(
         logging.INFO,
@@ -1465,9 +1557,9 @@ async def _hydrate_giz_documents_async(
 
                 coverage = result.get("coverage") if isinstance(result.get("coverage"), dict) else {}
                 coverage_status = str(coverage.get("coverage_status") or result.get("status") or "")
-                parsed_count = int(result.get("documents_parsed") or 0)
+                parsed_count = int(result.get("documents_ready") or 0)
                 failed_count = int(result.get("documents_failed") or 0)
-                if coverage_status == "failed" or (parsed_count == 0 and failed_count > 0):
+                if parsed_count == 0:
                     job_status = TenderSyncStatus.FAILED
                     result_status = "failed"
                     error_message = "GIZ document hydration completed without parsed documents."
@@ -1476,10 +1568,9 @@ async def _hydrate_giz_documents_async(
                     result_status = coverage_status or "success"
                     error_message = None
 
-                await _persist_sync_job_state(
+                await _persist_terminal_acquisition_state(
                     job_id=job_id,
                     status=job_status,
-                    progress=100,
                     error_message=error_message,
                 )
                 result["status"] = result_status
@@ -1512,8 +1603,9 @@ async def _hydrate_giz_documents_async(
                     error=exc,
                     elapsed_ms=int((time.monotonic() - task_started_at) * 1000),
                 )
-                await _mark_sync_job_failed(
+                await _persist_terminal_acquisition_state(
                     job_id=job_id,
+                    status=TenderSyncStatus.FAILED,
                     error_message=str(exc) or "GIZ document hydration failed.",
                 )
                 raise
@@ -1525,7 +1617,7 @@ async def _hydrate_giz_documents_async(
 def hydrate_giz_documents(
     self,
     tender_id: str,
-    job_id: str | None = None,
+    job_id: str,
     force: bool = False,
 ) -> dict[str, Any]:
     try:

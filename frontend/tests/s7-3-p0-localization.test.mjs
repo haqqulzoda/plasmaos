@@ -144,8 +144,8 @@ test("source, user, Proposal, and AI narrative fields remain original", () => {
   const recommendation = read("components/tenders/RecommendationSummary.tsx");
   const workspace = read("app/dashboard/bid-preparation/[proposalId]/page.tsx");
   assert.match(explorer, /\{tender\.title\}/);
-  assert.match(details, /tender\.description \|\| t\("descriptionMissing"\)/);
-  assert.match(details, /\{item\.label\}/);
+  assert.doesNotMatch(details, /tender\.description/);
+  assert.match(details, /<BidiText>\{item\.label\}<\/BidiText>/);
   assert.match(recommendation, /\{recommendation\.rationale_summary\}/);
   assert.match(workspace, /value=\{strategicSummary\}/);
   assert.doesNotMatch(

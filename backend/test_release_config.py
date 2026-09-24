@@ -50,12 +50,12 @@ def test_gates_reject_production_targets_before_importing_database(change):
         with pytest.raises(RuntimeError): assert_local_test_target()
 
 
-def test_tracked_compose_has_no_database_publish_or_literal_admin_password():
+def test_tracked_compose_database_is_loopback_only_and_has_no_literal_admin_password():
     import yaml
     root = Path(__file__).resolve().parents[1]
     source = (root / "docker-compose.yml").read_text()
     compose = yaml.safe_load(source)
-    assert "ports" not in compose["services"]["db"]
+    assert compose["services"]["db"].get("ports") == ["127.0.0.1:6543:5432"]
     assert compose["services"]["pgadmin"]["profiles"] == ["development"]
     for name in ("POSTGRES_PASSWORD",):
         assert compose["services"]["db"]["environment"][name].startswith("${")

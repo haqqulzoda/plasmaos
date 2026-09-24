@@ -12,7 +12,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Awaitable, Callable
-from urllib.parse import quote, unquote, urlparse
+from urllib.parse import quote, unquote, urljoin, urlparse
 from uuid import UUID, uuid4
 
 import httpx
@@ -30,6 +30,7 @@ from app.services.tender_sources.giz import (
     MAX_ARCHIVE_FILE_COUNT as GIZ_MAX_ARCHIVE_FILE_COUNT,
     MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES as GIZ_MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES,
     MAX_ARCHIVE_NESTING_DEPTH as GIZ_MAX_ARCHIVE_NESTING_DEPTH,
+    MAX_GIZ_REDIRECTS,
     GizTenderSource,
     _extension_from_url as _giz_extension_from_url,
     _safe_giz_url,
@@ -311,8 +312,9 @@ async def _giz_find_duplicate_document_by_sha(
 
 def _doc_has_successful_data(doc: TenderDocument) -> bool:
     return bool(
-        (doc.parsed_text and doc.parsed_text.strip())
-        or storage_file_exists(doc.storage_path)
+        storage_file_exists(doc.storage_path)
+        and doc.parsed_text
+        and doc.parsed_text.strip()
     )
 
 
@@ -359,7 +361,7 @@ async def _giz_parse_stored_document(
         _giz_mark_document_failed(doc, "GIZ document exceeds the individual file parsing limit.")
         return False
     if not force and doc.parsed_text and doc.parsed_text.strip():
-        doc.download_status = "downloaded"
+        doc.download_status = "processed"
         doc.download_error = None
         return False
 
@@ -379,7 +381,7 @@ async def _giz_parse_stored_document(
         return False
 
     doc.parsed_text = _giz_relabel_parsed_text(parsed_text, source_label)
-    doc.download_status = "downloaded"
+    doc.download_status = "processed"
     doc.download_error = None
     return True
 
@@ -548,6 +550,9 @@ async def _giz_extract_supported_zip_members(
             archive_doc,
             f"GIZ ZIP archive processing failed: {type(exc).__name__}.",
         )
+    if parsed_count > 0 and (archive_doc.download_status or "").casefold() != "failed":
+        archive_doc.download_status = "processed"
+        archive_doc.download_error = None
     return parsed_count
 
 
@@ -568,7 +573,15 @@ async def update_giz_document_coverage(
         if "#giz-inner=" in (doc.source_document_url or doc.file_url or "")
         or "#giz-inner-sha=" in (doc.source_document_url or doc.file_url or "")
     ]
-    parsed_count = sum(1 for doc in docs if doc.parsed_text and doc.parsed_text.strip())
+    parsed_count = sum(
+        1
+        for doc in docs
+        if storage_file_exists(doc.storage_path)
+        and doc.parsed_text
+        and doc.parsed_text.strip()
+        and (doc.download_status or "").casefold()
+        not in {"failed", "unavailable", "missing", "missing_file", "access_required"}
+    )
     unsupported_count = sum(
         1
         for doc in docs
@@ -636,9 +649,8 @@ def _giz_valid_file_signature(
 ) -> bool:
     head = file_bytes[:16]
     ext = extension.casefold()
-    normalized_type = (content_type or "").split(";", 1)[0].strip().casefold()
     if ext == "pdf":
-        return file_bytes.lstrip().startswith(b"%PDF") or normalized_type == "application/pdf"
+        return file_bytes.lstrip().startswith(b"%PDF")
     if ext == "zip":
         return head.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"))
     if ext in {"docx", "xlsx"}:
@@ -647,7 +659,15 @@ def _giz_valid_file_signature(
         return head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
     if ext == "rtf":
         return file_bytes.lstrip().startswith(b"{\\rtf")
-    return normalized_type.startswith("application/")
+    return False
+
+
+def _giz_transient_download_error(exc: BaseException) -> bool:
+    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in {408, 425, 429} or exc.response.status_code >= 500
+    return False
 
 
 async def download_giz_document_into_storage(
@@ -679,57 +699,88 @@ async def download_giz_document_into_storage(
     request_url = source_url.split("#", 1)[0]
     filename = Path(urlparse(request_url).path).name or f"giz-document.{extension}"
     temp_path: str | None = None
-    try:
-        async with client.stream("GET", request_url) as response:
-            response.raise_for_status()
-            content_type = (response.headers.get("content-type") or "").split(";", 1)[0].strip()
-            content_length = response.headers.get("content-length")
-            try:
-                declared_length = int(content_length) if content_length else None
-            except ValueError:
-                declared_length = None
-            if declared_length is not None and declared_length > max_bytes:
-                _giz_mark_document_failed(
-                    doc,
-                    "Public GIZ document exceeds configured download size limit.",
-                )
-                return False
-            if _giz_rejected_payload_content_type(content_type):
-                if not _doc_has_successful_data(doc):
-                    doc.download_status = "access_required" if "html" in content_type.casefold() else "failed"
-                doc.download_error = "Public GIZ document URL returned a page or error payload, not a document file."
-                return False
-
-            temp_path, final_path = _reserve_document_download_path(
-                tender_id=tender.id,
-                filename=filename,
-            )
-            first_bytes = bytearray()
-            total_bytes = 0
-            with Path(temp_path).open("wb") as file_handle:
-                async for chunk in response.aiter_bytes():
-                    if not chunk:
+    content_type = ""
+    first_bytes = bytearray()
+    total_bytes = 0
+    final_path = ""
+    for attempt in range(3):
+        temp_path = None
+        try:
+            current_url = request_url
+            completed = False
+            for redirect_count in range(MAX_GIZ_REDIRECTS + 1):
+                if not _safe_giz_url(current_url):
+                    raise ValueError("GIZ download URL is outside approved giz.de hosts")
+                async with client.stream(
+                    "GET",
+                    current_url,
+                    follow_redirects=False,
+                ) as response:
+                    if response.is_redirect:
+                        location = response.headers.get("location")
+                        if not location or redirect_count >= MAX_GIZ_REDIRECTS:
+                            raise ValueError("GIZ download redirect chain is invalid or too long")
+                        current_url = urljoin(str(response.url), location)
                         continue
-                    total_bytes += len(chunk)
-                    if total_bytes > max_bytes:
-                        _cleanup_temp_download(temp_path)
+                    if not _safe_giz_url(str(response.url)):
+                        raise ValueError("GIZ download response left approved giz.de hosts")
+                    response.raise_for_status()
+                    content_type = (response.headers.get("content-type") or "").split(";", 1)[0].strip()
+                    content_length = response.headers.get("content-length")
+                    try:
+                        declared_length = int(content_length) if content_length else None
+                    except ValueError:
+                        declared_length = None
+                    if declared_length is not None and declared_length > max_bytes:
                         _giz_mark_document_failed(
                             doc,
                             "Public GIZ document exceeds configured download size limit.",
                         )
                         return False
-                    if len(first_bytes) < 2048:
-                        first_bytes.extend(chunk[: 2048 - len(first_bytes)])
-                    file_handle.write(chunk)
-    except Exception as exc:
-        if temp_path:
-            _cleanup_temp_download(temp_path)
-        _giz_mark_document_failed(
-            doc,
-            f"GIZ public document download failed: {type(exc).__name__}",
-        )
-        logger.error("operation_failed event=giz_document_hydration:731 error_type=%s", type(exc).__name__)
-        return False
+                    if _giz_rejected_payload_content_type(content_type):
+                        if not _doc_has_successful_data(doc):
+                            doc.download_status = "access_required" if "html" in content_type.casefold() else "failed"
+                        doc.download_error = "Public GIZ document URL returned a page or error payload, not a document file."
+                        return False
+
+                    temp_path, final_path = _reserve_document_download_path(
+                        tender_id=tender.id,
+                        filename=filename,
+                    )
+                    first_bytes = bytearray()
+                    total_bytes = 0
+                    with Path(temp_path).open("wb") as file_handle:
+                        async for chunk in response.aiter_bytes():
+                            if not chunk:
+                                continue
+                            total_bytes += len(chunk)
+                            if total_bytes > max_bytes:
+                                _cleanup_temp_download(temp_path)
+                                _giz_mark_document_failed(
+                                    doc,
+                                    "Public GIZ document exceeds configured download size limit.",
+                                )
+                                return False
+                            if len(first_bytes) < 2048:
+                                first_bytes.extend(chunk[: 2048 - len(first_bytes)])
+                            file_handle.write(chunk)
+                    completed = True
+                    break
+            if not completed:
+                raise ValueError("GIZ download redirect chain is too long")
+            break
+        except Exception as exc:
+            if temp_path:
+                _cleanup_temp_download(temp_path)
+            if attempt < 2 and _giz_transient_download_error(exc):
+                await asyncio.sleep(0.5 * (2**attempt))
+                continue
+            _giz_mark_document_failed(
+                doc,
+                f"GIZ public document download failed: {type(exc).__name__}",
+            )
+            logger.error("operation_failed event=giz_document_hydration:731 error_type=%s", type(exc).__name__)
+            return False
 
     file_head = bytes(first_bytes)
     if total_bytes < 32:
@@ -753,11 +804,20 @@ async def download_giz_document_into_storage(
         )
         return False
 
-    storage_path, file_size, sha256_digest = await asyncio.to_thread(
-        _finalize_document_download,
-        temp_path=temp_path,
-        final_path=final_path,
-    )
+    try:
+        storage_path, file_size, sha256_digest = await asyncio.to_thread(
+            _finalize_document_download,
+            temp_path=temp_path,
+            final_path=final_path,
+        )
+    except Exception as exc:
+        if temp_path:
+            _cleanup_temp_download(temp_path)
+        _giz_mark_document_failed(
+            doc,
+            f"GIZ public document persistence failed: {type(exc).__name__}",
+        )
+        return False
     if not storage_file_exists(storage_path):
         _giz_mark_document_failed(doc, "GIZ public document was written but is not present on disk.")
         return False
@@ -784,7 +844,15 @@ async def compile_tender_text_from_documents(
         .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
     )
     docs = result.scalars().all()
-    parsed_parts = [doc.parsed_text.strip() for doc in docs if doc.parsed_text and doc.parsed_text.strip()]
+    parsed_parts = [
+        doc.parsed_text.strip()
+        for doc in docs
+        if storage_file_exists(doc.storage_path)
+        and doc.parsed_text
+        and doc.parsed_text.strip()
+        and (doc.download_status or "").casefold()
+        not in {"failed", "unavailable", "missing", "missing_file", "access_required"}
+    ]
     tender.compiled_master_text = "\n\n".join(parsed_parts) if parsed_parts else None
 
 
@@ -892,30 +960,54 @@ async def hydrate_giz_tender_documents(
     source = GizTenderSource(source_pages=[])
     normalized = _normalized_tender_from_giz_row(tender)
     await _emit_progress(progress_callback, 15)
-    documents = await source.discover_documents(normalized)
     upsert_created = 0
     upsert_updated = 0
-    if documents:
-        upsert_created, upsert_updated = await source.upsert_documents(
-            db,
-            tender=tender,
-            documents=documents,
-        )
-        await db.flush()
-
     downloaded_count = 0
-    await _emit_progress(progress_callback, 30)
     async with httpx.AsyncClient(
         timeout=source.config.timeout_seconds,
         headers={"User-Agent": GIZ_USER_AGENT},
-        follow_redirects=True,
+        follow_redirects=False,
     ) as client:
+        documents, metadata_updates = await source.discover_documents_for_acquisition(
+            normalized,
+            client=client,
+        )
+        if metadata_updates:
+            tender.source_metadata_json = {
+                **dict(tender.source_metadata_json or {}),
+                **metadata_updates,
+            }
+        if documents:
+            upsert_created, upsert_updated = await source.upsert_documents(
+                db,
+                tender=tender,
+                documents=documents,
+            )
+            await db.flush()
+
+        await _emit_progress(progress_callback, 30)
+        is_eproc = (urlparse(str(tender.source_url or "")).hostname or "").casefold() == "ausschreibungen.giz.de"
+        active_urls = {item.source_document_url for item in documents}
         docs_result = await db.execute(
             select(TenderDocument)
             .where(TenderDocument.tender_id == tender.id)
             .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
         )
         for doc in docs_result.scalars().all():
+            source_url = doc.source_document_url or doc.file_url or ""
+            if (
+                is_eproc
+                and "#giz-inner=" not in source_url
+                and "#giz-inner-sha=" not in source_url
+                and source_url not in active_urls
+                and not storage_file_exists(doc.storage_path)
+            ):
+                doc.download_status = "access_required"
+                doc.download_error = (
+                    "The current official GIZ participation-documents page did not expose "
+                    "a public downloadable archive."
+                )
+                continue
             downloaded = await download_giz_document_into_storage(
                 client=client,
                 tender=tender,
@@ -937,7 +1029,15 @@ async def hydrate_giz_tender_documents(
         select(TenderDocument).where(TenderDocument.tender_id == tender.id)
     )
     docs = docs_result.scalars().all()
-    parsed_documents = sum(1 for doc in docs if doc.parsed_text and doc.parsed_text.strip())
+    ready_documents = sum(
+        1
+        for doc in docs
+        if storage_file_exists(doc.storage_path)
+        and doc.parsed_text
+        and doc.parsed_text.strip()
+        and (doc.download_status or "").casefold()
+        not in {"failed", "unavailable", "missing", "missing_file", "access_required"}
+    )
     failed_documents = sum(
         1
         for doc in docs
@@ -954,7 +1054,8 @@ async def hydrate_giz_tender_documents(
         "documents_updated": upsert_updated,
         "documents_downloaded": downloaded_count,
         "documents_total": len(docs),
-        "documents_parsed": parsed_documents,
+        "documents_parsed": ready_documents,
+        "documents_ready": ready_documents,
         "documents_failed": failed_documents,
         "documents_parsed_this_run": int(coverage.get("parsed_this_run") or 0),
         "coverage": coverage,

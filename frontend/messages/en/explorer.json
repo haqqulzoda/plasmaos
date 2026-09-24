@@ -1,6 +1,6 @@
 {
   "title": "Tender Explorer",
-  "subtitle": "Discover tenders, review advisory matches, and manage pursuit actions independently.",
+  "subtitle": "Discover and evaluate relevant tenders from global development partners.",
   "newArrivals": "{count, plural, one {# new tender available} other {# new tenders available}}",
   "resultsStable": "Your current results have not moved.",
   "show": "Show",
@@ -105,7 +105,7 @@
     "dismiss": "Dismiss recommendation"
   },
   "redesign": {
-    "eyebrow": "Explore global opportunities",
+    "eyebrow": "Discovery",
     "preview": "Preview tender",
     "selectTitle": "Select a tender",
     "selectHelp": "Choose Preview on a result to see its summary here.",
@@ -114,6 +114,23 @@
     "activeFilters": "Active filters",
     "removeFilter": "Remove {filter}",
     "clearAll": "Clear all",
-    "value": "Estimated value"
+    "value": "Estimated value",
+    "budget": "Budget",
+    "searchPlaceholder": "Search tenders by keyword, title, source, or region…",
+    "sourceLabel": "Source",
+    "sortBy": "Sort by",
+    "regionCountry": "Region / Country",
+    "statusLabel": "Status",
+    "allRegions": "All regions",
+    "categorySector": "Category / Sector",
+    "allCategories": "All categories",
+    "resultsToolbar": "Manage tender results",
+    "resultCount": "{count, plural, one {# tender found} other {# tenders found}}",
+    "deadlineUnavailable": "Deadline unavailable",
+    "match": "{score}% match",
+    "openSource": "Open source",
+    "openSourceFor": "Open source for {title} in a new tab",
+    "partialTitle": "Some sources may be incomplete",
+    "partialHelp": "Recent refreshes for {sources} were partial or failed. Results show available records only."
   }
 }

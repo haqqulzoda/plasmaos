@@ -191,7 +191,12 @@ function NotificationRow({ item, locale, busy, onReadChange }: {
   const body = broadcast
     ? item.body || ''
     : safeTemplate
-      ? t(`templates.${safeTemplate}.body`, { versionNumber: numericPayload(item.payload.version_number) })
+      ? t(`templates.${safeTemplate}.body`, {
+          versionNumber: numericPayload(item.payload.version_number),
+          readyCount: numericPayload(item.payload.ready_count, 0),
+          totalCount: numericPayload(item.payload.total_count, 0),
+          failedCount: numericPayload(item.payload.failed_count, 0),
+        })
       : t('fallback.body');
   const category = t(`categories.${item.category}`);
   const date = safeDate(item.created_at, locale);
@@ -228,8 +233,8 @@ function NotificationSkeleton({ label }: { label: string }) {
   return <div className="notification-loading" role="status"><RefreshCw className="ds-spin" aria-hidden /><span>{label}</span></div>;
 }
 
-function numericPayload(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 1;
+function numericPayload(value: unknown, fallback = 1) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
 function safeDate(value: string, locale: string) {

@@ -52,7 +52,7 @@ class AdminApprovalQueueTests(unittest.TestCase):
         approvals_page = read_frontend("app/admin/approvals/page.tsx")
         legacy_admin_page = read_frontend("app/dashboard/admin/page.tsx")
         legacy_approvals_page = read_frontend("app/dashboard/admin/approvals/page.tsx")
-        middleware = read_frontend("middleware.ts")
+        proxy = read_frontend("proxy.ts")
 
         self.assertIn("<PlasmaLogo admin", admin_layout)
         self.assertIn("'/admin'", admin_layout)
@@ -62,7 +62,7 @@ class AdminApprovalQueueTests(unittest.TestCase):
         self.assertIn("router.replace('/dashboard')", admin_layout)
         self.assertEqual(translated(dashboard_layout, "navigation", "adminConsole"), "Admin Console")
         self.assertNotIn("name: 'Admin'", dashboard_layout)
-        self.assertIn("'/admin/:path*'", middleware)
+        self.assertIn("'/admin/:path*'", proxy)
 
         self.assertIn("Open accounts", admin_page)
         self.assertIn('href="/admin/approvals"', admin_page)

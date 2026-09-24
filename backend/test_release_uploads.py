@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, UploadFile
-from fastapi.testclient import TestClient
+import httpx
 import pytest
 
 from app.api.endpoints.proposals import upload_tender_tz
@@ -90,8 +90,18 @@ def test_oversized_content_length_is_rejected_before_multipart_or_handler():
     async def upload(file: UploadFile):
         called.append(True)
         return {"success":True}
-    with TestClient(app) as client:
-        response = client.post("/api/v1/proposals/fixture/upload-tz", content=b"ignored",headers={"Content-Length":str(uploads.MAX_UPLOAD_REQUEST_BYTES+1)})
+    async def exercise():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            return await client.post(
+                "/api/v1/proposals/fixture/upload-tz",
+                content=b"ignored",
+                headers={"Content-Length": str(uploads.MAX_UPLOAD_REQUEST_BYTES + 1)},
+            )
+
+    response = asyncio.run(exercise())
     assert response.status_code == 413 and not called
 
 

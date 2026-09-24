@@ -97,7 +97,7 @@ def test_generation_is_scheduled_background_work_not_a_read_side_effect() -> Non
     assert "~exists(recommendation_exists)" in worker
     assert "TenderRecommendation(" in worker
     assert "MIN_MATCH_SCORE = 10" in worker
-    assert "process_tender_docs.delay" in worker
+    assert "process_tender_docs" not in worker
     assert "run_hunter_sweep" not in hunter
 
 

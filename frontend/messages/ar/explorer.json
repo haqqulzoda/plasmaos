@@ -105,7 +105,7 @@
     "dismiss": "تجاهل التوصية"
   },
   "redesign": {
-    "eyebrow": "استكشف الفرص العالمية",
+    "eyebrow": "اكتشاف الفرص",
     "preview": "معاينة المناقصة",
     "selectTitle": "اختر مناقصة",
     "selectHelp": "اختر المعاينة من إحدى النتائج لعرض ملخصها هنا.",
@@ -114,6 +114,23 @@
     "activeFilters": "عوامل التصفية النشطة",
     "removeFilter": "إزالة {filter}",
     "clearAll": "مسح الكل",
-    "value": "القيمة التقديرية"
+    "value": "القيمة التقديرية",
+    "budget": "الميزانية",
+    "searchPlaceholder": "ابحث بالكلمة أو العنوان أو المصدر أو المنطقة…",
+    "sourceLabel": "المصدر",
+    "sortBy": "ترتيب حسب",
+    "regionCountry": "المنطقة / البلد",
+    "statusLabel": "الحالة",
+    "allRegions": "جميع المناطق",
+    "categorySector": "الفئة / القطاع",
+    "allCategories": "جميع الفئات",
+    "resultsToolbar": "إدارة نتائج المناقصات",
+    "resultCount": "تم العثور على {count} مناقصة",
+    "deadlineUnavailable": "الموعد النهائي غير متاح",
+    "match": "تطابق {score}%",
+    "openSource": "فتح المصدر",
+    "openSourceFor": "فتح مصدر {title} في علامة تبويب جديدة",
+    "partialTitle": "قد تكون بعض المصادر غير مكتملة",
+    "partialHelp": "كان التحديث الأخير للمصادر {sources} جزئيًا أو فشل. تظهر السجلات المتاحة فقط."
   }
 }

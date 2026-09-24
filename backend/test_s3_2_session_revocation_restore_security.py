@@ -182,18 +182,18 @@ class SessionRevocationStaticTests(TestCase):
 
     def test_browser_cookie_and_authjs_callbacks_revalidate_current_authority(self):
         auth = self.frontend("auth.ts")
-        middleware = self.frontend("middleware.ts")
-        proxy = self.frontend("lib/documentProxy.ts")
+        proxy = self.frontend("proxy.ts")
+        document_proxy = self.frontend("lib/documentProxy.ts")
 
         self.assertIn("await validateAndRotateBackendSession", auth)
         self.assertIn("clearBackendAuthority(token)", auth)
         self.assertIn("BackendSessionRevoked", auth)
         self.assertNotIn("keep existing token", auth)
-        self.assertIn("`${backendApiBase}/users/me`", middleware)
-        self.assertIn("cache: 'no-store'", middleware)
-        self.assertIn("Authorization: `Bearer ${accessToken}`", middleware)
-        self.assertIn("const session = await auth();", proxy)
+        self.assertIn("`${backendApiBase}/users/me`", proxy)
+        self.assertIn("cache: 'no-store'", proxy)
         self.assertIn("Authorization: `Bearer ${accessToken}`", proxy)
+        self.assertIn("const session = await auth();", document_proxy)
+        self.assertIn("Authorization: `Bearer ${accessToken}`", document_proxy)
 
     def test_token_issuance_and_role_grants_revoke_atomically(self):
         auth = self.backend("app/api/endpoints/auth.py")

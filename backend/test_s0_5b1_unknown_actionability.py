@@ -44,6 +44,12 @@ class _ExistingResult:
     def scalar_one_or_none(self) -> Tender:
         return self.tender
 
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.tender if isinstance(self.tender, list) else [self.tender]
+
 
 class _ExistingTenderSession:
     def __init__(self, tender: Tender):
@@ -226,8 +232,8 @@ class ComplianceAndProposalTests(unittest.TestCase):
 
     def test_23_open_compliance_reaches_existing_document_validation(self) -> None:
         user = SimpleNamespace(id=uuid4())
-        tender = SimpleNamespace(status=TenderStatus.OPEN, compiled_master_text="")
-        db = _SequenceSession(tender)
+        tender = SimpleNamespace(id=uuid4(), status=TenderStatus.OPEN, compiled_master_text="")
+        db = _SequenceSession(tender, [])
         with patch.object(tender_endpoints, "_ensure_tender_access", new=AsyncMock()):
             with self.assertRaises(HTTPException) as raised:
                 asyncio.run(tender_endpoints.analyze_tender(uuid4(), current_user=user, session=db))
@@ -305,7 +311,7 @@ class FrontendContractTests(unittest.TestCase):
     def test_31_details_remain_visible_with_explicit_status_badge(self) -> None:
         details = read_frontend("app/dashboard/tenders/[tenderId]/page.tsx")
         self.assertIn('tExplorer("status.open")', details)
-        self.assertIn('t("status", { status: tenderStatus })', details)
+        self.assertIn('<StatusBadge tone={tender.status === "OPEN" ? "success" : "neutral"}>{tenderStatus}</StatusBadge>', details)
         self.assertIn("const actionable = isTenderActionable(tender)", details)
         self.assertIn("canStartNew={actionable}", details)
 

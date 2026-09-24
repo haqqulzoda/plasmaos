@@ -54,7 +54,7 @@ async def scenario(tmp_path):
             session.add_all(artifact_rows)
             session.add_all([ReadinessDocument(company_profile_id=profile_id,document_type="license",document_name=f"License {i:02}",status="available",related_service="IT" if i%2 else "Construction") for i in range(31)])
             session.add_all([User(google_id=f"pending-{i}-{uuid4()}",email=f"pending-{i}@release.invalid",name=f"Pending {i}",approval_status="pending",platform_role="pilot_user") for i in range(31)])
-            document = TenderDocument(id=uuid4(),tender_id=corpus[0].id,file_url="https://example.invalid/file.pdf",file_type="pdf",download_status="downloaded",storage_path=str(stored))
+            document = TenderDocument(id=uuid4(),tender_id=corpus[0].id,file_url="https://example.invalid/file.pdf",file_type="pdf",download_status="processed",storage_path=str(stored),parsed_text="Stored technical text")
             missing = TenderDocument(id=uuid4(),tender_id=corpus[0].id,file_url="https://example.invalid/remote.pdf",file_type="pdf",download_status="metadata_only")
             session.add_all([document,missing])
             analysis = TenderAnalysis(id=uuid4(),tender_id=corpus[0].id,user_id=user_id,company_profile_id=profile_id,ownership_state="OWNED",tender_file_name="fixture.pdf",company_name="Synthetic",raw_extracted_text="Stored text",analysis_json={})
@@ -94,7 +94,9 @@ async def scenario(tmp_path):
         routes = [
             ("legacy-list","/api/v1/tenders?limit=25",200,8),
             ("legacy-detail",f"/api/v1/tenders/{corpus[0].id}",200,8),
-            ("details",f"/api/v1/tenders/{corpus[0].id}/details",200,13),
+                # Sprint 13 adds one constant-time latest acquisition-job read so
+                # restart-safe progress can be rendered without any source I/O.
+                ("details",f"/api/v1/tenders/{corpus[0].id}/details",200,15),
             ("decision",f"/api/v1/tenders/{corpus[0].id}/decision-snapshot",200,7),
             ("documents",f"/api/v1/tenders/{corpus[0].id}/documents",200,6),
             ("stored-download",f"/api/v1/tenders/documents/{document.id}/download",200,8),

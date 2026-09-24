@@ -1,1 +1,79 @@
-{"eyebrow":"Kiruvchi xabarlar","title":"Bildirishnomalar","description":"Hisob, tender va ma’muriy yangilanishlar bir joyda.","bell":"Bildirishnomalar","bellWithCount":"Bildirishnomalar, {count} ta o‘qilmagan","filterLabel":"Bildirishnomalarni filtrlash","listLabel":"Bildirishnomalar ro‘yxati","markAllRead":"Barchasini o‘qilgan deb belgilash","loadMore":"Yana yuklash","retry":"Qayta urinish","read":"O‘qilgan","unread":"O‘qilmagan","test":"Sinov","version":"Tahlil versiyasi {versionNumber}","filters":{"ALL":"Barchasi","UNREAD":"O‘qilmagan","SYSTEM":"Tizim","TENDER_ALERT":"Tender xabarlari","ADMIN":"E’lonlar"},"categories":{"SYSTEM":"Tizim","TENDER_ALERT":"Tender xabari","ADMIN":"E’lon"},"actions":{"markRead":"O‘qilgan deb belgilash","markUnread":"O‘qilmagan deb belgilash","openTender":"Tenderni ochish","openCompliance":"Tahlilni ko‘rish","openDashboard":"Boshqaruv panelini ochish"},"templates":{"recommendationCreated":{"title":"Yangi tender tavsiyasi","body":"Ko‘rib chiqishingiz uchun yangi tender tavsiyasi tayyor."},"analysisCompleted":{"title":"Tahlil yakunlandi","body":"Tahlilning {versionNumber}-versiyasi ko‘rib chiqishga tayyor."},"accountApproved":{"title":"Hisob tasdiqlandi","body":"Hisobingiz tasdiqlandi. Endi ish maydonidan foydalanishingiz mumkin."}},"fallback":{"title":"Hisob yangilanishi","body":"Bu yangilanish mavjud, ammo uning dastlabki manzili endi qo‘llab-quvvatlanmaydi."},"states":{"loading":"Bildirishnomalar yuklanmoqda…","empty":"Barcha xabarlarni ko‘rdingiz","emptyHelp":"Yangi yangilanishlar shu yerda ko‘rinadi.","filteredEmpty":"Bu filtrga mos bildirishnoma yo‘q","filteredEmptyHelp":"Ko‘proq yangilanishlarni ko‘rish uchun boshqa filtrni tanlang.","failure":"Bildirishnomalarni yuklab bo‘lmadi.","mutationFailure":"O‘qilganlik holatini o‘zgartirib bo‘lmadi. Ro‘yxat tiklandi."},"feedback":{"markedRead":"Bildirishnoma o‘qilgan deb belgilandi.","markedUnread":"Bildirishnoma o‘qilmagan deb belgilandi.","allRead":"Barcha bildirishnomalar o‘qilgan deb belgilandi."}}
+{
+  "eyebrow": "Kiruvchi xabarlar",
+  "title": "Bildirishnomalar",
+  "description": "Hisob, tender va ma’muriy yangilanishlar bir joyda.",
+  "bell": "Bildirishnomalar",
+  "bellWithCount": "Bildirishnomalar, {count} ta o‘qilmagan",
+  "filterLabel": "Bildirishnomalarni filtrlash",
+  "listLabel": "Bildirishnomalar ro‘yxati",
+  "markAllRead": "Barchasini o‘qilgan deb belgilash",
+  "loadMore": "Yana yuklash",
+  "retry": "Qayta urinish",
+  "read": "O‘qilgan",
+  "unread": "O‘qilmagan",
+  "test": "Sinov",
+  "version": "Tahlil versiyasi {versionNumber}",
+  "filters": {
+    "ALL": "Barchasi",
+    "UNREAD": "O‘qilmagan",
+    "SYSTEM": "Tizim",
+    "TENDER_ALERT": "Tender xabarlari",
+    "ADMIN": "E’lonlar"
+  },
+  "categories": {
+    "SYSTEM": "Tizim",
+    "TENDER_ALERT": "Tender xabari",
+    "ADMIN": "E’lon"
+  },
+  "actions": {
+    "markRead": "O‘qilgan deb belgilash",
+    "markUnread": "O‘qilmagan deb belgilash",
+    "openTender": "Tenderni ochish",
+    "openCompliance": "Tahlilni ko‘rish",
+    "openDashboard": "Boshqaruv panelini ochish"
+  },
+  "templates": {
+    "recommendationCreated": {
+      "title": "Yangi tender tavsiyasi",
+      "body": "Ko‘rib chiqishingiz uchun yangi tender tavsiyasi tayyor."
+    },
+    "analysisCompleted": {
+      "title": "Tahlil yakunlandi",
+      "body": "Tahlilning {versionNumber}-versiyasi ko‘rib chiqishga tayyor."
+    },
+    "accountApproved": {
+      "title": "Hisob tasdiqlandi",
+      "body": "Hisobingiz tasdiqlandi. Endi ish maydonidan foydalanishingiz mumkin."
+    },
+    "documentsReady": {
+      "title": "Tender hujjatlari tayyor",
+      "body": "{totalCount} ta hujjatdan {readyCount} tasi muvofiqlik tahliliga tayyor."
+    },
+    "documentsPartial": {
+      "title": "Tender hujjatlari qisman tayyor",
+      "body": "{totalCount} tadan {readyCount} tasi tayyor; {failedCount} tasini tayyorlab bo‘lmadi."
+    },
+    "documentsFailed": {
+      "title": "Tender hujjatlarini olish amalga oshmadi",
+      "body": "Tender hujjatlarini tayyorlab bo‘lmadi. Qayta urinish uchun tenderni oching."
+    }
+  },
+  "fallback": {
+    "title": "Hisob yangilanishi",
+    "body": "Bu yangilanish mavjud, ammo uning dastlabki manzili endi qo‘llab-quvvatlanmaydi."
+  },
+  "states": {
+    "loading": "Bildirishnomalar yuklanmoqda…",
+    "empty": "Barcha xabarlarni ko‘rdingiz",
+    "emptyHelp": "Yangi yangilanishlar shu yerda ko‘rinadi.",
+    "filteredEmpty": "Bu filtrga mos bildirishnoma yo‘q",
+    "filteredEmptyHelp": "Ko‘proq yangilanishlarni ko‘rish uchun boshqa filtrni tanlang.",
+    "failure": "Bildirishnomalarni yuklab bo‘lmadi.",
+    "mutationFailure": "O‘qilganlik holatini o‘zgartirib bo‘lmadi. Ro‘yxat tiklandi."
+  },
+  "feedback": {
+    "markedRead": "Bildirishnoma o‘qilgan deb belgilandi.",
+    "markedUnread": "Bildirishnoma o‘qilmagan deb belgilandi.",
+    "allRead": "Barcha bildirishnomalar o‘qilgan deb belgilandi."
+  }
+}

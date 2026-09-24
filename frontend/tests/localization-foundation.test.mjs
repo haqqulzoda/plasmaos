@@ -355,7 +355,7 @@ test("enum display and stable error-code foundations preserve canonical payloads
 
 test("runtime integration is locale-neutral, request-scoped, and bundle-conscious", () => {
   const layout = readText("../app/layout.tsx");
-  const middleware = readText("../middleware.ts");
+  const proxy = readText("../proxy.ts");
   const loader = readText("../i18n/messages.ts");
   const request = readText("../i18n/request.ts");
   const localeAction = readText("../i18n/userLocale.ts");
@@ -369,8 +369,10 @@ test("runtime integration is locale-neutral, request-scoped, and bundle-consciou
     layout,
     /NextIntlClientProvider locale=\{locale\} messages=\{messages\}/,
   );
-  assert.match(middleware, /cache: 'no-store'/);
-  assert.match(middleware, /PERSISTED_UI_LOCALE_HEADER/);
+  assert.match(proxy, /export async function proxy\(request: NextRequest\)/);
+  assert.doesNotMatch(proxy, /function middleware\(/);
+  assert.match(proxy, /cache: 'no-store'/);
+  assert.match(proxy, /PERSISTED_UI_LOCALE_HEADER/);
   assert.match(
     request,
     /persistedUserLocale.*presentationCookie.*acceptLanguage/s,

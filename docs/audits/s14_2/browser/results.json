@@ -1,0 +1,460 @@
+[
+  {
+    "case": "browser/chromium-version",
+    "status": "PASS",
+    "detail": "145.0.7632.6"
+  },
+  {
+    "case": "en-320/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-320/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-320/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-320/passive-budget",
+    "status": "PASS",
+    "detail": 12
+  },
+  {
+    "case": "en-390/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-390/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-390/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-390/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "en-390/axe",
+    "status": "PASS",
+    "detail": {
+      "serious_critical": 0
+    }
+  },
+  {
+    "case": "en-768/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-768/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-768/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-768/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "en-1440/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-1440/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-1440/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "en-1440/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "en-1440/axe",
+    "status": "PASS",
+    "detail": {
+      "serious_critical": 0
+    }
+  },
+  {
+    "case": "uz-320/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-320/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-320/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-320/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "uz-390/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-390/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-390/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-390/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "uz-768/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-768/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-768/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-768/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "uz-1440/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-1440/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-1440/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "uz-1440/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "ru-320/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-320/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-320/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-320/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "ru-390/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-390/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-390/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-390/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "ru-768/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-768/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-768/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-768/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "ru-1440/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-1440/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-1440/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ru-1440/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "ar-320/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-320/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-320/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-320/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "ar-390/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-390/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-390/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-390/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "ar-390/axe",
+    "status": "PASS",
+    "detail": {
+      "serious_critical": 0
+    }
+  },
+  {
+    "case": "ar-768/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-768/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-768/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-768/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "ar-1440/render",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-1440/overflow",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-1440/locale",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "ar-1440/passive-budget",
+    "status": "PASS",
+    "detail": 13
+  },
+  {
+    "case": "ar-1440/axe",
+    "status": "PASS",
+    "detail": {
+      "serious_critical": 0
+    }
+  },
+  {
+    "case": "mockup/deviations",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "branding/supplied-world-bank-art",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "branding/supplied-ebrd-art",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "branding/logo-only",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "content/no-card-description",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "canonical/budget-values",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "canonical/missing-match",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "canonical/missing-deadline-logo",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "source/safe-link",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "filters/search-chips-clear",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "views/all-recommended-dismissed-new",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "results/sort-pagination",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "bookmark/save-unsave",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "bookmark/failure-rollback",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "recommendation/dismiss-restore",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "states/empty",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "states/partial",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "states/failure",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "states/initial-loading",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "states/preserve-results-while-filtering",
+    "status": "PASS",
+    "detail": null
+  },
+  {
+    "case": "network/no-external",
+    "status": "PASS",
+    "detail": null
+  }
+]

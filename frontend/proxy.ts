@@ -44,7 +44,7 @@ function unavailableResponse(request: NextRequest) {
   });
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   if (isPublicPath(request.nextUrl.pathname)) {
     const requestHeaders = new Headers(request.headers);
     requestHeaders.delete(PERSISTED_UI_LOCALE_HEADER);

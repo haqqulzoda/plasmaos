@@ -1,0 +1,210 @@
+[
+  {
+    "case": "en/320/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "en/320/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "en/390/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "en/390/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "compliance-en-390/axe",
+    "status": "PASS",
+    "evidence": {
+      "serious_critical": 0
+    }
+  },
+  {
+    "case": "en/768/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "en/768/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "en/1440/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "en/1440/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "compliance-en-1440/axe",
+    "status": "PASS",
+    "evidence": {
+      "serious_critical": 0
+    }
+  },
+  {
+    "case": "uz/320/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "uz/320/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "uz/390/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "uz/390/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "uz/768/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "uz/768/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "uz/1440/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "uz/1440/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ru/320/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ru/320/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ru/390/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ru/390/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ru/768/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ru/768/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ru/1440/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ru/1440/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ar/320/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ar/320/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ar/390/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ar/390/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "compliance-ar-390/axe",
+    "status": "PASS",
+    "evidence": {
+      "serious_critical": 0
+    }
+  },
+  {
+    "case": "ar/768/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ar/768/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ar/1440/render-bounds-passivity",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "ar/1440/evidence-first-inspector",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "compliance-ar-1440/axe",
+    "status": "PASS",
+    "evidence": {
+      "serious_critical": 0
+    }
+  },
+  {
+    "case": "interactions/local-search-reset",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "interactions/matched-progressive-disclosure",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "interactions/audited-override",
+    "status": "PASS",
+    "evidence": null
+  },
+  {
+    "case": "interactions/exact-version-export",
+    "status": "PASS",
+    "evidence": null
+  }
+]

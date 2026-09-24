@@ -246,8 +246,9 @@ textarea.ds-control {
   color: var(--ds-success);
 }
 .ds-tone-warning {
-  background: var(--ds-warning-subtle);
-  color: var(--ds-warning);
+  background: var(--warning-bg);
+  color: var(--warning-accent);
+  border-color: var(--warning-border);
 }
 .ds-tone-danger {
   background: var(--ds-danger-subtle);

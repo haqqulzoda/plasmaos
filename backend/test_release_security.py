@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import jwt
+import httpx
 import pytest
 from fastapi import FastAPI, HTTPException, Response, UploadFile
-from fastapi.testclient import TestClient
 
 from app.api.endpoints import auth, tenders
 from app.core import auth_bridge
@@ -138,8 +138,14 @@ def test_direct_tender_authorization_matrix(state, expected, route):
     app.include_router(tenders.router, prefix="/tenders")
     app.dependency_overrides[get_db] = lambda: db
     headers = {} if state == "anonymous" else {"Authorization": "Bearer " + ("invalid" if state == "invalid" else create_access_token({"sub":str(user.id),"auth_version":2 if state == "stale" else 3}))}
-    with TestClient(app) as client:
-        response = client.get("/tenders" + route, headers=headers)
+    async def exercise():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            return await client.get("/tenders" + route, headers=headers)
+
+    response = asyncio.run(exercise())
     # Authorized absent resources are looked up and return 404; list is 200.
     assert response.status_code == (404 if expected == 200 and route else expected)
     if expected != 200:
@@ -158,12 +164,20 @@ def test_safe_error_boundary_and_validation_do_not_echo_input(caplog):
     async def failure(): raise RuntimeError(SENTINEL)
     @app.get("/validate")
     async def validate(number: int): return number
-    with TestClient(app) as client:
-        for route in ["/failure", "/validate?number=" + SENTINEL]:
-            response = client.get(route)
-            assert response.status_code in {500,422}
-            assert "request_id" in response.json()
-            assert "SENTINEL" not in response.text
+    async def exercise():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+        ) as client:
+            return [
+                await client.get(route)
+                for route in ["/failure", "/validate?number=" + SENTINEL]
+            ]
+
+    for response in asyncio.run(exercise()):
+        assert response.status_code in {500,422}
+        assert "request_id" in response.json()
+        assert "SENTINEL" not in response.text
     assert "SENTINEL" not in caplog.text
 
 

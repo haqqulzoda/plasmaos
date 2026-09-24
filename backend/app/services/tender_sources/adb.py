@@ -15,7 +15,7 @@ from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
-import fitz
+import pymupdf as fitz
 
 logger = logging.getLogger(__name__)
 

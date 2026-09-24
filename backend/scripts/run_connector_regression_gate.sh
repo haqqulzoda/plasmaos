@@ -3,7 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-python3 -m pytest -s -q \
+python_bin="${PYTHON_BIN:-python3}"
+"$python_bin" -m pytest -s -q \
   test_s5_cross_source_regression.py \
   test_scraper_download_variants.py \
   test_tender_worker_failure_handling.py \

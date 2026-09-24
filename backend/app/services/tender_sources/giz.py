@@ -70,6 +70,7 @@ MAX_ARCHIVE_INDIVIDUAL_FILE_BYTES = _env_positive_int(
 MAX_ARCHIVE_NESTING_DEPTH = _env_positive_int("GIZ_MAX_ARCHIVE_NESTING_DEPTH", 1)
 MAX_DOWNLOAD_BYTES = MAX_ARCHIVE_COMPRESSED_BYTES
 MAX_GIZ_EPROC_PAGES = 6
+MAX_GIZ_REDIRECTS = 5
 GIZ_PLACEHOLDER_TITLES = {
     "bidding list",
     "tender",
@@ -893,9 +894,27 @@ class GizTenderSource:
 
         for attempt in range(self.config.max_retries + 1):
             try:
-                response = await client.request(method, url, **kwargs)
-                response.raise_for_status()
-                return response
+                request_url = url
+                for redirect_count in range(MAX_GIZ_REDIRECTS + 1):
+                    if not _safe_giz_url(request_url):
+                        raise ValueError("GIZ request URL is outside approved giz.de hosts")
+                    response = await client.request(
+                        method,
+                        request_url,
+                        follow_redirects=False,
+                        **kwargs,
+                    )
+                    if response.is_redirect:
+                        location = response.headers.get("location")
+                        if not location or redirect_count >= MAX_GIZ_REDIRECTS:
+                            raise ValueError("GIZ redirect chain is invalid or too long")
+                        request_url = urljoin(str(response.url), location)
+                        continue
+                    if not _safe_giz_url(str(response.url)):
+                        raise ValueError("GIZ response URL is outside approved giz.de hosts")
+                    response.raise_for_status()
+                    return response
+                raise ValueError("GIZ redirect chain is too long")
             except Exception as exc:
                 details = connector_failure_details(exc)
                 if attempt >= self.config.max_retries or not details.retryable:
@@ -1143,6 +1162,89 @@ class GizTenderSource:
             download_status="metadata_only",
         )
 
+    async def discover_documents_for_acquisition(
+        self,
+        normalized_tender: NormalizedTender,
+        *,
+        client: Any,
+    ) -> tuple[list[Any], dict[str, Any]]:
+        """Refresh official e-procurement URLs inside the download session.
+
+        Public country-office file links are stable and reuse stored metadata.
+        E-procurement archive links can require session cookies or expire, so
+        acquisition revisits the official project and documents pages first.
+        """
+        metadata = dict(normalized_tender.source_metadata_json or {})
+        project_url = str(
+            metadata.get("eproc_project_url")
+            or metadata.get("official_source_url")
+            or normalized_tender.source_url
+            or ""
+        ).strip()
+        if (urlparse(project_url).hostname or "").casefold() != "ausschreibungen.giz.de":
+            return await self.discover_documents(normalized_tender), {}
+        if not _safe_giz_url(project_url):
+            raise ValueError("Stored GIZ e-procurement project URL is not approved")
+
+        project_response = await self._request(client, "GET", project_url)
+        refreshed_project_url = str(project_response.url)
+        documents_url = _discover_participation_documents_url(
+            project_response.content,
+            project_url=refreshed_project_url,
+        )
+        if not documents_url or not _safe_giz_url(documents_url):
+            # Do not fall back to a previously stored e-procurement archive URL:
+            # those links can expire and may require the current HTTP session.
+            return [], {
+                "eproc_project_url": refreshed_project_url,
+                "participation_documents": [],
+            }
+
+        documents_response = await self._request(client, "GET", documents_url)
+        listed_documents, attachment = _extract_eproc_documents_metadata(
+            documents_response.content,
+            documents_url=str(documents_response.url),
+            project_id=(
+                str(metadata.get("eproc_project_id") or "").strip()
+                or _eproc_project_id(refreshed_project_url)
+            ),
+        )
+        updates: dict[str, Any] = {
+            "eproc_project_url": refreshed_project_url,
+            "participation_documents_url": str(documents_response.url),
+            "participation_documents": listed_documents,
+        }
+        if attachment is None:
+            return [], updates
+
+        stored_attachments = metadata.get("attachments")
+        if isinstance(stored_attachments, list):
+            previous = next(
+                (
+                    item
+                    for item in stored_attachments
+                    if isinstance(item, dict) and item.get("external_file_id")
+                ),
+                None,
+            )
+            if previous is not None:
+                # Rotate expiring URLs without changing the canonical row.
+                attachment["external_file_id"] = previous["external_file_id"]
+        updates["attachments"] = [attachment]
+        normalized_attachment = NormalizedAttachment(
+            source_document_url=str(attachment["source_document_url"]),
+            source_document_type=attachment.get("source_document_type"),
+            external_file_id=attachment.get("external_file_id"),
+            file_size=attachment.get("file_size"),
+            mime_type=attachment.get("mime_type"),
+            source_metadata_json=attachment.get("source_metadata_json"),
+        )
+        return canonical_documents_from_attachments(
+            source_system=self.source_system,
+            attachments=[normalized_attachment],
+            download_status=str(attachment.get("download_status") or "metadata_only"),
+        ), updates
+
     def normalize(self, raw: dict[str, Any]) -> NormalizedTender:
         metadata = dict(raw.get("source_metadata_json") or {})
         attachments = raw.get("attachments") or []
@@ -1200,8 +1302,35 @@ class GizTenderSource:
     ) -> tuple[int, int]:
         from app.services.tender_sources.base import persist_document_descriptors
 
+        descriptors = list(documents)
         result = await persist_document_descriptors(
-            db, source_system="giz", tender=tender, documents=documents,
+            db, source_system="giz", tender=tender, documents=descriptors,
             url_validator=_safe_giz_url, default_status="metadata_only",
         )
-        return result.created_count, result.updated_count
+        # GIZ e-procurement archive URLs may rotate while their stable external
+        # file identity remains unchanged. Keep the durable row/status/file,
+        # but point any retry at the URL refreshed in the current official
+        # session rather than a stale archive link.
+        by_external_id = {
+            str(descriptor.external_file_id): descriptor
+            for descriptor in descriptors
+            if descriptor.external_file_id
+        }
+        rotated_count = 0
+        rotated_unchanged_count = 0
+        for item in result.items:
+            descriptor = by_external_id.get(str(item.document.external_file_id or ""))
+            if descriptor is None:
+                continue
+            refreshed_url = str(descriptor.source_document_url or "").strip()
+            if not refreshed_url or not _safe_giz_url(refreshed_url):
+                continue
+            if item.document.source_document_url != refreshed_url:
+                item.document.source_document_url = refreshed_url
+                item.document.file_url = refreshed_url[:500]
+                rotated_count += 1
+                if item.outcome.value == "unchanged":
+                    rotated_unchanged_count += 1
+        if rotated_count:
+            await db.flush()
+        return result.created_count, result.updated_count + rotated_unchanged_count

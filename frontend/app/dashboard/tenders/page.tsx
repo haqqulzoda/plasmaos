@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Suspense,
@@ -11,19 +12,21 @@ import {
   useState,
 } from "react";
 import {
-  Clock,
   FileText,
   MapPin,
   SlidersHorizontal,
   X,
   Globe2,
+  ExternalLink,
+  ArrowRight,
+  Landmark,
+  Eye,
 } from "lucide-react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import {
   Surface,
   PageHeader,
   EmptyState,
-  StatusBadge,
   Badge,
   PageSkeleton,
 } from "@/components/ui/Display";
@@ -31,15 +34,15 @@ import { Input, Select, SearchField, Checkbox } from "@/components/ui/Forms";
 import { Alert } from "@/components/ui/Feedback";
 import { Tabs, Pagination } from "@/components/ui/Navigation";
 import { Drawer } from "@/components/ui/Overlay";
-import { SaveTenderButton } from "@/components/customer/SaveTenderButton";
+import { DashboardBookmarkButton } from "@/components/customer/DashboardBookmarkButton";
 import { useLocale, useTranslations } from "next-intl";
 
-import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
 import { BidiText, TechnicalText } from "@/components/i18n/BidiText";
+import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
 import { SourceRefreshMenu } from "@/components/source-refresh/SourceRefreshMenu";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
-import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";
 import { NewTenderBadge } from "@/components/tenders/NewTenderBadge";
+import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";
 import { RecommendationSummary } from "@/components/tenders/RecommendationSummary";
 import {
   dismissRecommendation,
@@ -60,21 +63,32 @@ import {
   type ServerClockReference,
 } from "@/lib/tenderNewness";
 import {
+  INVALID_FORMAT_VALUE,
   formatCurrency,
   formatDate,
   formatRelativeTime,
 } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { localizeTaxonomyValue } from "@/i18n/taxonomy";
+import { safeSourceUrl } from "@/lib/sourceUrl";
 import type {
   ExplorerItem,
   ExplorerResponse,
   ExplorerView,
+  PursuitSummary,
 } from "@/types/explorer";
 import type { TenderStatus } from "@/types/tender";
 import { isTenderActionable } from "@/types/tender";
 
 const PAGE_SIZE = 25;
+const SOURCE_LOGOS: Record<string, string> = {
+  world_bank: "/brand/sources/world-bank-supplied.png",
+  adb: "/brand/sources/adb.svg",
+  giz: "/brand/sources/giz.svg",
+  ebrd: "/brand/sources/ebrd-supplied.png",
+  uzex: "/brand/sources/uzex.svg",
+};
+
 const LIFECYCLE_STATUSES: ReadonlyArray<TenderStatus | "ALL"> = [
   "OPEN",
   "UNKNOWN",
@@ -203,13 +217,14 @@ function TendersPageContent() {
   const router = useRouter();
   const t = useTranslations("explorer");
   const tCommon = useTranslations("common");
+  const tRefresh = useTranslations("refresh");
   const searchParams = useSearchParams();
   const searchString = searchParams.toString();
   const query = useMemo(
     () => parseExplorerQuery(new URLSearchParams(searchString)),
     [searchString],
   );
-  const { catalog, catalogError, displayNameForSource, latestActivityBatch } =
+  const { catalog, catalogError, displayNameForSource, latestActivityBatch, statusItems } =
     useSourceRefresh();
   const copy = useTranslations("explorer.redesign");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -481,8 +496,13 @@ function TendersPageContent() {
     });
   const choose = (item: ExplorerItem) => {
     setSelectedId(item.tender.id);
-    if (!window.matchMedia("(min-width: 1200px)").matches) setPreviewOpen(true);
+    setPreviewOpen(true);
   };
+  const degradedSources = statusItems.filter((item) =>
+    ["partial", "failed", "source_unavailable"].includes(
+      item.latest_terminal?.status ?? "",
+    ) && (!query.source || item.source_system === query.source),
+  );
   const chips: { key: string; label: string; clear: () => void }[] = [
     ...query.countries.map((v) => ({
       key: `country-${v}`,
@@ -509,8 +529,14 @@ function TendersPageContent() {
       .filter((key) => query[key])
       .map((key) => ({
         key,
-        label: `${t(({ source: "source", region: "centralAsia", deadlineStatus: "deadlineFilter", documentStatus: "documentStatus", category: "category", priceMin: "minimumValue", priceMax: "maximumValue", keyword: "search" } as const)[key])}: ${key === "source" ? displayNameForSource(query[key]) : key === "deadlineStatus" ? t(query[key] === "active" ? "deadlineActive" : query[key] === "expired" ? "deadlineExpired" : "deadlineUnknown") : key === "documentStatus" ? documents.find(([value]) => value === query[key])?.[1] ?? query[key] : query[key]}`,
-        clear: () => navigate({ [key]: "" }),
+        label: `${key === "region" ? copy("regionCountry") : t(({ source: "source", region: "centralAsia", deadlineStatus: "deadlineFilter", documentStatus: "documentStatus", category: "category", priceMin: "minimumValue", priceMax: "maximumValue", keyword: "search" } as const)[key])}: ${key === "source" ? displayNameForSource(query[key]) : key === "region" && query[key] === CENTRAL_ASIA_REGION ? t("centralAsia") : key === "deadlineStatus" ? t(query[key] === "active" ? "deadlineActive" : query[key] === "expired" ? "deadlineExpired" : "deadlineUnknown") : key === "documentStatus" ? documents.find(([value]) => value === query[key])?.[1] ?? query[key] : query[key]}`,
+        clear: () => {
+          if (key === "keyword") setSearchDraft("");
+          if (key === "category") setCategoryDraft("");
+          if (key === "priceMin") setMinimumDraft("");
+          if (key === "priceMax") setMaximumDraft("");
+          navigate({ [key]: "" });
+        },
       })),
     ...(query.newOnly
       ? [
@@ -521,16 +547,11 @@ function TendersPageContent() {
           },
         ]
       : []),
-    ...(query.lifecycleStatus !== "OPEN"
-      ? [
-          {
-            key: "status",
-            label:
-              statuses.find(([v]) => v === query.lifecycleStatus)?.[1] ?? "",
-            clear: () => navigate({ lifecycleStatus: "OPEN" }),
-          },
-        ]
-      : []),
+    {
+      key: "status",
+      label: `${copy("statusLabel")}: ${statuses.find(([v]) => v === query.lifecycleStatus)?.[1] ?? ""}`,
+      clear: () => navigate({ lifecycleStatus: "ALL" }),
+    },
   ];
   const preview = selected ? (
     <ExplorerPreview
@@ -540,6 +561,7 @@ function TendersPageContent() {
       pending={pendingRecommendation}
       onDismiss={(id) => void mutateRecommendation(id, false)}
       onRestore={(id) => void mutateRecommendation(id, true)}
+      onRefresh={() => setRefreshVersion((value) => value + 1)}
     />
   ) : (
     <EmptyState
@@ -554,9 +576,9 @@ function TendersPageContent() {
         eyebrow={copy("eyebrow")}
         title={t("title")}
         description={t("subtitle")}
-        secondaryAction={<SourceRefreshMenu foundation />}
+        secondaryAction={<SourceRefreshMenu foundation triggerLabel={tRefresh("refresh")} />}
       />
-      <div className="explorer-layout">
+      <div className="explorer-workspace">
         <div className="ds-stack">
           {newArrival && (
             <Alert
@@ -590,26 +612,6 @@ function TendersPageContent() {
               {t("profileHelp")}
             </Alert>
           )}
-          <Tabs
-            label={t("viewsLabel")}
-            value={query.view}
-            onChange={(value) =>
-              navigate({
-                view: value as ExplorerView,
-                sort: defaultSort(value as ExplorerView),
-              })
-            }
-            items={modes.map(([value, label, count]) => ({
-              value,
-              label: (
-                <>
-                  {label}{" "}
-                  <span className="ds-numeric">{response ? count : "—"}</span>
-                </>
-              ),
-              content: null,
-            }))}
-          />
           <Surface
             className="explorer-filters ds-stack"
             role="region"
@@ -621,11 +623,11 @@ function TendersPageContent() {
               dir="auto"
               value={searchDraft}
               onValueChange={setSearchDraft}
-              placeholder={t("search")}
+              placeholder={copy("searchPlaceholder")}
             />
             <div className="explorer-filter-grid">
               <Select
-                label={t("source")}
+                label={copy("sourceLabel")}
                 value={query.source}
                 disabled={Boolean(catalogError)}
                 onChange={(e) => navigate({ source: e.target.value })}
@@ -648,7 +650,16 @@ function TendersPageContent() {
                 ))}
               </Select>
               <Select
-                label={t("lifecycle")}
+                label={copy("regionCountry")}
+                value={query.region}
+                onChange={(e) => navigate({ region: e.target.value })}
+              >
+                <option value="">{copy("allRegions")}</option>
+                <option value={CENTRAL_ASIA_REGION}>{t("centralAsia")}</option>
+                {query.region && query.region !== CENTRAL_ASIA_REGION && <option dir="auto" value={query.region}>{query.region}</option>}
+              </Select>
+              <Select
+                label={copy("statusLabel")}
                 value={query.lifecycleStatus}
                 onChange={(e) =>
                   navigate({
@@ -662,44 +673,35 @@ function TendersPageContent() {
                   </option>
                 ))}
               </Select>
+              <Input
+                label={copy("categorySector")}
+                dir="auto"
+                value={categoryDraft}
+                onChange={(e) => setCategoryDraft(e.target.value)}
+                onBlur={commitDrafts}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitDrafts();
+                }}
+                placeholder={copy("allCategories")}
+              />
               <Select
-                label={t("sort")}
-                value={query.sort}
-                onChange={(e) => navigate({ sort: e.target.value })}
+                label={t("deadlineFilter")}
+                value={query.deadlineStatus}
+                onChange={(e) => navigate({ deadlineStatus: e.target.value })}
               >
-                {(query.view === "all" ? tenderSorts : recommendationSorts).map(
-                  ([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ),
-                )}
+                <option value="">{t("deadlineAny")}</option>
+                <option value="active">{t("deadlineActive")}</option>
+                <option value="expired">{t("deadlineExpired")}</option>
+                <option value="unknown">{t("deadlineUnknown")}</option>
               </Select>
             </div>
-            <Checkbox
-              label={t("newLast24")}
-              checked={query.newOnly}
-              onChange={() => navigate({ newOnly: !query.newOnly })}
-            />
-            <details>
+            <details className="explorer-more-filters">
               <summary className="ds-button ds-button-ghost ds-button-sm">
                 <SlidersHorizontal aria-hidden />
                 {t("moreFilters")}
               </summary>
               <div className="ds-stack ds-divider">
                 <div className="explorer-filter-grid">
-                  <Select
-                    label={t("deadlineFilter")}
-                    value={query.deadlineStatus}
-                    onChange={(e) =>
-                      navigate({ deadlineStatus: e.target.value })
-                    }
-                  >
-                    <option value="">{t("deadlineAny")}</option>
-                    <option value="active">{t("deadlineActive")}</option>
-                    <option value="expired">{t("deadlineExpired")}</option>
-                    <option value="unknown">{t("deadlineUnknown")}</option>
-                  </Select>
                   <Select
                     label={t("documentStatus")}
                     value={query.documentStatus}
@@ -713,16 +715,6 @@ function TendersPageContent() {
                       </option>
                     ))}
                   </Select>
-                  <Input
-                    label={t("category")}
-                    dir="auto"
-                    value={categoryDraft}
-                    onChange={(e) => setCategoryDraft(e.target.value)}
-                    onBlur={commitDrafts}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitDrafts();
-                    }}
-                  />
                   <Input
                     label={t("minimumValue")}
                     type="number"
@@ -746,18 +738,6 @@ function TendersPageContent() {
                     }}
                   />
                 </div>
-                <Checkbox
-                  label={t("centralAsia")}
-                  checked={query.region === CENTRAL_ASIA_REGION}
-                  onChange={() =>
-                    navigate({
-                      region:
-                        query.region === CENTRAL_ASIA_REGION
-                          ? ""
-                          : CENTRAL_ASIA_REGION,
-                    })
-                  }
-                />
                 <fieldset className="ds-stack">
                   <legend>{t("countries")}</legend>
                   <div className="ds-row">
@@ -795,8 +775,31 @@ function TendersPageContent() {
               </div>
             </details>
           </Surface>
+          <div className="explorer-view-row">
+            <Tabs
+              label={t("viewsLabel")}
+              value={query.view}
+              onChange={(value) =>
+                navigate({
+                  view: value as ExplorerView,
+                  sort: defaultSort(value as ExplorerView),
+                })
+              }
+              items={modes.map(([value, label, count]) => ({
+                value,
+                label: <>{label} <span className="ds-numeric">{response ? count : "—"}</span></>,
+                content: null,
+              }))}
+            />
+            <Checkbox
+              label={t("newLast24")}
+              checked={query.newOnly}
+              onChange={() => navigate({ newOnly: !query.newOnly })}
+            />
+          </div>
           {chips.length > 0 && (
-            <div className="ds-row" aria-label={copy("activeFilters")}>
+            <div className="explorer-active-filters" aria-label={copy("activeFilters")}>
+              <span className="explorer-active-label">{copy("activeFilters")}:</span>
               {chips.map((chip) => (
                 <Button
                   key={chip.key}
@@ -813,11 +816,17 @@ function TendersPageContent() {
                 variant="ghost"
                 size="sm"
                 onClick={() =>
-                  navigate({
-                    ...parseExplorerQuery(new URLSearchParams()),
-                    view: query.view,
-                    sort: defaultSort(query.view),
-                  })
+                  {
+                    setSearchDraft("");
+                    setCategoryDraft("");
+                    setMinimumDraft("");
+                    setMaximumDraft("");
+                    navigate({
+                      ...parseExplorerQuery(new URLSearchParams()),
+                      view: query.view,
+                      sort: defaultSort(query.view),
+                    });
+                  }
                 }
               >
                 {copy("clearAll")}
@@ -825,9 +834,31 @@ function TendersPageContent() {
             </div>
           )}
           {mutationError && <Alert tone="danger" title={mutationError} />}
-          {loading ? (
-            <PageSkeleton label={t("loading")} />
-          ) : error ? (
+          {degradedSources.length > 0 && (
+            <Alert tone="warning" title={copy("partialTitle")}>
+              {copy("partialHelp", { sources: degradedSources.map((source) => source.display_name).join(", ") })}
+            </Alert>
+          )}
+          <Surface className="explorer-results-toolbar" role="group" aria-label={copy("resultsToolbar")}>
+            <strong className="ds-numeric">
+              {response ? copy("resultCount", { count: response.total }) : t("loading")}
+            </strong>
+            <div className="explorer-results-sort">
+              <Select
+                label={copy("sortBy")}
+                value={query.sort}
+                onChange={(e) => navigate({ sort: e.target.value })}
+              >
+                {(query.view === "all" ? tenderSorts : recommendationSorts).map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </Select>
+              {response && <span className="ds-muted ds-text-small">{t("page", { page: query.page, totalPages: lastPage })}</span>}
+            </div>
+          </Surface>
+          {loading && !response ? (
+            <ExplorerResultSkeleton label={t("loading")} />
+          ) : error && !response ? (
             <Alert
               tone="danger"
               title={error}
@@ -852,11 +883,16 @@ function TendersPageContent() {
                         ? t("empty.active")
                         : t("empty.recommended")
                 }
+                action={<Button variant="secondary" onClick={() => {
+                  setSearchDraft("");
+                  navigate({ ...parseExplorerQuery(new URLSearchParams()), view: query.view, sort: defaultSort(query.view) });
+                }}>{copy("clearAll")}</Button>}
               />
             </Surface>
           ) : response ? (
-            <section aria-label={t("resultsLabel")} className="ds-stack">
-              <p className="ds-muted ds-text-small">
+            <section aria-label={t("resultsLabel")} className="explorer-results" aria-busy={loading}>
+              {error && <Alert tone="danger" title={error} action={<Button variant="secondary" onClick={() => setRefreshVersion((v) => v + 1)}>{t("retry")}</Button>} />}
+              <p className="ds-muted ds-text-small explorer-range">
                 {t("showing", {
                   start: response.offset + 1,
                   end: Math.min(
@@ -868,7 +904,7 @@ function TendersPageContent() {
               </p>
               {response.items.map((item) => (
                 <ExplorerCard
-                  key={item.tender.id}
+                  key={`${item.tender.id}:${item.pursuit?.status ?? "none"}`}
                   item={item}
                   selected={selectedId === item.tender.id}
                   sourceDisplayName={displayNameForSource(
@@ -876,9 +912,6 @@ function TendersPageContent() {
                   )}
                   clock={serverClock}
                   monotonicNow={monotonicNow}
-                  pendingRecommendation={pendingRecommendation}
-                  onDismiss={(id) => void mutateRecommendation(id, false)}
-                  onRestore={(id) => void mutateRecommendation(id, true)}
                   onRefresh={() => setRefreshVersion((v) => v + 1)}
                   onOpen={remember}
                   onPreview={() => choose(item)}
@@ -898,9 +931,6 @@ function TendersPageContent() {
             </section>
           ) : null}
         </div>
-        <aside className="explorer-rail" aria-label={copy("preview")}>
-          <Surface className="ds-pad">{preview}</Surface>
-        </aside>
       </div>
       <Drawer
         open={previewOpen && Boolean(selected)}
@@ -919,9 +949,6 @@ function ExplorerCard({
   sourceDisplayName,
   clock,
   monotonicNow,
-  pendingRecommendation,
-  onDismiss,
-  onRestore,
   onRefresh,
   onOpen,
   onPreview,
@@ -931,185 +958,85 @@ function ExplorerCard({
   sourceDisplayName: string;
   clock: ServerClockReference | null;
   monotonicNow: number;
-  pendingRecommendation: string | null;
-  onDismiss: (id: string) => void;
-  onRestore: (id: string) => void;
   onRefresh: () => void;
   onOpen: (id: string) => void;
   onPreview: () => void;
   selected: boolean;
 }) {
   const t = useTranslations("explorer");
-  const tMy = useTranslations("myTenders");
+  const copy = useTranslations("explorer.redesign");
   const locale = useLocale() as CustomerSelectableLocale;
   const [initialNow] = useState(() => Date.now());
-  const { tender, recommendation, pursuit } = item;
+  const [pursuitState, setPursuitState] = useState<PursuitSummary | null>(item.pursuit);
+  const { tender, recommendation } = item;
   const actionable = isTenderActionable(tender.status);
   const expired = isExpiredDeadline(tender.deadline);
   const status = t(
     `status.${tender.status === "OPEN" ? "open" : tender.status === "CLOSED" ? "closed" : tender.status === "CANCELLED" ? "cancelled" : "unknown"}`,
   );
-  const documentStatus = t(
-    `documents.${tender.document_status === "documents_available" ? "ready" : tender.document_status === "files_missing" ? "preparationFailed" : tender.document_status === "metadata_only" ? "discovered" : tender.document_status === "access_required" ? "accessRequired" : tender.document_status === "processing" ? "processing" : tender.document_status === "failed" ? "failed" : "unavailable"}`,
-  );
+  const sourceUrl = safeSourceUrl(tender.source_url);
+  const tags = [...new Set([tender.sector, tender.category, tender.country, tender.region].filter((value): value is string => Boolean(value && value.trim())))].slice(0, 4);
+  const formattedBudget = tender.budget > 0 && Number.isFinite(tender.budget)
+    ? formatCurrency(
+        tender.budget,
+        tender.currency,
+        locale,
+        Number.isInteger(tender.budget) ? { maximumFractionDigits: 0 } : {},
+      )
+    : INVALID_FORMAT_VALUE;
+  const budget = formattedBudget === INVALID_FORMAT_VALUE
+    ? t("valueMissing")
+    : formattedBudget;
   return (
     <Surface
       className="explorer-card"
       data-tender-id={tender.id}
       data-selected={selected}
     >
-      <div className="ds-row">
-        <NewTenderBadge
-          foundation
-          isNew={tender.is_new}
-          newUntil={tender.new_until}
-          clock={clock}
-          monotonicNow={monotonicNow}
-        />
-        <Badge icon={<Globe2 aria-hidden />}>
-          <BidiText>{sourceDisplayName}</BidiText>
-        </Badge>
-        <StatusBadge tone={tender.status === "OPEN" ? "success" : "neutral"}>
-          {t("sourceStatus", { status })}
-        </StatusBadge>
-        <StatusBadge
-          tone={
-            tender.document_status === "documents_available"
-              ? "success"
-              : "warning"
-          }
-        >
-          {t("documentCount", {
-            status: documentStatus,
-            count: tender.document_count,
-          })}
-        </StatusBadge>
+      <div className="explorer-card-source">
+        <ExplorerSourceIdentity source={tender.source_system} name={sourceDisplayName} />
       </div>
-      <div className="explorer-card-top">
-        <div className="ds-stack">
-          <h2>
-            <Link
-              prefetch={false}
-              onClick={() => onOpen(tender.id)}
-              href={`/dashboard/tenders/${tender.id}`}
-            >
-              <BidiText>{tender.title}</BidiText>
-            </Link>
-          </h2>
-          <p className="ds-muted ds-text-small">
-            <BidiText>{tender.buyer || t("buyerMissing")}</BidiText> ·{" "}
-            <TechnicalText>{tender.external_id}</TechnicalText>
-          </p>
-          <div className="explorer-card-metadata">
-            <span className="ds-row">
-              <MapPin aria-hidden />
-              <BidiText>
-                {tender.country || tender.region || t("locationMissing")}
-              </BidiText>
-            </span>
-            <BidiText>
-              {tender.sector || tender.category || t("uncategorized")}
-            </BidiText>
-          </div>
+      <div className="explorer-card-main">
+        <div className="explorer-card-title-row"><h2><Link prefetch={false} onClick={() => onOpen(tender.id)} href={`/dashboard/tenders/${tender.id}`}><BidiText>{tender.title}</BidiText></Link></h2><NewTenderBadge foundation isNew={tender.is_new} newUntil={tender.new_until} clock={clock} monotonicNow={monotonicNow} /><Button variant="icon" size="sm" className="explorer-preview-control" aria-label={copy("preview")} aria-pressed={selected} onClick={onPreview}><Eye aria-hidden /></Button></div>
+        <p className="explorer-card-reference"><MapPin aria-hidden /><BidiText>{tender.country || tender.region || t("locationMissing")}</BidiText><span aria-hidden>·</span><TechnicalText>{tender.external_id}</TechnicalText></p>
+        {tags.length > 0 && <div className="explorer-card-tags">{tags.map((tag) => <span key={tag} className="explorer-card-tag"><BidiText>{tag}</BidiText></span>)}</div>}
+      </div>
+      <div className="explorer-card-facts">
+        <span className="explorer-status" data-status={tender.status}>{status}</span>
+        <div className="explorer-card-date">
+          <span className="explorer-card-deadline-label">{t("deadlineFilter")}</span>
+          <strong>{tender.deadline ? formatDate(tender.deadline, locale) : copy("deadlineUnavailable")}</strong>
+          {tender.deadline && tender.status === "OPEN" && <span className="ds-muted ds-text-small">{formatRelativeTime(tender.deadline, clock ? adjustedServerNow(clock, monotonicNow) : initialNow, locale)}</span>}
         </div>
-        <div className="ds-stack">
-          <p className="explorer-value">
-            {tender.budget > 0
-              ? formatCurrency(
-                  tender.budget,
-                  tender.currency || "USD",
-                  locale,
-                  { maximumFractionDigits: 0 },
-                )
-              : t("valueMissing")}
-          </p>
-          <p className="ds-row ds-text-small">
-            <Clock aria-hidden />
-            {tender.deadline
-              ? formatRelativeTime(
-                  tender.deadline,
-                  clock ? adjustedServerNow(clock, monotonicNow) : initialNow,
-                  locale,
-                )
-              : t("deadlineMissing")}
-          </p>
-          <p className="ds-muted ds-text-small">
-            {formatDate(tender.deadline, locale)}
-          </p>
+        <div className="explorer-card-budget">
+          <span>{copy("budget")}</span>
+          <strong><bdi>{budget}</bdi></strong>
         </div>
       </div>
-      <div className="ds-row">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onPreview}
-          aria-pressed={selected}
-        >
-          {t("redesign.preview")}
-        </Button>
-        <ButtonLink
-          variant="secondary"
-          size="sm"
-          onClick={() => onOpen(tender.id)}
-          href={`/dashboard/tenders/${tender.id}`}
-        >
-          <FileText aria-hidden />
-          {t("viewTender")}
-        </ButtonLink>
-        {pursuit ? (
-          <>
-            <StatusBadge>
-              {t("pursuit", {
-                status: tMy(
-                  `statuses.${pursuit.status.toLowerCase() as "saved" | "evaluating" | "preparing" | "submitted" | "won" | "lost" | "dismissed"}`,
-                ),
-              })}
-            </StatusBadge>
-            <EngagementWorkflowActions
-              foundation
-              engagement={{
-                engagement_id: pursuit.engagement_id,
-                engagement_status: pursuit.status,
-                allowed_actions: pursuit.allowed_actions,
-              }}
-              tenderId={tender.id}
-              onRefresh={onRefresh}
-            />
-          </>
-        ) : (
-          <>
-            <SaveTenderButton
-              tenderId={tender.id}
-              disabled={!actionable || expired}
-              onSaved={onRefresh}
-            />
-            <PrepareBidButton
-              foundation
-              tenderId={tender.id}
-              disabled={!actionable || expired}
-              title={
-                !actionable
-                  ? t("status.unknown")
-                  : expired
-                    ? t("deadlinePassed")
-                    : t("startBid")
-              }
-            />
-          </>
-        )}
+      <div className="explorer-card-actions">
+        <div className="explorer-card-action-top">
+          {recommendation && <span className="explorer-match">{copy("match", { score: recommendation.match_score })}</span>}
+          <span className="explorer-card-action-icons">
+            <DashboardBookmarkButton tenderId={tender.id} pursuit={pursuitState} disabled={!actionable || expired} onChanged={(value) => { setPursuitState(value); onRefresh(); }} />
+          </span>
+        </div>
+        <ButtonLink href={`/dashboard/tenders/${tender.id}`} onClick={() => onOpen(tender.id)} size="sm" className="explorer-view-tender">{t("viewTender")}<ArrowRight className="rtl-mirror" aria-hidden /></ButtonLink>
+        {sourceUrl && <a className="ds-button ds-button-secondary ds-button-sm explorer-open-source" href={sourceUrl} target="_blank" rel="noopener noreferrer external" aria-label={copy("openSourceFor", { title: tender.title })}><ExternalLink aria-hidden />{copy("openSource")}</a>}
       </div>
-      {recommendation && (
-        <RecommendationSummary
-          compact
-          foundation
-          recommendation={recommendation}
-          pending={pendingRecommendation === recommendation.recommendation_id}
-          onDismiss={onDismiss}
-          onRestore={onRestore}
-        />
-      )}
     </Surface>
   );
+}
+
+function ExplorerSourceIdentity({ source, name }: { source: string; name: string }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  const logo = SOURCE_LOGOS[source];
+  return <div className="explorer-source-identity">
+    {logo && !logoFailed ? <span className="explorer-source-logo" data-source={source}><Image src={logo} alt={name} width={source === "world_bank" ? 3000 : source === "ebrd" ? 1140 : 68} height={source === "world_bank" ? 2000 : source === "ebrd" ? 1141 : 60} unoptimized onError={() => setLogoFailed(true)} data-source-logo="official" /></span> : <><span className="explorer-source-fallback" data-source-logo="fallback"><Landmark aria-hidden /></span><BidiText className="explorer-source-name">{name}</BidiText></>}
+  </div>;
+}
+
+function ExplorerResultSkeleton({ label }: { label: string }) {
+  return <div className="explorer-results-skeleton" role="status" aria-label={label}>{[0, 1, 2].map((index) => <Surface key={index} className="explorer-card explorer-card-skeleton"><span className="ds-skeleton" /><span className="ds-skeleton" /><span className="ds-skeleton" /><span className="ds-skeleton" /></Surface>)}</div>;
 }
 
 function ExplorerPreview({
@@ -1119,6 +1046,7 @@ function ExplorerPreview({
   pending,
   onDismiss,
   onRestore,
+  onRefresh,
 }: {
   item: ExplorerItem;
   source: string;
@@ -1126,10 +1054,12 @@ function ExplorerPreview({
   pending: string | null;
   onDismiss: (id: string) => void;
   onRestore: (id: string) => void;
+  onRefresh: () => void;
 }) {
   const t = useTranslations("explorer");
+  const tMy = useTranslations("myTenders");
   const locale = useLocale() as CustomerSelectableLocale;
-  const { tender, recommendation } = item;
+  const { tender, recommendation, pursuit } = item;
   return (
     <div className="explorer-preview">
       <Badge icon={<Globe2 aria-hidden />}>
@@ -1172,6 +1102,19 @@ function ExplorerPreview({
       >
         {t("viewTender")}
       </ButtonLink>
+      {pursuit ? (
+        <div className="ds-stack">
+          <span className="ds-muted ds-text-small">{t("pursuit", { status: tMy(`statuses.${pursuit.status.toLowerCase() as "saved" | "evaluating" | "preparing" | "submitted" | "won" | "lost" | "dismissed"}`) })}</span>
+          <EngagementWorkflowActions
+            foundation
+            engagement={{ engagement_id: pursuit.engagement_id, engagement_status: pursuit.status, allowed_actions: pursuit.allowed_actions }}
+            tenderId={tender.id}
+            onRefresh={onRefresh}
+          />
+        </div>
+      ) : (
+        <PrepareBidButton foundation tenderId={tender.id} disabled={!isTenderActionable(tender.status) || isExpiredDeadline(tender.deadline)} title={t("startBid")} />
+      )}
       {recommendation && (
         <RecommendationSummary
           foundation

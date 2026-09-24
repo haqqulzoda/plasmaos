@@ -11,6 +11,7 @@ export interface ExplorerTenderSummary {
     canonical_source_key: string;
     source_url: string | null;
     title: string;
+    summary: string | null;
     buyer: string | null;
     budget: number;
     currency: string;

@@ -157,9 +157,9 @@ class CrossSourceStaticGateTests(unittest.TestCase):
         for connector in (world_bank, adb, ebrd, giz):
             self.assertIn("persist_document_descriptors", connector)
         self.assertIn("assert_source_scope(source_system, tender)", shared)
-        self.assertIn('source_system != "uzex"', tenders)
-        self.assertIn("Document sync worker is UzEx-only", tenders)
-        self.assertIn('tender.source_system != "uzex"', hunter)
+        self.assertIn('tender.source_system not in {"uzex", "giz"}', tenders)
+        self.assertIn("On-demand document acquisition is supported for UzEx and GIZ", tenders)
+        self.assertNotIn("process_tender_docs", hunter)
         self.assertIn("hydrate_giz_documents", worker)
         self.assertIn("hydrate_giz_documents.apply_async", tenders)
         self.assertIn('queue="heavy_dl_queue"', tenders)

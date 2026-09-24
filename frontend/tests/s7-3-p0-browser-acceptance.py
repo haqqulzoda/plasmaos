@@ -105,6 +105,9 @@ def tender_details() -> dict:
         "tender_id": "s72-tender",
         "project_context": envelope(None),
         "project_leadership": envelope(None),
+        "competitor_intelligence": envelope(
+            {"tender_id": "s72-tender", "message": "Unavailable", "groups": []}
+        ),
         "procurement_contacts": envelope(None),
         "requirements": envelope(
             {

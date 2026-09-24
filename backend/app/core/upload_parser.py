@@ -11,7 +11,7 @@ def main():
         resource.setrlimit(resource.RLIMIT_CPU, (50, 50))
     # Parser libraries may print diagnostics. Only extracted text reaches stdout.
     with open(os.devnull, "w") as sink, contextlib.redirect_stdout(sink):
-        import fitz
+        import pymupdf as fitz
         from app.core.parser import extract_text_from_file
         with fitz.open(sys.argv[1]) as document:
             if document.is_encrypted or not 1 <= len(document) <= 200:

@@ -13,6 +13,10 @@ const pageSource = readFileSync(
   new URL("../app/dashboard/tenders/[tenderId]/page.tsx", import.meta.url),
   "utf8",
 );
+const tenderDetailsMessages = JSON.parse(readFileSync(
+  new URL("../messages/en/tenderDetails.json", import.meta.url),
+  "utf8",
+));
 
 const project = (overrides = {}) => ({
   id: "internal-project-uuid",
@@ -55,7 +59,7 @@ test("linked not-enriched identity remains visible while details prepare", () =>
     projectFreshnessMessage("pending"),
     "Project details are being prepared.",
   );
-  assert.match(projectSectionSource, /project\.external_project_id/);
+  assert.match(projectSectionSource, /project\.name/);
   assert.match(
     projectSectionSource,
     /t\('projectPreparing'\)|t\("projectPreparing"\)/,
@@ -68,12 +72,25 @@ test("enriched metadata renders only meaningful rows", () => {
     rows.map((row) => row.label),
     [
       "Country / Region",
-      "Project Status",
-      "Project Approval",
-      "Project Closing",
+      "Status",
+      "Approval date",
+      "Closing date",
       "Borrower",
       "Implementing Agency",
     ],
+  );
+});
+
+test("Project Context uses the approved concise field labels", () => {
+  assert.deepEqual(
+    [
+      tenderDetailsMessages.s143.projectName,
+      tenderDetailsMessages.countryRegion,
+      tenderDetailsMessages.s143.projectStatus,
+      tenderDetailsMessages.projectApproval,
+      tenderDetailsMessages.projectClosing,
+    ],
+    ["Name", "Country / Region", "Status", "Approval date", "Closing date"],
   );
 });
 
@@ -98,19 +115,15 @@ test("missing metadata is omitted instead of rendered as placeholders", () => {
   );
 });
 
-test("current leadership is visible under the locked section label", () => {
+test("all source-backed leadership names use the scalable names-only list", () => {
   assert.match(projectSectionSource, /t\('leadership'\)|t\("leadership"\)/);
-  assert.match(projectSectionSource, /currentRoles\.map/);
+  assert.match(pageSource, /projectLeadership = leadership\?\.items \?\? \[\]/);
+  assert.match(projectSectionSource, /items=\{projectLeadership\}/);
+  assert.doesNotMatch(projectSectionSource, /leadershipRoleLabel|role\.native_role/);
 });
 
-test("historical leadership is separate and keyboard-accessible", () => {
-  assert.match(projectSectionSource, /<details/);
-  assert.match(projectSectionSource, /<summary/);
-  assert.match(
-    projectSectionSource,
-    /t\(["']previousLeadership["']/,
-  );
-  assert.match(projectSectionSource, /historicalRoles\.map/);
+test("leadership does not create a separate role or history treatment", () => {
+  assert.doesNotMatch(pageSource, /previousLeadership|s143-leadership-previous|role\.is_current/);
 });
 
 test("Task Team Leader canonical label is exact", () => {
@@ -149,14 +162,15 @@ test("no leadership email is inferred or replaced with a placeholder", () => {
 
 test("procurement contact remains an explicitly separate Tender section", () => {
   assert.match(pageSource, /title=\{t\("contactsTitle"\)\}/);
-  assert.match(pageSource, /t\("contactsHelp"\)/);
-  assert.match(projectSectionSource, /t\("leadershipHelp"\)/);
+  assert.match(pageSource, /id="contacts"/);
+  assert.match(projectSectionSource, /s143\.leadershipSource/);
+  assert.doesNotMatch(projectSectionSource, /role\.contact_person|role\.email/);
 });
 
 test("Project dates have explicit non-deadline labels", () => {
   const labels = projectMetadataRows(project()).map((row) => row.label);
-  assert.ok(labels.includes("Project Approval"));
-  assert.ok(labels.includes("Project Closing"));
+  assert.ok(labels.includes("Approval date"));
+  assert.ok(labels.includes("Closing date"));
   assert.ok(!labels.includes("Tender Deadline"));
 });
 
@@ -198,7 +212,7 @@ test("Project API failure is isolated from the Tender load", () => {
     pageSource,
     /useEffect\(\(\) => \{\s*void loadDetails\(\);\s*\}, \[loadDetails\]\)/,
   );
-  assert.match(pageSource, /detailsError \?/);
+  assert.match(pageSource, /detailsError &&/);
   assert.match(pageSource, /t\(["']detailsFailed["']\)/);
 });
 
@@ -211,9 +225,8 @@ test("Project HTTP outcomes remain semantically distinct", () => {
 });
 
 test("source and status semantics are accessible and responsive", () => {
-  assert.match(pageSource, /<SectionShell\s+id="project-context"/);
-  assert.match(pageSource, /aria-labelledby=\{`\$\{id\}-heading`\}/);
-  assert.match(projectSectionSource, /role="status"/);
-  assert.match(projectSectionSource, /details-fields/);
-  assert.match(readFileSync(new URL("../components/customer/pages.css", import.meta.url), "utf8"), /@container/);
+  assert.match(pageSource, /<Section id="project-context"/);
+  assert.match(pageSource, /aria-labelledby=\{`\$\{id\}-title`\}/);
+  assert.match(pageSource, /function StateMessage/);
+  assert.match(readFileSync(new URL("../components/customer/pages.css", import.meta.url), "utf8"), /s143-project-grid/);
 });

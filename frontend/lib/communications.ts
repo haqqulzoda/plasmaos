@@ -40,6 +40,15 @@ export function notificationDestination(item: NotificationItem): NotificationDes
       labelKey: 'openTender',
     };
   }
+  if (
+    ['DOCUMENTS_READY', 'DOCUMENTS_PARTIAL', 'DOCUMENTS_FAILED'].includes(item.event_type) &&
+    uuid(item.payload.tender_id)
+  ) {
+    return {
+      href: `/dashboard/tenders/${encodeURIComponent(item.payload.tender_id)}#requirements-documents`,
+      labelKey: 'openTender',
+    };
+  }
   if (item.event_type === 'ANALYSIS_COMPLETED' && uuid(item.payload.analysis_id)) {
     // The approved backend contract does not carry tender_id for analysis events.
     // Compliance can safely resolve the user's current version context.
@@ -55,6 +64,9 @@ export const SYSTEM_TEMPLATE_KEYS = {
   'notifications.recommendation_created': 'recommendationCreated',
   'notifications.analysis_completed': 'analysisCompleted',
   'notifications.account_approved': 'accountApproved',
+  'notifications.documents_ready': 'documentsReady',
+  'notifications.documents_partial': 'documentsPartial',
+  'notifications.documents_failed': 'documentsFailed',
 } as const;
 
 export type SystemTemplateKey = keyof typeof SYSTEM_TEMPLATE_KEYS;

@@ -61,18 +61,22 @@ test('token foreground pairs exceed AA normal text contrast', () => {
   };
   for (const block of blocks) {
     const tokens = Object.fromEntries(
-      [...block.matchAll(/--ds-([\w-]+): #([\da-f]{6});/g)].map((m) => [
+      [...block.matchAll(/--ds-([\w-]+): #([\da-f]{6});/gi)].map((m) => [
         m[1],
         m[2],
       ]),
     );
+    // S14.1 introduced a darker text token for warning copy; the amber accent
+    // is an icon/border color, not the normal-text foreground.
+    const warningText = block.match(/--warning-text: #([\da-f]{6});/i)?.[1];
+    const warningBackground = block.match(/--warning-bg: #([\da-f]{6});/i)?.[1];
     for (const [fg, bg] of [
       ['text', 'surface'],
       ['text-secondary', 'surface'],
       ['text-tertiary', 'surface'],
       ['text-disabled', 'background-subtle'],
       ['on-accent', 'accent'],
-      ...['success', 'warning', 'danger', 'info'].map((t) => [
+      ...['success', 'danger', 'info'].map((t) => [
         t,
         t + '-subtle',
       ]),
@@ -80,5 +84,7 @@ test('token foreground pairs exceed AA normal text contrast', () => {
       const l = [lum(tokens[fg]), lum(tokens[bg])].sort((a, b) => b - a);
       assert.ok((l[0] + 0.05) / (l[1] + 0.05) >= 4.5, `${fg}/${bg} contrast`);
     }
+    const warning = [lum(warningText ?? tokens.warning), lum(warningBackground ?? tokens['warning-subtle'])].sort((a, b) => b - a);
+    assert.ok((warning[0] + 0.05) / (warning[1] + 0.05) >= 4.5, 'warning text contrast');
   }
 });

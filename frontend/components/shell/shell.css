@@ -85,8 +85,8 @@
   color: var(--ds-text);
 }
 .shell-nav-link[aria-current='page'] {
-  color: var(--ds-nav-active);
-  background: transparent;
+  color: var(--ds-accent);
+  background: var(--ds-accent-subtle);
   font-weight: 600;
 }
 .shell-sidebar-footer {

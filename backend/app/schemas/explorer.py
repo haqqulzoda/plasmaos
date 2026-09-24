@@ -29,6 +29,7 @@ class ExplorerTenderSummary(BaseModel):
     canonical_source_key: str
     source_url: str | None = None
     title: str
+    summary: str | None = Field(default=None, max_length=240)
     buyer: str | None = None
     budget: float
     currency: str

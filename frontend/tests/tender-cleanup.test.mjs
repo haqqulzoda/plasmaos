@@ -119,23 +119,19 @@ test("canonical navigation and runtime copy omit obsolete product terminology", 
   );
 });
 
-test("dead Decision Snapshot and competitor client contracts are removed", () => {
+test("dead Decision Snapshot contracts stay removed while competitors use the details DTO", () => {
   assert.doesNotMatch(
     tenderTypes,
     /TenderDecisionSnapshot|TenderCompetitor|competitorStatusLabel|competitorConfidence|competitorParticipation/,
   );
   assert.doesNotMatch(tenderDetail, /decision-snapshot|\/competitors/);
+  assert.match(tenderDetail, /details\.competitor_intelligence/);
 });
 
-test("all six canonical Tender Details anchors remain present", () => {
-  for (const anchor of [
-    "#pursuit",
-    "#project-context",
-    "#requirements-documents",
-    "#compliance-readiness",
-    "#contacts",
-    "#bid-preparation",
-  ]) {
-    assert.match(tenderDetail, new RegExp(anchor.replace("-", "\\-")));
+test("Tender Details exposes the new decision-and-evidence sections without redundant anchor tabs", () => {
+  for (const id of ["project-context", "project-leadership", "tender-documents", "competitors", "contacts", "bid-preparation"]) {
+    assert.match(tenderDetail, new RegExp(`id="${id}"`));
   }
+  assert.match(tenderDetail, /decisionCard tenderId=\{tender\.id\}/);
+  assert.doesNotMatch(tenderDetail, /details-anchors/);
 });

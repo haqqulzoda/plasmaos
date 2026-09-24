@@ -9,7 +9,7 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -35,25 +35,23 @@ router = APIRouter(dependencies=[authenticated_dependency()])
 
 
 class HunterTenderPayload(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     title: str
     budget: float
     currency: str
     deadline: str | None
 
-    class Config:
-        from_attributes = True
-
 
 class HunterRecommendationPayload(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     match_score: int
     strategic_rationale: str
     created_at: str
     tender: HunterTenderPayload
-
-    class Config:
-        from_attributes = True
 
 
 class DismissResponse(BaseModel):

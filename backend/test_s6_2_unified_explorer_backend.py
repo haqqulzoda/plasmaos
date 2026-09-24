@@ -19,6 +19,7 @@ from app.schemas.explorer import ExplorerView, RecommendationAvailability
 from app.services.explorer import (
     ExplorerQuery,
     _all_order,
+    _bounded_tender_summary,
     _recommendation_order,
     recommendation_summary,
 )
@@ -105,6 +106,16 @@ def test_rationale_summary_is_unicode_bounded_without_mutating_source() -> None:
     assert result is not None
     assert len(result.rationale_summary) == 280
     assert recommendation.strategic_rationale == rationale
+
+
+def test_explorer_short_summary_is_read_only_and_bounded() -> None:
+    source_description = "  Source-authored   advisory\nservices  " + "界" * 250
+    result = _bounded_tender_summary(source_description)
+    assert result is not None
+    assert len(result) <= 240
+    assert result.endswith("…")
+    assert source_description.startswith("  Source-authored")
+    assert _bounded_tender_summary(" \n ") is None
 
 
 def test_response_schema_is_explicit_and_has_no_private_owner_or_llm_fields() -> None:

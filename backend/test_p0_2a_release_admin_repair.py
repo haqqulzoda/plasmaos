@@ -43,7 +43,7 @@ class ReleaseAdminRepairTests(unittest.TestCase):
         auth_route = read_frontend("app/api/auth/[...nextauth]/route.ts")
         proxy = read_frontend("lib/documentProxy.ts")
         backend_resolver = read_frontend("lib/backendApiBase.ts")
-        middleware = read_frontend("middleware.ts")
+        network_proxy = read_frontend("proxy.ts")
 
         self.assertIn("const apiBaseUrl = '/api/v1';", api)
         self.assertIn("ARG NEXT_PUBLIC_API_URL=/api/v1", dockerfile)
@@ -51,7 +51,7 @@ class ReleaseAdminRepairTests(unittest.TestCase):
         self.assertIn("resolveBackendApiBase", auth_config)
         self.assertIn("import { handlers } from '@/auth';", auth_route)
         self.assertIn("resolveBackendApiBase", proxy)
-        self.assertIn("PUBLIC_EXACT_PATHS = ['/api/v1/health/version']", middleware)
+        self.assertIn("PUBLIC_EXACT_PATHS = ['/api/v1/health/version']", network_proxy)
         self.assertNotIn(
             "localhost:8000",
             api + dockerfile + next_config + auth_config + auth_route + proxy + backend_resolver,

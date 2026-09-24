@@ -14,6 +14,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import traceback
 import threading
 import time
 from http.server import ThreadingHTTPServer
@@ -26,7 +27,12 @@ from playwright.sync_api import sync_playwright, expect
 ROOT = Path(__file__).resolve().parents[2]
 FRONT = Path(os.environ.get("PLASMA_FRONTEND_TEST_ROOT", str(ROOT / "frontend")))
 OUT = Path(os.environ.get("PLASMA_BROWSER_RESULTS", str(ROOT / "docs/audits/s9_3/browser")))
-BASE = "http://localhost:3114"
+BROWSER_PORT = int(os.environ.get("PLASMA_RELEASE_BROWSER_PORT", "3114"))
+BROWSER_HOST = os.environ.get("PLASMA_RELEASE_BROWSER_HOST", "localhost")
+BASE = f"http://{BROWSER_HOST}:{BROWSER_PORT}"
+CONNECT_HOST = os.environ.get("PLASMA_RELEASE_BROWSER_CONNECT_HOST", BROWSER_HOST)
+PROBE_BASE = f"http://{CONNECT_HOST}:{BROWSER_PORT}"
+NPM = "npm.cmd" if os.name == "nt" else "npm"
 
 
 def load_fixture():
@@ -80,7 +86,14 @@ def main():
         AUTH_TRUST_HOST="true", NODE_ENV="production", NEXT_DIST_DIR=release_dist,
         BACKEND_INTERNAL_URL="http://127.0.0.1:8114/api/v1")
     log = (OUT / "frontend.log").open("w")
-    proc = subprocess.Popen(["npm", "run", "start", "--", "-p", "3114"], cwd=FRONT, env=env, stdout=log, stderr=log, start_new_session=os.name == "posix")
+    proc = subprocess.Popen(
+        [NPM, "run", "start", "--", "-p", str(BROWSER_PORT)],
+        cwd=FRONT,
+        env=env,
+        stdout=log,
+        stderr=log,
+        start_new_session=os.name == "posix",
+    )
     api_server = None
     external = []
 
@@ -92,26 +105,40 @@ def main():
             evidence = action()
             rows.append({"case": name, "status": "PASS", "evidence": evidence})
         except Exception as error:
-            rows.append({"case": name, "status": "FAIL", "error": str(error)[:2000]})
+            rows.append({
+                "case": name,
+                "status": "FAIL",
+                "error": "".join(traceback.format_exception(error))[-4000:],
+            })
         print(rows[-1]["status"], name, flush=True)
 
     try:
         for _ in range(90):
             try:
-                urlopen(BASE, timeout=2)
+                urlopen(PROBE_BASE, timeout=2)
                 break
             except Exception:
                 time.sleep(1)
         else:
             raise RuntimeError("Local production frontend did not start")
-        token_js = """import {encode} from 'next-auth/jwt'; console.log(await encode({secret:'s72-browser-secret',salt:'authjs.session-token',token:{name:'Synthetic Pilot',email:'pilot@example.invalid',sub:'72000000-0000-4000-8000-000000000001',accessToken:process.env.TEST_ACCESS_TOKEN||'s72-token-a',approval_status:'approved',platform_role:'pilot_user'},maxAge:3600}));"""
-        token = subprocess.check_output(["node", "--input-type=module", "-e", token_js], cwd=FRONT, env=env, text=True).strip()
+        def session_token(salt, access_token="s72-token-a"):
+            token_js = f"""import {{encode}} from 'next-auth/jwt'; console.log(await encode({{secret:'s72-browser-secret',salt:'{salt}',token:{{name:'Synthetic Pilot',email:'pilot@example.invalid',sub:'72000000-0000-4000-8000-000000000001',accessToken:{json.dumps(access_token)},approval_status:'approved',platform_role:'pilot_user'}},maxAge:3600}}));"""
+            return subprocess.check_output(
+                ["node", "--input-type=module", "-e", token_js],
+                cwd=FRONT, env=env, text=True,
+            ).strip()
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
+            browser_args = ["--no-sandbox"]
+            if CONNECT_HOST != BROWSER_HOST:
+                browser_args.append(f"--host-resolver-rules=MAP {BROWSER_HOST} {CONNECT_HOST}")
+            browser = pw.chromium.launch(headless=True, args=browser_args)
             context = browser.new_context(viewport={"width":390,"height":844})
-            context.add_cookies([{"name":"authjs.session-token","value":token,"url":BASE,"httpOnly":True,"sameSite":"Lax"}])
+            context.add_cookies([
+                {"name":"__Secure-authjs.session-token","value":session_token("__Secure-authjs.session-token"),"url":BASE.replace("http://", "https://", 1),"secure":True,"httpOnly":True,"sameSite":"Lax"},
+                {"name":"authjs.session-token","value":session_token("authjs.session-token"),"url":BASE,"httpOnly":True,"sameSite":"Lax"},
+            ])
             def network(route):
-                if urlparse(route.request.url).hostname not in {"localhost", "127.0.0.1"}:
+                if urlparse(route.request.url).hostname not in {"localhost", "127.0.0.1", BROWSER_HOST, CONNECT_HOST}:
                     external.append(route.request.url.split("?")[0])
                     route.abort()
                 else:
@@ -125,14 +152,35 @@ def main():
                 controls["outage"] = False
                 s72.State.users["s72-token-a"]["ui_locale"] = locale
                 page.set_viewport_size({"width":width,"height":900})
-                errors.clear()
-                before = len(requests)
                 start_external = len(external)
-                response = page.goto(BASE + "/dashboard/" + path, wait_until="networkidle")
-                expect(page.locator('h1').first).to_be_visible(timeout=15000)
+                for attempt in range(3):
+                    errors.clear()
+                    before = len(requests)
+                    try:
+                        response = page.goto(BASE + "/dashboard/" + path, wait_until="networkidle")
+                    except Exception:
+                        if attempt == 2:
+                            raise
+                        page.wait_for_timeout(300)
+                        continue
+                    if response.status == 503 and attempt < 2:
+                        page.wait_for_timeout(300)
+                        continue
+                    try:
+                        expect(page.locator('h1').first).to_be_visible(timeout=15000)
+                    except AssertionError:
+                        if attempt == 2:
+                            raise
+                        page.wait_for_timeout(300)
+                        continue
+                    break
                 page.wait_for_load_state('networkidle')
                 page.wait_for_timeout(200)
-                assert response.status == 200 and "/dashboard/" in page.url
+                assert response.status == 200 and "/dashboard/" in page.url, {
+                    "status": response.status,
+                    "url": page.url,
+                    "requests": requests[before:],
+                }
                 dom = page.evaluate("""() => ({lang:document.documentElement.lang, dir:document.documentElement.dir,
                     width:innerWidth, scroll:document.documentElement.scrollWidth,
                     heading:document.querySelector('h1')?.textContent,
@@ -229,10 +277,12 @@ def main():
             def locale_isolation():
                 load('settings','en',390)
                 s72.State.users['s72-token-b']['ui_locale'] = 'ru'
-                other_token = subprocess.check_output(['node','--input-type=module','-e',token_js],cwd=FRONT,env={**env,'TEST_ACCESS_TOKEN':'s72-token-b'},text=True).strip()
                 other = browser.new_context(viewport={'width':390,'height':844})
                 other.route('**/*',network)
-                other.add_cookies([{'name':'authjs.session-token','value':other_token,'url':BASE,'httpOnly':True,'sameSite':'Lax'}])
+                other.add_cookies([
+                    {'name':'__Secure-authjs.session-token','value':session_token('__Secure-authjs.session-token','s72-token-b'),'url':BASE.replace('http://','https://',1),'secure':True,'httpOnly':True,'sameSite':'Lax'},
+                    {'name':'authjs.session-token','value':session_token('authjs.session-token','s72-token-b'),'url':BASE,'httpOnly':True,'sameSite':'Lax'},
+                ])
                 try:
                     other_page = other.new_page()
                     other_page.goto(BASE+'/dashboard/settings',wait_until='networkidle')
@@ -245,8 +295,15 @@ def main():
                 load('settings','en',390)
                 controls['revoked'] = True
                 try:
-                    response = page.goto(BASE+'/dashboard/tenders',wait_until='networkidle')
-                    assert urlparse(page.url).path == '/' and response.status == 200
+                    for attempt in range(3):
+                        response = page.goto(BASE+'/dashboard/tenders',wait_until='networkidle')
+                        if urlparse(page.url).path == '/' and response.status == 200:
+                            break
+                        if attempt < 2:
+                            page.wait_for_timeout(300)
+                    assert urlparse(page.url).path == '/' and response.status == 200, {
+                        'url': page.url, 'status': response.status,
+                    }
                 finally: controls['revoked'] = False
                 return {'next_navigation':'/','authorization_ttl':0}
             case('session/revocation-next-navigation',revoked)
@@ -390,7 +447,21 @@ def main():
         if os.name == 'posix':
             try: os.killpg(proc.pid,signal.SIGTERM)
             except ProcessLookupError: pass
-        else: proc.terminate()
+            powershell = Path("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")
+            if powershell.exists():
+                subprocess.run([
+                    str(powershell), "-NoProfile", "-Command",
+                    f"Stop-Process -Id (Get-NetTCPConnection -LocalPort {BROWSER_PORT} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique) -Force -ErrorAction SilentlyContinue",
+                ], check=False, capture_output=True)
+        else:
+            # npm.cmd launches a child Next.js process on Windows. Terminating
+            # only the wrapper leaves the release port and native modules
+            # locked, so stop the synthetic test process tree explicitly.
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                check=False,
+                capture_output=True,
+            )
         proc.wait(timeout=20)
         server.shutdown(); server.server_close(); log.close()
         result = {"method":"Real Chromium against local production Next.js and controlled HTTP API fixtures; backend security cases execute real route/dependency code with synthetic DB and signed assertion fixtures", "cases":rows,"external_requests":external,

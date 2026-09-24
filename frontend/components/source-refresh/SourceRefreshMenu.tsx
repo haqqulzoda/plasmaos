@@ -11,8 +11,10 @@ import { BidiText } from "@/components/i18n/BidiText";
 
 export function SourceRefreshMenu({
   foundation = false,
+  triggerLabel,
 }: {
   foundation?: boolean;
+  triggerLabel?: string;
 }) {
   const t = useTranslations("refresh");
   const {
@@ -36,7 +38,7 @@ export function SourceRefreshMenu({
         trigger={
           <>
             <RefreshCw aria-hidden />
-            {t("sourceRefresh")}
+            {triggerLabel ?? t("sourceRefresh")}
           </>
         }
       >

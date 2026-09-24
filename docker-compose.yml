@@ -12,6 +12,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-plasma}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-plasma_ai}
+    ports:
+      # Host-run FastAPI uses the root .env port while keeping PostgreSQL
+      # inaccessible from other machines.
+      - "127.0.0.1:6543:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -86,7 +90,10 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: ${FRONTEND_NEXT_PUBLIC_API_URL:-/api/v1}
-        BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000/api/v1}
+        # Next.js compiles rewrites during the image build. Always target the
+        # Compose service here; frontend/.env uses a loopback URL for running
+        # Next.js directly on the host, which is unreachable inside a container.
+        BACKEND_INTERNAL_URL: http://backend:8000/api/v1
         PLASMA_BUILD_SHA: ${PLASMA_BUILD_SHA:-unknown}
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_frontend

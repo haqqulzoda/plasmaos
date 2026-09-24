@@ -43,7 +43,11 @@
     ".next-s82-browser/types/**/*.ts",
     ".next-s82-browser/dev/types/**/*.ts",
     ".next-s83-browser/types/**/*.ts",
-    ".next-s83-browser/dev/types/**/*.ts"
+    ".next-s83-browser/dev/types/**/*.ts",
+    ".next-s143/types/**/*.ts",
+    ".next-s143/dev/types/**/*.ts",
+    ".next-s143-qa/types/**/*.ts",
+    ".next-s143-qa/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

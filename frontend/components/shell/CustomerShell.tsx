@@ -146,9 +146,11 @@ export function CustomerShell({
             <span className="shell-mobile-brand">
               <PlasmaMark size="sm" />
             </span>
-            <span className="shell-context">
-              {active ? t(active.nameKey) : t('commandCenter')}
-            </span>
+            {path !== '/dashboard' && (
+              <span className="shell-context">
+                {active ? t(active.nameKey) : t('commandCenter')}
+              </span>
+            )}
           </div>
           <div className="shell-actions">
             {search}

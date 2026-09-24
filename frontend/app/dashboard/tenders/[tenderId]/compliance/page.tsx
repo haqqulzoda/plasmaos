@@ -2,24 +2,25 @@
 
 import { Pagination } from "@/components/ui/Navigation";
 import {
+  Badge,
   PageHeader,
   SectionHeader,
   Surface,
   StatusBadge,
   PageSkeleton,
   EmptyState,
-  Metric,
+  Skeleton,
   type Tone,
 } from "@/components/ui/Display";
 import { Button, ButtonLink } from "@/components/ui/Button";
-import { Select, Textarea } from "@/components/ui/Forms";
+import { SearchField, Select, Textarea } from "@/components/ui/Forms";
 import { Dialog, Drawer } from "@/components/ui/Overlay";
 import { Alert } from "@/components/ui/Feedback";
 import { BidiText, TechnicalText } from "@/components/i18n/BidiText";
 import { formatDate } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { useCollectionOffset } from "@/lib/useCollectionOffset";
-import { useState, useEffect, use, useMemo, useRef } from "react";
+import { useState, useEffect, use, useId, useMemo, useRef } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import DocumentViewer from "@/components/workspace/DocumentViewer";
 import type {
@@ -45,7 +46,19 @@ import {
   type AnalysisLanguage,
   type CustomerAnalysisLanguage,
 } from "@/i18n/analysisLanguages";
-import { ArrowLeft, FileSearch, Download, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  CircleHelp,
+  Download,
+  ExternalLink,
+  FileSearch,
+  FileText,
+  Sparkles,
+} from "lucide-react";
 
 function extractContentHash(
   data: Record<string, unknown> | null | undefined,
@@ -80,6 +93,13 @@ type UiVerdict = {
     | "verdict.compliant"
     | "verdict.pending";
   tone: VerdictTone;
+};
+
+type RequirementStatusFilter = "ALL" | RequirementMatchDetail["verdict"];
+
+type RequirementGroup = {
+  key: "critical" | "review" | "matched" | "recorded";
+  items: RequirementMatchDetail[];
 };
 
 function safeDecodeURIComponent(value: string): string {
@@ -181,19 +201,6 @@ async function complianceExportErrorKey(
   return "exportFailed";
 }
 
-function documentErrorKey(
-  response: Response,
-):
-  | "documentSignIn"
-  | "documentForbidden"
-  | "documentUnavailable"
-  | "documentOpenFailed" {
-  if (response.status === 401) return "documentSignIn";
-  if (response.status === 403) return "documentForbidden";
-  if (response.status === 404) return "documentUnavailable";
-  return "documentOpenFailed";
-}
-
 function getDocumentDisplayName(doc: TenderDocument): string {
   return (
     basenameFromPathish(doc.display_name) ||
@@ -228,25 +235,6 @@ function isPdfDocument(doc: TenderDocument | null): boolean {
   return (
     getDocumentExtension(doc) === "pdf" ||
     doc?.file_type?.toLowerCase() === "pdf"
-  );
-}
-
-function isArchiveDocument(doc: TenderDocument | null): boolean {
-  return ["zip", "rar", "7z", "tar", "gz"].includes(getDocumentExtension(doc));
-}
-
-function isArchiveInnerSource(
-  requirement: RequirementMatchDetail,
-  doc: TenderDocument | null,
-): boolean {
-  if (!doc || !isArchiveDocument(doc)) return false;
-  const sourceNames = new Set(
-    normalizedFilenameCandidates(requirement.source_filename),
-  );
-  return (doc.archive_inner_filenames ?? []).some((filename) =>
-    normalizedFilenameCandidates(filename).some((candidate) =>
-      sourceNames.has(candidate),
-    ),
   );
 }
 
@@ -397,6 +385,7 @@ export default function CompliancePage({
   const [evaluation, setEvaluation] = useState<DynamicEvaluation | null>(null);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [resolvedTenderId, setResolvedTenderId] = useState<string>(tenderId);
+  const [tender, setTender] = useState<Tender | null>(null);
   const [rawText, setRawText] = useState<string>("");
   const [tenderTitle, setTenderTitle] = useState<string>("");
   const [complianceGuardMessage, setComplianceGuardMessage] = useState<
@@ -439,6 +428,14 @@ export default function CompliancePage({
     string | null
   >(null);
   const [contextOpen, setContextOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState<RequirementStatusFilter>("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [documentFilter, setDocumentFilter] = useState("ALL");
+  const [matchedExpanded, setMatchedExpanded] = useState(false);
+  const [overrideRequirement, setOverrideRequirement] =
+    useState<RequirementMatchDetail | null>(null);
   const evidenceTrigger = useRef<HTMLElement | null>(null);
   const [analysisHistory, setAnalysisHistory] = useState<
     AnalysisVersionMetadata[]
@@ -474,6 +471,7 @@ export default function CompliancePage({
         );
 
         setResolvedTenderId(resolvedId);
+        setTender(tenderData);
         setTenderTitle(
           tenderData?.title ||
             translateRef.current("fallbackTender", {
@@ -758,9 +756,115 @@ export default function CompliancePage({
     () => buildDocumentFilenameIndex(documents),
     [documents],
   );
+  const requirementGroups = useMemo<RequirementGroup[]>(
+    () =>
+      hybridCompliance
+        ? [
+            { key: "critical", items: hybridCompliance.failed_dealbreakers },
+            { key: "review", items: hybridCompliance.manual_reviews_required },
+            { key: "matched", items: hybridCompliance.satisfied_requirements },
+            {
+              key: "recorded",
+              items: hybridCompliance.recorded_obligations ?? [],
+            },
+          ]
+        : [],
+    [hybridCompliance],
+  );
+  const allRequirements = useMemo(
+    () => requirementGroups.flatMap((group) => group.items),
+    [requirementGroups],
+  );
+  const requirementIndex = useMemo(
+    () =>
+      new Map(
+        allRequirements.map((detail, index) => [
+          getRequirementKey(detail),
+          index + 1,
+        ]),
+      ),
+    [allRequirements],
+  );
+  const categoryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(allRequirements.map((item) => item.category).filter(Boolean)),
+      ).sort((a, b) => a.localeCompare(b)),
+    [allRequirements],
+  );
+  const documentOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          allRequirements.map((item) => item.source_filename).filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [allRequirements],
+  );
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+  const filteredGroups = useMemo(
+    () =>
+      requirementGroups.map((group) => ({
+        ...group,
+        items: group.items.filter((detail) => {
+          const matchesSearch =
+            !normalizedQuery ||
+            [
+              detail.headline,
+              detail.raw_text_snippet,
+              detail.parent_section_header,
+              detail.source_filename,
+            ].some((value) =>
+              (value ?? "").toLocaleLowerCase().includes(normalizedQuery),
+            );
+          return (
+            matchesSearch &&
+            (statusFilter === "ALL" || detail.verdict === statusFilter) &&
+            (categoryFilter === "ALL" || detail.category === categoryFilter) &&
+            (documentFilter === "ALL" ||
+              detail.source_filename === documentFilter)
+          );
+        }),
+      })),
+    [
+      categoryFilter,
+      documentFilter,
+      normalizedQuery,
+      requirementGroups,
+      statusFilter,
+    ],
+  );
+  const filtersActive = Boolean(
+    normalizedQuery ||
+      statusFilter !== "ALL" ||
+      categoryFilter !== "ALL" ||
+      documentFilter !== "ALL",
+  );
+  const visibleRequirementCount = filteredGroups.reduce(
+    (total, group) => total + group.items.length,
+    0,
+  );
+  const defaultRequirement =
+    filteredGroups.find((group) => group.items.length > 0)?.items[0] ??
+    allRequirements[0] ??
+    null;
+  const activeRequirement = selectedRequirement ?? defaultRequirement;
   const selectedDocument = useMemo(
-    () => resolveDocumentForRequirement(selectedRequirement, documentIndex),
-    [selectedRequirement, documentIndex],
+    () => resolveDocumentForRequirement(activeRequirement, documentIndex),
+    [activeRequirement, documentIndex],
+  );
+  const readinessSupportedCount = useMemo(
+    () =>
+      (hybridCompliance?.satisfied_requirements ?? []).filter(
+        (detail) =>
+          detail.match_method === "VAULT_DETERMINISTIC" ||
+          Boolean(
+            detail.vault_evidence_id ||
+              detail.vault_match_source ||
+              detail.matched_credential,
+          ),
+      ).length,
+    [hybridCompliance],
   );
 
   const selectVersion = async (versionNumber: number) => {
@@ -805,7 +909,14 @@ export default function CompliancePage({
     setContextOpen(false);
     window.setTimeout(() => evidenceTrigger.current?.focus(), 0);
   };
-  const chooseEvidence = (requirement: RequirementMatchDetail) => {
+  const chooseRequirement = (requirement: RequirementMatchDetail) => {
+    evidenceTrigger.current = document.activeElement as HTMLElement;
+    setSelectedRequirement(requirement);
+    if (window.matchMedia("(max-width: 1199px)").matches) {
+      setContextOpen(true);
+    }
+  };
+  const openEvidence = (requirement: RequirementMatchDetail) => {
     evidenceTrigger.current = document.activeElement as HTMLElement;
     setSelectedRequirement(requirement);
     setContextOpen(true);
@@ -813,23 +924,82 @@ export default function CompliancePage({
   const partial = Boolean(
     coverage?.coverage_status && coverage.coverage_status !== "complete",
   );
+  const sourceSystemLabel = tender
+    ? tender.source_system === "world_bank"
+      ? t("workspace.sourceSystems.worldBank")
+      : tender.source_system === "adb"
+        ? t("workspace.sourceSystems.adb")
+        : tender.source_system === "giz"
+          ? t("workspace.sourceSystems.giz")
+          : tender.source_system === "ebrd"
+            ? t("workspace.sourceSystems.ebrd")
+            : t("workspace.sourceSystems.uzex")
+    : null;
+  const currentCanMutate =
+    analysisVersion === latestVersion && !isLoading && Boolean(analysisId);
+  const activeKey = activeRequirement
+    ? getRequirementKey(activeRequirement)
+    : null;
+  const activeIsOverridden = activeRequirement
+    ? acceptedNodeIds.includes(
+        (
+          activeRequirement.taxonomy_node_id ??
+          `synth_${hashSnippet(activeRequirement.raw_text_snippet)}`
+        ).toLowerCase(),
+      )
+    : false;
+  const resetFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("ALL");
+    setCategoryFilter("ALL");
+    setDocumentFilter("ALL");
+  };
   return (
     <div className="customer-page compliance-page">
-      <ButtonLink href={`/dashboard/tenders/${tenderId}`} variant="ghost">
+      <ButtonLink
+        href={`/dashboard/tenders/${tenderId}`}
+        variant="ghost"
+        className="compliance-back-link"
+      >
         <ArrowLeft aria-hidden className="rtl-mirror" />
         {t("back")}
       </ButtonLink>
       <PageHeader
         eyebrow={t("engineTitle")}
         title={tenderTitle || t("title")}
-        description={
-          isLoading
-            ? t("analyzingSubtitle")
-            : analysisStatus === "failed"
-              ? t("analysisFailed")
-              : hasAnalysis
-                ? t("completeSubtitle")
-                : t("readySubtitle")
+        status={
+          <Badge tone="accent">
+            <span title={t("workspace.betaHelp")}>{t("workspace.beta")}</span>
+          </Badge>
+        }
+        description={t("workspace.betaHelp")}
+        metadata={
+          tender ? (
+            <>
+              <TechnicalText>{tender.external_id}</TechnicalText>
+              {sourceSystemLabel && <span>{sourceSystemLabel}</span>}
+              {tender.deadline && (
+                <span>
+                  {t("workspace.closes", {
+                    date: formatDate(tender.deadline, locale),
+                  })}
+                </span>
+              )}
+            </>
+          ) : undefined
+        }
+        secondaryAction={
+          tender?.source_url ? (
+            <ButtonLink
+              href={tender.source_url}
+              target="_blank"
+              rel="noreferrer"
+              variant="secondary"
+            >
+              {t("workspace.openOriginalSource")}
+              <ExternalLink aria-hidden />
+            </ButtonLink>
+          ) : undefined
         }
       />
       <Surface className="compliance-toolbar">
@@ -970,13 +1140,13 @@ export default function CompliancePage({
         )}
       </Surface>
       {(loadingResult && isLoadingText) || loadingVersion ? (
-        <PageSkeleton label={t("redesign.loadingVersion")} />
+        <ComplianceWorkspaceSkeleton label={t("redesign.loadingVersion")} />
       ) : hasAnalysis ? (
-        <div className="compliance-reading-layout">
-          <div className="compliance-result">
-            <Surface className="compliance-section">
+        <>
+          <Surface className="compliance-summary compliance-section">
+            <div className="compliance-summary-state">
               <SectionHeader
-                title={t("redesign.assessment")}
+                title={complianceLabel}
                 action={
                   <StatusBadge tone={verdictTone(uiVerdict.tone)}>
                     {complianceLabel}
@@ -985,14 +1155,14 @@ export default function CompliancePage({
               />
               <p
                 dir={analysisContentDirection(resultAnalysisLanguage)}
-                className="compliance-narrative"
+                className="compliance-narrative ds-muted"
               >
                 {deriveStatusMessage(hybridCompliance, evaluation) ??
                   t("manualOnly")}
               </p>
-              <div className="ds-row ds-muted">
+              <div className="compliance-summary-meta ds-muted">
                 <span>
-                  {t("resultLanguage")}:{" "}
+                  {t("resultLanguage")}: {" "}
                   {resultAnalysisLanguage
                     ? analysisLanguageLabel(resultAnalysisLanguage)
                     : t("notRecorded")}
@@ -1004,83 +1174,145 @@ export default function CompliancePage({
                   <span>{t("elapsedSeconds", { seconds: elapsedTime })}</span>
                 )}
               </div>
-            </Surface>
+            </div>
+            <SummaryMetric
+              value={hybridCompliance?.total_requirements ?? 0}
+              label={t("workspace.requirementsReviewed")}
+            />
+            <SummaryMetric
+              value={hybridCompliance?.failed_dealbreakers.length ?? 0}
+              label={t("workspace.criticalGaps")}
+              tone="danger"
+            />
+            <SummaryMetric
+              value={readinessSupportedCount}
+              label={t("workspace.readinessSupported")}
+              tone="success"
+            />
+            <SummaryMetric
+              value={documentOptions.length}
+              label={t("workspace.referencedDocuments")}
+            />
+          </Surface>
+          <Surface className="compliance-review-controls">
+            <div className="compliance-filters">
+              <SearchField
+                label={t("workspace.searchLabel")}
+                clearLabel={t("workspace.clearSearch")}
+                placeholder={t("workspace.searchPlaceholder")}
+                value={searchQuery}
+                onValueChange={setSearchQuery}
+              />
+              <Select
+                label={t("workspace.statusFilter")}
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(
+                    event.target.value as RequirementStatusFilter,
+                  )
+                }
+              >
+                <option value="ALL">{t("workspace.allStatuses")}</option>
+                <option value="FAILED">{t("verdictLabels.failed")}</option>
+                <option value="NEEDS_MANUAL_REVIEW">
+                  {t("verdictLabels.manualReview")}
+                </option>
+                <option value="SATISFIED">
+                  {t("verdictLabels.satisfied")}
+                </option>
+              </Select>
+              <Select
+                label={t("workspace.categoryFilter")}
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.target.value)}
+              >
+                <option value="ALL">{t("workspace.allCategories")}</option>
+                {categoryOptions.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                label={t("workspace.documentFilter")}
+                value={documentFilter}
+                onChange={(event) => setDocumentFilter(event.target.value)}
+              >
+                <option value="ALL">{t("workspace.allDocuments")}</option>
+                {documentOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </Select>
+              <Button
+                variant="ghost"
+                onClick={resetFilters}
+                disabled={!filtersActive}
+              >
+                {t("workspace.reset")}
+              </Button>
+            </div>
+          </Surface>
+          <div className="compliance-reading-layout">
+          <div className="compliance-result">
             {hybridCompliance ? (
               <>
-                <Surface className="compliance-metrics">
-                  {(
-                    [
-                      ["satisfied", hybridCompliance.satisfied_count],
-                      ["failed", hybridCompliance.failed_count],
-                      ["manual", hybridCompliance.manual_review_count],
-                      [
-                        "recorded",
-                        hybridCompliance.recorded_obligations_count ??
-                          hybridCompliance.skipped_optional_count,
-                      ],
-                    ] as const
-                  ).map(([label, value]) => (
-                    <Metric key={label} label={t(label)} value={value} />
-                  ))}
-                </Surface>
-                {(
-                  [
-                    [
-                      t("dealbreakerFailures", {
-                        count: hybridCompliance.failed_dealbreakers.length,
-                      }),
-                      hybridCompliance.failed_dealbreakers,
-                    ],
-                    [
-                      t("manualReviewRequired", {
-                        count: hybridCompliance.manual_reviews_required.length,
-                      }),
-                      hybridCompliance.manual_reviews_required,
-                    ],
-                    [
-                      t("satisfiedRequirements"),
-                      hybridCompliance.satisfied_requirements,
-                    ],
-                    [
-                      t("recordedObligations"),
-                      hybridCompliance.recorded_obligations ?? [],
-                    ],
-                  ] as [string, RequirementMatchDetail[]][]
-                )
-                  .filter(([, items]) => items.length > 0)
-                  .map(([label, items]) => (
-                    <section className="compliance-group" key={label}>
-                      <SectionHeader title={label} />
-                      {items.map((detail) => (
-                        <RequirementCard
-                          key={getRequirementKey(detail)}
-                          detail={detail}
-                          analysisLanguage={resultAnalysisLanguage}
-                          onEvidence={() => chooseEvidence(detail)}
-                          tenderId={resolvedTenderId}
-                          analysisId={analysisId}
-                          canMutate={
-                            analysisVersion === latestVersion && !isLoading
-                          }
-                          isOverridden={acceptedNodeIds.includes(
-                            (
-                              detail.taxonomy_node_id ??
-                              `synth_${hashSnippet(detail.raw_text_snippet)}`
-                            ).toLowerCase(),
-                          )}
-                          onOverride={(seal, nodeIds) => {
-                            setOverrideSeal(seal);
-                            setAcceptedNodeIds((prev) => [
-                              ...new Set([
-                                ...prev,
-                                ...nodeIds.map((id) => id.toLowerCase()),
-                              ]),
-                            ]);
-                          }}
-                        />
-                      ))}
-                    </section>
-                  ))}
+                <div className="compliance-result-heading">
+                  <div>
+                    <span className="ds-eyebrow">
+                      {t("workspace.reviewWorkspace")}
+                    </span>
+                    <h2>{t("workspace.requirements")}</h2>
+                  </div>
+                  <span className="ds-muted">
+                    {t("workspace.showingCount", {
+                      visible: visibleRequirementCount,
+                      total: allRequirements.length,
+                    })}
+                  </span>
+                </div>
+                {visibleRequirementCount > 0 ? (
+                  filteredGroups
+                    .filter((group) => group.items.length > 0)
+                    .map((group) => (
+                      <RequirementGroupSection
+                        key={group.key}
+                        group={group}
+                        totalCount={
+                          requirementGroups.find(
+                            (candidate) => candidate.key === group.key,
+                          )?.items.length ?? 0
+                        }
+                        indexByKey={requirementIndex}
+                        activeKey={activeKey}
+                        overriddenNodeIds={acceptedNodeIds}
+                        analysisLanguage={resultAnalysisLanguage}
+                        collapsed={
+                          group.key === "matched" &&
+                          !matchedExpanded &&
+                          !filtersActive
+                        }
+                        onToggle={() =>
+                          setMatchedExpanded((expanded) => !expanded)
+                        }
+                        onSelect={chooseRequirement}
+                        onOpen={openEvidence}
+                      />
+                    ))
+                ) : (
+                  <Surface className="compliance-section">
+                    <EmptyState
+                      title={t("workspace.noResults")}
+                      description={t("workspace.noResultsHelp")}
+                      action={
+                        <Button variant="secondary" onClick={resetFilters}>
+                          {t("workspace.reset")}
+                        </Button>
+                      }
+                    />
+                  </Surface>
+                )}
               </>
             ) : (
               <Surface className="compliance-section">
@@ -1093,54 +1325,79 @@ export default function CompliancePage({
           </div>
           <aside
             className="compliance-context"
-            aria-label={t("sourceEvidence")}
+            aria-label={t("workspace.requirementDetails")}
           >
-            <Surface className="compliance-section">
-              <SectionHeader title={t("sourceEvidence")} />
-              <p className="ds-muted">{t("redesign.evidenceHelp")}</p>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  evidenceTrigger.current =
-                    document.activeElement as HTMLElement;
-                  setSelectedRequirement(null);
-                  setContextOpen(true);
-                }}
-              >
-                {t("tenderDocument")}
-              </Button>
-            </Surface>
-            <Surface className="compliance-section">
-              <SectionHeader title={t("versionHistory")} />
-              <p>
-                <TechnicalText>{analysisId}</TechnicalText>
-              </p>
-              {contentHash && (
-                <>
-                  <p className="ds-muted">{t("contentSeal")}</p>
-                  <TechnicalText>{contentHash}</TechnicalText>
-                </>
-              )}
-              {overrideSeal && (
-                <>
-                  <p className="ds-muted">{t("overrideSeal")}</p>
-                  <TechnicalText>{overrideSeal}</TechnicalText>
-                  <StatusBadge tone="warning">
-                    {t("overrideCount", { count: acceptedNodeIds.length })}
-                  </StatusBadge>
-                </>
-              )}
-            </Surface>
+            {activeRequirement ? (
+              <EvidenceInspector
+                requirement={activeRequirement}
+                requirementNumber={
+                  requirementIndex.get(getRequirementKey(activeRequirement)) ?? 1
+                }
+                analysisLanguage={resultAnalysisLanguage}
+                matchedDocument={selectedDocument}
+                isLoadingDocuments={isLoadingDocuments}
+                documentFetchError={documentFetchError}
+                canMutate={currentCanMutate}
+                isOverridden={activeIsOverridden}
+                onOverride={() => setOverrideRequirement(activeRequirement)}
+              />
+            ) : (
+              <Surface className="compliance-section">
+                <EmptyState
+                  title={t("workspace.selectRequirement")}
+                  description={t("workspace.selectRequirementHelp")}
+                />
+              </Surface>
+            )}
           </aside>
-        </div>
+          </div>
+          {(contentHash || overrideSeal) && (
+            <details className="compliance-audit-details">
+              <summary>{t("workspace.auditDetails")}</summary>
+              <div className="compliance-audit-grid">
+                {analysisId && (
+                  <div>
+                    <span className="ds-muted">{t("workspace.analysisId")}</span>
+                    <TechnicalText>{analysisId}</TechnicalText>
+                  </div>
+                )}
+                {contentHash && (
+                  <div>
+                    <span className="ds-muted">{t("contentSeal")}</span>
+                    <TechnicalText>{contentHash}</TechnicalText>
+                  </div>
+                )}
+                {overrideSeal && (
+                  <div>
+                    <span className="ds-muted">{t("overrideSeal")}</span>
+                    <TechnicalText>{overrideSeal}</TechnicalText>
+                    <StatusBadge tone="warning">
+                      {t("overrideCount", { count: acceptedNodeIds.length })}
+                    </StatusBadge>
+                  </div>
+                )}
+              </div>
+            </details>
+          )}
+        </>
       ) : loadingResult ? (
-        <PageSkeleton label={t("redesign.loadingVersion")} />
+        <ComplianceWorkspaceSkeleton label={t("redesign.loadingVersion")} />
       ) : (
         <Surface>
           <EmptyState
             icon={<FileSearch aria-hidden />}
             title={t("ready")}
             description={t("introHelp")}
+            action={
+              <Button
+                onClick={handleAnalyzeTender}
+                loading={isLoading}
+                disabled={!canStartAnalysis || isLoading}
+              >
+                <Sparkles aria-hidden />
+                {t("start")}
+              </Button>
+            }
           />
           {!hasText && (
             <p className="compliance-section ds-muted">{t("noTextGuard")}</p>
@@ -1150,16 +1407,34 @@ export default function CompliancePage({
       <Drawer
         open={contextOpen}
         onClose={closeContext}
-        title={selectedRequirement ? t("sourceEvidence") : t("tenderDocument")}
-        closeLabel={t("backToDocument")}
+        title={
+          selectedRequirement
+            ? t("workspace.requirementDetails")
+            : t("tenderDocument")
+        }
+        closeLabel={t("workspace.closeInspector")}
       >
         {selectedRequirement ? (
-          <EvidenceDocumentPane
+          <EvidenceInspector
             requirement={selectedRequirement}
-            matchedDocument={selectedDocument}
+            requirementNumber={
+              requirementIndex.get(getRequirementKey(selectedRequirement)) ?? 1
+            }
+            analysisLanguage={resultAnalysisLanguage}
+            matchedDocument={resolveDocumentForRequirement(
+              selectedRequirement,
+              documentIndex,
+            )}
             isLoadingDocuments={isLoadingDocuments}
             documentFetchError={documentFetchError}
-            onClearSelection={() => setSelectedRequirement(null)}
+            canMutate={currentCanMutate}
+            isOverridden={acceptedNodeIds.includes(
+              (
+                selectedRequirement.taxonomy_node_id ??
+                `synth_${hashSnippet(selectedRequirement.raw_text_snippet)}`
+              ).toLowerCase(),
+            )}
+            onOverride={() => setOverrideRequirement(selectedRequirement)}
           />
         ) : isLoadingText ? (
           <PageSkeleton label={t("loadingDocument")} />
@@ -1169,147 +1444,277 @@ export default function CompliancePage({
           <EmptyState title={t("noTextTitle")} description={t("noTextHelp")} />
         )}
       </Drawer>
+      {overrideRequirement && analysisId && (
+        <OverrideChallengeModal
+          tenderId={resolvedTenderId}
+          analysisId={analysisId}
+          nodeId={
+            overrideRequirement.taxonomy_node_id ??
+            `synth_${hashSnippet(overrideRequirement.raw_text_snippet)}`
+          }
+          requirementSnippet={overrideRequirement.raw_text_snippet}
+          onClose={() => setOverrideRequirement(null)}
+          onOverrideComplete={(seal, nodeIds) => {
+            setOverrideSeal(seal);
+            setAcceptedNodeIds((previous) => [
+              ...new Set([
+                ...previous,
+                ...nodeIds.map((id) => id.toLowerCase()),
+              ]),
+            ]);
+            setOverrideRequirement(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function verdictTone(tone: VerdictTone): Tone {
-  return tone === "review" ? "warning" : tone === "pending" ? "neutral" : tone;
+function SummaryMetric({
+  value,
+  label,
+  tone = "neutral",
+}: {
+  value: number;
+  label: string;
+  tone?: "neutral" | "danger" | "success";
+}) {
+  return (
+    <dl className={`compliance-summary-metric is-${tone}`}>
+      <dt>{label}</dt>
+      <dd className="ds-numeric">{value}</dd>
+    </dl>
+  );
 }
 
-function RequirementCard({
-  detail,
+function ComplianceWorkspaceSkeleton({ label }: { label: string }) {
+  return (
+    <div className="compliance-workspace-skeleton" role="status" aria-label={label}>
+      <span className="sr-only">{label}</span>
+      <Surface className="compliance-summary">
+        {[0, 1, 2, 3, 4].map((item) => (
+          <div className="ds-stack" key={item}>
+            <Skeleton />
+            <Skeleton />
+          </div>
+        ))}
+      </Surface>
+      <div className="compliance-reading-layout">
+        <Surface className="compliance-section">
+          {[0, 1, 2, 3].map((item) => (
+            <Skeleton key={item} />
+          ))}
+        </Surface>
+        <Surface className="compliance-section">
+          {[0, 1, 2].map((item) => (
+            <Skeleton key={item} />
+          ))}
+        </Surface>
+      </div>
+    </div>
+  );
+}
+
+function RequirementGroupSection({
+  group,
+  totalCount,
+  indexByKey,
+  activeKey,
+  overriddenNodeIds,
   analysisLanguage,
-  onEvidence,
-  tenderId,
-  analysisId,
+  collapsed,
+  onToggle,
+  onSelect,
+  onOpen,
+}: {
+  group: RequirementGroup;
+  totalCount: number;
+  indexByKey: Map<string, number>;
+  activeKey: string | null;
+  overriddenNodeIds: string[];
+  analysisLanguage: AnalysisLanguage | null;
+  collapsed: boolean;
+  onToggle: () => void;
+  onSelect: (requirement: RequirementMatchDetail) => void;
+  onOpen: (requirement: RequirementMatchDetail) => void;
+}) {
+  const t = useTranslations("compliance");
+  const title = t(`workspace.groups.${group.key}.title`);
+  const description = t(`workspace.groups.${group.key}.description`);
+  const GroupIcon =
+    group.key === "critical"
+      ? AlertCircle
+      : group.key === "matched"
+        ? CheckCircle2
+        : CircleHelp;
+  return (
+    <section
+      className={`compliance-group compliance-section is-${group.key}`}
+      aria-labelledby={`compliance-group-${group.key}`}
+    >
+      <SectionHeader
+        title={title}
+        titleId={`compliance-group-${group.key}`}
+        description={description}
+        icon={<GroupIcon aria-hidden />}
+        action={<Badge>{group.items.length}</Badge>}
+      />
+      {!collapsed && (
+        <div className="compliance-requirement-list">
+          {group.items.map((detail) => {
+            const key = getRequirementKey(detail);
+            const nodeId = (
+              detail.taxonomy_node_id ??
+              `synth_${hashSnippet(detail.raw_text_snippet)}`
+            ).toLowerCase();
+            return (
+              <RequirementRow
+                key={key}
+                detail={detail}
+                number={indexByKey.get(key) ?? 1}
+                analysisLanguage={analysisLanguage}
+                selected={key === activeKey}
+                isOverridden={overriddenNodeIds.includes(nodeId)}
+                onSelect={() => onSelect(detail)}
+                onOpen={() => onOpen(detail)}
+              />
+            );
+          })}
+        </div>
+      )}
+      {group.key === "matched" && (
+        <Button variant="ghost" size="sm" onClick={onToggle}>
+          {collapsed ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden className="rtl-mirror" />}
+          {collapsed
+            ? t("workspace.showMatched", { count: totalCount })
+            : t("workspace.hideMatched")}
+        </Button>
+      )}
+    </section>
+  );
+}
+
+function RequirementRow({
+  detail,
+  number,
+  analysisLanguage,
+  selected,
+  isOverridden,
+  onSelect,
+  onOpen,
+}: {
+  detail: RequirementMatchDetail;
+  number: number;
+  analysisLanguage: AnalysisLanguage | null;
+  selected: boolean;
+  isOverridden: boolean;
+  onSelect: () => void;
+  onOpen: () => void;
+}) {
+  const t = useTranslations("compliance");
+  const title = detail.headline || detail.raw_text_snippet;
+  const description =
+    detail.raw_text_snippet !== title ? detail.raw_text_snippet : null;
+  return (
+    <div
+      className={`compliance-requirement${selected ? " is-selected" : ""}`}
+    >
+      <button
+        type="button"
+        className="compliance-row-select"
+        aria-pressed={selected}
+        onClick={onSelect}
+      >
+        <span className="compliance-row-number ds-numeric">{number}</span>
+        <span className="compliance-row-copy">
+          <h3 dir={analysisContentDirection(analysisLanguage)}>{title}</h3>
+          {description && <span dir="auto">{description}</span>}
+          <span className="compliance-row-source ds-muted">
+            {detail.parent_section_header && (
+              <BidiText>{detail.parent_section_header}</BidiText>
+            )}
+            {detail.source_filename && (
+              <BidiText>{detail.source_filename}</BidiText>
+            )}
+            {detail.source_page > 0 && (
+              <span>{t("page", { page: detail.source_page })}</span>
+            )}
+          </span>
+        </span>
+        <RequirementStatus detail={detail} isOverridden={isOverridden} />
+      </button>
+      <Button
+        variant="icon"
+        className="compliance-row-open"
+        aria-label={t("sourceEvidence")}
+        onClick={onOpen}
+      >
+        <ChevronRight aria-hidden className="rtl-mirror" />
+      </Button>
+    </div>
+  );
+}
+
+function RequirementStatus({
+  detail,
+  isOverridden = false,
+}: {
+  detail: RequirementMatchDetail;
+  isOverridden?: boolean;
+}) {
+  const t = useTranslations("compliance");
+  const tone =
+    detail.verdict === "SATISFIED"
+      ? "success"
+      : detail.verdict === "FAILED"
+        ? "danger"
+        : "warning";
+  const Icon =
+    detail.verdict === "SATISFIED"
+      ? CheckCircle2
+      : detail.verdict === "FAILED"
+        ? AlertCircle
+        : CircleHelp;
+  const label = t(
+    detail.verdict === "SATISFIED"
+      ? "verdictLabels.satisfied"
+      : detail.verdict === "FAILED"
+        ? "verdictLabels.failed"
+        : "verdictLabels.manualReview",
+  );
+  return (
+    <span className={`compliance-row-status is-${tone}`}>
+      <Icon aria-hidden />
+      <span>{label}</span>
+      {isOverridden && <Badge tone="warning">{t("overridden")}</Badge>}
+    </span>
+  );
+}
+
+function EvidenceInspector({
+  requirement,
+  requirementNumber,
+  analysisLanguage,
+  matchedDocument,
+  isLoadingDocuments,
+  documentFetchError,
   canMutate,
   isOverridden,
   onOverride,
 }: {
-  detail: RequirementMatchDetail;
-  analysisLanguage: AnalysisLanguage | null;
-  onEvidence: () => void;
-  tenderId: string;
-  analysisId: string | null;
-  canMutate: boolean;
-  isOverridden: boolean;
-  onOverride: (seal: string | null, ids: string[]) => void;
-}) {
-  const t = useTranslations("compliance");
-  const [open, setOpen] = useState(false);
-  const fatal = detail.verdict === "FAILED" && detail.is_dealbreaker;
-  const quote = detail.exact_quote || detail.raw_text_snippet;
-  return (
-    <Surface className="compliance-requirement">
-      <div className="ds-row">
-        <StatusBadge
-          tone={
-            detail.verdict === "SATISFIED"
-              ? "success"
-              : detail.verdict === "FAILED"
-                ? "danger"
-                : "warning"
-          }
-        >
-          {t(
-            detail.verdict === "SATISFIED"
-              ? "verdictLabels.satisfied"
-              : detail.verdict === "FAILED"
-                ? "verdictLabels.failed"
-                : "verdictLabels.manualReview",
-          )}
-        </StatusBadge>
-        {fatal && <StatusBadge tone="danger">{t("fatal")}</StatusBadge>}
-        {isOverridden && (
-          <StatusBadge tone="warning">{t("overridden")}</StatusBadge>
-        )}
-      </div>
-      {detail.parent_section_header && (
-        <p className="ds-muted">
-          <BidiText>{detail.parent_section_header}</BidiText>
-        </p>
-      )}
-      <div className="ds-row ds-muted">
-        <BidiText>{detail.source_filename || t("sourceDocument")}</BidiText>
-        <span>
-          {detail.source_page
-            ? t("page", { page: detail.source_page })
-            : t("documentLevel")}
-        </span>
-        <TechnicalText>
-          {detail.category || detail.requirement_type}
-        </TechnicalText>
-      </div>
-      <h3
-        dir={
-          detail.headline ? analysisContentDirection(analysisLanguage) : "auto"
-        }
-      >
-        {detail.headline || detail.raw_text_snippet}
-      </h3>
-      {detail.reason && (
-        <>
-          <p className="ds-muted">{t("redesign.rationale")}</p>
-          <p dir={analysisContentDirection(analysisLanguage)}>
-            {detail.reason}
-          </p>
-        </>
-      )}
-      <blockquote className="compliance-quote">
-        <p className="ds-muted">{t("evidenceQuote")}</p>
-        <p dir="auto">{quote}</p>
-      </blockquote>
-      {detail.matched_credential && (
-        <p>
-          <span className="ds-muted">{t("redesign.recordedCredential")}: </span>
-          <BidiText>{detail.matched_credential}</BidiText>
-        </p>
-      )}
-      <div className="ds-row">
-        <Button variant="secondary" onClick={onEvidence}>
-          {t("sourceEvidence")}
-        </Button>
-        {fatal && canMutate && analysisId && !isOverridden && (
-          <Button variant="ghost" onClick={() => setOpen(true)}>
-            {t("overrideFlag")}
-          </Button>
-        )}
-      </div>
-      {open && analysisId && (
-        <OverrideChallengeModal
-          tenderId={tenderId}
-          analysisId={analysisId}
-          nodeId={
-            detail.taxonomy_node_id ??
-            `synth_${hashSnippet(detail.raw_text_snippet)}`
-          }
-          requirementSnippet={detail.raw_text_snippet}
-          onClose={() => setOpen(false)}
-          onOverrideComplete={(seal, ids) => {
-            onOverride(seal, ids);
-            setOpen(false);
-          }}
-        />
-      )}
-    </Surface>
-  );
-}
-
-function EvidenceDocumentPane({
-  requirement,
-  matchedDocument,
-  isLoadingDocuments,
-  documentFetchError,
-  onClearSelection,
-}: {
   requirement: RequirementMatchDetail;
+  requirementNumber: number;
+  analysisLanguage: AnalysisLanguage | null;
   matchedDocument: TenderDocument | null;
   isLoadingDocuments: boolean;
   documentFetchError: string | null;
-  onClearSelection: () => void;
+  canMutate: boolean;
+  isOverridden: boolean;
+  onOverride: () => void;
 }) {
   const t = useTranslations("compliance");
+  const sourceTitleId = useId();
+  const analysisTitleId = useId();
   const sourcePage = requirement.source_page;
   const quote = requirement.exact_quote || requirement.raw_text_snippet;
   const sourceFilename = requirement.source_filename || t("sourceDocument");
@@ -1317,181 +1722,131 @@ function EvidenceDocumentPane({
     ? getDocumentDisplayName(matchedDocument)
     : sourceFilename;
   const documentUrl = matchedDocument
-    ? `/document-preview/${matchedDocument.id}`
+    ? `/document-preview/${matchedDocument.id}${
+        isPdfDocument(matchedDocument) && sourcePage > 0
+          ? `#page=${sourcePage}`
+          : ""
+      }`
     : null;
-  const iframeSrc = documentUrl
-    ? `${documentUrl}${sourcePage ? `#page=${sourcePage}` : ""}`
-    : null;
-  const extension = getDocumentExtension(matchedDocument);
-  const isPdf = isPdfDocument(matchedDocument);
-  const isDocx = extension === "docx" || extension === "doc";
-  const isArchive = isArchiveDocument(matchedDocument);
-  const isArchiveInner = isArchiveInnerSource(requirement, matchedDocument);
-  const pageLabel =
-    isDocx || !sourcePage
-      ? t("documentLevel")
-      : t("page", { page: sourcePage });
-
+  const readinessContext =
+    requirement.matched_credential ||
+    requirement.vault_missing_reason ||
+    requirement.vault_match_source;
   return (
-    <div className="compliance-section">
-      <SectionHeader
-        title={<BidiText>{matchedName}</BidiText>}
-        action={
-          <Button variant="ghost" onClick={onClearSelection}>
-            {t("backToDocument")}
-          </Button>
-        }
-      />
-      <div className="ds-row ds-muted">
-        <BidiText>{sourceFilename}</BidiText>
-        <span>{pageLabel}</span>
-      </div>
-      <blockquote className="compliance-quote">
-        <p className="ds-muted">{t("evidenceQuote")}</p>
-        <p dir="auto">{quote}</p>
-      </blockquote>
-      {isPdf && iframeSrc ? (
-        <>
-          <p className="ds-muted">{t("pdfBestEffort")}</p>
-          <iframe
-            key={iframeSrc}
-            title={t("evidenceFrame", { name: matchedName })}
-            src={iframeSrc}
-            className="compliance-document-frame"
-          />
-        </>
-      ) : (
-        <EvidenceFallbackPanel
-          matchedDocument={matchedDocument}
-          documentUrl={documentUrl}
-          sourceFilename={sourceFilename}
-          pageLabel={pageLabel}
-          isLoadingDocuments={isLoadingDocuments}
-          documentFetchError={documentFetchError}
-          isDocx={isDocx}
-          isArchive={isArchive}
-          isArchiveInner={isArchiveInner}
+    <Surface className="compliance-inspector compliance-section">
+      <header className="compliance-inspector-header">
+        <div>
+          <span className="ds-eyebrow">
+            {t("workspace.requirementNumber", { number: requirementNumber })}
+          </span>
+          <h2 dir={analysisContentDirection(analysisLanguage)}>
+            {requirement.headline || requirement.raw_text_snippet}
+          </h2>
+        </div>
+        <RequirementStatus
+          detail={requirement}
+          isOverridden={isOverridden}
         />
+      </header>
+
+      <div className="compliance-inspector-meta">
+        {requirement.category && (
+          <div>
+            <span className="ds-muted">{t("workspace.category")}</span>
+            <TechnicalText>{requirement.category}</TechnicalText>
+          </div>
+        )}
+        {requirement.taxonomy_node_id && (
+          <div>
+            <span className="ds-muted">{t("workspace.requirementId")}</span>
+            <TechnicalText>{requirement.taxonomy_node_id}</TechnicalText>
+          </div>
+        )}
+      </div>
+
+      <section className="compliance-evidence-block" aria-labelledby={sourceTitleId}>
+        <span className="ds-eyebrow" id={sourceTitleId}>
+          {t("workspace.sourceEvidenceLabel")}
+        </span>
+        <div className="compliance-source-document">
+          <FileText aria-hidden />
+          <div>
+            <strong><BidiText>{matchedName}</BidiText></strong>
+            <span className="ds-muted">
+              {requirement.parent_section_header && (
+                <BidiText>{requirement.parent_section_header}</BidiText>
+              )}
+              {sourcePage > 0 && <span>{t("page", { page: sourcePage })}</span>}
+            </span>
+          </div>
+        </div>
+        {documentFetchError && (
+          <Alert tone="danger" title={documentFetchError} />
+        )}
+        {isLoadingDocuments && (
+          <p className="ds-muted">{t("workspace.resolvingDocument")}</p>
+        )}
+        {!isLoadingDocuments && !documentFetchError && !matchedDocument && (
+          <p className="ds-muted">{t("fallbackUnmatched")}</p>
+        )}
+        {documentUrl && (
+          <ButtonLink
+            href={documentUrl}
+            target="_blank"
+            rel="noreferrer"
+            variant="secondary"
+            size="sm"
+          >
+            {t("workspace.openDocument")}
+            <ExternalLink aria-hidden />
+          </ButtonLink>
+        )}
+        <blockquote className="compliance-quote">
+          <p dir="auto">{quote || t("workspace.evidenceUnavailable")}</p>
+        </blockquote>
+      </section>
+
+      <section className="compliance-analysis-block" aria-labelledby={analysisTitleId}>
+        <span className="ds-eyebrow" id={analysisTitleId}>
+          {t("workspace.plasmaAnalysisLabel")}
+        </span>
+        <p dir={analysisContentDirection(analysisLanguage)}>
+          {requirement.reason || t("workspace.analysisUnavailable")}
+        </p>
+      </section>
+
+      {readinessContext && (
+        <section className="compliance-readiness-support">
+          <span className="ds-eyebrow">{t("workspace.readinessEvidence")}</span>
+          {requirement.matched_credential && (
+            <p><BidiText>{requirement.matched_credential}</BidiText></p>
+          )}
+          {!requirement.matched_credential && requirement.vault_missing_reason && (
+            <p dir={analysisContentDirection(analysisLanguage)}>
+              {requirement.vault_missing_reason}
+            </p>
+          )}
+          <p className="ds-muted">{t("workspace.readinessEvidenceHelp")}</p>
+          <ButtonLink href="/dashboard/readiness-vault" variant="secondary" size="sm">
+            {t("workspace.openReadinessVault")}
+          </ButtonLink>
+        </section>
       )}
-    </div>
+
+      {requirement.verdict === "FAILED" &&
+        requirement.is_dealbreaker &&
+        canMutate &&
+        !isOverridden && (
+          <Button variant="ghost" onClick={onOverride}>
+            {t("overrideFlag")}
+          </Button>
+        )}
+    </Surface>
   );
 }
 
-function EvidenceFallbackPanel({
-  matchedDocument,
-  documentUrl,
-  sourceFilename,
-  pageLabel,
-  isLoadingDocuments,
-  documentFetchError,
-  isDocx,
-  isArchive,
-  isArchiveInner,
-}: {
-  matchedDocument: TenderDocument | null;
-  documentUrl: string | null;
-  sourceFilename: string;
-  pageLabel: string;
-  isLoadingDocuments: boolean;
-  documentFetchError: string | null;
-  isDocx: boolean;
-  isArchive: boolean;
-  isArchiveInner: boolean;
-}) {
-  const t = useTranslations("compliance");
-  const [openError, setOpenError] = useState<string | null>(null);
-  const [isOpening, setIsOpening] = useState(false);
-  let message = t("fallbackDefault");
-
-  if (isLoadingDocuments) {
-    message = t("fallbackResolving");
-  } else if (documentFetchError) {
-    message = documentFetchError;
-  } else if (isArchiveInner) {
-    message = t("fallbackArchiveInner");
-  } else if (!matchedDocument) {
-    message = t("fallbackUnmatched");
-  } else if (isDocx) {
-    message = t("fallbackDocx");
-  } else if (isArchive) {
-    message = t("fallbackArchive");
-  }
-
-  const handleOpenDocument = async () => {
-    if (!documentUrl || isOpening) return;
-
-    setIsOpening(true);
-    setOpenError(null);
-
-    try {
-      const response = await fetch(documentUrl, { cache: "no-store" });
-      if (!response.ok) {
-        setOpenError(t(documentErrorKey(response)));
-        return;
-      }
-
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const contentType = response.headers.get("Content-Type") ?? "";
-      const downloadName =
-        filenameFromContentDisposition(
-          response.headers.get("Content-Disposition"),
-        ) ||
-        (matchedDocument
-          ? getDocumentDisplayName(matchedDocument)
-          : sourceFilename);
-
-      const link = document.createElement("a");
-      link.href = blobUrl;
-
-      if (contentType.includes("pdf")) {
-        link.target = "_blank";
-        link.rel = "noreferrer";
-      } else {
-        link.download = downloadName;
-      }
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
-    } catch {
-      setOpenError(t("documentOpenFailed"));
-    } finally {
-      setIsOpening(false);
-    }
-  };
-
-  return (
-    <div className="compliance-section">
-      <Alert tone="warning" title={t("fallbackTitle")}>
-        {message}
-      </Alert>
-      <dl className="readiness-facts">
-        <div>
-          <dt>{t("sourceFilename")}</dt>
-          <dd>
-            <BidiText>{sourceFilename}</BidiText>
-          </dd>
-        </div>
-        <div>
-          <dt>{t("sourcePosition")}</dt>
-          <dd>{pageLabel}</dd>
-        </div>
-      </dl>
-      {openError && <Alert tone="danger" title={openError} />}
-      {documentUrl && (
-        <Button
-          variant="secondary"
-          onClick={handleOpenDocument}
-          loading={isOpening}
-          disabled={isOpening}
-        >
-          {isOpening ? t("openingSource") : t("openSource")}
-        </Button>
-      )}
-    </div>
-  );
+function verdictTone(tone: VerdictTone): Tone {
+  return tone === "review" ? "warning" : tone === "pending" ? "neutral" : tone;
 }
 
 function OverrideChallengeModal({

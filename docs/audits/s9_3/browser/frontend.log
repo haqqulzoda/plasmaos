@@ -2,7 +2,8 @@
 > frontend@0.1.0 start
 > next start -p 3114
 
-▲ Next.js 16.2.11
+▲ Next.js 16.3.4
 - Local:         http://localhost:3114
-- Network:       http://10.255.255.254:3114
-✓ Ready in 249ms
+- Network:       http://10.83.133.199:3114
+✓ Ready in 654ms
+✓ Running next.config.ts took 2.3s

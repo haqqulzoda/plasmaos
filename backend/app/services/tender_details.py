@@ -21,7 +21,10 @@ from app.models.all_models import (
     Tender,
     TenderDocument,
     TenderProject,
+    TenderSyncJob,
+    TenderSyncStatus,
 )
+from app.core.storage_paths import storage_file_exists
 from app.models.company import (
     Certification,
     CompanyProfile,
@@ -37,6 +40,7 @@ from app.schemas.tender_details import (
     CompanyReadinessSummary,
     ComplianceSection,
     ComplianceSummary,
+    CompetitorIntelligenceSection,
     DetailsSectionState,
     ProcurementContactsSection,
     ProcurementContactsSummary,
@@ -55,6 +59,7 @@ from app.schemas.tender_details import (
     TenderDocumentsSection,
     TenderDocumentsSummary,
 )
+from app.schemas.tender import TenderCompetitorIntelligenceResponse
 from app.services.analysis_aggregates import get_owned_analysis_parent_for_tender
 from app.services.analysis_versions import (
     AnalysisVersionIntegrityError,
@@ -198,16 +203,83 @@ async def _documents_section(
     tender: Tender,
 ) -> TenderDocumentsSection:
     public_condition = _public_document_condition()
+    normalized_status = func.lower(
+        func.coalesce(func.nullif(func.trim(TenderDocument.download_status), ""), "")
+    )
+    stored_condition = (
+        TenderDocument.storage_path.is_not(None)
+        & (func.length(func.trim(TenderDocument.storage_path)) > 0)
+    )
+    parsed_condition = (
+        TenderDocument.parsed_text.is_not(None)
+        & (func.length(func.trim(TenderDocument.parsed_text)) > 0)
+    )
+    failed_condition = normalized_status.in_(
+        ("failed", "unavailable", "missing", "missing_file", "access_required")
+    )
+    ready_condition = stored_condition & (
+        parsed_condition | normalized_status.in_(("processed", "parsed", "usable"))
+    )
+    processing_condition = stored_condition & ~ready_condition & ~failed_condition
     counts = (
         await db.execute(
             select(
                 func.count(TenderDocument.id).filter(public_condition),
                 func.count(TenderDocument.id).filter(~public_condition),
+                func.count(TenderDocument.id).filter(public_condition & ready_condition),
+                func.count(TenderDocument.id).filter(public_condition & failed_condition),
+                func.count(TenderDocument.id).filter(public_condition & processing_condition),
             ).where(TenderDocument.tender_id == tender.id)
         )
     ).one()
     visible_total = int(counts[0] or 0)
     unknown_total = int(counts[1] or 0)
+    ready_count = int(counts[2] or 0)
+    failed_count = int(counts[3] or 0)
+    processing_count = int(counts[4] or 0)
+    remote_count = max(
+        visible_total - ready_count - failed_count - processing_count,
+        0,
+    )
+    latest_job = (
+        await db.execute(
+            select(TenderSyncJob)
+            .where(TenderSyncJob.tender_id == tender.id)
+            .order_by(TenderSyncJob.created_at.desc(), TenderSyncJob.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    job_state = (
+        latest_job.status.value
+        if latest_job is not None and hasattr(latest_job.status, "value")
+        else str(latest_job.status) if latest_job is not None else None
+    )
+    if latest_job is not None and latest_job.status == TenderSyncStatus.PENDING:
+        acquisition_state = "QUEUED"
+    elif latest_job is not None and latest_job.status == TenderSyncStatus.IN_PROGRESS:
+        acquisition_state = "PROCESSING" if latest_job.progress >= 60 else "DOWNLOADING"
+    elif visible_total > 0 and ready_count == visible_total:
+        acquisition_state = "READY"
+    elif ready_count > 0:
+        acquisition_state = "PARTIAL"
+    elif latest_job is not None and latest_job.status == TenderSyncStatus.FAILED:
+        acquisition_state = "FAILED"
+    elif failed_count > 0:
+        acquisition_state = "FAILED"
+    elif processing_count > 0:
+        acquisition_state = "PROCESSING"
+    else:
+        acquisition_state = "AVAILABLE_REMOTE"
+    summary_fields = dict(
+        acquisition_supported=tender.source_system in {"uzex", "giz"},
+        acquisition_state=acquisition_state,
+        job_id=latest_job.job_id if latest_job is not None else None,
+        job_state=job_state,
+        ready_count=ready_count,
+        failed_count=failed_count,
+        processing_count=processing_count,
+        remote_count=remote_count,
+    )
     if visible_total == 0:
         return TenderDocumentsSection(
             state=DetailsSectionState.EMPTY,
@@ -216,6 +288,7 @@ async def _documents_section(
                 returned_count=0,
                 omitted_unknown_count=unknown_total,
                 truncated=False,
+                **summary_fields,
             ),
             reason_code=(
                 "DOCUMENT_METADATA_CLASSIFICATION_UNAVAILABLE"
@@ -240,12 +313,34 @@ async def _documents_section(
     items = []
     for document in documents:
         download_status = (document.download_status or "").strip().lower()
-        if download_status in {"failed", "unavailable", "missing"}:
-            availability = "UNAVAILABLE"
-        elif download_status in {"downloaded", "success", "available"}:
+        stored = storage_file_exists(document.storage_path)
+        parsed = bool(document.parsed_text and document.parsed_text.strip())
+        ready = stored and (
+            parsed or download_status in {"processed", "parsed", "usable"}
+        )
+        if ready:
             availability = "AVAILABLE"
+            item_state = "READY"
+        elif download_status in {
+            "failed",
+            "unavailable",
+            "missing",
+            "missing_file",
+            "access_required",
+        }:
+            availability = "UNAVAILABLE"
+            item_state = "FAILED"
+        elif stored:
+            availability = "AVAILABLE"
+            item_state = "PROCESSING"
         else:
             availability = "METADATA_ONLY"
+            if latest_job is not None and latest_job.status == TenderSyncStatus.PENDING:
+                item_state = "QUEUED"
+            elif latest_job is not None and latest_job.status == TenderSyncStatus.IN_PROGRESS:
+                item_state = "PROCESSING" if latest_job.progress >= 60 else "DOWNLOADING"
+            else:
+                item_state = "AVAILABLE_REMOTE"
         items.append(
             TenderDocumentSummaryItem(
                 document_id=document.id,
@@ -257,6 +352,7 @@ async def _documents_section(
                 metadata_classification="PUBLIC_SOURCE_METADATA",
                 source_system=tender.source_system,
                 availability=availability,
+                acquisition_state=item_state,
                 file_size=document.file_size,
                 content_type=document.mime_type,
                 created_at=document.created_at,
@@ -270,6 +366,7 @@ async def _documents_section(
             returned_count=len(items),
             omitted_unknown_count=unknown_total,
             truncated=visible_total > len(items),
+            **summary_fields,
         ),
     )
 
@@ -573,6 +670,7 @@ async def compose_tender_details(
     tender: Tender,
     user_id: UUID,
     procurement_contacts: ProcurementContactsSummary | None,
+    competitor_intelligence: TenderCompetitorIntelligenceResponse | None = None,
 ) -> TenderDetailsResponse:
     """Compose local canonical state sequentially; never flush, commit, or enqueue."""
     profile = await db.scalar(
@@ -599,6 +697,22 @@ async def compose_tender_details(
         if procurement_contacts is not None
         else _empty(ProcurementContactsSection, "PROCUREMENT_CONTACTS_NOT_AVAILABLE")
     )
+    competitors = (
+        CompetitorIntelligenceSection(
+            state=DetailsSectionState(competitor_intelligence.state),
+            data=competitor_intelligence,
+            reason_code=(
+                None
+                if competitor_intelligence.state == "AVAILABLE"
+                else f"COMPETITOR_INTELLIGENCE_{competitor_intelligence.state}"
+            ),
+        )
+        if competitor_intelligence is not None
+        else CompetitorIntelligenceSection(
+            state=DetailsSectionState.UNAVAILABLE,
+            reason_code="COMPETITOR_INTELLIGENCE_UNAVAILABLE",
+        )
+    )
     # One bounded owned Recommendation read reuses the Explorer projection;
     # the page needs no extra list scan or generation request for its side rail.
     recommendation = await db.scalar(
@@ -622,6 +736,7 @@ async def compose_tender_details(
         tender_id=tender.id,
         project_context=project_context,
         project_leadership=project_leadership,
+        competitor_intelligence=competitors,
         procurement_contacts=contacts,
         requirements=requirements,
         documents=documents,
