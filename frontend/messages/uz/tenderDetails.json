@@ -76,6 +76,7 @@
   "requirementsUnavailable": "Talablar xulosasi hozir mavjud emas.",
   "requirementsTruncated": "Tahlil asosida olingan {total} ta talabdan {returned} tasi ko‘rsatilmoqda. To‘liq ish maydoni uchun Muvofiqlik tahlilini oching.",
   "tenderDocuments": "Tender hujjatlari",
+  "officialSourceDocuments": "Rasmiy manba hujjatlari",
   "documentAcquisitionFailed": "Hujjatlarni olishni boshlash imkoni bo‘lmadi. Qayta urinib ko‘ring.",
   "documentAcquisition": {
     "available": "{count} ta hujjat mavjud",

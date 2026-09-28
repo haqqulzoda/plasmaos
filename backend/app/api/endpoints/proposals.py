@@ -18,7 +18,7 @@ from typing import Annotated
 from fastapi import Query, Response
 from app.core.pagination import page_rows
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from pathlib import Path as _Path
 
@@ -38,7 +38,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user, require_approved_pilot_access, require_tier
+from app.api.deps import get_current_user, require_active_initial_membership, require_tier
 from app.core.evaluator import DynamicComplianceResult
 from app.core.security import authenticated_dependency
 from app.core.tender_actionability import (
@@ -53,11 +53,12 @@ from app.models.all_models import (
     SubscriptionTier,
     TaxonomyNode,
     Tender,
-    TenderEngagement,
     TenderStatus,
     User,
 )
 from app.models.company import CompanyProfile
+from app.models.base import MembershipState, PursuitOrigin
+from app.models.tenancy import Membership, Organization, OrganizationPursuit
 from app.schemas.proposal import (
     ProposalCreate,
     PrepareBidResponse,
@@ -84,7 +85,7 @@ from app.services.tender_engagements import allowed_actions_for_status
 router = APIRouter(
     dependencies=[
         authenticated_dependency(),
-        Depends(require_approved_pilot_access),
+        Depends(require_active_initial_membership),
     ]
 )
 
@@ -98,22 +99,19 @@ class AIStrategicLineItem(BaseModel):
     name: str
     quantity: float = 1
     unit: str = "pcs"
-    unit_price: float = 0
-    total: float = 0
 
 
 class AIDraftResponse(BaseModel):
     """Response from AI strategic drafting."""
     strategic_summary: str
-    suggested_price: float
     delivery_days: str
     line_items: list[AIStrategicLineItem] = Field(default_factory=list)
 
 
 class PDFGenerateRequest(BaseModel):
     """Request body for PDF generation."""
-    price: float
-    delivery_days: int
+    price: float = Field(gt=0, allow_inf_nan=False)
+    delivery_days: int = Field(ge=1)
     company_name: str = "Your Company LLC"
 
 
@@ -121,6 +119,20 @@ SENSITIVE_STRUCTURED_DATA_KEYS = {
     "uploaded_tz_path",
     "uploaded_tz_text",
 }
+
+
+def _export_scope_items(structured_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Use historical items only for scope; their prices have unknown origin."""
+    draft = structured_data.get("price_free_draft")
+    candidates = (
+        draft.get("line_items") if isinstance(draft, dict) else None
+    ) or structured_data.get("priced_items") or structured_data.get("line_items") or structured_data.get("ai_items")
+    if not isinstance(candidates, list):
+        return []
+    return [
+        {"name": item.get("name", "Item"), "quantity": item.get("quantity", 1), "unit": item.get("unit", "lot")}
+        for item in candidates if isinstance(item, dict)
+    ]
 
 
 def _public_structured_data(data: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -169,11 +181,24 @@ def _proposal_with_tender_response(
 
 async def _owned_profile_id(db: AsyncSession, user_id: UUID) -> UUID | None:
     return await db.scalar(
-        select(CompanyProfile.id).where(CompanyProfile.user_id == user_id)
+        select(CompanyProfile.id)
+        .join(Organization, Organization.legacy_company_profile_id == CompanyProfile.id)
+        .join(Membership, Membership.organization_id == Organization.id)
+        .where(
+            CompanyProfile.user_id == user_id,
+            Membership.user_id == user_id,
+            Membership.state == MembershipState.ACTIVE,
+        )
     )
 
 
-def _engagement_summary(engagement: TenderEngagement) -> TenderEngagementSummary:
+async def _organization_id_for_profile(db: AsyncSession, profile_id: UUID) -> UUID | None:
+    return await db.scalar(
+        select(Organization.id).where(Organization.legacy_company_profile_id == profile_id)
+    )
+
+
+def _engagement_summary(engagement) -> TenderEngagementSummary:
     return TenderEngagementSummary(
         engagement_id=engagement.id,
         tender_id=engagement.tender_id,
@@ -214,30 +239,30 @@ async def create_proposal(
 
     Requires: Agent tier or higher.
     """
-    # Verify tender exists
-    result = await db.execute(
-        select(Tender).where(Tender.id == proposal_data.tender_id)
-    )
-    tender = result.scalar_one_or_none()
-
-    if not tender:
+    profile_id = await _owned_profile_id(db, current_user.id)
+    if profile_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company profile not found",
+        )
+    try:
+        result = await prepare_bid(
+            db,
+            user_id=current_user.id,
+            company_profile_id=profile_id,
+            tender_id=proposal_data.tender_id,
+        )
+    except BidPreparationNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tender not found",
-        )
-
-    try:
-        resolution = await get_or_create_proposal_artifact(
-            db,
-            user_id=current_user.id,
-            tender=tender,
-        )
+        ) from exc
     except BidPreparationNotActionableError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=TENDER_NOT_ACTIONABLE_DETAIL,
         ) from exc
-    return _proposal_response(resolution.proposal)
+    return _proposal_response(result.proposal)
 
 
 @router.post("/prepare", response_model=PrepareBidResponse)
@@ -329,15 +354,16 @@ async def list_proposals(
         from sqlalchemy import func
         total = await db.scalar(select(func.count()).select_from(Proposal).where(Proposal.user_id == current_user.id))
         response.headers["X-Total-Count"] = str(total)
+    organization_id = await _organization_id_for_profile(db, profile_id)
     result = await db.execute(
-        select(Proposal, Tender, TenderEngagement)
+        select(Proposal, Tender, OrganizationPursuit)
         .join(Tender, Tender.id == Proposal.tender_id)
         .outerjoin(
-            TenderEngagement,
+            OrganizationPursuit,
             and_(
-                TenderEngagement.user_id == current_user.id,
-                TenderEngagement.company_profile_id == profile_id,
-                TenderEngagement.tender_id == Proposal.tender_id,
+                OrganizationPursuit.organization_id == organization_id,
+                OrganizationPursuit.source_tender_id == Proposal.tender_id,
+                OrganizationPursuit.origin == PursuitOrigin.SOURCE,
             ),
         )
         .where(Proposal.user_id == current_user.id)
@@ -348,7 +374,7 @@ async def list_proposals(
         _proposal_with_tender_response(
             proposal,
             tender,
-            engagement.status if engagement else None,
+            engagement.stage if engagement else None,
         )
         for proposal, tender, engagement in page_rows(list(result.all()), limit=limit, offset=offset, response=response)
     ]
@@ -369,15 +395,16 @@ async def get_proposal(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Bid Preparation not found",
         )
+    organization_id = await _organization_id_for_profile(db, profile_id)
     result = await db.execute(
-        select(Proposal, Tender, TenderEngagement)
+        select(Proposal, Tender, OrganizationPursuit)
         .join(Tender, Tender.id == Proposal.tender_id)
         .outerjoin(
-            TenderEngagement,
+            OrganizationPursuit,
             and_(
-                TenderEngagement.user_id == current_user.id,
-                TenderEngagement.company_profile_id == profile_id,
-                TenderEngagement.tender_id == Proposal.tender_id,
+                OrganizationPursuit.organization_id == organization_id,
+                OrganizationPursuit.source_tender_id == Proposal.tender_id,
+                OrganizationPursuit.origin == PursuitOrigin.SOURCE,
             ),
         )
         .where(
@@ -396,7 +423,7 @@ async def get_proposal(
     return _proposal_with_tender_response(
         proposal,
         tender,
-        engagement.status if engagement else None,
+        engagement.stage if engagement else None,
     )
 
 
@@ -441,11 +468,19 @@ async def update_proposal(
     margin = proposal.margin_percent
     include_vat = proposal.include_vat
 
-    # Update structured data
-    if update_data.structured_data is not None:
-        proposal.structured_data = update_data.structured_data
-
-    current_data: dict[str, Any] = proposal.structured_data or {}
+    # Price provenance is assigned only by the explicit commercial fields below.
+    # An arbitrary structured-data replacement cannot relabel a legacy amount.
+    existing_data: dict[str, Any] = dict(proposal.structured_data or {})
+    current_data: dict[str, Any] = (
+        dict(update_data.structured_data)
+        if update_data.structured_data is not None
+        else existing_data
+    )
+    for protected_key in ("our_price", "commercial_price_origin"):
+        if protected_key in existing_data:
+            current_data[protected_key] = existing_data[protected_key]
+        else:
+            current_data.pop(protected_key, None)
 
     # Process items with financial calculations
     if update_data.items is not None:
@@ -472,15 +507,17 @@ async def update_proposal(
         grand_total = subtotal + vat_amount
 
         # Store calculated values
-        current_data["ai_items"] = calculated_items
+        current_data["priced_items"] = calculated_items
         current_data["subtotal"] = round(subtotal, 2)
         current_data["vat_amount"] = round(vat_amount, 2)
         current_data["grand_total"] = round(grand_total, 2)
         current_data["our_price"] = round(grand_total, 2)
+        current_data["commercial_price_origin"] = "USER_ENTERED"
 
     # Update individual fields
     if update_data.our_price is not None:
         current_data["our_price"] = update_data.our_price
+        current_data["commercial_price_origin"] = "USER_ENTERED"
 
     if update_data.delivery_days is not None:
         current_data["delivery_days"] = update_data.delivery_days
@@ -527,25 +564,23 @@ async def ai_draft_proposal(
             detail="Proposal has no associated tender",
         )
 
-    current_data: dict[str, Any] = proposal.structured_data or {}
+    current_data: dict[str, Any] = dict(proposal.structured_data or {})
+    cached_draft = current_data.get("price_free_draft")
     if (
         not force
-        and isinstance(current_data.get("strategic_summary"), str)
-        and current_data.get("line_items")
+        and isinstance(cached_draft, dict)
+        and isinstance(cached_draft.get("strategic_summary"), str)
     ):
         return AIDraftResponse(
-            strategic_summary=current_data.get("strategic_summary", ""),
-            suggested_price=float(current_data.get("our_price", 0.0)),
-            delivery_days=str(current_data.get("delivery_days", "30 calendar days")),
+            strategic_summary=cached_draft.get("strategic_summary", ""),
+            delivery_days=str(cached_draft.get("delivery_days", "30 calendar days")),
             line_items=[
                 AIStrategicLineItem(
                     name=str(item.get("name", "Line Item")),
                     quantity=float(item.get("quantity", 1)),
                     unit=str(item.get("unit", "lot")),
-                    unit_price=float(item.get("unit_price", 0)),
-                    total=float(item.get("total", 0)),
                 )
-                for item in current_data.get("line_items", [])
+                for item in cached_draft.get("line_items", [])
                 if isinstance(item, dict)
             ],
         )
@@ -643,42 +678,26 @@ async def ai_draft_proposal(
             company_context=company_context,
             compliance_ledger=compliance_ledger,
             accepted_liabilities=accepted_liabilities,
-            tender_budget=proposal.tender.budget,
         )
     except HTTPException:
         raise
     except Exception as exc:
         logger.error("operation_failed event=proposals:651 error_type=%s", type(exc).__name__)
-        fallback_price = float(proposal.tender.budget * 0.85) if proposal.tender.budget else 0.0
         return AIDraftResponse(
             strategic_summary=(
                 "AI generation encountered an internal error. "
                 "Please try again or contact support."
             ),
-            suggested_price=fallback_price,
             delivery_days="30 calendar days",
-            line_items=[
-                AIStrategicLineItem(
-                    name="Delivery Scope",
-                    quantity=1.0,
-                    unit="lot",
-                    unit_price=round(fallback_price, 2),
-                    total=round(fallback_price, 2),
-                )
-            ],
+            line_items=[],
         )
 
     strategic_summary = str(ai_result.get("strategic_summary", "")).strip()
     if not strategic_summary:
         strategic_summary = (
             "Our team can execute this opportunity with disciplined delivery, "
-            "verified credentials, and transparent commercial controls."
+            "recorded company information, and a clear delivery plan."
         )
-
-    try:
-        suggested_price = float(ai_result.get("suggested_price", proposal.tender.budget * 0.85))
-    except (TypeError, ValueError):
-        suggested_price = float(proposal.tender.budget * 0.85)
 
     delivery_days = str(ai_result.get("delivery_days", "")).strip() or "30 calendar days"
 
@@ -692,21 +711,11 @@ async def ai_draft_proposal(
                 quantity = float(raw_item.get("quantity", 1))
             except (TypeError, ValueError):
                 quantity = 1.0
-            try:
-                unit_price = float(raw_item.get("unit_price", 0))
-            except (TypeError, ValueError):
-                unit_price = 0.0
-            try:
-                total = float(raw_item.get("total", quantity * unit_price))
-            except (TypeError, ValueError):
-                total = quantity * unit_price
             normalized_items.append(
                 {
                     "name": str(raw_item.get("name", "Line Item")).strip() or "Line Item",
                     "quantity": quantity,
                     "unit": str(raw_item.get("unit", "lot")).strip() or "lot",
-                    "unit_price": unit_price,
-                    "total": total,
                 }
             )
 
@@ -716,8 +725,6 @@ async def ai_draft_proposal(
                 "name": "Delivery Scope",
                 "quantity": 1.0,
                 "unit": "lot",
-                "unit_price": round(suggested_price, 2),
-                "total": round(suggested_price, 2),
             }
         ]
 
@@ -725,29 +732,25 @@ async def ai_draft_proposal(
     if "error" in ai_result:
         confidence = 60
 
-    current_data["strategic_summary"] = strategic_summary
-    current_data["ai_summary"] = strategic_summary
-    current_data["our_price"] = suggested_price
-    current_data["delivery_days"] = delivery_days
-    current_data["line_items"] = normalized_items
-    current_data["ai_items"] = normalized_items
-    current_data["compliance_ledger"] = compliance_ledger
-    current_data["accepted_liabilities"] = accepted_liabilities
+    current_data["price_free_draft"] = {
+        "strategic_summary": strategic_summary,
+        "delivery_days": delivery_days,
+        "line_items": normalized_items,
+        "compliance_ledger": compliance_ledger,
+        "accepted_liabilities": accepted_liabilities,
+    }
     proposal.structured_data = current_data
     proposal.ai_confidence_score = confidence
     await db.commit()
 
     return AIDraftResponse(
         strategic_summary=strategic_summary,
-        suggested_price=suggested_price,
         delivery_days=delivery_days,
         line_items=[
             AIStrategicLineItem(
                 name=item["name"],
                 quantity=float(item["quantity"]),
                 unit=item["unit"],
-                unit_price=float(item["unit_price"]),
-                total=float(item["total"]),
             )
             for item in normalized_items
         ],
@@ -821,14 +824,8 @@ async def upload_tender_tz(
             raise HTTPException(502, detail="PDF analysis failed. Please retry") from None
         current_data = deepcopy(proposal.structured_data or {})
         current_data["uploaded_tz_text"] = extracted_text.strip()
-        # Calculate estimates based on AI analysis
-        tender_budget = proposal.tender.budget
         items = ai_result.get("items", [])
         delivery_days = ai_result.get("delivery_days", 30)
-
-        # Estimate cost (75% of budget as baseline)
-        estimated_cost = tender_budget * 0.75
-        suggested_price = tender_budget * 0.85  # 15% margin
 
         # Build technical summary
         summary = ai_result.get("summary", "Analysis complete.")
@@ -851,49 +848,31 @@ async def upload_tender_tz(
 
         strategic_summary = (
             f"{summary[:420]} "
-            "This recommendation is backed by verified credentials and practical scope control."
+            "Review recorded company information and delivery assumptions before use."
         ).strip()
         delivery_days_text = f"{delivery_days} calendar days"
 
-        item_count = max(len(items), 1)
-        unit_price = suggested_price / item_count if item_count else suggested_price
         line_items = [
             {
                 "name": str(item.get("name", "Line Item")),
                 "quantity": float(item.get("quantity", 1)),
                 "unit": str(item.get("unit", "lot")),
-                "unit_price": round(unit_price, 2),
-                "total": round(unit_price * float(item.get("quantity", 1)), 2),
             }
-            for item in items
+            for item in items if isinstance(item, dict)
         ]
-        if not line_items:
-            line_items = [
-                {
-                    "name": "Delivery Scope",
-                    "quantity": 1.0,
-                    "unit": "lot",
-                    "unit_price": round(suggested_price, 2),
-                    "total": round(suggested_price, 2),
-                }
-            ]
-
-        current_data["strategic_summary"] = strategic_summary
-        current_data["our_price"] = suggested_price
-        current_data["delivery_days"] = delivery_days_text
-        current_data["line_items"] = line_items
-        current_data["ai_items"] = line_items
+        current_data["price_free_draft"] = {
+            "strategic_summary": strategic_summary,
+            "delivery_days": delivery_days_text,
+            "line_items": line_items,
+        }
         response_payload = AIDraftResponse(
             strategic_summary=strategic_summary,
-            suggested_price=suggested_price,
             delivery_days=delivery_days_text,
             line_items=[
                 AIStrategicLineItem(
                     name=item["name"],
                     quantity=float(item["quantity"]),
                     unit=item["unit"],
-                    unit_price=float(item["unit_price"]),
-                    total=float(item["total"]),
                 )
                 for item in line_items
             ],
@@ -927,8 +906,6 @@ async def get_uploaded_tz(
     Returns the PDF file that was uploaded via /upload-tz endpoint.
     """
     from pathlib import Path
-    from fastapi.responses import Response
-
     # Fetch proposal with tender
     result = await db.execute(
         select(Proposal)
@@ -952,10 +929,21 @@ async def get_uploaded_tz(
             detail="Proposal has no associated tender",
         )
 
-    # Look for uploaded PDF
-    uploads_dir = Path(__file__).parent.parent.parent.parent / "uploads"
-    tenant_uploads_dir = uploads_dir / str(current_user.id)
-    file_path = tenant_uploads_dir / f"{proposal.id}.pdf"
+    # Historical uploads used unique filenames recorded in structured_data.
+    # Resolve that path only inside the authenticated user's upload directory;
+    # retain the earlier proposal-id fallback for untouched artifacts.
+    uploads_dir = (Path(__file__).parent.parent.parent.parent / "uploads").resolve()
+    tenant_uploads_dir = (uploads_dir / str(current_user.id)).resolve()
+    stored_path = (proposal.structured_data or {}).get("uploaded_tz_path")
+    candidate = Path(stored_path).resolve() if isinstance(stored_path, str) else None
+    if (
+        candidate is not None
+        and candidate.suffix.casefold() == ".pdf"
+        and tenant_uploads_dir in candidate.parents
+    ):
+        file_path = candidate
+    else:
+        file_path = tenant_uploads_dir / f"{proposal.id}.pdf"
 
     if not file_path.exists():
         raise HTTPException(
@@ -963,13 +951,12 @@ async def get_uploaded_tz(
             detail="No uploaded PDF found for this tender",
         )
 
-    # Read file and return as Response (same pattern as working document download)
-    file_bytes = file_path.read_bytes()
-
-    return Response(
-        content=file_bytes,
+    return FileResponse(
+        file_path,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename=tz_{proposal.id}.pdf"},
+        filename=f"tz_{proposal.id}.pdf",
+        content_disposition_type="inline",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
     )
 
 
@@ -983,8 +970,7 @@ async def generate_proposal_pdf(
     """
     Generate a professional Commercial Proposal (KP) PDF.
 
-    Uses company details from user profile and AI-extracted items from proposal.
-    Returns a downloadable PDF document suitable for tender submissions.
+    Uses customer details and descriptive scope, with the request's explicit price.
     """
     # Fetch proposal with tender
     result = await db.execute(
@@ -1015,11 +1001,11 @@ async def generate_proposal_pdf(
     director_name = current_user.director_name or "Director"
     company_address = current_user.address or ""
 
-    # Get AI-extracted items from proposal structured_data
+    # Scope is descriptive; only the explicit request supplies an export price.
     structured_data = proposal.structured_data or {}
-    ai_items = structured_data.get("ai_items", [])
-    our_price = structured_data.get("our_price", pdf_data.price)
-    delivery_days = structured_data.get("delivery_days", pdf_data.delivery_days)
+    scope_items = _export_scope_items(structured_data)
+    our_price = pdf_data.price
+    delivery_days = pdf_data.delivery_days
 
     # Create PDF in memory
     buffer = io.BytesIO()
@@ -1101,7 +1087,10 @@ async def generate_proposal_pdf(
     elements.append(Spacer(1, 15))
 
     # ========== STRATEGIC SUMMARY ==========
-    strategic_summary_text = (structured_data.get("strategic_summary") or "").strip()
+    draft = structured_data.get("price_free_draft")
+    strategic_summary_text = (
+        draft.get("strategic_summary", "") if isinstance(draft, dict) else ""
+    ).strip()
     if strategic_summary_text:
         summary_style = ParagraphStyle(
             'KPSummary',
@@ -1147,124 +1136,46 @@ async def generate_proposal_pdf(
         elements.append(summary_block)
         elements.append(Spacer(1, 18))
 
-    # ========== ITEMS TABLE ==========
-    if ai_items and len(ai_items) > 0:
-        # Calculate unit prices (distribute total evenly if no individual prices)
-        total_qty = sum(item.get("quantity", 1) for item in ai_items)
-
-        # Table headers
-        items_table_data = [
-            ["#", "Nomi (Name)", "Birlik", "Miqdor", "Narxi", "Jami"],
-        ]
-
-        running_total = 0
-        for idx, item in enumerate(ai_items, 1):
-            name = item.get("name", "Item")[:50]  # Truncate long names
-            unit = item.get("unit", "dona")
-            qty = item.get("quantity", 1)
-            # Use pre-calculated unit_price if available, else estimate
-            unit_price = item.get("unit_price", (our_price * qty / total_qty) / qty if total_qty > 0 else our_price / len(ai_items))
-            item_total = item.get("total", unit_price * qty)
-            running_total += item_total
-
+    # ========== SCOPE AND EXPLICIT CUSTOMER PRICE ==========
+    if scope_items:
+        items_table_data = [["#", "Nomi (Name)", "Birlik", "Miqdor"]]
+        for idx, item in enumerate(scope_items, 1):
             items_table_data.append([
                 str(idx),
-                name,
-                unit,
-                f"{qty:,.0f}",
-                f"{unit_price:,.0f}",
-                f"{item_total:,.0f}",
+                str(item.get("name", "Item"))[:50],
+                str(item.get("unit", "dona"))[:20],
+                str(item.get("quantity", 1))[:20],
             ])
-
-        # Get calculated values from structured_data
-        subtotal = structured_data.get("subtotal", running_total)
-        vat_amount = structured_data.get("vat_amount", 0)
-        grand_total = structured_data.get("grand_total", our_price)
-
-        # Subtotal row
-        items_table_data.append([
-            "", "", "", "", Paragraph("<b>Jami summa:</b>", normal_style),
-            Paragraph(f"<b>{subtotal:,.0f}</b>", normal_style)
-        ])
-
-        # VAT row (only if VAT is included)
-        if proposal.include_vat and vat_amount > 0:
-            items_table_data.append([
-                "", "", "", "", Paragraph("QQS (12%):", normal_style),
-                Paragraph(f"+{vat_amount:,.0f}", normal_style)
-            ])
-
-        # Grand Total row
-        items_table_data.append([
-            "", "", "", "", Paragraph("<b>YAKUNIY JAMI:</b>", normal_style),
-            Paragraph(f"<b>{grand_total:,.0f} {tender.currency}</b>", normal_style)
-        ])
-
         items_table = Table(
-            items_table_data,
-            colWidths=[1*cm, 7*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm]
+            items_table_data, colWidths=[1 * cm, 9 * cm, 3 * cm, 3 * cm]
         )
         items_table.setStyle(TableStyle([
-            # Header row
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4F46E5')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('FONTNAME', (0, 0), (-1, 0), 'Roboto-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('TOPPADDING', (0, 0), (-1, 0), 8),
-            # Data rows
-            ('BACKGROUND', (0, 1), (-1, -2), colors.HexColor('#FAFAFA')),
-            ('FONTNAME', (0, 1), (-1, -1), 'Roboto'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # # column
-            ('ALIGN', (2, 1), (-1, -1), 'CENTER'),  # Numeric columns
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-            # Total row
-            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#E8E8FF')),
-            ('FONTNAME', (0, -1), (-1, -1), 'Roboto-Bold'),
-            # Grid
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
         ]))
         elements.append(items_table)
-    else:
-        # Fallback: Simple summary table if no items
-        summary_data = [
-            ["Tavsif (Description)", "Qiymat (Value)"],
-            ["Tender byudjeti", f"{tender.budget:,.0f} {tender.currency}"],
-            ["Bizning narximiz", f"{our_price:,.0f} {tender.currency}"],
-        ]
-        summary_table = Table(summary_data, colWidths=[8*cm, 8*cm])
-        summary_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4F46E5')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('FONTNAME', (0, 0), (-1, 0), 'Roboto-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#FAFAFA')),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ]))
-        elements.append(summary_table)
+        elements.append(Spacer(1, 16))
 
+    summary_data = [
+        ["Tavsif (Description)", "Qiymat (Value)"],
+        ["Tender byudjeti (source)", f"{tender.budget:,.0f} {tender.currency}"],
+        ["Siz kiritgan narx", f"{our_price:,.0f} {tender.currency}"],
+    ]
+    summary_table = Table(summary_data, colWidths=[8 * cm, 8 * cm])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4F46E5')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('FONTNAME', (0, 0), (-1, 0), 'Roboto-Bold'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+    ]))
+    elements.append(summary_table)
     elements.append(Spacer(1, 20))
 
-    # ========== DELIVERY & TERMS ==========
+    # Only the caller-supplied delivery duration is represented in this export.
     elements.append(Paragraph("<b>Yetkazib berish muddati:</b>", normal_style))
     elements.append(Paragraph(f"{delivery_days} ish kuni", normal_style))
-    elements.append(Spacer(1, 10))
-
-    elements.append(Paragraph("<b>To'lov shartlari:</b>", normal_style))
-    elements.append(Paragraph("15% oldindan to'lov, 85% yetkazib berilgandan keyin", normal_style))
-    elements.append(Spacer(1, 10))
-
-    # VAT notice if applicable
-    if proposal.include_vat:
-        elements.append(Paragraph("<b>QQS:</b> Narxlar 12% QQSni o'z ichiga oladi (Prices include 12% VAT)", normal_style))
-        elements.append(Spacer(1, 10))
-
-    elements.append(Paragraph("<b>Taklif amal qilish muddati:</b> 30 kun", normal_style))
     elements.append(Spacer(1, 30))
 
     # ========== SIGNATURE ==========
@@ -1317,8 +1228,7 @@ async def export_proposal_docx(
     """
     Export a Commercial Proposal as a Word (.docx) document.
 
-    Mirrors the PDF layout: header, strategic summary paragraphs,
-    line-items table, delivery/payment terms, and signature block.
+    Mirrors the PDF layout with price-free scope and an explicit customer price.
     """
     import re
 
@@ -1357,9 +1267,9 @@ async def export_proposal_docx(
     company_address = current_user.address or ""
 
     structured_data = proposal.structured_data or {}
-    ai_items = structured_data.get("ai_items", [])
-    our_price = structured_data.get("our_price", pdf_data.price)
-    delivery_days = structured_data.get("delivery_days", pdf_data.delivery_days)
+    scope_items = _export_scope_items(structured_data)
+    our_price = pdf_data.price
+    delivery_days = pdf_data.delivery_days
 
     # ── Build DOCX ──
     doc = DocxDocument()
@@ -1417,8 +1327,9 @@ async def export_proposal_docx(
     intro_para.paragraph_format.space_after = Pt(12)
 
     # ========== STRATEGIC SUMMARY ==========
+    draft = structured_data.get("price_free_draft")
     strategic_text = (
-        structured_data.get("strategic_summary") or ""
+        draft.get("strategic_summary", "") if isinstance(draft, dict) else ""
     ).strip()
     if strategic_text:
         heading_para = doc.add_paragraph()
@@ -1450,114 +1361,40 @@ async def export_proposal_docx(
             p.paragraph_format.space_after = Pt(8)
             p.paragraph_format.left_indent = Cm(0.5)
 
-    # ========== LINE ITEMS TABLE ==========
-    if ai_items and len(ai_items) > 0:
-        table = doc.add_table(rows=1, cols=6)
+    # ========== SCOPE AND EXPLICIT CUSTOMER PRICE ==========
+    if scope_items:
+        table = doc.add_table(rows=1, cols=4)
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
         table.style = "Table Grid"
-
-        headers = [
-            "#", "Nomi (Name)", "Birlik",
-            "Miqdor", "Narxi", "Jami",
-        ]
-        hdr_cells = table.rows[0].cells
-        for i, txt in enumerate(headers):
-            hdr_cells[i].text = txt
-            for para in hdr_cells[i].paragraphs:
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                for r in para.runs:
-                    _style_run(r, size=9, bold=True, color=(255, 255, 255))
-            tc_pr = hdr_cells[i]._element.get_or_add_tcPr()
-            shd = tc_pr.makeelement(
-                qn("w:shd"),
-                {
-                    qn("w:val"): "clear",
-                    qn("w:color"): "auto",
-                    qn("w:fill"): "4F46E5",
-                },
-            )
-            tc_pr.append(shd)
-
-        running_total = 0.0
-        for idx, item in enumerate(ai_items, 1):
-            name = str(item.get("name", "Item"))[:50]
-            unit = item.get("unit", "dona")
-            qty = item.get("quantity", 1)
-            up = item.get("unit_price", 0)
-            itot = item.get("total", up * qty)
-            running_total += itot
-
+        headers = ["#", "Nomi (Name)", "Birlik", "Miqdor"]
+        for index, label in enumerate(headers):
+            table.rows[0].cells[index].text = label
+        for idx, item in enumerate(scope_items, 1):
             row = table.add_row()
-            vals = [
-                str(idx), name, str(unit),
-                f"{qty:,.0f}", f"{up:,.0f}", f"{itot:,.0f}",
+            values = [
+                str(idx),
+                str(item.get("name", "Item"))[:50],
+                str(item.get("unit", "dona"))[:20],
+                str(item.get("quantity", 1))[:20],
             ]
-            for i, v in enumerate(vals):
-                row.cells[i].text = v
-                for para in row.cells[i].paragraphs:
-                    if i >= 3:
-                        para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-                    for r in para.runs:
-                        _style_run(r, size=9)
-
-        subtotal = structured_data.get("subtotal", running_total)
-        grand_total = structured_data.get("grand_total", our_price)
-
-        row_s = table.add_row()
-        row_s.cells[4].text = "Jami summa:"
-        row_s.cells[5].text = f"{subtotal:,.0f}"
-        for para in row_s.cells[4].paragraphs:
-            for r in para.runs:
-                _style_run(r, size=9, bold=True)
-        for para in row_s.cells[5].paragraphs:
-            para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            for r in para.runs:
-                _style_run(r, size=9, bold=True)
-
-        row_g = table.add_row()
-        row_g.cells[4].text = "YAKUNIY JAMI:"
-        row_g.cells[5].text = f"{grand_total:,.0f} {tender.currency}"
-        for para in row_g.cells[4].paragraphs:
-            for r in para.runs:
-                _style_run(r, size=9, bold=True)
-        for para in row_g.cells[5].paragraphs:
-            para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            for r in para.runs:
-                _style_run(r, size=9, bold=True)
-
+            for index, value in enumerate(values):
+                row.cells[index].text = value
         doc.add_paragraph()
 
-    # ========== DELIVERY & TERMS ==========
-    p_del = doc.add_paragraph()
-    rl = p_del.add_run("Yetkazib berish muddati: ")
-    _style_run(rl, size=10, bold=True)
-    rv = p_del.add_run(f"{delivery_days} ish kuni")
-    _style_run(rv, size=10)
-
-    p_pay = doc.add_paragraph()
-    rl2 = p_pay.add_run("To\u2018lov shartlari: ")
-    _style_run(rl2, size=10, bold=True)
-    rv2 = p_pay.add_run(
-        "15% oldindan to\u2018lov, 85% yetkazib berilgandan keyin"
+    p_budget = doc.add_paragraph()
+    r_budget = p_budget.add_run(
+        f"Tender byudjeti (source): {tender.budget:,.0f} {tender.currency}"
     )
-    _style_run(rv2, size=10)
+    _style_run(r_budget, size=10)
+    p_price = doc.add_paragraph()
+    r_price = p_price.add_run(
+        f"Siz kiritgan narx: {our_price:,.0f} {tender.currency}"
+    )
+    _style_run(r_price, size=10, bold=True)
 
-    if proposal.include_vat:
-        p_vat = doc.add_paragraph()
-        rl3 = p_vat.add_run("QQS: ")
-        _style_run(rl3, size=10, bold=True)
-        rv3 = p_vat.add_run(
-            "Narxlar 12% QQSni o\u2018z ichiga oladi "
-            "(Prices include 12% VAT)"
-        )
-        _style_run(rv3, size=10)
-
-    p_val = doc.add_paragraph()
-    rl4 = p_val.add_run("Taklif amal qilish muddati: ")
-    _style_run(rl4, size=10, bold=True)
-    rv4 = p_val.add_run("30 kun")
-    _style_run(rv4, size=10)
-    p_val.paragraph_format.space_after = Pt(24)
+    p_del = doc.add_paragraph()
+    r_del = p_del.add_run(f"Yetkazib berish muddati: {delivery_days} ish kuni")
+    _style_run(r_del, size=10)
 
     # ========== SIGNATURE ==========
     p_dir = doc.add_paragraph()

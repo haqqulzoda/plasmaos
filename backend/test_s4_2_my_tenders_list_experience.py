@@ -13,7 +13,7 @@ from app.services.my_tenders import MyTendersQuery, _base_list_statement, _order
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT = BACKEND_DIR.parent
-HEAD = "20260912_0001_s10_5_communications"
+HEAD = "20261002_0001_p0_extraction_trust_gate"
 
 
 def source(relative: str) -> str:
@@ -33,9 +33,9 @@ def test_no_migration_and_sprint_4_1_head_remains_canonical() -> None:
 
 def test_list_query_is_canonical_tenant_scoped_and_engagement_only() -> None:
     service = source("backend/app/services/my_tenders.py")
-    assert "TenderEngagement.user_id == user_id" in service
-    assert "TenderEngagement.company_profile_id == company_profile_id" in service
-    assert ".join(Tender, Tender.id == TenderEngagement.tender_id)" in service
+    assert "Membership.user_id == user_id" in service
+    assert "Organization.legacy_company_profile_id == company_profile_id" in service
+    assert ".join(Tender, Tender.id == OrganizationPursuit.source_tender_id)" in service
     assert ".outerjoin(Project" in service
     assert "Proposal" not in service
     assert "TenderAnalysis" not in service
@@ -50,7 +50,7 @@ def test_default_dismissed_policy_filters_only_engagement_status() -> None:
         query=MyTendersQuery(),
     )
     sql = str(statement)
-    assert "tender_engagements.status !=" in sql
+    assert "organization_pursuits.stage !=" in sql
     assert TenderEngagementStatus.DISMISSED.value in statement.compile().params.values()
     assert "proposals" not in sql.casefold()
 
@@ -63,8 +63,8 @@ def test_sorting_is_database_backed_stable_and_null_deadlines_are_explicit() -> 
     )
     recent = str(_ordered(base, "recently_updated"))
     deadline = str(_ordered(base, "deadline_soonest"))
-    assert "status_changed_at DESC" in recent
-    assert "tender_engagements.id DESC" in recent
+    assert "stage_changed_at DESC" in recent
+    assert "organization_pursuits.id DESC" in recent
     assert "CASE WHEN (tenders.deadline IS NULL)" in deadline
     assert "tenders.deadline ASC" in deadline
 
@@ -76,7 +76,7 @@ def test_api_is_bounded_safe_and_uses_current_profile() -> None:
     assert '"/tenders/{tender_id}/engagement"' in api
     assert "le=100" in api
     assert "CompanyProfile.user_id == current_user.id" in api
-    assert "require_approved_pilot_access" in api
+    assert "require_active_initial_membership" in api
     assert "current_user.id" in api
     assert "company_name" not in api
     schema = source("backend/app/schemas/engagement.py")

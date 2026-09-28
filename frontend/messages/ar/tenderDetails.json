@@ -76,6 +76,7 @@
   "requirementsUnavailable": "ملخص المتطلبات غير متاح حاليًا.",
   "requirementsTruncated": "يتم عرض {returned} من {total} متطلب مستخرج من التحليل. افتح الامتثال للوصول إلى ورشة العمل الكاملة.",
   "tenderDocuments": "مستندات المناقصة",
+  "officialSourceDocuments": "وثائق المصدر الرسمية",
   "documentAcquisitionFailed": "تعذر بدء الحصول على المستندات. حاول مرة أخرى.",
   "documentAcquisition": {
     "available": "{count} مستندات متاحة",

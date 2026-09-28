@@ -135,7 +135,7 @@ def test_single_additive_migration_and_historical_null_semantics() -> None:
     config = Config()
     config.set_main_option("script_location", str(ROOT / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20260912_0001_s10_5_communications"]
+    assert script.get_heads() == ["20261002_0001_p0_extraction_trust_gate"]
     assert script.get_revision("20260904_0001_s8_2_analysis_language").down_revision == "20260902_0001_s7_2_user_ui_locale"
     source = MIGRATION.read_text(encoding="utf-8")
     assert source.count("op.add_column(") == 2

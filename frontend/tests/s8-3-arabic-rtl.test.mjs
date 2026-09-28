@@ -117,7 +117,7 @@ test('source, user, technical, and analysis content have reusable bidi boundarie
 test('analysis, evidence, identifier, and filename islands are explicit in Compliance', () => {
   const source = read('app/dashboard/tenders/[tenderId]/compliance/page.tsx');
   assert.match(source, /dir=\{analysisContentDirection\(analysisLanguage\)\}/);
-  assert.match(source, /<p dir="auto">\{quote\}<\/p>/);
+  assert.match(source, /<p dir="auto">\{quote \|\| t\("workspace\.evidenceUnavailable"\)\}<\/p>/);
   assert.match(source, /<TechnicalText>\{contentHash\}<\/TechnicalText>/);
   assert.match(source, /<BidiText>\{detail\.source_filename/);
 });

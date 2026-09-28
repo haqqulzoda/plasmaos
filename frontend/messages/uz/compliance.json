@@ -124,7 +124,7 @@
     "openOriginalSource": "Asl manbani ochish",
     "requirementsReviewed": "Ko‘rib chiqilgan talablar",
     "criticalGaps": "Muhim kamchiliklar",
-    "readinessSupported": "Tayyorgarlik dalili bilan qo‘llab-quvvatlangan",
+    "readinessSupported": "Bog‘langan tayyorgarlik yozuvlari",
     "referencedDocuments": "Havola qilingan manba hujjatlari",
     "searchLabel": "Talablarni qidirish",
     "clearSearch": "Talablar qidiruvini tozalash",
@@ -158,14 +158,14 @@
     "openDocument": "Hujjatni ochish",
     "evidenceUnavailable": "Manba dalili mavjud emas.",
     "analysisUnavailable": "Tahlil izohi mavjud emas.",
-    "readinessEvidence": "Tayyorgarlik dalili",
+    "readinessEvidence": "Tayyorgarlik yozuvlari",
     "readinessEvidenceHelp": "Tayyorgarlik yozuvlari yordamchi dalil beradi va o‘z-o‘zidan muvofiqlikni kafolatlamaydi.",
     "openReadinessVault": "Tayyorgarlik omborini ochish",
     "groups": {
-      "critical": {"title": "Muhim kamchiliklar", "description": "Bajarilmagan hal qiluvchi talablar sifatida qayd etilgan tasdiqlangan taklif bosqichi talablari."},
+      "critical": {"title": "Muhim kamchiliklar", "description": "Bajarilmagan hal qiluvchi talablar sifatida qayd etilgan taklif bosqichi talablari."},
       "review": {"title": "Qo‘lda ko‘rib chiqish zarur", "description": "Deterministik tarzda hal qilib bo‘lmagan talablar."},
-      "matched": {"title": "Bajarilgan talablar", "description": "Qayd etilgan kompaniya dalillari bilan bajarilgani tasdiqlangan talablar."},
-      "recorded": {"title": "Qayd etilgan majburiyatlar", "description": "Hujjat mosligi emas, xabardorlik uchun qayd etilgan tasdiqlangan majburiyatlar."}
+      "matched": {"title": "Bajarilgan talablar", "description": "Qayd etilgan kompaniya ma’lumotlari asosida bajarilgan deb baholangan talablar; asosiy yozuvlarni ko‘rib chiqing."},
+      "recorded": {"title": "Qayd etilgan majburiyatlar", "description": "Hujjat mosligi emas, xabardorlik uchun qayd etilgan majburiyatlar."}
     },
     "sourceSystems": {"worldBank": "Jahon banki", "adb": "Osiyo taraqqiyot banki", "giz": "GIZ", "ebrd": "YTTB", "uzex": "UZEX"}
   },

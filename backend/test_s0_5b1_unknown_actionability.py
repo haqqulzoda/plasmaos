@@ -244,10 +244,8 @@ class ComplianceAndProposalTests(unittest.TestCase):
         user = SimpleNamespace(id=uuid4())
         db = _SequenceSession(SimpleNamespace(id=tender_id, status=TenderStatus.UNKNOWN))
         failure = proposal_endpoints.BidPreparationNotActionableError("not actionable")
-        with patch.object(
-            proposal_endpoints,
-            "get_or_create_proposal_artifact",
-            new=AsyncMock(side_effect=failure),
+        with patch.object(proposal_endpoints, "_owned_profile_id", new=AsyncMock(return_value=uuid4())), patch.object(
+            proposal_endpoints, "prepare_bid", new=AsyncMock(side_effect=failure),
         ):
             with self.assertRaises(HTTPException) as raised:
                 asyncio.run(proposal_endpoints.create_proposal(
@@ -268,10 +266,8 @@ class ComplianceAndProposalTests(unittest.TestCase):
             created_at=datetime(2026, 8, 25, tzinfo=timezone.utc),
         )
         resolution = SimpleNamespace(proposal=artifact, created=True)
-        with patch.object(
-            proposal_endpoints,
-            "get_or_create_proposal_artifact",
-            new=AsyncMock(return_value=resolution),
+        with patch.object(proposal_endpoints, "_owned_profile_id", new=AsyncMock(return_value=uuid4())), patch.object(
+            proposal_endpoints, "prepare_bid", new=AsyncMock(return_value=resolution),
         ):
             response = asyncio.run(proposal_endpoints.create_proposal(
                 ProposalCreate(tender_id=tender_id), current_user=user, db=db

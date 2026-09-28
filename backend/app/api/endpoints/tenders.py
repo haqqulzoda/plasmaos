@@ -119,6 +119,8 @@ from app.models.all_models import (
     User,
 )
 from app.models.company import CompanyProfile
+from app.models.base import MembershipState
+from app.models.tenancy import Membership, Organization
 from app.models.taxonomy import CompanyCredential
 from app.schemas.tender import (
     TenderCompetitorGroup,
@@ -175,6 +177,10 @@ from app.services.analysis_aggregates import (
     get_owned_analysis_parent_by_id,
     get_owned_analysis_parent_for_tender,
     resolve_or_create_analysis_aggregate,
+)
+from app.services.organization_context import (
+    OrganizationAccessDeniedError,
+    resolve_legacy_profile_context,
 )
 from app.services.analysis_versions import (
     ANALYSIS_PIPELINE_VERSION,
@@ -7698,6 +7704,24 @@ async def _ensure_tender_access(
     if allow_operator and current_user is not None and is_operator_or_admin(current_user):
         return
 
+    profile = None
+    if current_user is not None:
+        profile = await db.scalar(
+            select(CompanyProfile)
+            .join(Organization, Organization.legacy_company_profile_id == CompanyProfile.id)
+            .join(Membership, Membership.organization_id == Organization.id)
+            .where(
+                CompanyProfile.user_id == current_user.id,
+                Membership.user_id == current_user.id,
+                Membership.state == MembershipState.ACTIVE,
+            )
+        )
+        if profile is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tender not found",
+            )
+
     access_result = await db.execute(
         select(Proposal.id)
         .where(
@@ -7709,24 +7733,19 @@ async def _ensure_tender_access(
     if access_result.scalar_one_or_none() is not None:
         return
 
-    if current_user is not None:
-        profile_result = await db.execute(
-            select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
-        )
-        profile = profile_result.scalar_one_or_none()
-        if profile is not None and profile.user_id == current_user.id:
-            analysis_access_result = await db.execute(
-                select(TenderAnalysis.id)
-                .where(
-                    TenderAnalysis.tender_id == tender_id,
-                    TenderAnalysis.user_id == current_user.id,
-                    TenderAnalysis.company_profile_id == profile.id,
-                    TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
-                )
-                .limit(1)
+    if current_user is not None and profile is not None:
+        analysis_access_result = await db.execute(
+            select(TenderAnalysis.id)
+            .where(
+                TenderAnalysis.tender_id == tender_id,
+                TenderAnalysis.user_id == current_user.id,
+                TenderAnalysis.company_profile_id == profile.id,
+                TenderAnalysis.ownership_state == ANALYSIS_OWNERSHIP_OWNED,
             )
-            if analysis_access_result.scalar_one_or_none() is not None:
-                return
+            .limit(1)
+        )
+        if analysis_access_result.scalar_one_or_none() is not None:
+            return
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -7746,6 +7765,14 @@ async def _get_owned_analysis(
     )
     profile = profile_result.scalar_one_or_none()
     if profile is None or profile.user_id != current_user.id:
+        return None
+    try:
+        await resolve_legacy_profile_context(
+            db,
+            user_id=current_user.id,
+            company_profile_id=profile.id,
+        )
+    except OrganizationAccessDeniedError:
         return None
     result = await db.execute(
         select(TenderAnalysis).where(

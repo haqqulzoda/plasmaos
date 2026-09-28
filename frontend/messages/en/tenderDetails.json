@@ -76,6 +76,7 @@
   "requirementsUnavailable": "The requirement summary is currently unavailable.",
   "requirementsTruncated": "Showing {returned} of {total} analysis-derived requirements. Open Compliance for the full workbench.",
   "tenderDocuments": "Tender documents",
+  "officialSourceDocuments": "Official source documents",
   "documentAcquisitionFailed": "Document acquisition could not be started. Try again.",
   "documentAcquisition": {
     "available": "{count} documents available",

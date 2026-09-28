@@ -46,7 +46,15 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20260912_0001_s10_5_communications"]
+    assert script.get_heads() == ["20261002_0001_p0_extraction_trust_gate"]
+    assert (
+        script.get_revision("20261002_0001_p0_extraction_trust_gate").down_revision
+        == "20261001_0001_w8_proposal_evidence_pack"
+    )
+    assert (
+        script.get_revision("20261001_0001_w8_proposal_evidence_pack").down_revision
+        == "20260930_0001_w7_team_scenarios"
+    )
     assert (
         script.get_revision("20260828_0001_s3_1_admin_account_lifecycle").down_revision
         == "20260827_0002_s2_2_analysis_version_foundation"
@@ -64,7 +72,19 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
         == "20260825_0001_s0_5b3"
     )
     assert script.get_revision("20260825_0001_s0_5b3").down_revision == "20260824_0002_s0_4c"
-    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 31
+    assert (
+        script.get_revision("20260926_0001_w3_private_documents").down_revision
+        == "20260925_0002_w2_organization_pursuit"
+    )
+    assert (
+        script.get_revision("20260925_0002_w2_organization_pursuit").down_revision
+        == "20260925_0001_w2_organization_membership"
+    )
+    assert (
+        script.get_revision("20260925_0001_w2_organization_membership").down_revision
+        == "20260912_0001_s10_5_communications"
+    )
+    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 40
 
 
 def test_historical_migrations_are_untouched() -> None:

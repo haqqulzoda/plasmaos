@@ -14,6 +14,7 @@ test('known notification routes are internal and allowlisted', () => {
   assert.equal(notificationDestination({ ...base, event_type: 'ACCOUNT_APPROVED', payload: { url: '//evil.invalid' } }).href, '/dashboard');
   assert.equal(notificationDestination({ ...base, event_type: 'ANALYSIS_COMPLETED', payload: { analysis_id: '00000000-0000-4000-8000-000000000013' } }).href, '/dashboard/my-tenders');
   assert.equal(notificationDestination({ ...base, event_type: 'DOCUMENTS_READY', payload: { tender_id: '00000000-0000-4000-8000-000000000014' } }).href, '/dashboard/tenders/00000000-0000-4000-8000-000000000014#requirements-documents');
+  assert.equal(notificationDestination({ ...base, event_type: 'PRIVATE_DOCUMENTS_READY', payload: { pursuit_id: '00000000-0000-4000-8000-000000000015', organization_id: '00000000-0000-4000-8000-000000000016' } }).href, '/dashboard/pursuits/00000000-0000-4000-8000-000000000015?organization_id=00000000-0000-4000-8000-000000000016');
 });
 
 for (const [name, item] of [
@@ -36,7 +37,7 @@ for (const [filter, expected] of [
 
 for (const locale of ['en', 'uz', 'ru', 'ar']) test(`${locale} has complete notification contract`, () => {
   const messages = JSON.parse(source(`messages/${locale}/notifications.json`));
-  assert.deepEqual(Object.keys(messages.templates).sort(), ['accountApproved', 'analysisCompleted', 'documentsFailed', 'documentsPartial', 'documentsReady', 'recommendationCreated']);
+  assert.deepEqual(Object.keys(messages.templates).sort(), ['accountApproved', 'analysisCompleted', 'documentsFailed', 'documentsPartial', 'documentsReady', 'privateDocumentsFailed', 'privateDocumentsPartial', 'privateDocumentsReady', 'recommendationCreated']);
   assert.deepEqual(Object.keys(messages.filters).sort(), ['ADMIN', 'ALL', 'SYSTEM', 'TENDER_ALERT', 'UNREAD']);
   assert.ok(messages.fallback.title && messages.fallback.body && messages.states.mutationFailure);
 });

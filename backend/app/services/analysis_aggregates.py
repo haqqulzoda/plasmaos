@@ -11,6 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.all_models import CompanyProfile, TenderAnalysis
 from app.models.audit import ANALYSIS_OWNERSHIP_OWNED
+from app.services.organization_context import (
+    OrganizationAccessDeniedError,
+    resolve_legacy_profile_context,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -36,6 +40,12 @@ async def get_owned_analysis_parent_for_tender(
     tender_id: UUID,
 ) -> TenderAnalysis | None:
     """Apply the documented parent rule before selecting any version."""
+    try:
+        await resolve_legacy_profile_context(
+            db, user_id=user_id, company_profile_id=company_profile_id
+        )
+    except OrganizationAccessDeniedError:
+        return None
     parents = list(
         (
             await db.execute(
@@ -75,6 +85,12 @@ async def get_owned_analysis_parent_by_id(
     tender_id: UUID | None = None,
 ) -> TenderAnalysis | None:
     """Resolve an explicitly owned parent without display-name fallback."""
+    try:
+        await resolve_legacy_profile_context(
+            db, user_id=user_id, company_profile_id=company_profile_id
+        )
+    except OrganizationAccessDeniedError:
+        return None
     conditions = [
         TenderAnalysis.id == analysis_id,
         TenderAnalysis.user_id == user_id,
@@ -128,16 +144,14 @@ async def resolve_or_create_analysis_aggregate(
             "new analysis parent does not match the canonical tenant/tender scope"
         )
 
-    valid_profile = await db.scalar(
-        select(CompanyProfile.id).where(
-            CompanyProfile.id == company_profile_id,
-            CompanyProfile.user_id == user_id,
+    try:
+        await resolve_legacy_profile_context(
+            db, user_id=user_id, company_profile_id=company_profile_id
         )
-    )
-    if valid_profile is None:
+    except OrganizationAccessDeniedError:
         raise AnalysisAggregateOwnershipError(
-            "company profile is not owned by the authenticated user"
-        )
+            "company profile is not available through an active membership"
+        ) from None
 
     identity = analysis_aggregate_identity(
         user_id=user_id,

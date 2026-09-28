@@ -26,7 +26,7 @@ from app.services.tender_engagements import (
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
-HEAD = "20260912_0001_s10_5_communications"
+HEAD = "20261002_0001_p0_extraction_trust_gate"
 
 
 def source(relative: str) -> str:
@@ -56,12 +56,13 @@ def test_backend_allowed_action_contract_is_exact() -> None:
 def test_action_api_is_semantic_scoped_and_stale_safe() -> None:
     api = source("backend/app/api/endpoints/my_tenders.py")
     service = source("backend/app/services/tender_engagements.py")
+    pursuits = source("backend/app/services/pursuits.py")
     assert '"/my-tenders/{engagement_id}/actions/{action}"' in api
     for command in ("evaluate", "mark-submitted", "mark-won", "mark-lost", "dismiss", "correct-to-preparing", "correct-to-submitted", "correct-to-won", "correct-to-lost"):
         assert f'"{command}"' in api
-    assert "TenderEngagement.user_id == user_id" in service
-    assert "TenderEngagement.company_profile_id == company_profile_id" in service
-    assert ".with_for_update()" in service
+    assert "resolve_legacy_profile_context" in service
+    assert "OrganizationPursuit.organization_id == organization_id" in pursuits
+    assert ".with_for_update()" in pursuits
     assert "expected_status" in service
     assert "HTTP_404_NOT_FOUND" in api
     assert "HTTP_409_CONFLICT" in api

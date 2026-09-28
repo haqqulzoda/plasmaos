@@ -51,6 +51,21 @@ SYSTEM_TEMPLATES = {
         "notifications.documents_failed",
         {"tender_id", "job_id", "ready_count", "total_count", "failed_count"},
     ),
+    "PRIVATE_DOCUMENTS_READY": (
+        "SYSTEM",
+        "notifications.private_documents_ready",
+        {"organization_id", "pursuit_id", "batch_id", "processed_count", "total_count", "failed_count"},
+    ),
+    "PRIVATE_DOCUMENTS_PARTIAL": (
+        "SYSTEM",
+        "notifications.private_documents_partial",
+        {"organization_id", "pursuit_id", "batch_id", "processed_count", "total_count", "failed_count"},
+    ),
+    "PRIVATE_DOCUMENTS_FAILED": (
+        "SYSTEM",
+        "notifications.private_documents_failed",
+        {"organization_id", "pursuit_id", "batch_id", "processed_count", "total_count", "failed_count"},
+    ),
 }
 
 
@@ -108,7 +123,7 @@ def validate_system_event(*, event_type, category, template_key, payload, dedupe
             elif key == "analysis_language":
                 if value not in ("en", "uz", "ru", "ar", None):
                     raise ValueError()
-            elif key in {"ready_count", "total_count", "failed_count"}:
+            elif key in {"ready_count", "processed_count", "total_count", "failed_count"}:
                 if type(value) is not int or value < 0:
                     raise ValueError()
         if {
@@ -117,6 +132,11 @@ def validate_system_event(*, event_type, category, template_key, payload, dedupe
             "failed_count",
         }.issubset(payload) and (
             payload["ready_count"] > payload["total_count"]
+            or payload["failed_count"] > payload["total_count"]
+        ):
+            raise ValueError()
+        if {"processed_count", "total_count", "failed_count"}.issubset(payload) and (
+            payload["processed_count"] > payload["total_count"]
             or payload["failed_count"] > payload["total_count"]
         ):
             raise ValueError()
@@ -268,6 +288,59 @@ async def stage_document_acquisition_notification(
                 dedupe_key=dedupe_key,
                 event_type=event_type,
                 category="TENDER_ALERT",
+                template_key=template_key,
+                payload=payload,
+            )
+        )
+
+
+async def stage_private_document_notification(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    organization_id: UUID,
+    pursuit_id: UUID,
+    batch_id: UUID,
+    outcome: str,
+    processed_count: int,
+    total_count: int,
+    failed_count: int,
+) -> None:
+    """Stage one batch-level private processing event containing IDs/counts only."""
+    contracts = {
+        "ready": ("PRIVATE_DOCUMENTS_READY", "notifications.private_documents_ready"),
+        "partial": ("PRIVATE_DOCUMENTS_PARTIAL", "notifications.private_documents_partial"),
+        "failed": ("PRIVATE_DOCUMENTS_FAILED", "notifications.private_documents_failed"),
+    }
+    try:
+        event_type, template_key = contracts[outcome]
+    except KeyError:
+        raise CommunicationsError("communications_invalid_event") from None
+    payload = {
+        "organization_id": str(organization_id),
+        "pursuit_id": str(pursuit_id),
+        "batch_id": str(batch_id),
+        "processed_count": max(0, int(processed_count)),
+        "total_count": max(0, int(total_count)),
+        "failed_count": max(0, int(failed_count)),
+    }
+    dedupe_key = f"private-documents:{batch_id}:{outcome}"
+    validate_system_event(
+        event_type=event_type,
+        category="SYSTEM",
+        template_key=template_key,
+        payload=payload,
+        dedupe_key=dedupe_key,
+    )
+    if await db.scalar(
+        select(NotificationOutbox.id).where(NotificationOutbox.dedupe_key == dedupe_key)
+    ) is None:
+        db.add(
+            NotificationOutbox(
+                user_id=user_id,
+                dedupe_key=dedupe_key,
+                event_type=event_type,
+                category="SYSTEM",
                 template_key=template_key,
                 payload=payload,
             )

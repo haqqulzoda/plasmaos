@@ -30,7 +30,8 @@
     "markUnread": "Отметить непрочитанным",
     "openTender": "Открыть тендер",
     "openCompliance": "Открыть анализ",
-    "openDashboard": "Открыть панель"
+    "openDashboard": "Открыть панель",
+    "openWorkspace": "Открыть рабочую область"
   },
   "templates": {
     "recommendationCreated": {
@@ -56,7 +57,10 @@
     "documentsFailed": {
       "title": "Не удалось получить документы тендера",
       "body": "Документы тендера не удалось подготовить. Откройте тендер и повторите попытку."
-    }
+    },
+    "privateDocumentsReady": {"title":"Частные документы готовы","body":"Готово частных документов: {processedCount} из {totalCount}."},
+    "privateDocumentsPartial": {"title":"Частные документы готовы частично","body":"Обработано {processedCount} из {totalCount}; ошибок: {failedCount}."},
+    "privateDocumentsFailed": {"title":"Ошибка обработки частных документов","body":"Не удалось подготовить пакет. Откройте рабочую область для проверки."}
   },
   "fallback": {
     "title": "Обновление аккаунта",

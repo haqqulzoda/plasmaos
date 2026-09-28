@@ -59,3 +59,78 @@ class TenderEngagementOrigin(str, enum.Enum):
     BID_PREPARATION = "BID_PREPARATION"
     LEGACY_PROPOSAL = "LEGACY_PROPOSAL"
     OTHER_EXPLICIT_USER_ACTION = "OTHER_EXPLICIT_USER_ACTION"
+
+
+class MembershipRole(str, enum.Enum):
+    """Organization-scoped authorization role."""
+
+    OWNER = "OWNER"
+    MEMBER = "MEMBER"
+
+
+class MembershipState(str, enum.Enum):
+    """Durable membership lifecycle state."""
+
+    INVITED = "INVITED"
+    ACTIVE = "ACTIVE"
+    REVOKED = "REVOKED"
+
+
+class PursuitOrigin(str, enum.Enum):
+    """Authority that established a pursuit identity."""
+
+    SOURCE = "SOURCE"
+    UPLOAD = "UPLOAD"
+
+
+class PrivateDocumentRole(str, enum.Enum):
+    """Controlled role of an organization-private tender document."""
+
+    RFP = "RFP"
+    TOR = "TOR"
+    NOTICE = "NOTICE"
+    ADDENDUM = "ADDENDUM"
+    CLARIFICATION = "CLARIFICATION"
+    FORM = "FORM"
+    ANNEX = "ANNEX"
+    OTHER = "OTHER"
+
+
+class PrivateDocumentState(str, enum.Enum):
+    """Logical lifecycle of a private document identity."""
+
+    ACTIVE = "ACTIVE"
+    ARCHIVED = "ARCHIVED"
+
+
+class DocumentProcessingState(str, enum.Enum):
+    """Truthful durable state for private document processing."""
+
+    UPLOADING = "UPLOADING"
+    QUEUED = "QUEUED"
+    CHECKING = "CHECKING"
+    EXTRACTING = "EXTRACTING"
+    READY = "READY"
+    PARTIAL = "PARTIAL"
+    FAILED = "FAILED"
+
+
+class PursuitAnalysisStatus(str, enum.Enum):
+    """Durable lifecycle for a sealed pursuit analysis run."""
+
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class CoverageState(str, enum.Enum):
+    """Reviewed W4 coverage semantics, separate from legacy Compliance."""
+
+    SUPPORTED = "SUPPORTED"
+    PARTIAL = "PARTIAL"
+    GAP = "GAP"
+    EVIDENCE_MISSING = "EVIDENCE_MISSING"
+    NEEDS_INTERPRETATION = "NEEDS_INTERPRETATION"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    LATER_STAGE_OBLIGATION = "LATER_STAGE_OBLIGATION"

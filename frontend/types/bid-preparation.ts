@@ -13,6 +13,7 @@ export interface BidPreparationArtifact {
         strategic_summary?: string;
         ai_summary?: string;
         our_price?: number;
+        commercial_price_origin?: string;
         delivery_days?: string | number;
     } | null;
     final_pdf_url: string | null;

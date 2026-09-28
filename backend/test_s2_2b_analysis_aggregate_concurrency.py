@@ -16,7 +16,7 @@ SERVICE = BACKEND_DIR / "app/services/analysis_aggregates.py"
 ENDPOINT = BACKEND_DIR / "app/api/endpoints/tenders.py"
 PROPOSALS = BACKEND_DIR / "app/api/endpoints/proposals.py"
 PREFLIGHT = BACKEND_DIR / "scripts/report_analysis_aggregate_concurrency.py"
-HEAD = "20260912_0001_s10_5_communications"
+HEAD = "20261002_0001_p0_extraction_trust_gate"
 
 
 def source(path: Path) -> str:
@@ -45,7 +45,7 @@ def test_resolution_is_database_backed_and_transaction_scoped() -> None:
     assert "TenderAnalysis.user_id == user_id" in service
     assert "TenderAnalysis.company_profile_id == company_profile_id" in service
     assert "TenderAnalysis.tender_id == tender_id" in service
-    assert "CompanyProfile.user_id == user_id" in service
+    assert "resolve_legacy_profile_context" in service
     assert ".with_for_update()" in service
     assert "TenderAnalysis.company_name" not in service
     assert "input_hash" not in service

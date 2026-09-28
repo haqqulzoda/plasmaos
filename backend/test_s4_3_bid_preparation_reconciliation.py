@@ -60,7 +60,8 @@ def test_proposal_reads_require_owned_user_and_valid_profile_context():
     source = backend("app/api/endpoints/proposals.py")
     assert "Proposal.user_id == current_user.id" in source
     assert "profile_id = await _owned_profile_id" in source
-    assert "TenderEngagement.company_profile_id == profile_id" in source
+    assert "OrganizationPursuit.organization_id == organization_id" in source
+    assert "Membership.state == MembershipState.ACTIVE" in source
     assert "CompanyProfile.user_id == user_id" in source
 
 

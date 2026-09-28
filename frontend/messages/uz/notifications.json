@@ -30,7 +30,8 @@
     "markUnread": "O‘qilmagan deb belgilash",
     "openTender": "Tenderni ochish",
     "openCompliance": "Tahlilni ko‘rish",
-    "openDashboard": "Boshqaruv panelini ochish"
+    "openDashboard": "Boshqaruv panelini ochish",
+    "openWorkspace": "Ish maydonini ochish"
   },
   "templates": {
     "recommendationCreated": {
@@ -56,7 +57,10 @@
     "documentsFailed": {
       "title": "Tender hujjatlarini olish amalga oshmadi",
       "body": "Tender hujjatlarini tayyorlab bo‘lmadi. Qayta urinish uchun tenderni oching."
-    }
+    },
+    "privateDocumentsReady": {"title":"Xususiy hujjatlar tayyor","body":"{totalCount} tadan {processedCount} ta xususiy hujjat tayyor."},
+    "privateDocumentsPartial": {"title":"Xususiy hujjatlar qisman tayyor","body":"{totalCount} tadan {processedCount} tasi qayta ishlandi; {failedCount} tasi bajarilmadi."},
+    "privateDocumentsFailed": {"title":"Xususiy hujjatlarni qayta ishlashda xato","body":"Hujjatlar to‘plamini tayyorlab bo‘lmadi. Ish maydonini ochib tekshiring."}
   },
   "fallback": {
     "title": "Hisob yangilanishi",

@@ -23,6 +23,10 @@ from app.core.security import get_current_user as core_get_current_user
 from app.db.session import get_db
 from app.models.all_models import SubscriptionTier, User
 from app.models.company import CompanyProfile
+from app.services.organization_context import (
+    OrganizationAccessDeniedError,
+    resolve_legacy_profile_context,
+)
 
 # Tier hierarchy for comparison
 TIER_HIERARCHY = {
@@ -184,6 +188,31 @@ async def require_approved_pilot_access(
             detail="Approved pilot access required",
         )
 
+    return current_user
+
+
+async def require_active_initial_membership(
+    current_user: User = Depends(require_approved_pilot_access),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Require the user's legacy profile to map to an active Membership."""
+    profile_id = await db.scalar(
+        select(CompanyProfile.id).where(CompanyProfile.user_id == current_user.id)
+    )
+    if profile_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization membership required",
+        )
+    try:
+        await resolve_legacy_profile_context(
+            db, user_id=current_user.id, company_profile_id=profile_id
+        )
+    except OrganizationAccessDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization membership required",
+        ) from exc
     return current_user
 
 

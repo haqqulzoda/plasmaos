@@ -10,12 +10,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_approved_pilot_access
+from app.api.deps import get_current_user, require_active_initial_membership
 from app.core.security import authenticated_dependency
 from app.db.session import get_db
-from app.models.all_models import Proposal, TenderEngagement, User
-from app.models.base import TenderEngagementStatus, TenderStatus
+from app.models.all_models import Proposal, User
+from app.models.base import MembershipState, TenderEngagementStatus, TenderStatus
 from app.models.company import CompanyProfile
+from app.models.tenancy import Membership, Organization
+from app.services.organization_context import resolve_legacy_profile_context
+from app.services.pursuits import get_owned_pursuit_by_legacy_id
 from app.schemas.engagement import (
     MyTenderListItem,
     MyTendersListResponse,
@@ -54,7 +57,7 @@ from app.services.tender_engagements import (
 router = APIRouter(
     dependencies=[
         authenticated_dependency(),
-        Depends(require_approved_pilot_access),
+        Depends(require_active_initial_membership),
     ]
 )
 
@@ -78,7 +81,14 @@ async def _owned_profile_id(
     current_user: User,
 ) -> UUID:
     profile_id = await db.scalar(
-        select(CompanyProfile.id).where(CompanyProfile.user_id == current_user.id)
+        select(CompanyProfile.id)
+        .join(Organization, Organization.legacy_company_profile_id == CompanyProfile.id)
+        .join(Membership, Membership.organization_id == Organization.id)
+        .where(
+            CompanyProfile.user_id == current_user.id,
+            Membership.user_id == current_user.id,
+            Membership.state == MembershipState.ACTIVE,
+        )
     )
     if profile_id is None:
         raise HTTPException(
@@ -242,14 +252,15 @@ async def apply_tender_engagement_action(
 ) -> TenderEngagementActionResponse:
     """Apply one explicit, tenant-scoped lifecycle command."""
     profile_id = await _owned_profile_id(db, current_user)
-    owned_tender_id = await db.scalar(
-        select(TenderEngagement.tender_id).where(
-            TenderEngagement.id == engagement_id,
-            TenderEngagement.user_id == current_user.id,
-            TenderEngagement.company_profile_id == profile_id,
-        )
+    context = await resolve_legacy_profile_context(
+        db, user_id=current_user.id, company_profile_id=profile_id
     )
-    if owned_tender_id is None:
+    pursuit = await get_owned_pursuit_by_legacy_id(
+        db,
+        legacy_engagement_id=engagement_id,
+        organization_id=context.organization.id,
+    )
+    if pursuit is None or pursuit.source_tender_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="My Tender not found",
@@ -258,7 +269,7 @@ async def apply_tender_engagement_action(
     scope = {
         "user_id": current_user.id,
         "company_profile_id": profile_id,
-        "tender_id": owned_tender_id,
+        "tender_id": pursuit.source_tender_id,
         "expected_status": command.expected_status,
     }
     normal_commands: dict[str, Callable[..., Awaitable]] = {

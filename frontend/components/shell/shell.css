@@ -124,6 +124,20 @@
   gap: var(--ds-space-4);
   flex-shrink: 0;
 }
+@media (max-width: 760px) {
+  .shell-upload-action span {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .shell-upload-action {
+    inline-size: var(--ds-control-sm);
+    padding-inline: 0;
+  }
+}
 .shell-account-icon {
   inline-size: 28px;
   block-size: 28px;

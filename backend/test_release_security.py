@@ -83,6 +83,7 @@ class QueryResult:
     def scalars(self): return self
     def all(self): return self.rows
     def first(self): return self.rows[0] if self.rows else None
+    def one_or_none(self): return self.rows[0] if self.rows else None
     def mappings(self): return self
 
 

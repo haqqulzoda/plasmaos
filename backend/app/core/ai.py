@@ -64,13 +64,6 @@ class _TenderItemSchema(BaseModel):
     unit: str = "pcs"
 
 
-class _CostBreakdownSchema(BaseModel):
-    model_config = ConfigDict(strict=False)
-    materials: float = 0
-    labor: float = 0
-    other: float = 0
-
-
 class TenderAnalysisSchema(BaseModel):
     """Enforced response schema for tender document analysis."""
     model_config = ConfigDict(strict=False)
@@ -78,27 +71,21 @@ class TenderAnalysisSchema(BaseModel):
     items: list[_TenderItemSchema] = Field(default_factory=list)
     delivery_days: int = 30
     required_licenses: list[str] = Field(default_factory=list)
-    estimated_cost_breakdown: _CostBreakdownSchema = Field(
-        default_factory=_CostBreakdownSchema,
-    )
     key_requirements: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
 
 
 class _StrategicLineItemSchema(BaseModel):
-    model_config = ConfigDict(strict=False)
+    model_config = ConfigDict(strict=False, extra="ignore")
     name: str = "Line Item"
     quantity: float = 1
     unit: str = "lot"
-    unit_price: float = 0
-    total: float = 0
 
 
 class StrategicDraftSchema(BaseModel):
     """Enforced response schema for strategic proposal drafting."""
-    model_config = ConfigDict(strict=False)
+    model_config = ConfigDict(strict=False, extra="ignore")
     strategic_summary: str = ""
-    suggested_price: float = 0
     delivery_days: str = "30 calendar days"
     line_items: list[_StrategicLineItemSchema] = Field(default_factory=list)
 
@@ -372,13 +359,16 @@ def _validate_with_schema(
     response_text: str,
     schema: type[BaseModel],
 ) -> dict[str, Any]:
-    """Validate LLM response against a Pydantic schema, with raw fallback."""
+    """Validate LLM response without exposing extra model-generated fields."""
     try:
         result = schema.model_validate_json(response_text)
         return result.model_dump()
     except (ValidationError, json.JSONDecodeError) as exc:
         logger.error("operation_failed event=ai:380 error_type=%s", type(exc).__name__)
-        return _extract_json(response_text)
+        try:
+            return schema.model_validate(_extract_json(response_text)).model_dump()
+        except ValidationError:
+            return schema().model_dump()
 
 
 # ---------------------------------------------------------------------------
@@ -430,11 +420,6 @@ Required JSON structure:
     ],
     "delivery_days": 30,
     "required_licenses": ["ISO 9001", "Construction License"],
-    "estimated_cost_breakdown": {{
-        "materials": 0,
-        "labor": 0,
-        "other": 0
-    }},
     "key_requirements": ["Requirement 1", "Requirement 2"],
     "risks": ["Potential risk 1", "Potential risk 2"]
 }}
@@ -443,7 +428,6 @@ Rules:
 - "items": Extract all products/services/equipment mentioned with quantities. If quantity not specified, estimate or use 1.
 - "delivery_days": Look for delivery timeline. Default to 30 if not mentioned.
 - "required_licenses": Any certifications, licenses, or qualifications required.
-- "estimated_cost_breakdown": Rough breakdown if budget info is available, otherwise use zeros.
 - "key_requirements": Technical specifications, standards, conditions that must be met.
 - "risks": Potential challenges or risks you identify.
 
@@ -548,36 +532,32 @@ async def analyze_tender_text_async(
 # ═══════════════════════════════════════════════════════════════════════════
 
 STRATEGIC_DRAFT_PROMPT = """{company_persona}
-Act as a Chief Revenue Officer. Write a persuasive, 3-paragraph `strategic_summary`. Emphasize verified credentials. You MUST provide a commercial justification for these accepted liabilities: [{accepted_liabilities}].
+Write a clear, 3-paragraph `strategic_summary` using recorded company information. Address these accepted liabilities: [{accepted_liabilities}].
 
 You are drafting a commercial proposal with compliance context:
-- Tender budget: {tender_budget}
 - Compliance ledger snapshot:
 {compliance_ledger}
 
 Analyze the tender text and return ONLY valid JSON with this exact shape:
 {{
     "strategic_summary": "string",
-    "suggested_price": 0,
     "delivery_days": "string",
     "line_items": [
         {{
             "name": "string",
             "quantity": 1,
-            "unit": "string",
-            "unit_price": 0,
-            "total": 0
+            "unit": "string"
         }}
     ]
 }}
 
 Rules:
-- `strategic_summary` must be exactly 3 paragraphs and commercially persuasive.
-- Mention verified credentials from the compliance ledger and how they de-risk execution.
+- `strategic_summary` must be exactly 3 paragraphs and grounded in recorded information.
+- Do not describe company credentials or readiness records as verified proof.
 - If accepted liabilities are listed, include business rationale for each.
-- `suggested_price` must be numeric and competitive for the scope.
 - `delivery_days` must be a readable string (e.g., "45 calendar days").
-- `line_items` must include practical deliverables with realistic quantities and totals.
+- `line_items` must describe practical deliverables and quantities without prices.
+- Do not estimate a bid, cost, unit price, total, or payment term.
 
 TENDER TEXT:
 ---
@@ -595,7 +575,6 @@ async def _draft_strategic_proposal_impl(
     company_context: dict[str, str] | None = None,
     compliance_ledger: dict[str, Any] | None = None,
     accepted_liabilities: list[str] | None = None,
-    tender_budget: float = 0.0,
 ) -> dict[str, Any]:
     """Core async implementation for strategic proposal drafting."""
     if not _ensure_configured():
@@ -603,7 +582,6 @@ async def _draft_strategic_proposal_impl(
             "error": "AI not configured",
             "error_type": "api_error",
             "strategic_summary": "AI drafting unavailable - API key not configured.",
-            "suggested_price": float(tender_budget or 0.0),
             "delivery_days": "30 calendar days",
             "line_items": [],
         }
@@ -614,7 +592,6 @@ async def _draft_strategic_proposal_impl(
             "error": "Text too short",
             "error_type": "api_error",
             "strategic_summary": "Tender text is too short for strategic drafting.",
-            "suggested_price": float(tender_budget or 0.0),
             "delivery_days": "30 calendar days",
             "line_items": [],
         }
@@ -634,7 +611,6 @@ async def _draft_strategic_proposal_impl(
             company_persona=company_persona,
             accepted_liabilities=liabilities_text,
             compliance_ledger=ledger_text,
-            tender_budget=tender_budget,
         )
 
         response_text, model_used = await _call_gemini_with_fallback_async(
@@ -652,13 +628,8 @@ async def _draft_strategic_proposal_impl(
         if not summary:
             summary = (
                 "We will execute this tender with proven delivery discipline, "
-                "validated credentials, and measurable commercial value."
+                "recorded experience, and a clear delivery plan."
             )
-
-        try:
-            suggested_price = float(result.get("suggested_price", tender_budget or 0.0))
-        except (TypeError, ValueError):
-            suggested_price = float(tender_budget or 0.0)
 
         delivery_days = str(result.get("delivery_days", "")).strip() or "30 calendar days"
         raw_items = result.get("line_items", [])
@@ -668,33 +639,20 @@ async def _draft_strategic_proposal_impl(
                 if not isinstance(item, dict):
                     continue
                 quantity = item.get("quantity", 1)
-                unit_price = item.get("unit_price", 0)
-                total = item.get("total", 0)
                 try:
                     quantity = float(quantity)
                 except (TypeError, ValueError):
                     quantity = 1.0
-                try:
-                    unit_price = float(unit_price)
-                except (TypeError, ValueError):
-                    unit_price = 0.0
-                try:
-                    total = float(total)
-                except (TypeError, ValueError):
-                    total = quantity * unit_price
                 line_items.append(
                     {
                         "name": str(item.get("name", "Line Item")).strip() or "Line Item",
                         "quantity": quantity,
                         "unit": str(item.get("unit", "lot")).strip() or "lot",
-                        "unit_price": unit_price,
-                        "total": total,
                     }
                 )
 
         return {
             "strategic_summary": summary,
-            "suggested_price": suggested_price,
             "delivery_days": delivery_days,
             "line_items": line_items,
         }
@@ -705,7 +663,6 @@ async def _draft_strategic_proposal_impl(
             "error": "Invalid model response",
             "error_type": "api_error",
             "strategic_summary": "AI drafting failed due to malformed model response.",
-            "suggested_price": float(tender_budget or 0.0),
             "delivery_days": "30 calendar days",
             "line_items": [],
         }
@@ -724,7 +681,6 @@ async def _draft_strategic_proposal_impl(
             "error": "AI processing failed",
             "error_type": error_type,
             "strategic_summary": msg,
-            "suggested_price": float(tender_budget or 0.0),
             "delivery_days": "30 calendar days",
             "line_items": [],
         }
@@ -736,7 +692,6 @@ def draft_strategic_proposal(
     company_context: dict[str, str] | None = None,
     compliance_ledger: dict[str, Any] | None = None,
     accepted_liabilities: list[str] | None = None,
-    tender_budget: float = 0.0,
 ) -> dict[str, Any]:
     """Generate a strategic proposal draft. Sync wrapper for backward compat."""
     return asyncio.run(
@@ -745,7 +700,6 @@ def draft_strategic_proposal(
             company_context=company_context,
             compliance_ledger=compliance_ledger,
             accepted_liabilities=accepted_liabilities,
-            tender_budget=tender_budget,
         )
     )
 
@@ -756,7 +710,6 @@ async def draft_strategic_proposal_async(
     company_context: dict[str, str] | None = None,
     compliance_ledger: dict[str, Any] | None = None,
     accepted_liabilities: list[str] | None = None,
-    tender_budget: float = 0.0,
 ) -> dict[str, Any]:
     """Async entry point — calls native async implementation directly."""
     return await _draft_strategic_proposal_impl(
@@ -764,7 +717,6 @@ async def draft_strategic_proposal_async(
         company_context=company_context,
         compliance_ledger=compliance_ledger,
         accepted_liabilities=accepted_liabilities,
-        tender_budget=tender_budget,
     )
 
 
@@ -797,11 +749,6 @@ Required JSON structure:
     ],
     "delivery_days": 30,
     "required_licenses": ["ISO 9001", "Construction License"],
-    "estimated_cost_breakdown": {{
-        "materials": 0,
-        "labor": 0,
-        "other": 0
-    }},
     "key_requirements": ["Requirement 1", "Requirement 2"],
     "risks": ["Potential risk 1", "Potential risk 2"]
 }}
@@ -810,7 +757,6 @@ Rules:
 - "items": Extract all products/services/equipment mentioned with quantities. If quantity not specified, estimate or use 1.
 - "delivery_days": Look for delivery timeline. Default to 30 if not mentioned.
 - "required_licenses": Any certifications, licenses, or qualifications required.
-- "estimated_cost_breakdown": Rough breakdown if budget info is available, otherwise use zeros.
 - "key_requirements": Technical specifications, standards, conditions that must be met.
 - "risks": Potential challenges or risks you identify.
 

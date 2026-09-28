@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
+import { SourcePrivateUpload } from "@/components/pursuits/SourcePrivateUpload";
 import { TenderEngagementPanel } from "@/components/tenders/TenderEngagementPanel";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
 import { Button, ButtonLink } from "@/components/ui/Button";
@@ -412,7 +413,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
         </Section>
       </div>
 
-      <Section id="tender-documents" title={t("tenderDocuments")} icon={<FileText aria-hidden="true" />}
+      <Section id="tender-documents" title={t("officialSourceDocuments")} icon={<FileText aria-hidden="true" />}
         action={canAcquireDocuments ? <Button variant="secondary" size="sm" type="button" loading={acquisitionBusy} onClick={() => void acquireDocuments()}>
           <Download aria-hidden="true" />{documents?.acquisition_state === "AVAILABLE_REMOTE" ? t("documentAcquisition.download") : t("documentAcquisition.retry")}
         </Button> : undefined}>
@@ -438,6 +439,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
           </table>
         </div> : <StateMessage state={details.documents.state} empty={t("documentsEmpty")} unavailable={t("documentsUnavailable")} />}
         {documents?.truncated && <p className="s143-note">{t("documentsTruncated", { count: documents.visible_total_count - documents.returned_count })}</p>}
+        <SourcePrivateUpload tenderId={tender.id} />
         <details className="s143-disclosure">
           <summary>{t("importantRequirements")}</summary>
           {requirements?.items.length ? <ul>{requirements.items.map((item, index) => <li key={`${item.label}-${index}`}>

@@ -224,7 +224,8 @@ export default function BidPreparationPage() {
                 <div>
                   <dt>{copy("price")}</dt>
                   <dd className="ds-numeric">
-                    {typeof proposal.structured_data?.our_price === "number" &&
+                    {proposal.structured_data?.commercial_price_origin === "USER_ENTERED" &&
+                    typeof proposal.structured_data.our_price === "number" &&
                     Number.isFinite(proposal.structured_data.our_price)
                       ? money(
                           proposal.structured_data.our_price,

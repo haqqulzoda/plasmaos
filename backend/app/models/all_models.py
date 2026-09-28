@@ -38,6 +38,29 @@ from app.models.base import (
     TenderStatus,
 )
 
+# Import additive domain modules so Base.metadata includes their tables.
+from app.models.participation import (  # noqa: F401,E402
+    CandidateAvailabilityFact,
+    CandidateInterestFact,
+    CandidateParticipationDecision,
+    CandidateParticipationRecord,
+)
+from app.models.team_scenarios import (  # noqa: F401,E402
+    ScenarioGapAssessment,
+    ScenarioIssue,
+    TeamScenario,
+    TeamScenarioContribution,
+    TeamScenarioDecision,
+    TeamScenarioParticipant,
+    TeamScenarioRevision,
+)
+from app.models.proposal_evidence import (  # noqa: F401,E402
+    ProposalEvidenceArtifact,
+    ProposalEvidencePack,
+    ProposalEvidencePackItem,
+    PursuitProposalWorkspace,
+)
+
 
 # ============================================================================
 # Models
@@ -763,7 +786,33 @@ from app.models.taxonomy import (  # noqa: E402,F401
     TenderRequirement,
 )
 from app.models.communications import Broadcast, BroadcastRecipient, NotificationDelivery, NotificationEvent, NotificationOutbox  # noqa: E402,F401
+from app.models.tenancy import (  # noqa: E402,F401
+    Membership,
+    Organization,
+    OrganizationPursuit,
+    PursuitLifecycleEvent,
+    TenancyBackfillException,
+)
+from app.models.private_documents import (  # noqa: E402,F401
+    DocumentProcessingJob,
+    DocumentProcessingResult,
+    DocumentVersion,
+    MembershipLifecycleEvent,
+    PrivateDocument,
+    PrivateDocumentBatch,
+    PursuitContextSuggestion,
+    PursuitTenderContext,
+)
 from app.models.user import User  # noqa: E402,F401
+from app.models.candidate_retrieval import (  # noqa: E402,F401
+    CVVersion,
+    CandidateMatch,
+    CandidateReviewDecision,
+    CandidateSearchRun,
+    Expert,
+    Firm,
+    ProjectReference,
+)
 
 
 __all__ = [
@@ -800,4 +849,39 @@ __all__ = [
     "TenderRecommendation",
     "AuditLog",
     "AdminActivityEvent",
+    "Organization",
+    "Membership",
+    "OrganizationPursuit",
+    "PursuitLifecycleEvent",
+    "TenancyBackfillException",
+    "PrivateDocument",
+    "DocumentVersion",
+    "PrivateDocumentBatch",
+    "DocumentProcessingJob",
+    "DocumentProcessingResult",
+    "PursuitTenderContext",
+    "PursuitContextSuggestion",
+    "MembershipLifecycleEvent",
+    "Firm",
+    "ProjectReference",
+    "Expert",
+    "CVVersion",
+    "CandidateSearchRun",
+    "CandidateMatch",
+    "CandidateReviewDecision",
+    "CandidateParticipationRecord",
+    "CandidateAvailabilityFact",
+    "CandidateInterestFact",
+    "CandidateParticipationDecision",
+    "TeamScenario",
+    "TeamScenarioRevision",
+    "TeamScenarioParticipant",
+    "TeamScenarioContribution",
+    "ScenarioGapAssessment",
+    "ScenarioIssue",
+    "TeamScenarioDecision",
+    "PursuitProposalWorkspace",
+    "ProposalEvidencePack",
+    "ProposalEvidencePackItem",
+    "ProposalEvidenceArtifact",
 ]

@@ -124,7 +124,7 @@
     "openOriginalSource": "Open original source",
     "requirementsReviewed": "Requirements reviewed",
     "criticalGaps": "Critical gaps",
-    "readinessSupported": "Supported by readiness evidence",
+    "readinessSupported": "Linked readiness records",
     "referencedDocuments": "Referenced source documents",
     "searchLabel": "Search requirements",
     "clearSearch": "Clear requirement search",
@@ -158,13 +158,13 @@
     "openDocument": "Open document",
     "evidenceUnavailable": "Source evidence is unavailable.",
     "analysisUnavailable": "Analysis explanation is unavailable.",
-    "readinessEvidence": "Readiness evidence",
+    "readinessEvidence": "Readiness records",
     "readinessEvidenceHelp": "Readiness records provide supporting evidence and do not independently guarantee compliance.",
     "openReadinessVault": "Open Readiness Vault",
     "groups": {
       "critical": {
         "title": "Critical gaps",
-        "description": "Verified bid-stage requirements recorded as failed dealbreakers."
+        "description": "Bid-stage requirements recorded as failed dealbreakers."
       },
       "review": {
         "title": "Manual review required",
@@ -172,11 +172,11 @@
       },
       "matched": {
         "title": "Satisfied requirements",
-        "description": "Requirements confirmed as met by recorded company evidence."
+        "description": "Requirements assessed as met using recorded company information; review the underlying records."
       },
       "recorded": {
         "title": "Recorded obligations",
-        "description": "Verified obligations recorded for awareness, not as credential matches."
+        "description": "Obligations recorded for awareness, not as credential matches."
       }
     },
     "sourceSystems": {

@@ -36,6 +36,8 @@ celery_app = Celery(
         "app.workers.project_enrichment_tasks",
         "app.workers.hunter_tasks",
         "app.workers.communications_tasks",
+        "app.workers.private_document_tasks",
+        "app.workers.pursuit_analysis_tasks",
     ],
 )
 
@@ -61,6 +63,14 @@ celery_app.conf.update(
     beat_schedule={
         "publish-committed-notifications": {"task": "app.workers.communications_tasks.publish_notifications", "schedule": timedelta(seconds=10)},
         "dispatch-durable-broadcasts": {"task": "app.workers.communications_tasks.dispatch_broadcasts", "schedule": timedelta(seconds=10)},
+        "dispatch-private-document-work": {
+            "task": "app.workers.private_document_tasks.dispatch_private_documents",
+            "schedule": timedelta(seconds=10),
+        },
+        "dispatch-pursuit-analysis-work": {
+            "task": "app.workers.pursuit_analysis_tasks.dispatch_pursuit_analysis",
+            "schedule": timedelta(seconds=10),
+        },
         "run-hunter-sweep-every-30-minutes": {
             "task": "app.workers.hunter_tasks.run_hunter_sweep",
             "schedule": crontab(minute="*/30"),
@@ -84,9 +94,19 @@ celery_app.conf.task_queues = (
     Queue("celery", routing_key="celery"),
     Queue("ai_fast_queue", routing_key="ai_fast_queue"),
     Queue("heavy_dl_queue", routing_key="heavy_dl_queue"),
+    Queue("private_documents", routing_key="private_documents"),
+    Queue("pursuit_analysis", routing_key="pursuit_analysis"),
 )
 
 celery_app.conf.task_routes = {
+    "app.workers.private_document_tasks.*": {
+        "queue": "private_documents",
+        "routing_key": "private_documents",
+    },
+    "app.workers.pursuit_analysis_tasks.*": {
+        "queue": "pursuit_analysis",
+        "routing_key": "pursuit_analysis",
+    },
     "app.workers.source_refresh_tasks.refresh_tender_source": {
         "queue": "celery",
         "routing_key": "celery",

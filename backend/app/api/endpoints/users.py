@@ -34,6 +34,7 @@ from app.core.services import normalize_target_services
 from app.db.session import get_db
 from app.models.all_models import User, SubscriptionTier
 from app.models.company import CompanyProfile
+from app.services.organization_context import ensure_profile_organization
 
 router = APIRouter()
 
@@ -503,7 +504,9 @@ async def update_company_profile(
     update_data = profile_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(profile, field, value)
-    
+
+    await db.flush()
+    await ensure_profile_organization(db, profile=profile)
     await db.commit()
     await db.refresh(profile)
     
@@ -540,6 +543,8 @@ async def submit_company_onboarding(
     if not profile.pilot_status:
         profile.pilot_status = COMPANY_PILOT_SCOPED
 
+    await db.flush()
+    await ensure_profile_organization(db, profile=profile)
     await db.commit()
     await db.refresh(profile)
 

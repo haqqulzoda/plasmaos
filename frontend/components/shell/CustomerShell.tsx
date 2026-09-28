@@ -17,6 +17,8 @@ import {
   ChevronDown,
   ShieldCheck,
   Bell,
+  Files,
+  Upload,
 } from 'lucide-react';
 import { PlasmaLogo, PlasmaMark } from '@/components/brand/PlasmaLogo';
 import { Button } from '@/components/ui/Button';
@@ -26,6 +28,7 @@ const navigation = [
   { nameKey: 'dashboard', href: '/dashboard', Icon: LayoutDashboard },
   { nameKey: 'tenders', href: '/dashboard/tenders', Icon: Search },
   { nameKey: 'myTenders', href: '/dashboard/my-tenders', Icon: Bookmark },
+  { nameKey: 'uploadedTenders', href: '/dashboard/uploaded-tenders', Icon: Files },
   {
     nameKey: 'bidPreparation',
     href: '/dashboard/bid-preparation',
@@ -153,6 +156,10 @@ export function CustomerShell({
             )}
           </div>
           <div className="shell-actions">
+            <Link className="shell-upload-action ds-button ds-button-primary ds-button-sm" href="/dashboard/uploaded-tenders/upload" prefetch={false}>
+              <Upload aria-hidden />
+              <span>{t('uploadTender')}</span>
+            </Link>
             {search}
             {refresh}
             {notifications}

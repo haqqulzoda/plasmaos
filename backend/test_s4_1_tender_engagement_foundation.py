@@ -24,7 +24,7 @@ MIGRATION = (
     / "alembic/versions/20260828_0003_s4_1_tender_engagement_foundation.py"
 )
 SERVICE = BACKEND_DIR / "app/services/tender_engagements.py"
-HEAD = "20260912_0001_s10_5_communications"
+HEAD = "20261002_0001_p0_extraction_trust_gate"
 
 
 def source(relative: str) -> str:
@@ -120,12 +120,15 @@ def test_corrections_are_explicit_and_narrow() -> None:
 
 def test_creation_and_status_mutation_are_database_backed_and_canonical() -> None:
     service = SERVICE.read_text(encoding="utf-8")
-    assert ".on_conflict_do_nothing(" in service
-    assert 'constraint="uq_tender_engagements_owner_tender"' in service
-    assert "CompanyProfile.user_id == user_id" in service
-    assert "Tender.id == tender_id" in service
-    assert ".with_for_update()" in service
-    assert "await db.flush()" in service
+    pursuits = source("app/services/pursuits.py")
+    assert "get_or_create_source_pursuit" in service
+    assert "transition_pursuit" in service
+    assert "reopen_pursuit" in service
+    assert ".on_conflict_do_nothing(" in pursuits
+    assert "OrganizationPursuit.organization_id" in pursuits
+    assert "Tender.id == tender_id" in pursuits
+    assert ".with_for_update()" in pursuits
+    assert "await db.flush()" in pursuits
     assert "await db.commit()" not in service
     assert "company_name" not in service
 

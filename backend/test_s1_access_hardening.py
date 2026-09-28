@@ -72,7 +72,7 @@ class S14AccessHardeningTests(unittest.TestCase):
         self.assertIn("Depends(require_approved_pilot_access)", vault)
         self.assertIn("async def update_company_profile", users)
         self.assertIn("current_user: User = Depends(require_approved_pilot_access)", users)
-        self.assertIn("Depends(require_approved_pilot_access)", proposals)
+        self.assertIn("Depends(require_active_initial_membership)", proposals)
         self.assertIn("current_user: User = Depends(require_approved_pilot_access)", audit)
         self.assertIn("current_user: User = Depends(require_approved_pilot_access)", hunter)
 

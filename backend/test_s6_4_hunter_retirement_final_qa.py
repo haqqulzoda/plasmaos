@@ -7,7 +7,7 @@ from alembic.script import ScriptDirectory
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD = "20260912_0001_s10_5_communications"
+HEAD = "20261002_0001_p0_extraction_trust_gate"
 
 
 def source(relative: str) -> str:

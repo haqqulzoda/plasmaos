@@ -22,7 +22,8 @@ from app.core.tender_newness import tender_newness
 from app.models.all_models import Tender
 from app.models.audit import TenderRecommendation
 from app.models.company import CompanyProfile
-from app.models.engagement import TenderEngagement
+from app.models.base import MembershipState
+from app.models.tenancy import Membership, Organization, OrganizationPursuit
 from app.schemas.explorer import (
     ExplorerCounts,
     ExplorerPursuitSummary,
@@ -126,14 +127,14 @@ def recommendation_summary(
 
 
 def _pursuit_summary(
-    engagement: TenderEngagement | None,
+    engagement: OrganizationPursuit | None,
 ) -> ExplorerPursuitSummary | None:
-    if engagement is None:
+    if engagement is None or engagement.legacy_engagement_id is None:
         return None
     return ExplorerPursuitSummary(
-        engagement_id=engagement.id,
-        status=engagement.status,
-        allowed_actions=list(allowed_actions_for_status(engagement.status)),
+        engagement_id=engagement.legacy_engagement_id,
+        status=engagement.stage,
+        allowed_actions=list(allowed_actions_for_status(engagement.stage)),
     )
 
 
@@ -212,10 +213,19 @@ async def _filtered_counts(
 
 
 def _owned_engagement_join(*, user_id: UUID, profile_id: UUID):
+    organization_id = (
+        select(Organization.id)
+        .join(Membership, Membership.organization_id == Organization.id)
+        .where(
+            Organization.legacy_company_profile_id == profile_id,
+            Membership.user_id == user_id,
+            Membership.state == MembershipState.ACTIVE,
+        )
+        .scalar_subquery()
+    )
     return and_(
-        TenderEngagement.tender_id == Tender.id,
-        TenderEngagement.user_id == user_id,
-        TenderEngagement.company_profile_id == profile_id,
+        OrganizationPursuit.source_tender_id == Tender.id,
+        OrganizationPursuit.organization_id == organization_id,
     )
 
 
@@ -225,7 +235,7 @@ async def _page_rows(
     user_id: UUID,
     profile_id: UUID | None,
     query: ExplorerQuery,
-) -> list[tuple[Tender, TenderRecommendation | None, TenderEngagement | None]]:
+) -> list[tuple[Tender, TenderRecommendation | None, OrganizationPursuit | None]]:
     if query.view != ExplorerView.ALL and profile_id is None:
         return []
 
@@ -254,19 +264,19 @@ async def _page_rows(
     )
     if query.view == ExplorerView.ALL:
         statement = (
-            select(Tender, TenderRecommendation, TenderEngagement).options(defer(Tender.compiled_master_text, raiseload=True))
+            select(Tender, TenderRecommendation, OrganizationPursuit).options(defer(Tender.compiled_master_text, raiseload=True))
             .outerjoin(TenderRecommendation, recommendation_join)
-            .outerjoin(TenderEngagement, engagement_join)
+            .outerjoin(OrganizationPursuit, engagement_join)
             .where(customer_visible_tender_condition(Tender))
         )
         statement = _all_order(_filtered(statement, query), query.sort)
     else:
         dismissed = query.view == ExplorerView.DISMISSED
         statement = (
-            select(Tender, TenderRecommendation, TenderEngagement).options(defer(Tender.compiled_master_text, raiseload=True))
+            select(Tender, TenderRecommendation, OrganizationPursuit).options(defer(Tender.compiled_master_text, raiseload=True))
             .select_from(TenderRecommendation)
             .join(Tender, Tender.id == TenderRecommendation.tender_id)
-            .outerjoin(TenderEngagement, engagement_join)
+            .outerjoin(OrganizationPursuit, engagement_join)
             .where(
                 TenderRecommendation.company_profile_id == profile_id,
                 TenderRecommendation.is_dismissed.is_(dismissed),

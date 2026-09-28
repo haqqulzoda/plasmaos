@@ -30,7 +30,8 @@
     "markUnread": "Mark as unread",
     "openTender": "Open tender",
     "openCompliance": "View analysis",
-    "openDashboard": "Open dashboard"
+    "openDashboard": "Open dashboard",
+    "openWorkspace": "Open workspace"
   },
   "templates": {
     "recommendationCreated": {
@@ -56,6 +57,18 @@
     "documentsFailed": {
       "title": "Tender document acquisition failed",
       "body": "The tender documents could not be prepared. Open the tender to try again."
+    },
+    "privateDocumentsReady": {
+      "title": "Private documents ready",
+      "body": "{processedCount} of {totalCount} private documents are ready."
+    },
+    "privateDocumentsPartial": {
+      "title": "Private documents partially ready",
+      "body": "{processedCount} of {totalCount} documents were processed; {failedCount} failed."
+    },
+    "privateDocumentsFailed": {
+      "title": "Private document processing failed",
+      "body": "The private document pack could not be prepared. Open the workspace to review it."
     }
   },
   "fallback": {

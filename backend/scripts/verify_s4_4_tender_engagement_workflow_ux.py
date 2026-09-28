@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -35,7 +36,7 @@ from app.services.tender_engagements import (
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20260912_0001_s10_5_communications"
+HEAD = "20261002_0001_p0_extraction_trust_gate"
 
 
 async def seed_owner(connection: asyncpg.Connection, label: str) -> tuple[UUID, UUID]:
@@ -59,6 +60,26 @@ async def seed_owner(connection: asyncpg.Connection, label: str) -> tuple[UUID, 
         ) VALUES ($1,$2,'Same Name Company','active_pilot','approved')
         """,
         profile_id,
+        user_id,
+    )
+    organization_id = UUID(bytes=hashlib.md5(
+        f"plasma:w2:organization:{profile_id}".encode(), usedforsecurity=False
+    ).digest())
+    membership_id = UUID(bytes=hashlib.md5(
+        f"plasma:w2:membership:{organization_id}:{user_id}".encode(), usedforsecurity=False
+    ).digest())
+    await connection.execute(
+        "INSERT INTO organizations(id,legacy_company_profile_id,display_name) VALUES ($1,$2,'Same Name Company')",
+        organization_id,
+        profile_id,
+    )
+    await connection.execute(
+        """
+        INSERT INTO memberships(id,organization_id,user_id,role,state,activated_at)
+        VALUES ($1,$2,$3,'OWNER','ACTIVE',now())
+        """,
+        membership_id,
+        organization_id,
         user_id,
     )
     return user_id, profile_id
@@ -107,6 +128,31 @@ async def seed_engagement(
         tender_id,
         engagement_status.value,
     )
+    pursuit_id = uuid4()
+    organization_id, membership_id = await connection.fetchrow(
+        """
+        SELECT o.id, m.id
+        FROM organizations o
+        JOIN memberships m ON m.organization_id=o.id AND m.user_id=$1
+        WHERE o.legacy_company_profile_id=$2
+        """,
+        user_id,
+        profile_id,
+    )
+    await connection.execute(
+        """
+        INSERT INTO organization_pursuits(
+            id,organization_id,source_tender_id,origin,legacy_engagement_id,
+            legacy_origin,owner_membership_id,stage
+        ) VALUES ($1,$2,$3,'SOURCE',$4,'MANUAL_SAVE',$5,$6)
+        """,
+        pursuit_id,
+        organization_id,
+        tender_id,
+        engagement_id,
+        membership_id,
+        engagement_status.value,
+    )
     return engagement_id
 
 
@@ -147,7 +193,13 @@ async def scenario(database: str) -> dict[str, Any]:
         connection = await support.database_connection(database)
         try:
             return await connection.fetchval(
-                "SELECT status::text FROM tender_engagements WHERE user_id=$1 AND company_profile_id=$2 AND tender_id=$3",
+                """
+                SELECT p.stage::text
+                FROM organization_pursuits p
+                JOIN organizations o ON o.id=p.organization_id
+                JOIN memberships m ON m.organization_id=o.id AND m.user_id=$1
+                WHERE o.legacy_company_profile_id=$2 AND p.source_tender_id=$3
+                """,
                 user_a,
                 profile_a,
                 tender_id,
@@ -193,9 +245,9 @@ async def scenario(database: str) -> dict[str, Any]:
     connection = await support.database_connection(database)
     try:
         assert await connection.fetchval("SELECT COUNT(*) FROM proposals WHERE tender_id=$1", no_proposal_tender) == 0
-        cancelled_before = await connection.fetchval("SELECT status::text FROM tender_engagements WHERE tender_id=$1", cancelled_tender)
+        cancelled_before = await connection.fetchval("SELECT stage::text FROM organization_pursuits WHERE source_tender_id=$1", cancelled_tender)
         await connection.execute("UPDATE tenders SET status='CLOSED' WHERE id=$1", cancelled_tender)
-        cancelled_after = await connection.fetchval("SELECT status::text FROM tender_engagements WHERE tender_id=$1", cancelled_tender)
+        cancelled_after = await connection.fetchval("SELECT stage::text FROM organization_pursuits WHERE source_tender_id=$1", cancelled_tender)
         assert cancelled_before == cancelled_after == "PREPARING"
     finally:
         await connection.close()
@@ -203,7 +255,7 @@ async def scenario(database: str) -> dict[str, Any]:
     async def concurrent_pair(tender_id: UUID, left, right) -> tuple[list[str], str]:
         outcomes = await asyncio.gather(left(), right(), return_exceptions=True)
         kinds = sorted("conflict" if isinstance(value, TenderEngagementTransitionError) else "committed" for value in outcomes)
-        assert kinds == ["committed", "conflict"]
+        assert kinds == ["committed", "conflict"], outcomes
         return kinds, await status_of(tender_id)
 
     a = concurrency_tenders["a"]
@@ -266,9 +318,10 @@ async def scenario(database: str) -> dict[str, Any]:
         integrity = await connection.fetchrow(
             """
             SELECT
-              COUNT(*) FILTER (WHERE status_changed_at IS NULL) AS missing_timestamps,
-              COUNT(*) - COUNT(DISTINCT (user_id,company_profile_id,tender_id)) AS duplicate_keys
-            FROM tender_engagements
+              COUNT(*) FILTER (WHERE stage_changed_at IS NULL) AS missing_timestamps,
+              COUNT(*) - COUNT(DISTINCT (organization_id,source_tender_id)) AS duplicate_keys
+            FROM organization_pursuits
+            WHERE origin='SOURCE'
             """
         )
         assert tuple(integrity) == (0, 0)

@@ -194,6 +194,7 @@ function NotificationRow({ item, locale, busy, onReadChange }: {
       ? t(`templates.${safeTemplate}.body`, {
           versionNumber: numericPayload(item.payload.version_number),
           readyCount: numericPayload(item.payload.ready_count, 0),
+          processedCount: numericPayload(item.payload.processed_count, 0),
           totalCount: numericPayload(item.payload.total_count, 0),
           failedCount: numericPayload(item.payload.failed_count, 0),
         })

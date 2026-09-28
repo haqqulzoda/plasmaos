@@ -25,7 +25,7 @@ export type NotificationPage = {
 
 export type NotificationDestination = {
   href: string;
-  labelKey: 'openTender' | 'openCompliance' | 'openDashboard';
+  labelKey: 'openTender' | 'openCompliance' | 'openDashboard' | 'openWorkspace';
 };
 
 const uuid = (value: unknown): value is string =>
@@ -49,6 +49,15 @@ export function notificationDestination(item: NotificationItem): NotificationDes
       labelKey: 'openTender',
     };
   }
+  if (
+    ['PRIVATE_DOCUMENTS_READY', 'PRIVATE_DOCUMENTS_PARTIAL', 'PRIVATE_DOCUMENTS_FAILED'].includes(item.event_type) &&
+    uuid(item.payload.pursuit_id) && uuid(item.payload.organization_id)
+  ) {
+    return {
+      href: `/dashboard/pursuits/${encodeURIComponent(item.payload.pursuit_id)}?organization_id=${encodeURIComponent(item.payload.organization_id)}`,
+      labelKey: 'openWorkspace',
+    };
+  }
   if (item.event_type === 'ANALYSIS_COMPLETED' && uuid(item.payload.analysis_id)) {
     // The approved backend contract does not carry tender_id for analysis events.
     // Compliance can safely resolve the user's current version context.
@@ -67,6 +76,9 @@ export const SYSTEM_TEMPLATE_KEYS = {
   'notifications.documents_ready': 'documentsReady',
   'notifications.documents_partial': 'documentsPartial',
   'notifications.documents_failed': 'documentsFailed',
+  'notifications.private_documents_ready': 'privateDocumentsReady',
+  'notifications.private_documents_partial': 'privateDocumentsPartial',
+  'notifications.private_documents_failed': 'privateDocumentsFailed',
 } as const;
 
 export type SystemTemplateKey = keyof typeof SYSTEM_TEMPLATE_KEYS;

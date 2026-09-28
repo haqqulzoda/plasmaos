@@ -52,6 +52,12 @@ services:
       timeout: 3s
       retries: 5
 
+  # ---- Malware scanning for organization-private uploads ----
+  clamav:
+    image: clamav/clamav:1.4
+    container_name: plasma_clamav
+    restart: always
+
   # ---- Backend (FastAPI) ----
   backend:
     build:
@@ -79,10 +85,13 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:?Set explicit HTTPS origins}
       PLASMA_SERVICE_NAME: backend
+      PRIVATE_DOCUMENT_STORAGE_ROOT: /app/private-data
+      PRIVATE_DOCUMENT_SCAN_HOST: clamav
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - tender_documents_data:/app/data
+      - private_documents_data:/app/private-data
 
   # ---- Frontend (Next.js) ----
   frontend:
@@ -168,6 +177,55 @@ services:
     volumes:
       - tender_documents_data:/app/data
 
+  worker_private_documents:
+    build:
+      context: ./backend
+      args:
+        PLASMA_BUILD_SHA: ${PLASMA_BUILD_SHA:-unknown}
+        PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
+    container_name: plasma_worker_private_documents
+    restart: always
+    depends_on:
+      - db
+      - redis
+      - clamav
+    env_file:
+      - .env
+    environment:
+      POSTGRES_SERVER: db
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PRIVATE_DOCUMENT_STORAGE_ROOT: /app/private-data
+      PRIVATE_DOCUMENT_SCAN_HOST: clamav
+      CELERY_WORKER_MAX_TASKS_PER_CHILD: 10
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      AUTH_BRIDGE_SECRET: ${AUTH_BRIDGE_SECRET:?Set AUTH_BRIDGE_SECRET}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:?Set explicit HTTPS origins}
+      PLASMA_SERVICE_NAME: worker_private_documents
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "private_documents", "--concurrency=1", "--max-tasks-per-child=10" ]
+    volumes:
+      - private_documents_data:/app/private-data
+
+  worker_pursuit_analysis:
+    build: ./backend
+    container_name: plasma_worker_pursuit_analysis
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_SERVER: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PLASMA_SERVICE_NAME: worker_pursuit_analysis
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "pursuit_analysis", "--concurrency=1", "--max-tasks-per-child=10" ]
+    depends_on:
+      - db
+      - redis
+
   # ---- Celery Beat (Scheduler) ----
   celery_beat:
     build:
@@ -199,3 +257,4 @@ volumes:
   redis_data:
   postgres_data:
   tender_documents_data:
+  private_documents_data:

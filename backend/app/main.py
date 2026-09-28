@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
 from app.api.endpoints.communications import notifications_router, broadcasts_router
-from app.api.endpoints import operations, admin, auth, explorer, hunter, meta, my_tenders, proposals, tenders, users, vault
+from app.api.endpoints import candidates, participation, proposal_evidence, team_scenarios, operations, admin, auth, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
 from app.core.release import VERSION, public_release_metadata, release_metadata_with_database
@@ -23,6 +23,11 @@ from app.db.session import engine, get_db
 from app.models.all_models import Base
 from app.models.user import User
 from app.models import audit as audit_models  # noqa: F401
+from app.models import pursuit_analysis as pursuit_analysis_models  # noqa: F401
+from app.models import candidate_retrieval as candidate_retrieval_models  # noqa: F401
+from app.models import participation as participation_models  # noqa: F401
+from app.models import team_scenarios as team_scenario_models  # noqa: F401
+from app.models import proposal_evidence as proposal_evidence_models  # noqa: F401
 
 
 @asynccontextmanager
@@ -30,14 +35,14 @@ async def lifespan(app: FastAPI):
     """Application lifespan with startup/shutdown events."""
     print("--- LIFESPAN: STARTING ---")
     print("--- CHECKING DB CONNECTION ---")
-    
+
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         print("--- DB CONNECTION SUCCESS ---")
     except Exception as e:
         print("operation_failed event=main:38")
-    
+
     if settings.AUTO_CREATE_TABLES:
         # Local/dev escape hatch only. Production schema changes should run via Alembic.
         try:
@@ -48,9 +53,9 @@ async def lifespan(app: FastAPI):
             print("operation_failed event=main:47")
     else:
         print("--- AUTO TABLE CREATION DISABLED; USING ALEMBIC SCHEMA ---")
-    
+
     yield  # App runs here
-    
+
     print("--- LIFESPAN: SHUTTING DOWN ---")
 
 
@@ -71,7 +76,7 @@ app.add_middleware(
     allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Organization-ID"],
     expose_headers=["X-Total-Count", "X-Has-More", "X-Next-Offset", "X-Page-Limit", "X-Request-ID"],
 )
 
@@ -88,6 +93,13 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(tenders.router, prefix="/api/v1/tenders", tags=["Tenders"])
 app.include_router(proposals.router, prefix="/api/v1/proposals", tags=["Proposals"])
 app.include_router(my_tenders.router, prefix="/api/v1", tags=["My Tenders"])
+app.include_router(organizations.router, prefix="/api/v1/organizations", tags=["Organizations"])
+app.include_router(pursuits.router, prefix="/api/v1/pursuits", tags=["Pursuits"])
+app.include_router(candidates.pursuit_router, prefix="/api/v1/pursuits", tags=["Candidate Retrieval"])
+app.include_router(candidates.router, prefix="/api/v1/candidates", tags=["Candidate Library"])
+app.include_router(participation.router, prefix="/api/v1/pursuits", tags=["Candidate Participation"])
+app.include_router(team_scenarios.router, prefix="/api/v1/pursuits", tags=["Team Scenarios"])
+app.include_router(proposal_evidence.router, prefix="/api/v1/pursuits", tags=["Proposal Evidence"])
 app.include_router(meta.router, prefix="/api/v1/meta", tags=["Meta"])
 app.include_router(vault.router, prefix="/api/v1", tags=["Vault"])
 app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
@@ -100,7 +112,7 @@ app.include_router(explorer.router, prefix="/api/v1", tags=["Explorer"])
 async def health_check() -> dict:
     """
     Health check endpoint for load balancers and monitoring.
-    
+
     Returns:
         JSON object with service status, project name, and version.
     """

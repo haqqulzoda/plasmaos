@@ -41,6 +41,19 @@ TABLES = (
     "analysis_version_document_snapshots",
     "proposals",
     "tender_engagements",
+    "organizations",
+    "memberships",
+    "organization_pursuits",
+    "pursuit_lifecycle_events",
+    "tenancy_backfill_exceptions",
+    "private_documents",
+    "private_document_versions",
+    "private_document_batches",
+    "private_document_processing_jobs",
+    "private_document_processing_results",
+    "pursuit_tender_contexts",
+    "pursuit_context_suggestions",
+    "membership_lifecycle_events",
     "tender_recommendations",
     "risk_override_logs",
     "readiness_documents",
@@ -679,6 +692,55 @@ class ReadOnlyPreflight:
                 **_json_value(integrity),
                 "legacy_proposal_candidates": legacy_proposals,
             },
+        }
+
+    async def organization_pursuit_audit(self) -> dict[str, Any]:
+        """Aggregate-only W2 mapping, ownership, and quarantine health."""
+        required = ("organizations", "memberships", "organization_pursuits")
+        if not all(self.has_table(table) for table in required):
+            return {"tables_exist": False, "data": None}
+        data = await self.fetchrow(
+            """
+            SELECT
+              (SELECT count(*) FROM company_profiles) AS company_profiles,
+              (SELECT count(*) FROM organizations) AS organizations,
+              (SELECT count(*) FROM memberships) AS memberships,
+              (SELECT count(*) FROM memberships WHERE state::text = 'ACTIVE' AND role::text = 'OWNER') AS active_owners,
+              (SELECT count(*) FROM organization_pursuits) AS pursuits,
+              (SELECT count(*) FROM organization_pursuits WHERE origin::text = 'SOURCE') AS source_pursuits,
+              (SELECT count(*) FROM organization_pursuits WHERE owner_membership_id IS NULL) AS unassigned_pursuits,
+              (SELECT count(*) FROM tenancy_backfill_exceptions) AS quarantined_rows,
+              (SELECT count(*) FROM organization_pursuits p
+                 LEFT JOIN memberships m ON m.id = p.owner_membership_id AND m.organization_id = p.organization_id
+                WHERE p.owner_membership_id IS NOT NULL AND m.id IS NULL) AS cross_organization_owners,
+              (SELECT count(*) FROM organization_pursuits p
+                 LEFT JOIN tenders t ON t.id = p.source_tender_id
+                WHERE p.origin::text = 'SOURCE' AND t.id IS NULL) AS broken_source_tenders,
+              (SELECT count(*) FROM (
+                 SELECT organization_id, source_tender_id FROM organization_pursuits
+                  WHERE origin::text = 'SOURCE'
+                  GROUP BY organization_id, source_tender_id HAVING count(*) > 1
+               ) duplicates) AS duplicate_source_pursuits
+            """
+        )
+        parity = await self.fetchrow(
+            """
+            SELECT
+              (SELECT count(*) FROM tender_engagements te
+                JOIN organizations o ON o.legacy_company_profile_id = te.company_profile_id
+                JOIN memberships m ON m.organization_id = o.id AND m.user_id = te.user_id
+                JOIN tenders t ON t.id = te.tender_id) AS valid_engagements,
+              (SELECT count(*) FROM organization_pursuits
+                WHERE legacy_engagement_id IS NOT NULL) AS mapped_engagements,
+              (SELECT count(*) FROM organization_pursuits p
+                LEFT JOIN tender_engagements te ON te.id = p.legacy_engagement_id
+                WHERE p.legacy_engagement_id IS NOT NULL AND te.id IS NULL) AS compatibility_only_ids
+            """
+        )
+        return {
+            "tables_exist": True,
+            "data": _json_value(data),
+            "legacy_mapping": _json_value(parity),
         }
 
     def _legacy_candidate_sql(self) -> str:
@@ -1897,6 +1959,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             "tender_recommendations": await runner.recommendation_audit(),
             "proposals": await runner.proposal_audit(),
             "tender_engagements": await runner.tender_engagement_audit(),
+            "organization_pursuits": await runner.organization_pursuit_audit(),
             "tender_analyses": await runner.analysis_audit(),
             "analysis_versions": await runner.analysis_version_audit(),
             "identity": await runner.identity_audit(

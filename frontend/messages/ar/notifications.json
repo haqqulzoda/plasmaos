@@ -30,7 +30,8 @@
     "markUnread": "تحديد كغير مقروء",
     "openTender": "فتح المناقصة",
     "openCompliance": "عرض التحليل",
-    "openDashboard": "فتح لوحة التحكم"
+    "openDashboard": "فتح لوحة التحكم",
+    "openWorkspace": "فتح مساحة العمل"
   },
   "templates": {
     "recommendationCreated": {
@@ -56,7 +57,10 @@
     "documentsFailed": {
       "title": "فشل الحصول على مستندات المناقصة",
       "body": "تعذر إعداد مستندات المناقصة. افتح المناقصة للمحاولة مرة أخرى."
-    }
+    },
+    "privateDocumentsReady": {"title":"الوثائق الخاصة جاهزة","body":"أصبحت {processedCount} من {totalCount} وثيقة خاصة جاهزة."},
+    "privateDocumentsPartial": {"title":"الوثائق الخاصة جاهزة جزئياً","body":"تمت معالجة {processedCount} من {totalCount}؛ وفشلت {failedCount}."},
+    "privateDocumentsFailed": {"title":"فشلت معالجة الوثائق الخاصة","body":"تعذر إعداد حزمة الوثائق. افتح مساحة العمل لمراجعتها."}
   },
   "fallback": {
     "title": "تحديث الحساب",

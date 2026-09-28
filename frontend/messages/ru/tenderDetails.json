@@ -76,6 +76,7 @@
   "requirementsUnavailable": "Сводка требований сейчас недоступна.",
   "requirementsTruncated": "Показано {returned} из {total} требований, полученных при анализе. Полный список доступен в рабочей области анализа соответствия.",
   "tenderDocuments": "Документы тендера",
+  "officialSourceDocuments": "Официальные документы источника",
   "documentAcquisitionFailed": "Не удалось запустить получение документов. Повторите попытку.",
   "documentAcquisition": {
     "available": "Доступно документов: {count}",

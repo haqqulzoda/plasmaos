@@ -9,6 +9,9 @@ from starlette.formparsers import MultiPartException
 
 from app.core.config import settings
 from app.core.uploads import MAX_UPLOAD_REQUEST_BYTES
+from app.core.private_storage import MAX_PRIVATE_PACK_BYTES
+
+MAX_PRIVATE_PACK_REQUEST_BYTES = MAX_PRIVATE_PACK_BYTES + 2 * 1024 * 1024
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +41,25 @@ class HardenedHTTPMiddleware:
         scope.setdefault("state", {})["request_id"] = request_id
         headers = dict(scope["headers"])
         is_upload = scope["path"].startswith("/api/v1/proposals/") and scope["path"].endswith("/upload-tz")
+        is_private_upload = (
+            scope["method"] == "POST"
+            and scope["path"].startswith("/api/v1/pursuits/")
+            and (
+                scope["path"].endswith("/upload")
+                or scope["path"].endswith("/documents")
+                or "/versions" in scope["path"]
+            )
+        )
+        request_limit = MAX_PRIVATE_PACK_REQUEST_BYTES if is_private_upload else MAX_UPLOAD_REQUEST_BYTES
         size = 0
         started = False
 
         async def limited_receive():
             nonlocal size
             message = await receive()
-            if is_upload and message["type"] == "http.request":
+            if (is_upload or is_private_upload) and message["type"] == "http.request":
                 size += len(message.get("body", b""))
-                if size > MAX_UPLOAD_REQUEST_BYTES:
+                if size > request_limit:
                     scope["state"]["upload_too_large"] = True
                     # This exception makes Starlette close every partial spool.
                     raise MultiPartException("Upload request exceeds the size limit")
@@ -74,9 +87,9 @@ class HardenedHTTPMiddleware:
             origin = headers.get(b"origin", b"").decode("latin-1")
             if origin not in settings.BACKEND_CORS_ORIGINS:
                 return await safe_error(403, "untrusted_origin", "Untrusted request origin", request_id)(scope, receive, hardened_send)
-        if is_upload:
+        if is_upload or is_private_upload:
             try:
-                if int(headers.get(b"content-length", b"0")) > MAX_UPLOAD_REQUEST_BYTES:
+                if int(headers.get(b"content-length", b"0")) > request_limit:
                     return await safe_error(413, "upload_too_large", "Upload request exceeds the size limit", request_id)(scope, receive, hardened_send)
             except ValueError:
                 return await safe_error(400, "invalid_request", "Invalid request", request_id)(scope, receive, hardened_send)

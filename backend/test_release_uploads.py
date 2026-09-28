@@ -24,7 +24,12 @@ async def permit(_user):
 
 @pytest.mark.parametrize("failure", ["parse", "empty_parse", "model", "invalid_model", "commit", "success"])
 def test_pipeline_failure_fingerprint_and_cleanup(tmp_path, failure):
-    before = {"strategic_summary":"Preserved prior work", "nested":{"original":True}}
+    before = {
+        "strategic_summary": "Preserved prior work",
+        "nested": {"original": True},
+        "our_price": 850,
+        "ai_items": [{"name": "Historical item", "unit_price": 850, "total": 850}],
+    }
     proposal = SimpleNamespace(id=uuid4(), structured_data=deepcopy(before), ai_confidence_score=10,
                                tender=SimpleNamespace(budget=1000))
     user = SimpleNamespace(id=uuid4(), company_name="Synthetic company", core_services="", past_experience="")
@@ -48,7 +53,10 @@ def test_pipeline_failure_fingerprint_and_cleanup(tmp_path, failure):
         file = UploadFile(io.BytesIO(b"%PDF-1.4 fixture"),filename='../../source.pdf')
         if failure == "success":
             result = asyncio.run(upload_tender_tz(proposal.id,file,user,db))
-            assert result.suggested_price == 850
+            assert not hasattr(result, "suggested_price")
+            for key, value in before.items():
+                assert proposal.structured_data[key] == value
+            assert "unit_price" not in str(proposal.structured_data["price_free_draft"])
             assert proposal.structured_data["uploaded_tz_text"]
             assert Path(proposal.structured_data["uploaded_tz_path"]).is_file()
             db.commit.assert_awaited_once()

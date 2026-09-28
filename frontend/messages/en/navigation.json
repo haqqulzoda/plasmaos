@@ -2,6 +2,8 @@
   "dashboard": "Dashboard",
   "tenders": "Tender Explorer",
   "myTenders": "My Tenders",
+  "uploadedTenders": "Uploaded Tenders",
+  "uploadTender": "Upload Tender",
   "bidPreparation": "Bid Preparation",
   "companyProfile": "Company Profile",
   "readinessVault": "Readiness Vault",

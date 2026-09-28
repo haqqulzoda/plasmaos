@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -37,8 +37,6 @@ interface StrategicLineItem {
   name: string;
   quantity: number;
   unit: string;
-  unit_price: number;
-  total: number;
 }
 
 interface Proposal {
@@ -52,6 +50,12 @@ interface Proposal {
     delivery_days?: string | number;
     line_items?: StrategicLineItem[];
     ai_items?: StrategicLineItem[];
+    commercial_price_origin?: string;
+    price_free_draft?: {
+      strategic_summary?: string;
+      delivery_days?: string;
+      line_items?: StrategicLineItem[];
+    };
   } | null;
   tender_title: string;
   tender_budget: number;
@@ -65,7 +69,6 @@ interface Proposal {
 
 interface StrategicDraftResponse {
   strategic_summary: string;
-  suggested_price: number;
   delivery_days: string;
   line_items: StrategicLineItem[];
 }
@@ -252,7 +255,8 @@ export default function BidPreparationWorkspacePage({
 
   const [companyName, setCompanyName] = useState("");
   const [strategicSummary, setStrategicSummary] = useState("");
-  const [suggestedPrice, setSuggestedPrice] = useState("");
+  const [summaryEdited, setSummaryEdited] = useState(false);
+  const [enteredPrice, setEnteredPrice] = useState("");
   const [deliveryDays, setDeliveryDays] = useState("");
   const [lineItems, setLineItems] = useState<StrategicLineItem[]>([]);
 
@@ -273,25 +277,26 @@ export default function BidPreparationWorkspacePage({
         setProposal(data);
 
         const structured = data.structured_data ?? {};
+        const priceFreeDraft = structured.price_free_draft;
         setStrategicSummary(
-          (structured.strategic_summary || structured.ai_summary || "").trim(),
+          (priceFreeDraft?.strategic_summary || structured.strategic_summary || structured.ai_summary || "").trim(),
         );
-        setSuggestedPrice(
-          typeof structured.our_price === "number"
+        setSummaryEdited(false);
+        setEnteredPrice(
+          structured.commercial_price_origin === "USER_ENTERED" && typeof structured.our_price === "number"
             ? String(structured.our_price)
             : "",
         );
         setDeliveryDays(
-          structured.delivery_days !== undefined
-            ? String(structured.delivery_days)
+          priceFreeDraft?.delivery_days !== undefined || structured.delivery_days !== undefined
+            ? String(priceFreeDraft?.delivery_days ?? structured.delivery_days)
             : "",
         );
         setLineItems(
-          (structured.line_items || structured.ai_items || []).map((item) => ({
-            ...item,
+          (priceFreeDraft?.line_items || structured.line_items || structured.ai_items || []).map((item) => ({
+            name: item.name,
             quantity: Number(item.quantity) || 1,
-            unit_price: Number(item.unit_price) || 0,
-            total: Number(item.total) || 0,
+            unit: item.unit,
           })),
         );
       } catch {
@@ -367,14 +372,13 @@ export default function BidPreparationWorkspacePage({
       }
 
       setStrategicSummary(draft.strategic_summary || "");
-      setSuggestedPrice(String(draft.suggested_price ?? ""));
+      setSummaryEdited(true);
       setDeliveryDays(draft.delivery_days || "");
       setLineItems(
         (draft.line_items || []).map((item) => ({
-          ...item,
+          name: item.name,
           quantity: Number(item.quantity) || 1,
-          unit_price: Number(item.unit_price) || 0,
-          total: Number(item.total) || 0,
+          unit: item.unit,
         })),
       );
     } catch (err: unknown) {
@@ -499,15 +503,19 @@ export default function BidPreparationWorkspacePage({
     if (!proposal) return;
     setIsSaving(true);
     try {
-      const rawPrice = stripNonDigits(suggestedPrice || "0");
-      const priceNum = parseFloat(rawPrice || "0");
+      const rawPrice = stripNonDigits(enteredPrice);
+      const priceNum = Number(rawPrice);
       await api.put(`/proposals/${proposal.id}`, {
-        our_price: Number.isFinite(priceNum) ? priceNum : null,
+        ...(rawPrice && Number.isFinite(priceNum) && priceNum > 0 ? { our_price: priceNum } : {}),
         delivery_days: getDeliveryDaysInt(deliveryDays || "30"),
         structured_data: {
           ...(proposal.structured_data || {}),
-          strategic_summary: strategicSummary,
-          line_items: lineItems,
+          price_free_draft: {
+            ...(proposal.structured_data?.price_free_draft || {}),
+            ...(summaryEdited ? { strategic_summary: strategicSummary } : {}),
+            delivery_days: deliveryDays,
+            line_items: lineItems,
+          },
         },
       });
       setProposal((prev) =>
@@ -516,8 +524,13 @@ export default function BidPreparationWorkspacePage({
               ...prev,
               structured_data: {
                 ...(prev.structured_data || {}),
-                strategic_summary: strategicSummary,
-                line_items: lineItems,
+                ...(rawPrice && priceNum > 0 ? { our_price: priceNum, commercial_price_origin: "USER_ENTERED" } : {}),
+                price_free_draft: {
+                  ...(prev.structured_data?.price_free_draft || {}),
+                  ...(summaryEdited ? { strategic_summary: strategicSummary } : {}),
+                  delivery_days: deliveryDays,
+                  line_items: lineItems,
+                },
               },
             }
           : prev,
@@ -531,7 +544,7 @@ export default function BidPreparationWorkspacePage({
     if (!proposal) return;
     setIsGeneratingPdf(true);
     try {
-      const rawPrice = stripNonDigits(suggestedPrice || "0");
+      const rawPrice = stripNonDigits(enteredPrice);
       const response = await api.post(
         `/proposals/${proposal.id}/generate-pdf`,
         {
@@ -553,7 +566,7 @@ export default function BidPreparationWorkspacePage({
     if (!proposal) return;
     setIsGeneratingDocx(true);
     try {
-      const rawPrice = stripNonDigits(suggestedPrice || "0");
+      const rawPrice = stripNonDigits(enteredPrice);
       const response = await api.post(
         `/proposals/${proposal.id}/export/docx`,
         {
@@ -579,10 +592,6 @@ export default function BidPreparationWorkspacePage({
     }
   };
 
-  const computedTotal = useMemo(
-    () => lineItems.reduce((acc, item) => acc + (Number(item.total) || 0), 0),
-    [lineItems],
-  );
   const localizedTenderStatus = (status: TenderStatus) =>
     status === "OPEN"
       ? tExplorer("status.open")
@@ -705,10 +714,14 @@ export default function BidPreparationWorkspacePage({
                 {isCopied ? t("copied") : t("copy")}
               </Button>
             </div>
+            {!summaryEdited && !proposal.structured_data?.price_free_draft?.strategic_summary &&
+              (proposal.structured_data?.strategic_summary || proposal.structured_data?.ai_summary) && (
+                <p className="ds-muted ds-text-small">{t("historicalSummaryHelp")}</p>
+              )}
             <textarea
               dir="auto"
               value={strategicSummary}
-              onChange={(e) => setStrategicSummary(e.target.value)}
+              onChange={(e) => { setStrategicSummary(e.target.value); setSummaryEdited(true); }}
               rows={14}
               placeholder={t("summaryPlaceholder")}
               className="ds-control proposal-summary"
@@ -722,7 +735,7 @@ export default function BidPreparationWorkspacePage({
             <div className="proposal-table-scroll">
               <table className="proposal-table">
                 <thead>
-                  <tr><th scope="col">{t("item")}</th><th scope="col">{t("quantity")}</th><th scope="col">{t("unitPrice")}</th><th scope="col">{t("total")}</th>
+                  <tr><th scope="col">{t("item")}</th><th scope="col">{t("quantity")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -732,12 +745,6 @@ export default function BidPreparationWorkspacePage({
                       <td className="ds-numeric">
                         {item.quantity} {item.unit}
                       </td>
-                      <td className="ds-numeric">
-                        {formatNumber(item.unit_price, locale)}
-                      </td>
-                      <td className="ds-numeric proposal-total">
-                        {formatNumber(item.total, locale)}
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -745,17 +752,6 @@ export default function BidPreparationWorkspacePage({
             </div>
             {lineItems.length === 0 && (
               <p className="ds-muted proposal-empty">{t("noLineItems")}</p>
-            )}
-            {lineItems.length > 0 && (
-              <p className="proposal-computed-total ds-numeric">
-                {t("computedTotal", {
-                  value: formatLocaleCurrency(
-                    computedTotal,
-                    proposal.tender_currency,
-                    locale,
-                  ),
-                })}
-              </p>
             )}
           </section>
         </div>
@@ -773,16 +769,15 @@ export default function BidPreparationWorkspacePage({
                   className="ds-control"
                 />
               </label>
-              <label className="ds-field"><span className="ds-field-label">{t("suggestedPrice", { currency: proposal.tender_currency })}</span>
+              <label className="ds-field"><span className="ds-field-label">{t("enteredPrice", { currency: proposal.tender_currency })}</span>
                 <input
                   dir="ltr"
                   type="text"
                   inputMode="numeric"
-                  value={formatPriceDisplay(suggestedPrice, locale)}
+                  value={formatPriceDisplay(enteredPrice, locale)}
                   onChange={(e) =>
-                    setSuggestedPrice(stripNonDigits(e.target.value))
+                    setEnteredPrice(stripNonDigits(e.target.value))
                   }
-                  placeholder="21,890,000,000"
                   className="ds-control technical-ltr"
                 />
               </label>
@@ -808,7 +803,7 @@ export default function BidPreparationWorkspacePage({
               <Button
                 variant="secondary"
                 onClick={handleGeneratePdf}
-                disabled={isGeneratingPdf || !suggestedPrice}
+                disabled={isGeneratingPdf || !enteredPrice || Number(enteredPrice) <= 0}
                 loading={isGeneratingPdf}
                 leadingIcon={<FileOutput aria-hidden />}
               >
@@ -817,7 +812,7 @@ export default function BidPreparationWorkspacePage({
               <Button
                 variant="secondary"
                 onClick={handleGenerateDocx}
-                disabled={isGeneratingDocx || !suggestedPrice}
+                disabled={isGeneratingDocx || !enteredPrice || Number(enteredPrice) <= 0}
                 loading={isGeneratingDocx}
                 leadingIcon={<FileType aria-hidden />}
               >

@@ -2,8 +2,13 @@
 > frontend@0.1.0 start
 > next start -p 3114
 
-▲ Next.js 16.3.4
-- Local:         http://localhost:3114
-- Network:       http://10.83.133.199:3114
-✓ Ready in 654ms
-✓ Running next.config.ts took 2.3s
+⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use :::3114
+    at <unknown> (Error: listen EADDRINUSE: address already in use :::3114)
+    at new Promise (<anonymous>) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3114
+}

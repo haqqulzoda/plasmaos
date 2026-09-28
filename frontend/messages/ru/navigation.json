@@ -2,6 +2,8 @@
   "dashboard": "Панель управления",
   "tenders": "Каталог тендеров",
   "myTenders": "Мои тендеры",
+  "uploadedTenders": "Загруженные тендеры",
+  "uploadTender": "Загрузить тендер",
   "bidPreparation": "Подготовка заявки",
   "companyProfile": "Профиль компании",
   "readinessVault": "Документы готовности",

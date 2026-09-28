@@ -12,12 +12,13 @@ from fastapi import FastAPI
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
-from app.api.endpoints import admin, explorer, my_tenders, proposals, tenders, users, vault
+from app.api.endpoints import admin, explorer, my_tenders, organizations, proposals, pursuits, tenders, users, vault
 from app.core.security import create_access_token
 from app.db.session import get_db
 from app.models.all_models import Tender, TenderDocument, Proposal, User
 from app.models.engagement import TenderEngagement
-from app.models.base import TenderEngagementStatus, TenderEngagementOrigin
+from app.models.base import PursuitOrigin, TenderEngagementStatus, TenderEngagementOrigin
+from app.models.tenancy import Membership, Organization, OrganizationPursuit
 from app.models.audit import TenderAnalysis, AnalysisVersion
 from app.models.company import ReadinessDocument
 from scripts import test_s0_5b4_baseline as support
@@ -50,6 +51,30 @@ async def scenario(tmp_path):
             await session.flush()
             engagement_rows = [TenderEngagement(user_id=user_id,company_profile_id=profile_id,tender_id=tender.id,status=TenderEngagementStatus.SAVED,origin=TenderEngagementOrigin.MANUAL_SAVE) for tender in corpus]
             session.add_all(engagement_rows)
+            await session.flush()
+            organization_id = await session.scalar(
+                select(Organization.id).where(Organization.legacy_company_profile_id == profile_id)
+            )
+            membership_id = await session.scalar(
+                select(Membership.id).where(
+                    Membership.organization_id == organization_id,
+                    Membership.user_id == user_id,
+                )
+            )
+            assert organization_id is not None and membership_id is not None
+            pursuit_rows = [
+                OrganizationPursuit(
+                    organization_id=organization_id,
+                    source_tender_id=tender.id,
+                    origin=PursuitOrigin.SOURCE,
+                    legacy_engagement_id=engagement.id,
+                    legacy_origin=engagement.origin,
+                    owner_membership_id=membership_id,
+                    stage=engagement.status,
+                )
+                for tender, engagement in zip(corpus, engagement_rows, strict=True)
+            ]
+            session.add_all(pursuit_rows)
             artifact_rows = [Proposal(user_id=user_id,tender_id=tender.id,structured_data={}) for tender in corpus]
             session.add_all(artifact_rows)
             session.add_all([ReadinessDocument(company_profile_id=profile_id,document_type="license",document_name=f"License {i:02}",status="available",related_service="IT" if i%2 else "Construction") for i in range(31)])
@@ -70,7 +95,7 @@ async def scenario(tmp_path):
                 previous = version.id
             await session.commit()
         app = FastAPI()
-        for module,prefix in [(users,"/api/v1/users"),(my_tenders,"/api/v1"),(tenders,"/api/v1/tenders"),(explorer,"/api/v1"),(proposals,"/api/v1/proposals"),(vault,"/api/v1"),(admin,"/api/v1/admin")]:
+        for module,prefix in [(users,"/api/v1/users"),(my_tenders,"/api/v1"),(organizations,"/api/v1/organizations"),(pursuits,"/api/v1/pursuits"),(tenders,"/api/v1/tenders"),(explorer,"/api/v1"),(proposals,"/api/v1/proposals"),(vault,"/api/v1"),(admin,"/api/v1/admin")]:
             app.include_router(module.router,prefix=prefix)
         async def session_dependency():
             async with sessions() as session: yield session
@@ -83,7 +108,7 @@ async def scenario(tmp_path):
         connection = await support.database_connection(database)
         async def fingerprint():
             result = {}
-            for table in ("users","company_profiles","tenders","tender_documents","proposals","tender_analyses","analysis_versions","analysis_version_document_snapshots","audit_logs","readiness_documents","tender_recommendations","tender_engagements"):
+            for table in ("users","company_profiles","organizations","memberships","organization_pursuits","pursuit_lifecycle_events","tenancy_backfill_exceptions","tenders","tender_documents","proposals","tender_analyses","analysis_versions","analysis_version_document_snapshots","audit_logs","readiness_documents","tender_recommendations","tender_engagements"):
                 result[table] = await connection.fetchval(f"SELECT md5(coalesce(jsonb_agg(to_jsonb(t) ORDER BY id)::text,'')) FROM {table} t")
             return result
         before = await fingerprint()
@@ -96,20 +121,21 @@ async def scenario(tmp_path):
             ("legacy-detail",f"/api/v1/tenders/{corpus[0].id}",200,8),
                 # Sprint 13 adds one constant-time latest acquisition-job read so
                 # restart-safe progress can be rendered without any source I/O.
-                ("details",f"/api/v1/tenders/{corpus[0].id}/details",200,15),
-            ("decision",f"/api/v1/tenders/{corpus[0].id}/decision-snapshot",200,7),
-            ("documents",f"/api/v1/tenders/{corpus[0].id}/documents",200,6),
-            ("stored-download",f"/api/v1/tenders/documents/{document.id}/download",200,8),
-            ("missing-download",f"/api/v1/tenders/documents/{missing.id}/download",404,8),
-            ("compiled-text",f"/api/v1/tenders/{corpus[0].id}/compiled-text",200,10),
+                ("details",f"/api/v1/tenders/{corpus[0].id}/details",200,17),
+            ("decision",f"/api/v1/tenders/{corpus[0].id}/decision-snapshot",200,8),
+            ("documents",f"/api/v1/tenders/{corpus[0].id}/documents",200,7),
+            ("stored-download",f"/api/v1/tenders/documents/{document.id}/download",200,9),
+            ("missing-download",f"/api/v1/tenders/documents/{missing.id}/download",404,9),
+            ("compiled-text",f"/api/v1/tenders/{corpus[0].id}/compiled-text",200,11),
             ("explorer","/api/v1/explorer/tenders?limit=25&view=all",200,8),
-            ("proposals","/api/v1/proposals",200,5),
-            ("my-tenders","/api/v1/my-tenders",200,8),
+            ("proposals","/api/v1/proposals",200,8),
+            ("my-tenders","/api/v1/my-tenders",200,10),
+            ("pursuits","/api/v1/pursuits",200,8),
             ("readiness","/api/v1/vault/readiness",200,6),
             ("company-profile","/api/v1/users/me/company",200,5),
-            ("version-detail",history+"/1",200,9),
-            ("history",history,200,7),
-            ("latest-analysis",f"/api/v1/tenders/{corpus[0].id}/latest-analysis",200,9),
+            ("version-detail",history+"/1",200,11),
+            ("history",history,200,9),
+            ("latest-analysis",f"/api/v1/tenders/{corpus[0].id}/latest-analysis",200,11),
             ("approval-queue","/api/v1/admin/approval-queue",200,5),
             ("source-status","/api/v1/tenders/sources/refresh-status",200,3),
         ]
@@ -162,6 +188,8 @@ async def scenario(tmp_path):
                 assert foreign_lists.json()["items"] == []
                 foreign_artifacts = await client.get("/api/v1/proposals",headers=foreign_headers)
                 assert foreign_artifacts.json() == []
+                foreign_pursuits = await client.get("/api/v1/pursuits",headers=foreign_headers)
+                assert foreign_pursuits.json()["items"] == []
                 foreign_readiness = await client.get("/api/v1/vault/readiness",headers=foreign_headers)
                 assert foreign_readiness.json() == []
                 foreign_profile = await client.get("/api/v1/users/me/company",headers=foreign_headers)
@@ -172,6 +200,8 @@ async def scenario(tmp_path):
                     ("PUT",f"/api/v1/vault/readiness/{readiness_id}",{"document_name":"Forbidden"}),
                     ("DELETE",f"/api/v1/vault/readiness/{readiness_id}",None),
                     ("GET",f"/api/v1/proposals/{artifact_rows[0].id}",None),
+                    ("GET",f"/api/v1/pursuits/{pursuit_rows[0].id}",None),
+                    ("GET",f"/api/v1/organizations/{organization_id}/members",None),
                     ("PUT",f"/api/v1/proposals/{artifact_rows[0].id}",{"our_price":1}),
                     ("POST",f"/api/v1/proposals/{artifact_rows[0].id}/continue",None),
                     ("POST",f"/api/v1/my-tenders/{engagement_rows[0].id}/actions/evaluate",{"expected_status":"SAVED"}),
@@ -208,7 +238,7 @@ async def scenario(tmp_path):
                 write_evidence.append({"action":label,"changed_tables":sorted(changed),"allowed_tables":allowed})
                 return response
             with patch("app.core.ai.analyze_tender_text_async",side_effect=AssertionError("Unexpected analysis")), patch("celery.app.base.Celery.send_task",side_effect=AssertionError("Unexpected dispatch")), patch("requests.sessions.Session.request",side_effect=AssertionError("Unexpected source network")):
-                await mutate("profile-save","PUT","/api/v1/users/me/company",{"company_name":"Updated owned company"},["company_profiles"])
+                await mutate("profile-save","PUT","/api/v1/users/me/company",{"company_name":"Updated owned company"},["company_profiles","organizations"])
                 await mutate("analysis-default","PATCH","/api/v1/users/me/preferences",{"default_analysis_language":"ru"},["users"])
                 created=await mutate("readiness-create","POST","/api/v1/vault/readiness",{"document_type":"license","document_name":"Owned metadata only","status":"available"},["readiness_documents"])
                 owned_id=created.json()["id"]

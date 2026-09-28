@@ -27,7 +27,7 @@ from app.services.explorer import (
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-HEAD = "20260912_0001_s10_5_communications"
+HEAD = "20261002_0001_p0_extraction_trust_gate"
 
 
 def source(relative: str) -> str:
@@ -192,9 +192,10 @@ def test_queries_use_uuid_authority_and_independent_pursuit_overlay() -> None:
     for authority in (
         "CompanyProfile.user_id == user_id",
         "TenderRecommendation.company_profile_id == profile_id",
-        "TenderEngagement.user_id == user_id",
-        "TenderEngagement.company_profile_id == profile_id",
-        "TenderEngagement.tender_id == Tender.id",
+        "Membership.user_id == user_id",
+        "Membership.state == MembershipState.ACTIVE",
+        "Organization.legacy_company_profile_id == profile_id",
+        "OrganizationPursuit.source_tender_id == Tender.id",
         "customer_visible_tender_condition(Tender)",
     ):
         assert authority in service

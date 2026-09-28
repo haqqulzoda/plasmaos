@@ -1,4 +1,4 @@
-"""Transactional Proposal/TenderEngagement integration for explicit preparation."""
+"""Transactional Proposal/OrganizationPursuit integration for preparation."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from app.models.base import (
     TenderEngagementStatus,
 )
 from app.models.company import CompanyProfile
-from app.models.engagement import TenderEngagement
 from app.services.tender_engagements import (
+    LegacyEngagementView,
     TenderEngagementTransitionError,
     get_or_create_tender_engagement,
     get_tender_engagement,
@@ -52,7 +52,7 @@ class ProposalArtifactResolution:
 class PrepareBidResult:
     proposal: Proposal
     tender: Tender
-    engagement: TenderEngagement
+    engagement: LegacyEngagementView
     proposal_created: bool
     engagement_created: bool
 

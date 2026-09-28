@@ -96,3 +96,15 @@ test("canonical detail return links use their domain identifiers", () => {
   );
   assert.match(compliance, /href=\{`\/dashboard\/tenders\/\$\{tenderId\}`\}/);
 });
+
+test("commercial input is user controlled and ambiguous legacy prices stay hidden", () => {
+  assert.match(detail, /structured\.commercial_price_origin === "USER_ENTERED"/);
+  assert.match(list, /proposal\.structured_data\?\.commercial_price_origin === "USER_ENTERED"/);
+  assert.match(detail, /summaryEdited \? \{ strategic_summary: strategicSummary \} : \{\}/);
+  assert.doesNotMatch(detail, /suggestedPrice|suggested_price|unit_price|computedTotal/);
+  for (const locale of ["en", "uz", "ru", "ar"]) {
+    const copy = JSON.parse(read(`messages/${locale}/bidPreparation.json`));
+    assert.ok(copy.enteredPrice);
+    assert.equal(copy.suggestedPrice, undefined);
+  }
+});

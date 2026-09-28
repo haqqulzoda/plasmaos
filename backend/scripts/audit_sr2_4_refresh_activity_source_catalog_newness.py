@@ -38,7 +38,7 @@ from app.services.source_registry import SOURCE_REGISTRY
 from scripts import bootstrap_database as bootstrap
 
 
-HEAD = "20260912_0001_s10_5_communications"
+HEAD = "20261002_0001_p0_extraction_trust_gate"
 PREFIX = "plasma_sr24_"
 
 

@@ -12,6 +12,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import Base and all models so Alembic can detect them
 from app.models.all_models import Base
+from app.models import pursuit_analysis as pursuit_analysis_models  # noqa: F401
+from app.models import candidate_retrieval as candidate_retrieval_models  # noqa: F401
+from app.models import participation as participation_models  # noqa: F401
+from app.models import team_scenarios as team_scenario_models  # noqa: F401
+from app.models import proposal_evidence as proposal_evidence_models  # noqa: F401
 from app.core.config import settings
 
 # Alembic Config object

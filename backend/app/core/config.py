@@ -68,6 +68,13 @@ class Settings(BaseSettings):
     DEMO_OCR_BYPASS: bool = False
     PLASMA_ENABLE_PSEUDO_LOCALE: bool = False
 
+    # Organization-private uploads. The default is outside every public webroot.
+    PRIVATE_DOCUMENT_STORAGE_ROOT: str = str(PROJECT_ROOT / ".private-storage")
+    PRIVATE_DOCUMENT_SCAN_HOST: str = "clamav"
+    PRIVATE_DOCUMENT_SCAN_PORT: int = 3310
+    PRIVATE_DOCUMENT_SCAN_TIMEOUT_SECONDS: int = 30
+    PRIVATE_DOCUMENT_OCR_MAX_PAGES: int = 25
+
     @model_validator(mode="after")
     def validate_release(self):
         if self.ENVIRONMENT not in {"development", "test", "production", "release"}:
@@ -81,6 +88,8 @@ class Settings(BaseSettings):
                 raise ValueError("Unsafe release flag")
             if not self.AUTH_BRIDGE_SECRET or len(self.AUTH_BRIDGE_SECRET) < 32 or len(self.SECRET_KEY) < 32:
                 raise ValueError("Release secrets must be explicitly configured")
+            if not self.PRIVATE_DOCUMENT_SCAN_HOST or not (1 <= self.PRIVATE_DOCUMENT_SCAN_PORT <= 65535):
+                raise ValueError("Release requires a private document malware scanner")
             if not self.BACKEND_CORS_ORIGINS or any(
                 urlparse(origin).scheme != "https" or not urlparse(origin).hostname
                 or urlparse(origin).path or "*" in origin or urlparse(origin).username
