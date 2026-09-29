@@ -64,6 +64,22 @@ PROCUREMENT_SIGNALS = (
 )
 
 
+PROVIDER_UNAVAILABLE_MESSAGE = "The analysis provider is temporarily unavailable. Plasma has been notified."
+
+
+def classify_analysis_failure(exc: Exception) -> tuple[str, str | None]:
+    """Customer-safe failure_reason and an operator code for an extraction exception.
+
+    Provider account/billing rejections never reach the customer as raw detail.
+    Everything else keeps the existing behavior (the exception text, bounded).
+    """
+    if isinstance(exc, pursuit_analyzer.ProviderAccountError):
+        return PROVIDER_UNAVAILABLE_MESSAGE, exc.code
+    if isinstance(exc, pursuit_analyzer.RunBudgetExceeded):
+        return str(exc)[:1000], exc.code
+    return str(exc)[:1000], None
+
+
 class AnalysisAdmissionError(ValueError):
     """Selection cannot be sealed into a safe FULL analysis pack."""
 
@@ -585,6 +601,10 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
             return
         run.status = "COMPLETED"
         run.result_completeness = "FULL"
+        # A fallback model may have produced some chunks; record what actually did.
+        accepted_model_name = analyzer_diagnostics.get("model_name")
+        if accepted_model_name:
+            run.model_name = str(accepted_model_name)[:200]
         quality_state, quality_summary, quality_diagnostics = assess_extraction_quality(
             input_texts,
             requirement_count=len(requirements),
@@ -620,7 +640,8 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
                 run.status = "QUEUED"
                 run.next_dispatch_at = datetime.now(timezone.utc) + timedelta(seconds=30)
             run.failure_stage = "EXTRACTION"
-            run.failure_reason = str(exc)[:1000]
+            failure_reason, failure_code = classify_analysis_failure(exc)
+            run.failure_reason = failure_reason
             quality_state, quality_summary, quality_diagnostics = assess_extraction_quality(
                 input_texts,
                 requirement_count=0,
@@ -643,6 +664,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
                 "quality_state": quality_state,
                 "quality_summary": quality_summary,
                 "error_type": type(exc).__name__,
+                **({"failure_code": failure_code} if failure_code else {}),
             }
             run.lease_until = None
             run.lease_owner = None

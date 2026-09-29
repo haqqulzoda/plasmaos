@@ -458,7 +458,23 @@ def test_w4_analysis_authority_for_upload_and_source_pursuits(tmp_path: Path, mo
                             private_version_ids=[pdf_candidate.document_version_id],
                         ),
                     )
+                    async def extracted_via_fallback(sealed, language):
+                        # D1-01: the run records the model that produced the accepted output.
+                        return pursuit_analyzer.VerifiedFacts(
+                            await extracted(sealed, language),
+                            {"raw_requirement_count": 2, "raw_position_count": 1, "schema_rejected_count": 0,
+                             "provenance_rejected_count": 0, "normalization_dropped_count": 0,
+                             "duplicate_count": 0, "model_name": "fallback-model-under-test", "retry_count": 2},
+                        )
+
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", extracted_via_fallback)
+                    assert (await db.get(AnalysisRun, rerun.analysis_run_id)).model_name == pursuit_analyzer.MODEL_NAME
                     await process_analysis_run(db, rerun.analysis_run_id, worker_id="w4-rerun")
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", extracted)
+                    rerun_row = await db.get(AnalysisRun, rerun.analysis_run_id)
+                    assert rerun_row.model_name == "fallback-model-under-test"
+                    assert rerun_row.extraction_diagnostics["retry_count"] == 2
+                    assert completed_run.model_name == pursuit_analyzer.MODEL_NAME  # analyzer without model diagnostics leaves the default
                     newer = await db.scalar(select(PursuitRequirement).where(PursuitRequirement.analysis_run_id == rerun.analysis_run_id).order_by(PursuitRequirement.created_at))
                     assert newer and await db.scalar(select(func.count(PursuitRequirement.id)).where(PursuitRequirement.analysis_run_id == started.analysis_run_id)) == old_requirement_count
                     lineage = await append_lineage(
@@ -506,6 +522,38 @@ def test_w4_analysis_authority_for_upload_and_source_pursuits(tmp_path: Path, mo
                     assert failed_row.extraction_diagnostics["schema_rejected_count"] == 1
                     assert failed_row.extraction_diagnostics["input_character_count"] > 0
                     assert failed_row.extraction_diagnostics["input_page_count"] == 1
+                    assert "failure_code" not in failed_row.extraction_diagnostics  # existing failures are unchanged
+
+                    # D1-01: a provider account/billing rejection and a spent run budget use the same
+                    # failure path (QUEUED/FAILED quality, lease cleared, prior success intact) with a
+                    # customer-safe reason and an operator code.
+                    async def account_rejected(*_args, **_kwargs):
+                        raise pursuit_analyzer.ProviderAccountError(402)
+
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", account_rejected)
+                    with pytest.raises(pursuit_analyzer.ProviderAccountError):
+                        await process_analysis_run(db, failed.analysis_run_id, worker_id="w4-account-worker")
+                    failed_row = await db.get(AnalysisRun, failed.analysis_run_id)
+                    assert failed_row.status == "QUEUED" and failed_row.quality_state == "FAILED"
+                    assert failed_row.lease_owner is None and failed_row.lease_until is None
+                    assert failed_row.failure_stage == "EXTRACTION"
+                    assert failed_row.failure_reason == "The analysis provider is temporarily unavailable. Plasma has been notified."
+                    assert failed_row.extraction_diagnostics["failure_code"] == "PROVIDER_ACCOUNT"
+                    assert failed_row.extraction_diagnostics["error_type"] == "ProviderAccountError"
+                    assert "402" not in failed_row.failure_reason
+
+                    async def budget_spent(*_args, **_kwargs):
+                        raise pursuit_analyzer.RunBudgetExceeded("The analysis time budget was exhausted")
+
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", budget_spent)
+                    with pytest.raises(pursuit_analyzer.RunBudgetExceeded):
+                        await process_analysis_run(db, failed.analysis_run_id, worker_id="w4-budget-worker")
+                    failed_row = await db.get(AnalysisRun, failed.analysis_run_id)
+                    assert failed_row.quality_state == "FAILED" and failed_row.lease_owner is None
+                    assert failed_row.extraction_diagnostics["failure_code"] == "RUN_BUDGET_EXCEEDED"
+                    prior = await db.get(AnalysisRun, started.analysis_run_id)
+                    assert prior.status == "COMPLETED" and prior.quality_state == "READY_FOR_REVIEW"
+                    assert await db.scalar(select(func.count(PursuitRequirement.id)).where(PursuitRequirement.analysis_run_id == started.analysis_run_id)) == 2
                     monkeypatch.setattr(
                         analysis_service.pursuit_analyzer,
                         "analyze_pack_items",
