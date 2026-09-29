@@ -36,7 +36,7 @@ from app.services.tender_engagements import (
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261002_0001_p0_extraction_trust_gate"
+HEAD = "20261003_0001_d1_03_official_notice_unique"
 
 
 async def seed_owner(connection: asyncpg.Connection, label: str) -> tuple[UUID, UUID]:

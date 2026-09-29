@@ -151,6 +151,14 @@ export interface TenderDetailsDocumentItem {
     created_at: string;
 }
 
+/** The source's own notice text: shown with a link to the source, never downloaded. */
+export interface TenderDetailsOfficialNotice {
+    document_id: string;
+    source_url: string | null;
+    character_count: number;
+    created_at: string;
+}
+
 export interface TenderDetailsDocuments {
     items: TenderDetailsDocumentItem[];
     visible_total_count: number;
@@ -166,6 +174,7 @@ export interface TenderDetailsDocuments {
     failed_count: number;
     processing_count: number;
     remote_count: number;
+    official_notice?: TenderDetailsOfficialNotice | null;
 }
 
 export interface TenderDetailsCompliance {

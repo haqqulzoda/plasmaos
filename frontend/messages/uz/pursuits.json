@@ -62,6 +62,7 @@
     "CLARIFICATION": "Tushuntirish",
     "FORM": "Shakl",
     "ANNEX": "Ilova",
+    "OFFICIAL_NOTICE": "Rasmiy e’lon matni",
     "OTHER": "Boshqa"
   },
   "processing": {
@@ -227,7 +228,7 @@
     "packHelp": "Plasma tahlil qilishi kerak bo‘lgan rasmiy/manba va o‘zingizning hujjatlaringizni tanlang.",
     "sourceDocument": "Rasmiy/manba hujjati",
     "privateDocument": "Sizning hujjatingiz",
-    "documentRoles": { "RFP": "RFP", "TOR": "Texnik topshiriq", "NOTICE": "E’lon", "ADDENDUM": "Qo‘shimcha", "CLARIFICATION": "Tushuntirish", "FORM": "Shakl", "ANNEX": "Ilova", "OTHER": "Boshqa" },
+    "documentRoles": { "RFP": "RFP", "TOR": "Texnik topshiriq", "NOTICE": "E’lon", "ADDENDUM": "Qo‘shimcha", "CLARIFICATION": "Tushuntirish", "FORM": "Shakl", "ANNEX": "Ilova", "OFFICIAL_NOTICE": "Rasmiy e’lon matni", "OTHER": "Boshqa" },
     "pages": "{count} sahifa",
     "pagesUnknown": "Sahifalar soni mavjud emas",
     "version": "{version}-versiya",

@@ -101,6 +101,11 @@
     }
   },
   "documentsEmpty": "No public source-document metadata is available.",
+  "officialNotice": {
+    "title": "Official notice text",
+    "help": "The source’s own notice text, captured for analysis. It is not a downloadable file.",
+    "openAtSource": "Open at source"
+  },
   "documentsUnavailable": "Tender document metadata is currently unavailable.",
   "documentsTruncated": "{count, plural, one {# more public source document} other {# more public source documents}}. Open Compliance for evidence workflows.",
   "opening": "Opening",

@@ -101,7 +101,7 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
     if (value?.status === 'COMPLETED' && value.quality_state === 'READY_FOR_REVIEW') setLastReviewableAnalysis(value);
   }, []);
   const documentRoleLabel = (role: string) => role === 'RFP' ? t('roles.RFP') : role === 'TOR' ? t('roles.TOR') :
-    role === 'NOTICE' ? t('roles.NOTICE') : role === 'ADDENDUM' ? t('roles.ADDENDUM') :
+    role === 'OFFICIAL_NOTICE' ? t('roles.OFFICIAL_NOTICE') : role === 'NOTICE' ? t('roles.NOTICE') : role === 'ADDENDUM' ? t('roles.ADDENDUM') :
       role === 'CLARIFICATION' ? t('roles.CLARIFICATION') : role === 'FORM' ? t('roles.FORM') :
         role === 'ANNEX' ? t('roles.ANNEX') : t('roles.OTHER');
 
@@ -458,7 +458,7 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
       <div className="pursuit-panel-heading"><div><span className="ds-eyebrow">{t('workspace.documentsEyebrow')}</span><h2 id="pursuit-documents-title">{t('workspace.documents')}</h2><p>{t('workspace.documentsHelp')}</p></div></div>
       <section className="pursuit-document-group" aria-labelledby="official-documents-title"><header><div><h3 id="official-documents-title">{t('documents.official')}</h3><p>{t('documents.officialHelp')}</p></div></header>
         {documentCandidateLoading ? <p className="ds-muted">{t('documents.loading')}</p> : documentCandidate?.source_documents.length ? <div className="private-document-list">{documentCandidate.source_documents.map((document) => <Surface className="private-document-row" key={document.tender_document_id}>
-          <FileCheck2 aria-hidden /><div className="private-document-summary"><h4><BidiText>{document.display_name}</BidiText></h4><div className="ds-row ds-muted ds-text-small"><span>{documentRoleLabel(document.role)}</span><span>{document.page_count_known ? t('documents.pages', { count: document.page_count || 0 }) : t('documents.pagesUnknown')}</span><span>{t('documents.officialSource')}</span></div></div>
+          <FileCheck2 aria-hidden /><div className="private-document-summary"><h4><BidiText>{document.role === 'OFFICIAL_NOTICE' ? t('roles.OFFICIAL_NOTICE') : document.display_name}</BidiText></h4><div className="ds-row ds-muted ds-text-small"><span>{documentRoleLabel(document.role)}</span><span>{document.page_count_known ? t('documents.pages', { count: document.page_count || 0 }) : t('documents.pagesUnknown')}</span><span>{t('documents.officialSource')}</span></div></div>
           <StatusBadge tone={document.parse_ready ? 'success' : 'warning'}>{document.parse_ready ? t('requirements.ready') : t('requirements.notReady')}</StatusBadge>
           {document.source_url && <ButtonLink size="sm" variant="ghost" href={document.source_url}>{t('documents.openSource')}</ButtonLink>}
         </Surface>)}</div> : <EmptyState icon={<FileText aria-hidden />} title={t('documents.noOfficial')} description={t('documents.noOfficialHelp')} />}

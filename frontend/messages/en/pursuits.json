@@ -62,6 +62,7 @@
     "CLARIFICATION": "Clarification",
     "FORM": "Form",
     "ANNEX": "Annex",
+    "OFFICIAL_NOTICE": "Official notice text",
     "OTHER": "Other"
   },
   "processing": {
@@ -227,7 +228,7 @@
     "packHelp": "Choose the official/source and your documents that Plasma should analyze.",
     "sourceDocument": "Official/source document",
     "privateDocument": "Your document",
-    "documentRoles": { "RFP": "RFP", "TOR": "Terms of reference", "NOTICE": "Notice", "ADDENDUM": "Addendum", "CLARIFICATION": "Clarification", "FORM": "Form", "ANNEX": "Annex", "OTHER": "Other" },
+    "documentRoles": { "RFP": "RFP", "TOR": "Terms of reference", "NOTICE": "Notice", "ADDENDUM": "Addendum", "CLARIFICATION": "Clarification", "FORM": "Form", "ANNEX": "Annex", "OFFICIAL_NOTICE": "Official notice text", "OTHER": "Other" },
     "pages": "{count} pages",
     "pagesUnknown": "Page count unavailable",
     "version": "Version {version}",

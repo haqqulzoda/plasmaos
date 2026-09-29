@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.all_models import Tender, TenderDocument, TenderStatus
 from app.services.competitor_cache import COMPETITOR_CACHE_METADATA_KEY
+from app.services.official_notice import not_official_notice, sync_official_notices
 from app.services.tender_sources.keys import (
     canonical_source_key,
     normalize_source_system,
@@ -532,6 +533,7 @@ async def persist_tender_batch(
 
     items: list[TenderPersistenceItem] = []
     for chunk in _chunks(ordered, batch_size):
+        chunk_start = len(items)
         existing = await _lookup_tenders(db, chunk)
         absent = [
             item for item in chunk if item.canonical_source_key not in existing
@@ -617,6 +619,14 @@ async def persist_tender_batch(
             # ORM unit-of-work emits safe parameterized executemany updates where
             # changed column shapes match. UNCHANGED objects are never mutated.
             await db.flush()
+
+        if isinstance(db, AsyncSession):
+            # D1-03: the system-generated official-notice document is derived
+            # from the persisted rows in the same transaction, set-wise. Also
+            # covering UNCHANGED rows lets refresh repair a missing document.
+            await sync_official_notices(
+                db, [item.tender for item in items[chunk_start:]]
+            )
 
     logger.info(
         "tender_source_batch persisted=%s created=%s updated=%s unchanged=%s duplicates=%s",
@@ -726,6 +736,7 @@ async def persist_document_descriptors(
             result = await db.execute(
                 select(TenderDocument).where(
                     TenderDocument.tender_id == tender.id,
+                    not_official_notice(),
                     or_(*predicates),
                 )
             )
@@ -770,6 +781,9 @@ async def persist_document_descriptors(
         await db.execute(
             select(TenderDocument).where(
                 TenderDocument.tender_id == tender.id,
+                # The system-generated notice row is never an attachment match,
+                # even when a source lists a document at the tender's own URL.
+                not_official_notice(),
                 or_(*predicates),
             )
         )

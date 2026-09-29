@@ -46,7 +46,11 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20261002_0001_p0_extraction_trust_gate"]
+    assert script.get_heads() == ["20261003_0001_d1_03_official_notice_unique"]
+    assert (
+        script.get_revision("20261003_0001_d1_03_official_notice_unique").down_revision
+        == "20261002_0001_p0_extraction_trust_gate"
+    )
     assert (
         script.get_revision("20261002_0001_p0_extraction_trust_gate").down_revision
         == "20261001_0001_w8_proposal_evidence_pack"
@@ -84,7 +88,7 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
         script.get_revision("20260925_0001_w2_organization_membership").down_revision
         == "20260912_0001_s10_5_communications"
     )
-    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 40
+    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 41
 
 
 def test_historical_migrations_are_untouched() -> None:

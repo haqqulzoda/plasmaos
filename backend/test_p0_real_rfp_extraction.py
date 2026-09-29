@@ -300,6 +300,8 @@ def test_p0_additive_migration_is_reversible_and_drift_free() -> None:
             finally:
                 await connection.close()
             await asyncio.to_thread(support.alembic, database, "upgrade", P0_HEAD)
+            # Drift is checked at the repository head; later migrations add to P0's schema.
+            await asyncio.to_thread(support.alembic, database, "upgrade", "head")
             check = await asyncio.to_thread(support.alembic, database, "check", success=False)
             assert check.returncode == 0, check.stderr or check.stdout
         finally:

@@ -27,7 +27,7 @@ from app.services.explorer import (
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-HEAD = "20261002_0001_p0_extraction_trust_gate"
+HEAD = "20261003_0001_d1_03_official_notice_unique"
 
 
 def source(relative: str) -> str:

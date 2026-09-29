@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.parser import process_tender_document
 from app.core.storage_paths import normalize_storage_path, storage_file_exists
 from app.models.all_models import Tender, TenderDocument
+from app.services.official_notice import not_official_notice
 from app.services.tender_sources.base import NormalizedTender, assert_source_scope
 from app.services.tender_sources.giz import (
     GIZ_USER_AGENT,
@@ -252,6 +253,7 @@ async def _giz_upsert_inner_document(
     result = await db.execute(
         select(TenderDocument).where(
             TenderDocument.tender_id == tender.id,
+            not_official_notice(),
             TenderDocument.source_document_url == source_url,
         )
     )
@@ -297,6 +299,7 @@ async def _giz_find_duplicate_document_by_sha(
         select(TenderDocument)
         .where(
             TenderDocument.tender_id == tender.id,
+            not_official_notice(),
             TenderDocument.id != excluding_doc_id,
             TenderDocument.sha256 == sha256_digest,
             TenderDocument.storage_path.is_not(None),
@@ -563,7 +566,9 @@ async def update_giz_document_coverage(
 ) -> dict[str, Any]:
     assert_source_scope("giz", tender)
     result = await db.execute(
-        select(TenderDocument).where(TenderDocument.tender_id == tender.id)
+        select(TenderDocument).where(
+            TenderDocument.tender_id == tender.id, not_official_notice()
+        )
     )
     docs = result.scalars().all()
     official_count = _giz_official_listed_document_count(tender)
@@ -840,7 +845,7 @@ async def compile_tender_text_from_documents(
 ) -> None:
     result = await db.execute(
         select(TenderDocument)
-        .where(TenderDocument.tender_id == tender.id)
+        .where(TenderDocument.tender_id == tender.id, not_official_notice())
         .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
     )
     docs = result.scalars().all()
@@ -865,7 +870,7 @@ async def process_giz_documents_for_compliance(
     assert_source_scope("giz", tender)
     result = await db.execute(
         select(TenderDocument)
-        .where(TenderDocument.tender_id == tender.id)
+        .where(TenderDocument.tender_id == tender.id, not_official_notice())
         .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
     )
     docs = result.scalars().all()
@@ -990,7 +995,7 @@ async def hydrate_giz_tender_documents(
         active_urls = {item.source_document_url for item in documents}
         docs_result = await db.execute(
             select(TenderDocument)
-            .where(TenderDocument.tender_id == tender.id)
+            .where(TenderDocument.tender_id == tender.id, not_official_notice())
             .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
         )
         for doc in docs_result.scalars().all():
@@ -1026,7 +1031,9 @@ async def hydrate_giz_tender_documents(
     await _emit_progress(progress_callback, 90)
     after_counts = _marker_counts(tender.compiled_master_text)
     docs_result = await db.execute(
-        select(TenderDocument).where(TenderDocument.tender_id == tender.id)
+        select(TenderDocument).where(
+            TenderDocument.tender_id == tender.id, not_official_notice()
+        )
     )
     docs = docs_result.scalars().all()
     ready_documents = sum(

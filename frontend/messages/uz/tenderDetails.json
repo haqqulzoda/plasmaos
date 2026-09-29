@@ -101,6 +101,11 @@
     }
   },
   "documentsEmpty": "Ochiq manba hujjatlari metama’lumotlari mavjud emas.",
+  "officialNotice": {
+    "title": "Rasmiy e’lon matni",
+    "help": "Manbadagi e’lonning o‘zi, tahlil uchun saqlangan. Bu yuklab olinadigan fayl emas.",
+    "openAtSource": "Manbada ochish"
+  },
   "documentsUnavailable": "Tender hujjatlari metama’lumotlari hozir mavjud emas.",
   "documentsTruncated": "Yana {count, plural, one {# ta ommaviy manba hujjati} other {# ta ommaviy manba hujjati}} mavjud. Dalillar bilan ishlash uchun Muvofiqlik tahlilini oching.",
   "opening": "Ochilmoqda",

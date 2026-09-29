@@ -80,6 +80,7 @@ function Evidence({ item, packName }: { item: PursuitRequirement | PursuitPositi
 export function PursuitRequirements({ pursuitId, headers, initialReviewableAnalysis, onAnalysisChange }: Props) {
   const t = useTranslations('pursuits.requirements');
   const documentRoleLabel = (role: string) => role === 'RFP' ? t('documentRoles.RFP') :
+    role === 'OFFICIAL_NOTICE' ? t('documentRoles.OFFICIAL_NOTICE') :
     role === 'TOR' ? t('documentRoles.TOR') : role === 'NOTICE' ? t('documentRoles.NOTICE') :
       role === 'ADDENDUM' ? t('documentRoles.ADDENDUM') : role === 'CLARIFICATION' ? t('documentRoles.CLARIFICATION') :
         role === 'FORM' ? t('documentRoles.FORM') : role === 'ANNEX' ? t('documentRoles.ANNEX') : t('documentRoles.OTHER');
@@ -163,7 +164,7 @@ export function PursuitRequirements({ pursuitId, headers, initialReviewableAnaly
         <div className="analysis-candidate-list">
           {candidate.source_documents.map((item) => <label key={item.tender_document_id} className="analysis-candidate-row">
             <input type="checkbox" checked={selectedSource.has(item.tender_document_id)} disabled={!item.parse_ready || busy} onChange={(event) => setSelectedSource((current) => { const next = new Set(current); if (event.target.checked) next.add(item.tender_document_id); else next.delete(item.tender_document_id); return next; })} />
-            <span><strong><BidiText>{item.display_name}</BidiText></strong><small>{t('sourceDocument')} · {documentRoleLabel(item.role)} · {item.page_count_known ? t('pages', { count: item.page_count || 0 }) : t('pagesUnknown')}</small>{item.duplicate_warning && <em>{item.duplicate_warning}</em>}</span>
+            <span><strong><BidiText>{item.role === 'OFFICIAL_NOTICE' ? t('documentRoles.OFFICIAL_NOTICE') : item.display_name}</BidiText></strong><small>{t('sourceDocument')} · {documentRoleLabel(item.role)} · {item.page_count_known ? t('pages', { count: item.page_count || 0 }) : t('pagesUnknown')}</small>{item.duplicate_warning && <em>{item.duplicate_warning}</em>}</span>
             <StatusBadge tone={item.parse_ready ? 'success' : 'warning'}>{item.parse_ready ? t('ready') : t('notReady')}</StatusBadge>
           </label>)}
           {candidate.private_versions.map((item) => <label key={item.document_version_id} className="analysis-candidate-row">

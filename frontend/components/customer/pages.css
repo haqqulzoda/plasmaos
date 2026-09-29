@@ -1379,6 +1379,9 @@
 .s143-document-table th:first-child, .s143-document-table td:first-child { inline-size: 55%; }
 .s143-document-status, .s143-document-state, .s143-note { color: var(--ds-text-secondary); font-size: var(--ds-caption); }
 .s143-document-state { white-space: nowrap; }
+.s143-official-notice { display: flex; align-items: center; gap: var(--ds-space-4); padding: var(--ds-space-4); border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-sm); background: var(--ds-background-subtle); }
+.s143-official-notice > div { flex: 1 1 auto; min-inline-size: 0; }
+.s143-official-notice p { margin: 0; }
 .s143-state { padding: var(--ds-space-4); background: var(--ds-background-subtle); color: var(--ds-text-secondary); font-size: var(--ds-caption); }
 .s143-error { color: var(--ds-danger); }
 .s143-retry { display: flex; justify-content: space-between; align-items: center; gap: var(--ds-space-4); padding: var(--ds-space-4); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); }

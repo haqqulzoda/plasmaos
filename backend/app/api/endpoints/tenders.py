@@ -233,6 +233,7 @@ from app.services.source_refresh_activity import (
     source_refresh_status,
 )
 from app.services.tender_details import compose_tender_details
+from app.services.official_notice import is_official_notice, not_official_notice
 from app.services.tender_sources.base import (
     NormalizedTender,
     assert_source_scope,
@@ -2401,6 +2402,7 @@ def _document_status_exists(condition):
     return exists(
         select(1).where(
             TenderDocument.tender_id == Tender.id,
+            not_official_notice(),
             condition,
         )
     )
@@ -2770,7 +2772,7 @@ async def _batched_tender_summaries(
             Tender.source_system,
         )
         .join(Tender, TenderDocument.tender_id == Tender.id)
-        .where(TenderDocument.tender_id.in_(tender_ids))
+        .where(TenderDocument.tender_id.in_(tender_ids), not_official_notice())
     )
     for row in document_rows.mappings().all():
         tender_id = row["tender_id"]
@@ -4405,7 +4407,7 @@ async def analyze_tender(
 
     documents_result = await session.execute(
         select(TenderDocument)
-        .where(TenderDocument.tender_id == tender.id)
+        .where(TenderDocument.tender_id == tender.id, not_official_notice())
         .order_by(TenderDocument.source_document_url.asc(), TenderDocument.id.asc())
     )
     tender_documents = [
@@ -5245,6 +5247,17 @@ async def download_document(
                 detail="You do not have access to this document",
             ) from exc
         raise
+
+    if is_official_notice(doc):
+        # System-generated text of the source's notice: there is no file to
+        # serve, and a redirect would send an authenticated XHR off-site.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "This is the official notice text, not a downloadable file. "
+                "Open the notice at its source."
+            ),
+        )
 
     local_path = normalize_storage_path(doc.storage_path)
 
@@ -7865,6 +7878,7 @@ async def _count_parsed_documents(
         select(func.count(TenderDocument.id))
         .where(
             TenderDocument.tender_id == tender_id,
+            not_official_notice(),
             TenderDocument.parsed_text.is_not(None),
             func.length(func.trim(TenderDocument.parsed_text)) > 0,
         )
@@ -7895,7 +7909,9 @@ async def _get_sync_marker_diagnostics(
     compiled_text = tender.compiled_master_text if tender is not None else ""
 
     docs_result = await db.execute(
-        select(TenderDocument).where(TenderDocument.tender_id == tender_id)
+        select(TenderDocument).where(
+            TenderDocument.tender_id == tender_id, not_official_notice()
+        )
     )
     documents = docs_result.scalars().all()
     parsed_documents = [
@@ -8110,7 +8126,8 @@ async def sync_tender_documents(
             total_documents = int(
                 await db.scalar(
                     select(func.count(TenderDocument.id)).where(
-                        TenderDocument.tender_id == tender_id
+                        TenderDocument.tender_id == tender_id,
+                        not_official_notice(),
                     )
                 )
                 or 0
@@ -8258,7 +8275,7 @@ async def get_tender_documents(
 
     result = await db.execute(
         select(TenderDocument)
-        .where(TenderDocument.tender_id == tender_id)
+        .where(TenderDocument.tender_id == tender_id, not_official_notice())
         .order_by(TenderDocument.created_at.asc())
     )
     return [

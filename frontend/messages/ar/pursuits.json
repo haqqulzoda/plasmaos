@@ -62,6 +62,7 @@
     "CLARIFICATION": "توضيح",
     "FORM": "نموذج",
     "ANNEX": "مرفق",
+    "OFFICIAL_NOTICE": "نص الإشعار الرسمي",
     "OTHER": "أخرى"
   },
   "processing": {
@@ -222,7 +223,7 @@
     "packHelp": "اختر المستندات الرسمية أو مستندات المصدر ومستنداتك التي ينبغي لـ Plasma تحليلها.",
     "sourceDocument": "وثيقة رسمية/مصدر",
     "privateDocument": "مستندك",
-    "documentRoles": { "RFP": "طلب عروض", "TOR": "الشروط المرجعية", "NOTICE": "إشعار", "ADDENDUM": "ملحق", "CLARIFICATION": "توضيح", "FORM": "نموذج", "ANNEX": "مرفق", "OTHER": "أخرى" },
+    "documentRoles": { "RFP": "طلب عروض", "TOR": "الشروط المرجعية", "NOTICE": "إشعار", "ADDENDUM": "ملحق", "CLARIFICATION": "توضيح", "FORM": "نموذج", "ANNEX": "مرفق", "OFFICIAL_NOTICE": "نص الإشعار الرسمي", "OTHER": "أخرى" },
     "pages": "{count} صفحة",
     "pagesUnknown": "عدد الصفحات غير متاح",
     "version": "الإصدار {version}",
