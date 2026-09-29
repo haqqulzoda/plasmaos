@@ -156,7 +156,7 @@ else
   clam_ping="$(ops_exec "$PROJECT" backend python -c "
 import os, socket
 s = socket.create_connection((os.environ.get('PRIVATE_DOCUMENT_SCAN_HOST', 'clamav'), int(os.environ.get('PRIVATE_DOCUMENT_SCAN_PORT', '3310'))), 5)
-s.sendall(b'zPING\0'); print(s.recv(16).decode().strip())" 2>/dev/null | tr -d '\r' | tail -n 1 || true)"
+s.sendall(b'zPING\0'); print(s.recv(16).decode().replace(chr(0), '').strip())" 2>/dev/null | tr -d '\r' | tail -n 1 || true)"
   if [ "$clam_ping" = "PONG" ]; then
     ok "clamd answers PING from the backend container (private uploads can be scanned)"
   else

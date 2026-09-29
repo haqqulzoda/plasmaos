@@ -91,7 +91,8 @@ Tools: `scripts/ops/backup.sh` (PostgreSQL `pg_dump -Fc` verified with `pg_resto
 Private-document uploads are scanned by ClamAV; the backend reaches it over TCP (`PRIVATE_DOCUMENT_SCAN_HOST`/`PORT`, default `clamav:3310`). If it is down, uploads cannot be scanned.
 
 - [ ] `scripts/ops/smoke.sh` passes the ClamAV checks: `clamd` answers `PING` from the backend container, and the signature date (`freshclam --version`) is at most 3 days old (`SMOKE_CLAMAV_MAX_AGE_DAYS`).
-- [ ] The container healthcheck is healthy (`docker ps`). Note: on the developer machine used to build these scripts, `clamd` refused TCP connections and its healthcheck reported unhealthy while signatures were current; confirm this on staging and production, not just the signature date.
+- [ ] The container healthcheck is healthy (`docker ps`), and `docker inspect -f '{{.State.OOMKilled}} {{.State.Health.Status}}' plasma_clamav` does not show `true`. On the developer machine `clamd` had been OOM-killed (3.7 GB Docker VM, swap full) while the container stayed "Up (unhealthy)": the image's `/init` blocks on `tail -f /dev/null`, so nothing restarted it. Since pilot/week1 the service runs `deploy/clamav/supervise.sh`, which exits after 5 missed PINGs (30 s apart) so `restart: always` restarts it (tested: back to healthy about 4 minutes after `clamd` was killed), and `ConcurrentDatabaseReload no` keeps one signature set in memory during reloads.
+- [ ] Memory headroom for `clamd`: about 1 GB resident after loading signatures (measured 0.94 GB), more while loading. The host must hold it next to Postgres, the API, five Celery workers and Next.js without swapping.
 - [ ] Signature freshness is alerted on (the official image runs `freshclam` itself, which needs outbound access to the ClamAV mirrors).
 
 ## 7. Celery Beat and workers

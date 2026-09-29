@@ -34,6 +34,7 @@ from sqlalchemy import func, select
 from app.core.agents import pursuit_analyzer as analyzer
 from app.core.agents.requirement_extractor import _resolve_gemini_api_key
 from app.db.session import AsyncSessionLocal, engine
+import app.models.all_models  # noqa: F401  (registers every mapper before the first query)
 from app.models.pursuit_analysis import AnalysisRun
 
 
