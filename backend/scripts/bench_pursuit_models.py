@@ -73,6 +73,8 @@ PRESETS: dict[str, dict[str, dict[str, int]]] = {
         "gemini-3.8-flash": {"b4a_full": 5, "reoi_1": 5, "reoi_2": 5, "long_rfp": 3},
         "gemini-3.1-pro-preview": {"long_rfp": 3},
     },
+    # D1 final: gemini-3.1-pro-preview verification on every input; its long-RFP runs are the new reference.
+    "r4": {"gemini-3.1-pro-preview": {"b4a_full": 3, "reoi_1": 3, "reoi_2": 3, "long_rfp": 3}},
     # D1 v3 (source-window contexts): candidates only; the long-RFP reference is reused from r2.
     "r3": {
         "gemini-3.8-flash": {"b4a_full": 5, "reoi_1": 5, "reoi_2": 5, "long_rfp": 3},
@@ -437,8 +439,9 @@ def _sum(chunks: list[dict[str, object]], key: str) -> int | None:
 async def run_once(
     model: str, item: BenchInput, run_number: int, spans_out: list[Span] | None = None
 ) -> dict[str, object]:
-    analyzer.MODEL_NAME = model
-    analyzer.FALLBACK_MODEL_NAMES = ()  # attribute every result to exactly this model
+    # Attribute every result to exactly this model, whichever length route the input takes.
+    analyzer.MODEL_NAME = analyzer.LONG_MODEL_NAME = model
+    analyzer.FALLBACK_MODEL_NAMES = analyzer.LONG_FALLBACK_MODEL_NAMES = ()
     sealed = analyzer.SealedTextInput(
         uuid4(), item.name, item.text, page_count=item.page_count, page_count_known=item.page_count_known
     )
@@ -467,6 +470,7 @@ async def run_once(
         provenance_rejected=diagnostics["provenance_rejected_count"],
         normalization_dropped=diagnostics["normalization_dropped_count"],
         duplicates=diagnostics["duplicate_count"],
+        route=diagnostics.get("route"), route_chunk_characters=diagnostics.get("route_chunk_characters"),
         context_model_verbatim=diagnostics.get("context_model_verbatim"),
         context_source_window=diagnostics.get("context_source_window"),
         context_none=diagnostics.get("context_none"),
@@ -503,6 +507,12 @@ def _percentiles(values: list[float]) -> tuple[float | None, float | None]:
 
 def _fmt(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.1f}"
+
+
+def _calls_text(ok: list[dict[str, object]]) -> str:
+    chunks = [int(r["chunk_count"]) for r in ok if "chunk_count" in r]
+    calls = [int(r["attempts"]) for r in ok if "attempts" in r]
+    return f"{statistics.median(chunks):g} / {statistics.median(calls):g}" if chunks and calls else "n/a"
 
 
 def _median(values: list[int | float]) -> float | None:
@@ -605,8 +615,8 @@ def render_markdown(payload: dict[str, object]) -> str:
             f"`{item.get('text_sha256', 'n/a')}` | {item['page_markers']} | {item['chunks']} |"
         )
     lines += ["", "## Results by model and input", "",
-              "| Model | Input | Successes | Latency p50 / p90 (s) | Raw requirements (median) | Verified requirements min / median / max | Provenance-rejected (median) | Context origin verbatim / window / none (totals) | Verified positions (median) | Retries used | Failure classes | Golden 19 (min / runs at 19) |",
-              "| --- | --- | ---: | --- | ---: | --- | ---: | --- | ---: | ---: | --- | --- |"]
+              "| Model | Input | Successes | Latency p50 / p90 (s) | Chunks / provider calls per run (median) | Raw requirements (median) | Verified requirements min / median / max | Provenance-rejected (median) | Context origin verbatim / window / none (totals) | Verified positions (median) | Retries used | Failure classes | Golden 19 (min / runs at 19) |",
+              "| --- | --- | ---: | --- | --- | ---: | --- | ---: | --- | ---: | ---: | --- | --- |"]
     for model in models:
         for item in inputs:
             mine = [r for r in records if r["model"] == model and r["input"] == item["name"]]
@@ -634,6 +644,7 @@ def render_markdown(payload: dict[str, object]) -> str:
             label = f"{model} (reference)" if model == REFERENCE_MODEL else model
             lines.append(
                 f"| {label} | {item['name']} | {len(ok)}/{len(mine)} | {_fmt(p50)} / {_fmt(p90)} | "
+                f"{_calls_text(ok)} | "
                 f"{'n/a' if not raws else f'{statistics.median(raws):g}'} | "
                 f"{'n/a' if not reqs else f'{min(reqs)} / {statistics.median(reqs):g} / {max(reqs)}'} | "
                 f"{'n/a' if not rejected else f'{statistics.median(rejected):g}'} | "
@@ -745,6 +756,8 @@ async def main_async(args: argparse.Namespace) -> int:
     api_key = analyzer._resolve_gemini_api_key()
     if not api_key:
         raise SystemExit("GEMINI_API_KEY is not configured.")
+    if args.long_chunk_chars:
+        analyzer.LONG_CHUNK_CHARACTERS = args.long_chunk_chars
     plan = build_plan(args)
     models = list(plan)
     wanted = {name for per in plan.values() for name in per}
@@ -763,6 +776,10 @@ async def main_async(args: argparse.Namespace) -> int:
         if not reused:
             raise SystemExit(f"No {REFERENCE_MODEL} long-RFP spans stored for tag {args.reference_from!r}.")
         spans_by_model[REFERENCE_MODEL] = reused
+    for tag in args.compare_tags:
+        for model, runs in _load_spans(PRIVATE_DIR / tag / "long_rfp_spans.json").items():
+            if model != REFERENCE_MODEL:
+                spans_by_model[f"{model} ({tag})"] = runs
     if args.resume and json_path.exists():
         records = json.loads(json_path.read_text(encoding="utf-8"))["records"]
     done = {(r["model"], r["input"], r["run"]) for r in records}
@@ -782,6 +799,8 @@ async def main_async(args: argparse.Namespace) -> int:
                 "sdk_version": getattr(genai, "__version__", "unknown"),
                 "prompt_version": analyzer.PROMPT_VERSION, "schema_version": analyzer.SCHEMA_VERSION,
                 "pipeline_version": analyzer.PIPELINE_VERSION, "reference_from": args.reference_from,
+                "long_chunk_characters": analyzer.LONG_CHUNK_CHARACTERS, "compare_tags": args.compare_tags,
+                "long_pack_threshold_characters": analyzer.LONG_PACK_CHARACTERS,
             },
             "summary": summarize(records, models, public_inputs, args.runs, recall_summary(spans_by_model)),
             "records": records,
@@ -839,6 +858,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--reference-from", default=None,
         help="reuse the reference model's long-RFP spans from an earlier tag (e.g. r2) instead of re-running it",
+    )
+    parser.add_argument("--long-chunk-chars", type=int, default=None, help="override the LONG route chunk size")
+    parser.add_argument(
+        "--compare-tags", nargs="*", default=[],
+        help="also score the stored long-RFP runs of these earlier tags against this bench's reference set",
     )
     parser.add_argument("--long-tender-id", type=UUID, default=None, help="override the auto-selected long RFP")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)

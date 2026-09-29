@@ -1,0 +1,185 @@
+{
+  "meta": {
+    "generated_at": "2026-09-29 03:05 UTC",
+    "models": [
+      "gemini-3.8-flash"
+    ],
+    "plan": {
+      "gemini-3.8-flash": {
+        "long_rfp": 3
+      }
+    },
+    "runs_per_model_input": 3,
+    "max_output_tokens": 32768,
+    "request_timeout_seconds": 90,
+    "chunk_budget_seconds": 240,
+    "run_budget_seconds": 480,
+    "chunk_concurrency": 3,
+    "sdk_version": "0.3.0",
+    "prompt_version": "pursuit_analysis_d1_v3",
+    "schema_version": "pursuit_analysis_output_p0_v2",
+    "pipeline_version": "pursuit_analysis_pipeline_d1_v3",
+    "reference_from": "r4",
+    "long_chunk_characters": 30000,
+    "compare_tags": [],
+    "long_pack_threshold_characters": 60000
+  },
+  "summary": {
+    "per_model": {
+      "gemini-3.8-flash": {
+        "runs": 3,
+        "successes": 3,
+        "success_ratio": 1.0,
+        "latency_p50_s": 64.55,
+        "latency_p90_s": 66.03,
+        "failure_classes": {},
+        "runs_needing_retry": 0,
+        "runs_where_fallback_would_be_needed": 0,
+        "provider_error_runs": 0,
+        "b4a_runs": 0,
+        "b4a_golden_19_of_19_runs": 0,
+        "golden_min": null,
+        "thinking_tokens_median": 20592,
+        "output_tokens_median": 27531,
+        "selection_success": true,
+        "selection_p90": true,
+        "selection_golden": false,
+        "reference_only": false
+      }
+    },
+    "planned_runs_per_model_input": 3,
+    "inputs": [
+      {
+        "name": "long_rfp",
+        "description": "Long consulting RFP (tenders.compiled_master_text)",
+        "source_ref": "giz:ea0e13e9-b360-452d-8491-8680c6a73d12",
+        "characters": 253112,
+        "text_sha256": "e525a6600af49172f3cd3d3381c1851c96606127d739569b4217e1593e58ff2b",
+        "page_markers": 119,
+        "chunks": 3
+      }
+    ],
+    "long_rfp_recall": {
+      "reference_model": "gemini-3.1-pro-preview",
+      "reference_runs": 3,
+      "reference_items": 84,
+      "reference_items_per_run": [
+        81,
+        81,
+        75
+      ],
+      "span_match_min_overlap": 0.5,
+      "models": {
+        "gemini-3.8-flash": {
+          "runs": 3,
+          "recall_per_run": [
+            0.571,
+            0.643,
+            0.571
+          ],
+          "recall_median": 0.571,
+          "recall_union": 0.667,
+          "model_only_per_run": [
+            23,
+            19,
+            18
+          ],
+          "model_only_median": 19,
+          "model_only_union": 39
+        }
+      }
+    }
+  },
+  "records": [
+    {
+      "model": "gemini-3.8-flash",
+      "input": "long_rfp",
+      "run": 1,
+      "status": "SUCCESS",
+      "failure_class": null,
+      "latency_s": 64.55,
+      "chunk_count": 9,
+      "attempts": 9,
+      "retry_count": 0,
+      "retry_failure_classes": [],
+      "max_chunk_latency_s": 25.39,
+      "raw_requirements": 78,
+      "raw_positions": 4,
+      "verified_requirements": 72,
+      "verified_positions": 3,
+      "provenance_rejected": 7,
+      "normalization_dropped": 0,
+      "duplicates": 0,
+      "route": "LONG",
+      "route_chunk_characters": 30000,
+      "context_model_verbatim": 63,
+      "context_source_window": 9,
+      "context_none": 3,
+      "pipeline_version": "pursuit_analysis_pipeline_d1_v3",
+      "prompt_version": "pursuit_analysis_d1_v3",
+      "prompt_tokens": 73383,
+      "output_tokens": 28245,
+      "thinking_tokens": 20175
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "input": "long_rfp",
+      "run": 2,
+      "status": "SUCCESS",
+      "failure_class": null,
+      "latency_s": 62.56,
+      "chunk_count": 9,
+      "attempts": 9,
+      "retry_count": 0,
+      "retry_failure_classes": [],
+      "max_chunk_latency_s": 28.57,
+      "raw_requirements": 83,
+      "raw_positions": 4,
+      "verified_requirements": 77,
+      "verified_positions": 3,
+      "provenance_rejected": 7,
+      "normalization_dropped": 0,
+      "duplicates": 0,
+      "route": "LONG",
+      "route_chunk_characters": 30000,
+      "context_model_verbatim": 71,
+      "context_source_window": 6,
+      "context_none": 3,
+      "pipeline_version": "pursuit_analysis_pipeline_d1_v3",
+      "prompt_version": "pursuit_analysis_d1_v3",
+      "prompt_tokens": 73383,
+      "output_tokens": 27531,
+      "thinking_tokens": 21420
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "input": "long_rfp",
+      "run": 3,
+      "status": "SUCCESS",
+      "failure_class": null,
+      "latency_s": 66.4,
+      "chunk_count": 9,
+      "attempts": 9,
+      "retry_count": 0,
+      "retry_failure_classes": [],
+      "max_chunk_latency_s": 25.28,
+      "raw_requirements": 79,
+      "raw_positions": 3,
+      "verified_requirements": 64,
+      "verified_positions": 2,
+      "provenance_rejected": 16,
+      "normalization_dropped": 0,
+      "duplicates": 0,
+      "route": "LONG",
+      "route_chunk_characters": 30000,
+      "context_model_verbatim": 57,
+      "context_source_window": 8,
+      "context_none": 1,
+      "pipeline_version": "pursuit_analysis_pipeline_d1_v3",
+      "prompt_version": "pursuit_analysis_d1_v3",
+      "prompt_tokens": 73383,
+      "output_tokens": 25848,
+      "thinking_tokens": 20592
+    }
+  ]
+}

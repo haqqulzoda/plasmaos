@@ -6,8 +6,13 @@ Scope: `backend/app/core/agents/pursuit_analyzer.py` (`_extract_chunk_sync`, `an
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `GEMINI_PURSUIT_MODEL` | `gemini-3.1-pro-preview` | Primary model. Exported as `pursuit_analyzer.MODEL_NAME`, which is also the value stored on a run when it is queued. |
-| `GEMINI_PURSUIT_FALLBACK_MODELS` | `gemini-3.8-flash,gemini-3.7-flash` | Ordered fallbacks, used per chunk only after the primary has exhausted its single retry. Empty disables them. |
+| `GEMINI_PURSUIT_LONG_PACK_CHARS` | `60000` | Routing threshold on the run's total sealed pack characters: `<=` uses the SHORT route, `>` the LONG route. |
+| `GEMINI_PURSUIT_MODEL` | `gemini-3.8-flash` | SHORT-route primary (`pursuit_analyzer.MODEL_NAME`). The route primary is stored on a run when it is queued; the models that produced the accepted output replace it on completion. |
+| `GEMINI_PURSUIT_FALLBACK_MODELS` | `gemini-3.7-flash,gemini-3.1-pro-preview` | SHORT-route ordered fallbacks, used per chunk only after the primary has exhausted its single retry. Empty disables them. |
+| `GEMINI_PURSUIT_LONG_MODEL` | `gemini-3.1-pro-preview` | LONG-route primary. |
+| `GEMINI_PURSUIT_LONG_FALLBACK_MODELS` | `gemini-3.8-flash` | LONG-route ordered fallbacks. |
+| `GEMINI_PURSUIT_CHUNK_CHARS` | `100000` | SHORT-route chunk size. |
+| `GEMINI_PURSUIT_LONG_CHUNK_CHARS` | `100000` | LONG-route chunk size. Overlap is 1,000 characters for chunks of 100,000 or more, 1,500 for smaller chunks. |
 | `GEMINI_PURSUIT_MAX_OUTPUT_TOKENS` | `32768` | `max_output_tokens` on every provider call. |
 | `GEMINI_PURSUIT_TIMEOUT_SECONDS` | `90` | Per-request read timeout (connecting is capped at 10 s). |
 | `PURSUIT_ANALYSIS_CHUNK_BUDGET_SECONDS` | `240` | Per-chunk budget: no new attempt starts if elapsed + backoff + timeout would exceed it. |
@@ -18,20 +23,22 @@ Scope: `backend/app/core/agents/pursuit_analyzer.py` (`_extract_chunk_sync`, `an
 
 The API and the `worker_pursuit_analysis` service read the analyzer variables through `env_file: .env`; `PURSUIT_ANALYSIS_WORKER_CONCURRENCY` is interpolated by compose from the shell or the project `.env`. Values are read at import, like the other extractors.
 
-## Model recommendation (D1, 2026-09-29)
+## Model configuration (D1 final, 2026-09-29)
 
-Rule set by the owner: primary = the flash model with golden 19/19 in >= 4/5 B4a runs AND long-RFP recall >= 75% against the gemini-3.1-pro-preview reference set (prefer gemini-3.8-flash if both qualify; tie-break by recall, then p90). If none qualifies, gemini-3.1-pro-preview is primary for this week with a 150 s per-model timeout and the flash models as fallbacks. Recall is applied as the median per-run recall; the union of runs is reported too.
+History: R3/R3b (`model-bench-r3*.md`) showed no flash model met the primary-model rule (golden 19/19 in >= 4/5 B4a runs AND >= 75% long-RFP recall). Prompt arm B (`pursuit_analysis_d1_v3`) fixed golden coverage (5/5 for both flash models) but not long-document recall. The final configuration therefore routes by pack length.
 
-| Arm (pipeline d1_v3) | Model | Golden 19/19 runs | Long-RFP recall median (union) | Qualifies |
+| Route | Condition | Primary | Fallbacks | Chunk size |
 | --- | --- | --- | --- | --- |
-| A: source-window contexts, prompt p0_v2 (`model-bench-r3.md`) | gemini-3.8-flash | 0/5 | 41% (48%) | no |
-| A | gemini-3.7-flash | 0/5 | 37% (39%) | no |
-| B: A + two prompt instructions, prompt d1_v3 (`model-bench-r3b.md`) | gemini-3.8-flash | 5/5 | 37% (46%) | no |
-| B | gemini-3.7-flash | 5/5 | 39% (44%) | no |
+| SHORT | total sealed pack characters <= 60,000 | `gemini-3.8-flash` | `gemini-3.7-flash`, `gemini-3.1-pro-preview` | 100,000 |
+| LONG | > 60,000 | `gemini-3.1-pro-preview` (150 s timeout) | `gemini-3.8-flash` | 100,000 |
 
-Outcome: no flash model qualifies. Implemented defaults: primary `gemini-3.1-pro-preview` with `GEMINI_PURSUIT_MODEL_TIMEOUTS=gemini-3.1-pro-preview=150`; fallbacks `gemini-3.8-flash,gemini-3.7-flash` (3.8 first per the owner's stated preference; it also had the higher union recall). `gemini-3.6-flash` was dropped from the chain: it was not re-benched after the first bench and was the slowest flash model there. Prompt arm B is kept (`PROMPT_VERSION = pursuit_analysis_d1_v3`): it took both flash models from 0/5 to 5/5 golden runs and roughly doubled verified B4a requirements without changing the verification rules.
+Run diagnostics record `route`, `route_models`, `route_chunk_characters`, `long_pack_threshold_characters` and `pack_characters`. The queued run's `model_name` is the route primary.
 
-With a 150 s primary timeout and the 240 s chunk budget, a primary timeout at 150 s leaves no room for a primary retry (150 + 150 > 240); that attempt is skipped and the first fallback (90 s) still fits (150 + 90 = 240). A malformed primary response before 90 s is still retried on the primary.
+**R4 pro verification** (`model-bench-r4.md`, prompt/pipeline d1_v3): 12/12 runs succeeded; golden 19/19 in 3/3 B4a-full runs (20 verified requirements each); long RFP 75/82/82 verified requirements, p90 101.7 s. Its three long-RFP runs form the fresh reference set (84 distinct items). Against it, R3b flash recall at 100,000-character chunks: gemini-3.8-flash 39% median per run (49% union), gemini-3.7-flash 38% (44%).
+
+**Flash chunk-size experiment** (`model-bench-r4c30.md`, `model-bench-r4c50.md`, gemini-3.8-flash on the long RFP, overlap 1,500): 30,000-character chunks gave 57% median per-run recall (67% union) with 9 provider calls per run and p90 66.0 s; 50,000 gave 51% (58%) with 6 calls and p90 47.6 s. Neither reached the 75% bar, so the decision branch kept the LONG route on `gemini-3.1-pro-preview` at 100,000-character chunks. Smaller chunks clearly help flash recall and are the next lever if pro-preview cost or latency becomes a problem.
+
+With a 150 s pro-preview timeout inside the 240 s chunk budget, a pro-preview failure after more than 90 s leaves no room for its retry (the retry is skipped) and the chunk falls through to `gemini-3.8-flash` (90 s), which still fits; a pro-preview timeout at 150 s followed by the flash fallback ends by 240 s (+10 s connect). With chunk concurrency 3 and about 100 s per pro-preview chunk, the 480 s run budget admits about five waves of chunks (roughly 15 chunks, ~1.4 M characters at 100,000-character chunks); larger packs will fail with `RUN_BUDGET_EXCEEDED` unless `PURSUIT_ANALYSIS_RUN_BUDGET_SECONDS` is raised.
 
 ## Source context (pipeline d1_v3)
 
@@ -40,7 +47,7 @@ Owner decision: the verbatim quote remains the sole trust anchor and its check (
 | Model-supplied `source_context` | Result | `context_origin` |
 | --- | --- | --- |
 | absent | unchanged (no context) | `NONE` |
-| found in the sealed text (`_normalized_contains`, i.e. equal up to whitespace, NFKC, apostrophe/dash and page-decoration normalization) | kept as supplied | `MODEL_VERBATIM` |
+| found in the sealed text, exactly or up to the quote normalization (whitespace, NFKC, apostrophe/dash, page decoration) | replaced by the **exact source substring** it maps to (nearest occurrence to the quote), as quotes are mapped to exact offsets | `MODEL_VERBATIM` |
 | not found | the fact is kept and its context is **replaced** by an exact window of the sealed text | `SOURCE_WINDOW` |
 | not found, and the quote alone is longer than 800 characters | the context is dropped (`None`) | `NONE` |
 

@@ -361,7 +361,8 @@ async def create_analysis_run(
     run = AnalysisRun(
         organization_id=organization_id, pursuit_id=pursuit_id, pack_id=pack.id,
         requested_by_membership_id=membership_id, analysis_language=language, status="QUEUED",
-        model_provider=pursuit_analyzer.MODEL_PROVIDER, model_name=pursuit_analyzer.MODEL_NAME,
+        model_provider=pursuit_analyzer.MODEL_PROVIDER,
+        model_name=pursuit_analyzer.route_for(character_count).models[0],
         prompt_version=pursuit_analyzer.PROMPT_VERSION, prompt_sha256=pursuit_analyzer.PROMPT_SHA256,
         schema_version=pursuit_analyzer.SCHEMA_VERSION, pipeline_version=pursuit_analyzer.PIPELINE_VERSION,
     )

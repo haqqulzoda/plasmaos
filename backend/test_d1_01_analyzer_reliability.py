@@ -259,7 +259,8 @@ def test_configuration_defaults_and_environment_overrides() -> None:
         "import json;from app.core.agents import pursuit_analyzer as a;"
         "print(json.dumps([a.MODEL_NAME, list(a.FALLBACK_MODEL_NAMES), a.MAX_OUTPUT_TOKENS,"
         " a.REQUEST_TIMEOUT_SECONDS, a.CHUNK_BUDGET_SECONDS, a.RUN_BUDGET_SECONDS, a.CHUNK_CONCURRENCY,"
-        " a.MODEL_TIMEOUT_SECONDS]))"
+        " a.MODEL_TIMEOUT_SECONDS, a.LONG_PACK_CHARACTERS, a.LONG_MODEL_NAME, list(a.LONG_FALLBACK_MODEL_NAMES),"
+        " a.MAX_CHUNK_CHARACTERS, a.LONG_CHUNK_CHARACTERS]))"
     )
 
     def configured(**environment: str) -> list[object]:
@@ -273,15 +274,20 @@ def test_configuration_defaults_and_environment_overrides() -> None:
         return json.loads(done.stdout.strip().splitlines()[-1])
 
     assert configured() == [
-        "gemini-3.1-pro-preview", ["gemini-3.8-flash", "gemini-3.7-flash"], 32768, 90, 240, 480, 3,
-        {"gemini-3.1-pro-preview": 150},
+        "gemini-3.8-flash", ["gemini-3.7-flash", "gemini-3.1-pro-preview"], 32768, 90, 240, 480, 3,
+        {"gemini-3.1-pro-preview": 150}, 60000, "gemini-3.1-pro-preview", ["gemini-3.8-flash"], 100000, 100000,
     ]
     assert configured(
         GEMINI_PURSUIT_MODEL="m1", GEMINI_PURSUIT_FALLBACK_MODELS="m2, m1,m3,m2",
         GEMINI_PURSUIT_MAX_OUTPUT_TOKENS="4096", GEMINI_PURSUIT_TIMEOUT_SECONDS="45",
         PURSUIT_ANALYSIS_CHUNK_BUDGET_SECONDS="100", PURSUIT_ANALYSIS_RUN_BUDGET_SECONDS="300",
         PURSUIT_ANALYSIS_CHUNK_CONCURRENCY="5", GEMINI_PURSUIT_MODEL_TIMEOUTS="m1=120",
-    ) == ["m1", ["m2", "m3"], 4096, 45, 100, 300, 5, {"m1": 120}]
+    )[:8] == ["m1", ["m2", "m3"], 4096, 45, 100, 300, 5, {"m1": 120}]
+    assert configured(
+        GEMINI_PURSUIT_LONG_PACK_CHARS="80000", GEMINI_PURSUIT_LONG_MODEL="l1",
+        GEMINI_PURSUIT_LONG_FALLBACK_MODELS="l1,l2", GEMINI_PURSUIT_CHUNK_CHARS="40000",
+        GEMINI_PURSUIT_LONG_CHUNK_CHARS="30000",
+    )[8:] == [80000, "l1", ["l2"], 40000, 30000]
     assert configured(GEMINI_PURSUIT_MODEL_TIMEOUTS="")[7] == {}
     assert configured(GEMINI_PURSUIT_FALLBACK_MODELS="", PURSUIT_ANALYSIS_CHUNK_CONCURRENCY="0")[1] == []
     assert configured(PURSUIT_ANALYSIS_CHUNK_CONCURRENCY="0")[6] == 1
@@ -299,6 +305,7 @@ def small_chunks(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(analyzer, "_resolve_gemini_api_key", lambda: "test-key")
     monkeypatch.setattr(analyzer, "MAX_CHUNK_CHARACTERS", 80)
     monkeypatch.setattr(analyzer, "CHUNK_OVERLAP_CHARACTERS", 10)
+    monkeypatch.setattr(analyzer, "SMALL_CHUNK_OVERLAP_CHARACTERS", 10)
     monkeypatch.setattr(analyzer, "MODEL_NAME", PRIMARY)
     monkeypatch.setattr(analyzer, "FALLBACK_MODEL_NAMES", FALLBACKS)
 
@@ -322,7 +329,7 @@ def test_chunks_run_concurrently_within_the_bound_and_merge_in_chunk_order(small
     total_chunks = len(analyzer._chunks(CHUNK_TEXT))
     assert total_chunks >= 6
 
-    def stub(item, chunk, language, api_key):
+    def stub(item, chunk, language, api_key, models=None):
         number = _chunk_index(CHUNK_TEXT, chunk)
         with lock:
             state["running"] += 1
@@ -352,11 +359,12 @@ def test_duplicates_across_overlapping_chunks_keep_the_first_chunk_and_counters_
     monkeypatch.setattr(analyzer, "CHUNK_CONCURRENCY", 3)
     monkeypatch.setattr(analyzer, "MAX_CHUNK_CHARACTERS", 70)
     monkeypatch.setattr(analyzer, "CHUNK_OVERLAP_CHARACTERS", 30)
+    monkeypatch.setattr(analyzer, "SMALL_CHUNK_OVERLAP_CHARACTERS", 30)
     quote = "Three references."
     text = "x" * 40 + " " + quote + " " + "y" * 60  # the quote sits in the overlap of chunks 0 and 1
     assert len(analyzer._chunks(text)) == 3
 
-    def stub(item, chunk, language, api_key):
+    def stub(item, chunk, language, api_key, models=None):
         number = _chunk_index(text, chunk)
         if number == 2:
             return []
@@ -384,7 +392,7 @@ def test_diagnostics_are_count_only_and_record_attempts_retries_latency_and_mode
     secret = "PRIVATE-SOURCE-MARKER"
     text = CHUNK_TEXT + secret
 
-    def stub(item, chunk, language, api_key):
+    def stub(item, chunk, language, api_key, models=None):
         number = _chunk_index(text, chunk)
         used_fallback = number == 1
         return analyzer.ChunkFacts(
@@ -420,7 +428,7 @@ def test_a_failed_chunk_stops_new_provider_work_and_raises_the_classified_failur
     monkeypatch.setattr(analyzer, "CHUNK_CONCURRENCY", 1)
     started: list[int] = []
 
-    def stub(item, chunk, language, api_key):
+    def stub(item, chunk, language, api_key, models=None):
         number = _chunk_index(CHUNK_TEXT, chunk)
         started.append(number)
         if number == 1:
@@ -436,7 +444,7 @@ def test_a_failed_chunk_stops_new_provider_work_and_raises_the_classified_failur
 def test_failure_under_concurrency_raises_the_earliest_chunks_failure(small_chunks, monkeypatch) -> None:
     monkeypatch.setattr(analyzer, "CHUNK_CONCURRENCY", 3)
 
-    def stub(item, chunk, language, api_key):
+    def stub(item, chunk, language, api_key, models=None):
         number = _chunk_index(CHUNK_TEXT, chunk)
         if number == 0:
             time.sleep(0.1)
@@ -712,7 +720,7 @@ def test_run_budget_stops_starting_chunks_and_fails_with_the_classified_failure(
     monkeypatch.setattr(analyzer, "RUN_BUDGET_SECONDS", 250)
     started: list[int] = []
 
-    def stub(item, chunk, language, api_key):
+    def stub(item, chunk, language, api_key, models=None):
         started.append(_chunk_index(CHUNK_TEXT, chunk))
         fake.now += 200  # each chunk takes 200 s of the 250 s run budget
         return analyzer.ChunkFacts([], {"model_name": PRIMARY, "attempts": 1})
@@ -729,7 +737,7 @@ def test_run_budget_lets_started_chunks_finish_and_a_fast_run_is_unaffected(smal
     monkeypatch.setattr(analyzer, "_monotonic", lambda: fake.now)
     monkeypatch.setattr(analyzer, "RUN_BUDGET_SECONDS", 480)
 
-    def stub(item, chunk, language, api_key):
+    def stub(item, chunk, language, api_key, models=None):
         fake.now += 1
         return analyzer.ChunkFacts([_fact(_quote_in(chunk), "Item")], {"model_name": PRIMARY, "attempts": 1})
 
@@ -1057,3 +1065,129 @@ def test_report_writes_keep_hand_written_run_notes(tmp_path) -> None:
     report.write_text("# old generated\n\n## Run notes\n\n- a human note\n", encoding="utf-8")
     bench.write_report(report, "# new generated\n")
     assert report.read_text(encoding="utf-8") == "# new generated\n\n## Run notes\n\n- a human note\n"
+
+
+# --- D1 final: exact model contexts and length-based routing ----------------------
+
+CONTEXT_SOURCE = (
+    "Section 4:\n"
+    "The bidder’s  proposal shall\n"
+    "include a work plan.\n\n"
+    "[[PAGE 2]]\n"
+    "Other text."
+)
+
+
+def test_a_normalized_model_context_is_persisted_as_the_exact_source_substring(monkeypatch) -> None:
+    # The model wrote a straight apostrophe, single spaces and no line break.
+    model_context = "Section 4: The bidder's proposal shall include a work plan."
+    assert model_context not in CONTEXT_SOURCE and analyzer._normalized_contains(CONTEXT_SOURCE, model_context)
+    result = _analyze_one(monkeypatch, CONTEXT_SOURCE, [
+        _fact("include a work plan.", "Work plan", source_context=model_context),
+    ])
+    kept = result[0]
+    assert kept.context_origin == "MODEL_VERBATIM"
+    exact = "Section 4:\nThe bidder’s  proposal shall\ninclude a work plan."
+    assert kept.fact.source_context == exact and exact in CONTEXT_SOURCE
+    assert result.diagnostics["context_model_verbatim"] == 1
+
+
+def test_an_exact_model_context_is_unchanged_and_the_nearest_occurrence_is_used() -> None:
+    text = "Heading.\nclause A\nfiller " * 3 + "the quote here."
+    near = text.index("the quote here.")
+    span = analyzer._exact_span(text, "clause A", near)
+    assert span == (text.rindex("clause A"), text.rindex("clause A") + len("clause A"))
+    assert analyzer._exact_span(text, "clause   A", 0) == (text.index("clause A"), text.index("clause A") + 8)
+    assert analyzer._exact_span(text, "not there", 0) is None
+    assert analyzer._exact_span(text, " \n ", 0) is None  # empty after normalization
+
+
+def test_normalization_is_computed_once_per_item(monkeypatch) -> None:
+    calls = {"count": 0}
+    original = analyzer._normalized_evidence
+
+    def counting(value, *, map_offsets):
+        if map_offsets and value == CONTEXT_SOURCE:
+            calls["count"] += 1
+        return original(value, map_offsets=map_offsets)
+
+    monkeypatch.setattr(analyzer, "_normalized_evidence", counting)
+    facts = [
+        _fact("include a work plan.", f"Work plan {n}", source_context="The bidder's proposal shall include")
+        for n in range(3)
+    ]
+    result = _analyze_one(monkeypatch, CONTEXT_SOURCE, facts)
+    assert len(result) == 3 and all(v.context_origin == "MODEL_VERBATIM" for v in result)
+    assert calls["count"] == 1
+
+
+@pytest.fixture
+def routes(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(analyzer, "LONG_PACK_CHARACTERS", 1_000)
+    monkeypatch.setattr(analyzer, "MODEL_NAME", "short-primary")
+    monkeypatch.setattr(analyzer, "FALLBACK_MODEL_NAMES", ("short-fallback", "short-last"))
+    monkeypatch.setattr(analyzer, "LONG_MODEL_NAME", "long-primary")
+    monkeypatch.setattr(analyzer, "LONG_FALLBACK_MODEL_NAMES", ("long-fallback",))
+    monkeypatch.setattr(analyzer, "MAX_CHUNK_CHARACTERS", 5_000)
+    monkeypatch.setattr(analyzer, "LONG_CHUNK_CHARACTERS", 400)
+
+
+def test_routing_boundary_is_inclusive_for_the_short_route(routes) -> None:
+    assert analyzer.route_for(1_000) == analyzer.Route("SHORT", ("short-primary", "short-fallback", "short-last"), 5_000)
+    assert analyzer.route_for(1_001) == analyzer.Route("LONG", ("long-primary", "long-fallback"), 400)
+    assert analyzer.route_for(0).name == "SHORT"
+
+
+def _routed_run(monkeypatch, texts: list[str]):
+    seen: list[tuple[int, tuple[str, ...]]] = []
+
+    def stub(item, chunk, language, api_key, models=None):
+        seen.append((len(chunk), models))
+        return analyzer.ChunkFacts([], {"model_name": models[0], "attempts": 1})
+
+    monkeypatch.setattr(analyzer, "_resolve_gemini_api_key", lambda: "test-key")
+    monkeypatch.setattr(analyzer, "_extract_chunk_sync", stub)
+    pack = [SealedTextInput(uuid4(), f"part-{n}.txt", text) for n, text in enumerate(texts)]
+    return asyncio.run(analyzer.analyze_pack_items(pack, "en")), seen
+
+
+def test_the_route_uses_total_pack_characters_its_chain_and_its_chunk_size(routes, monkeypatch) -> None:
+    # Two items of 600 characters: each is short, the pack (1,200) is long.
+    result, seen = _routed_run(monkeypatch, ["x " * 300, "y " * 300])
+    assert {models for _, models in seen} == {("long-primary", "long-fallback")}
+    assert max(size for size, _ in seen) <= 400 and len(seen) == 4  # two 400-char chunks per item
+    d = result.diagnostics
+    assert (d["route"], d["pack_characters"], d["long_pack_threshold_characters"]) == ("LONG", 1_200, 1_000)
+    assert d["route_models"] == ["long-primary", "long-fallback"] and d["route_chunk_characters"] == 400
+    assert d["model_name"] == "long-primary" and d["fallback_chunk_count"] == 0
+
+    result, seen = _routed_run(monkeypatch, ["z " * 500])
+    assert seen == [(1_000, ("short-primary", "short-fallback", "short-last"))]
+    assert result.diagnostics["route"] == "SHORT" and result.diagnostics["route_chunk_characters"] == 5_000
+
+
+def test_fallback_chains_follow_the_route(clock, client, routes) -> None:
+    long_chain = analyzer.route_for(10_000).models
+    client.script = ["{bad", "{bad", _payload(_fact())]
+    facts = analyzer._extract_chunk_sync(SealedTextInput(uuid4(), "s", QUOTE), QUOTE, "en", "k", long_chain)
+    assert _models_called() == ["long-primary", "long-primary", "long-fallback"]
+    assert facts.meta["model_name"] == "long-fallback"
+    client.calls.clear()
+    client.script = ["{bad"] * 4
+    with pytest.raises(ValidationError):
+        analyzer._extract_chunk_sync(SealedTextInput(uuid4(), "s", QUOTE), QUOTE, "en", "k", analyzer.route_for(10).models)
+    assert _models_called() == ["short-primary", "short-primary", "short-fallback", "short-last"]
+
+
+def test_chunk_overlap_is_1500_below_the_default_chunk_size_and_1000_at_it() -> None:
+    text = "w" * 120_000
+    small = analyzer._chunks(text, 30_000)
+    assert [start for start, _ in small][:3] == [0, 28_500, 57_000]
+    assert all(len(chunk) <= 30_000 for _, chunk in small) and small[-1][0] + len(small[-1][1]) == len(text)
+    default = analyzer._chunks(text, 100_000)
+    assert [start for start, _ in default] == [0, 99_000]
+
+
+def test_the_queued_run_model_is_the_route_primary() -> None:
+    service = (BACKEND_DIR / "app" / "services" / "pursuit_analysis.py").read_text(encoding="utf-8")
+    assert "model_name=pursuit_analyzer.route_for(character_count).models[0]" in service

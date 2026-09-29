@@ -16,7 +16,7 @@ import re
 import time
 import unicodedata
 from dataclasses import dataclass
-from typing import Literal
+from typing import Callable, Literal
 from uuid import UUID
 
 import requests
@@ -37,8 +37,12 @@ PROMPT_VERSION = "pursuit_analysis_d1_v3"
 SCHEMA_VERSION = "pursuit_analysis_output_p0_v2"
 PIPELINE_VERSION = "pursuit_analysis_pipeline_d1_v3"
 MODEL_PROVIDER = "google-gemini"
-MAX_CHUNK_CHARACTERS = 100_000
-CHUNK_OVERLAP_CHARACTERS = 1_000
+DEFAULT_CHUNK_CHARACTERS = 100_000
+# Chunk size of the SHORT route (GEMINI_PURSUIT_CHUNK_CHARS) and of the LONG route.
+MAX_CHUNK_CHARACTERS: int = max(1_000, _env_int("GEMINI_PURSUIT_CHUNK_CHARS", DEFAULT_CHUNK_CHARACTERS))
+LONG_CHUNK_CHARACTERS: int = max(1_000, _env_int("GEMINI_PURSUIT_LONG_CHUNK_CHARS", DEFAULT_CHUNK_CHARACTERS))
+CHUNK_OVERLAP_CHARACTERS = 1_000  # chunks of DEFAULT_CHUNK_CHARACTERS or more
+SMALL_CHUNK_OVERLAP_CHARACTERS = 1_500  # smaller chunks
 
 
 def _fallback_models(raw: str, primary: str) -> tuple[str, ...]:
@@ -50,13 +54,17 @@ def _fallback_models(raw: str, primary: str) -> tuple[str, ...]:
     return tuple(models)
 
 
-# D1 decision (docs/audits/d1): no flash model met the primary-model rule (golden
-# 19/19 in >= 4/5 B4a runs AND >= 75% long-RFP recall), so the reference-quality
-# model is primary with a longer timeout and the flash models are fallbacks.
-MODEL_NAME: str = os.getenv("GEMINI_PURSUIT_MODEL", "").strip() or "gemini-3.1-pro-preview"
-# Used per chunk only after the primary model has exhausted its single retry.
+# Length-based routing (docs/audits/d1): packs of at most LONG_PACK_CHARACTERS use the
+# SHORT route, longer packs the LONG route. Each route has a primary model, which gets
+# one retry, then ordered fallbacks used per chunk only after that retry is exhausted.
+LONG_PACK_CHARACTERS: int = max(0, _env_int("GEMINI_PURSUIT_LONG_PACK_CHARS", 60_000))
+MODEL_NAME: str = os.getenv("GEMINI_PURSUIT_MODEL", "").strip() or "gemini-3.8-flash"
 FALLBACK_MODEL_NAMES: tuple[str, ...] = _fallback_models(
-    os.getenv("GEMINI_PURSUIT_FALLBACK_MODELS", "gemini-3.8-flash,gemini-3.7-flash"), MODEL_NAME
+    os.getenv("GEMINI_PURSUIT_FALLBACK_MODELS", "gemini-3.7-flash,gemini-3.1-pro-preview"), MODEL_NAME
+)
+LONG_MODEL_NAME: str = os.getenv("GEMINI_PURSUIT_LONG_MODEL", "").strip() or "gemini-3.1-pro-preview"
+LONG_FALLBACK_MODEL_NAMES: tuple[str, ...] = _fallback_models(
+    os.getenv("GEMINI_PURSUIT_LONG_FALLBACK_MODELS", "gemini-3.8-flash"), LONG_MODEL_NAME
 )
 # Output cap per provider call. The largest successful historical response was
 # ~18.5K characters (P0R attempt 2). At a pessimistic 2 characters/token
@@ -321,18 +329,35 @@ class VerifiedFacts(list[VerifiedFact]):
         self.diagnostics = diagnostics
 
 
-def _chunks(text: str) -> list[tuple[int, str]]:
-    if len(text) <= MAX_CHUNK_CHARACTERS:
+def _chunks(text: str, size: int | None = None) -> list[tuple[int, str]]:
+    size = size or MAX_CHUNK_CHARACTERS
+    if len(text) <= size:
         return [(0, text)]
+    overlap = CHUNK_OVERLAP_CHARACTERS if size >= DEFAULT_CHUNK_CHARACTERS else SMALL_CHUNK_OVERLAP_CHARACTERS
+    overlap = min(overlap, size // 2)  # always advance
     result: list[tuple[int, str]] = []
     cursor = 0
     while cursor < len(text):
-        end = min(len(text), cursor + MAX_CHUNK_CHARACTERS)
+        end = min(len(text), cursor + size)
         result.append((cursor, text[cursor:end]))
         if end == len(text):
             break
-        cursor = end - CHUNK_OVERLAP_CHARACTERS
+        cursor = end - overlap
     return result
+
+
+@dataclass(frozen=True)
+class Route:
+    name: str  # SHORT or LONG
+    models: tuple[str, ...]  # primary first, then fallbacks
+    chunk_characters: int
+
+
+def route_for(pack_characters: int) -> Route:
+    """Model chain and chunk size for a pack of ``pack_characters`` sealed characters."""
+    if pack_characters > LONG_PACK_CHARACTERS:
+        return Route("LONG", (LONG_MODEL_NAME, *LONG_FALLBACK_MODEL_NAMES), LONG_CHUNK_CHARACTERS)
+    return Route("SHORT", (MODEL_NAME, *FALLBACK_MODEL_NAMES), MAX_CHUNK_CHARACTERS)
 
 
 _PAGE_MARKER = re.compile(
@@ -516,16 +541,58 @@ def _source_window(text: str, start: int, end: int) -> tuple[int, int] | None:
     return window_start, window_end
 
 
-def _resolve_context(fact: ExtractedFact, text: str, start: int, end: int) -> tuple[ExtractedFact, str]:
-    """Keep a verifiable model context; otherwise substitute an exact source window.
+NormalizedText = tuple[str, list[tuple[int, int]]]
 
-    The quote has already been verified. A model context that is not found in the
-    source is never kept: it is replaced by a verbatim window of the sealed text.
+
+def _exact_span(
+    text: str, candidate: str, near: int, normalized: Callable[[], NormalizedText] | None = None
+) -> tuple[int, int] | None:
+    """Offsets of ``candidate`` in ``text``, exactly or after the quote normalization.
+
+    Uses the same normalization as ``_locate`` (so it accepts exactly what
+    ``_normalized_contains`` accepts) and maps a normalized match back to source
+    offsets. Of several occurrences, the one starting nearest ``near`` wins.
+    """
+    best: tuple[int, int] | None = None
+
+    def consider(span: tuple[int, int]) -> None:
+        nonlocal best
+        if best is None or abs(span[0] - near) < abs(best[0] - near):
+            best = span
+
+    position = text.find(candidate)
+    while position >= 0:
+        consider((position, position + len(candidate)))
+        position = text.find(candidate, position + 1)
+    if best is not None:
+        return best
+    normalized_candidate, _ = _normalized_evidence(candidate, map_offsets=False)
+    if not normalized_candidate:
+        return None
+    normalized_text, offsets = normalized() if normalized else _normalized_evidence(text, map_offsets=True)
+    position = normalized_text.find(normalized_candidate)
+    while position >= 0:
+        consider((offsets[position][0], offsets[position + len(normalized_candidate) - 1][1]))
+        position = normalized_text.find(normalized_candidate, position + 1)
+    return best
+
+
+def _resolve_context(
+    fact: ExtractedFact, text: str, start: int, end: int,
+    normalized: Callable[[], NormalizedText] | None = None,
+) -> tuple[ExtractedFact, str]:
+    """Keep a verifiable model context as exact source text; otherwise substitute a window.
+
+    The quote has already been verified. A model context found in the source (up to
+    the quote normalization) is replaced by the exact source substring it maps to,
+    so persisted context text is always byte-for-byte source text. A context that is
+    not found is replaced by a verbatim window of the sealed text.
     """
     if not fact.source_context:
         return fact, "NONE"
-    if _normalized_contains(text, fact.source_context):
-        return fact, "MODEL_VERBATIM"
+    span = _exact_span(text, fact.source_context, start, normalized)
+    if span is not None:
+        return fact.model_copy(update={"source_context": text[span[0]:span[1]]}), "MODEL_VERBATIM"
     window = _source_window(text, start, end)
     if window is None:
         return fact.model_copy(update={"source_context": None}), "NONE"
@@ -672,7 +739,9 @@ def _generate_chunk_once(
     return facts, counts
 
 
-def _extract_chunk_sync(item: SealedTextInput, chunk: str, language: str, api_key: str) -> ChunkFacts:
+def _extract_chunk_sync(
+    item: SealedTextInput, chunk: str, language: str, api_key: str, models: tuple[str, ...] | None = None
+) -> ChunkFacts:
     """Extract one chunk: the primary model gets one retry, then each fallback one attempt.
 
     Only malformed/schema-invalid/empty output, timeouts, and 429/503/504 are
@@ -685,7 +754,8 @@ def _extract_chunk_sync(item: SealedTextInput, chunk: str, language: str, api_ke
     as it did before retries existed.
     """
     prompt = _prompt(item, chunk, language)
-    plan = [MODEL_NAME, MODEL_NAME, *FALLBACK_MODEL_NAMES]
+    chain = tuple(models) if models else (MODEL_NAME, *FALLBACK_MODEL_NAMES)
+    plan = [chain[0], chain[0], *chain[1:]]
     started = _monotonic()
     failure_classes: list[str] = []
     last_error: Exception | None = None
@@ -744,11 +814,20 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
     }
     # provenance_rejected_count counts quote failures only; contexts never reject a fact.
     context_counts = {"MODEL_VERBATIM": 0, "SOURCE_WINDOW": 0, "NONE": 0}
+    pack_characters = sum(len(item.text) for item in items)
+    route = route_for(pack_characters)
     jobs = [
         (item_index, chunk_index, item, chunk_start, chunk)
         for item_index, item in enumerate(items)
-        for chunk_index, (chunk_start, chunk) in enumerate(_chunks(item.text))
+        for chunk_index, (chunk_start, chunk) in enumerate(_chunks(item.text, route.chunk_characters))
     ]
+    normalized_items: dict[int, NormalizedText] = {}
+
+    def normalized_for(index: int, text: str) -> NormalizedText:
+        # Normalizing a long pack is costly; do it at most once per item, and only on demand.
+        if index not in normalized_items:
+            normalized_items[index] = _normalized_evidence(text, map_offsets=True)
+        return normalized_items[index]
     semaphore = asyncio.Semaphore(CHUNK_CONCURRENCY)
     failed = asyncio.Event()
     run_started = _monotonic()
@@ -764,7 +843,7 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
                 )
             started = _monotonic()
             try:
-                facts = await asyncio.to_thread(_extract_chunk_sync, job[2], job[4], language, api_key)
+                facts = await asyncio.to_thread(_extract_chunk_sync, job[2], job[4], language, api_key, route.models)
             except BaseException:
                 failed.set()
                 raise
@@ -829,7 +908,9 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
                 continue
             seen.add(key)
             start, end, page, paragraph = location
-            fact, origin = _resolve_context(fact, item.text, start, end)
+            fact, origin = _resolve_context(
+                fact, item.text, start, end, lambda index=item_index, text=item.text: normalized_for(index, text)
+            )
             context_counts[origin] += 1
             verified.append(VerifiedFact(item.pack_item_id, fact, start, end, page, paragraph, origin))
     diagnostics["verified_requirement_count"] = sum(
@@ -839,17 +920,22 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
     diagnostics["context_model_verbatim"] = context_counts["MODEL_VERBATIM"]
     diagnostics["context_source_window"] = context_counts["SOURCE_WINDOW"]
     diagnostics["context_none"] = context_counts["NONE"]
-    chain = (MODEL_NAME, *FALLBACK_MODEL_NAMES)
+    chain = route.models
     used = list(dict.fromkeys(str(record["model_name"]) for record in chunk_records))
     models_used = [name for name in chain if name in used] + [name for name in used if name not in chain]
     diagnostics.update({
         # Models that produced accepted output, primary first; the worker records this as the run's model_name.
-        "model_name": ",".join(models_used) or MODEL_NAME,
+        "model_name": ",".join(models_used) or route.models[0],
         "analysis_models": models_used,
         "chunk_count": len(chunk_records),
         "attempt_count": sum(int(record["attempts"]) for record in chunk_records),
         "retry_count": sum(int(record["retry_count"]) for record in chunk_records),
-        "fallback_chunk_count": sum(record["model_name"] != MODEL_NAME for record in chunk_records),
+        "fallback_chunk_count": sum(record["model_name"] != route.models[0] for record in chunk_records),
+        "route": route.name,
+        "route_models": list(route.models),
+        "route_chunk_characters": route.chunk_characters,
+        "long_pack_threshold_characters": LONG_PACK_CHARACTERS,
+        "pack_characters": pack_characters,
         "chunk_concurrency": CHUNK_CONCURRENCY,
         "max_output_tokens": MAX_OUTPUT_TOKENS,
         "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
