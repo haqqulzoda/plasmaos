@@ -33,9 +33,9 @@ from app.core.analysis_languages import analysis_language_prompt_instruction
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "pursuit_analysis_p0_v2"
+PROMPT_VERSION = "pursuit_analysis_d1_v3"
 SCHEMA_VERSION = "pursuit_analysis_output_p0_v2"
-PIPELINE_VERSION = "pursuit_analysis_pipeline_p0_v2"
+PIPELINE_VERSION = "pursuit_analysis_pipeline_d1_v3"
 MODEL_PROVIDER = "google-gemini"
 MAX_CHUNK_CHARACTERS = 100_000
 CHUNK_OVERLAP_CHARACTERS = 1_000
@@ -50,10 +50,13 @@ def _fallback_models(raw: str, primary: str) -> tuple[str, ...]:
     return tuple(models)
 
 
-MODEL_NAME: str = os.getenv("GEMINI_PURSUIT_MODEL", "").strip() or "gemini-3.7-flash"
+# D1 decision (docs/audits/d1): no flash model met the primary-model rule (golden
+# 19/19 in >= 4/5 B4a runs AND >= 75% long-RFP recall), so the reference-quality
+# model is primary with a longer timeout and the flash models are fallbacks.
+MODEL_NAME: str = os.getenv("GEMINI_PURSUIT_MODEL", "").strip() or "gemini-3.1-pro-preview"
 # Used per chunk only after the primary model has exhausted its single retry.
 FALLBACK_MODEL_NAMES: tuple[str, ...] = _fallback_models(
-    os.getenv("GEMINI_PURSUIT_FALLBACK_MODELS", "gemini-3.8-flash,gemini-3.6-flash"), MODEL_NAME
+    os.getenv("GEMINI_PURSUIT_FALLBACK_MODELS", "gemini-3.8-flash,gemini-3.7-flash"), MODEL_NAME
 )
 # Output cap per provider call. The largest successful historical response was
 # ~18.5K characters (P0R attempt 2). At a pessimistic 2 characters/token
@@ -64,6 +67,31 @@ FALLBACK_MODEL_NAMES: tuple[str, ...] = _fallback_models(
 MAX_OUTPUT_TOKENS: int = max(1, _env_int("GEMINI_PURSUIT_MAX_OUTPUT_TOKENS", 32_768))
 # Per-request HTTP timeout. A timed-out call is retried once like a malformed one.
 REQUEST_TIMEOUT_SECONDS: int = max(1, _env_int("GEMINI_PURSUIT_TIMEOUT_SECONDS", 90))
+
+
+def _model_timeouts(raw: str) -> dict[str, int]:
+    """Parse ``model=seconds,model=seconds``; malformed entries are ignored."""
+    timeouts: dict[str, int] = {}
+    for entry in raw.split(","):
+        name, _, value = entry.partition("=")
+        try:
+            seconds = int(value.strip())
+        except ValueError:
+            continue
+        if name.strip() and seconds >= 1:
+            timeouts[name.strip()] = seconds
+    return timeouts
+
+
+# Per-model overrides of REQUEST_TIMEOUT_SECONDS as "model=seconds,model=seconds".
+MODEL_TIMEOUT_SECONDS: dict[str, int] = _model_timeouts(
+    os.getenv("GEMINI_PURSUIT_MODEL_TIMEOUTS", "gemini-3.1-pro-preview=150")
+)
+
+
+def _timeout_for(model: str) -> int:
+    return MODEL_TIMEOUT_SECONDS.get(model, REQUEST_TIMEOUT_SECONDS)
+
 # A chunk starts no new attempt when elapsed + REQUEST_TIMEOUT_SECONDS would exceed
 # this budget; a run starts no new chunk once this budget is spent. Chunks already
 # in flight finish within their own budget (see docs/audits/d1 for worst cases).
@@ -112,8 +140,10 @@ desired qualification is not mandatory: preserve it as PREFERRED or DESIRED with
 the position qualification criteria. A customer-supplied commercial value such as
 an hourly rate is an input requirement; never generate or recommend the value.
 Mark complex or ambiguous rules, including unclear individual-versus-firm role
-applicability, with complex_rule=true. Never invent a page number. Return strict
-JSON only."""
+applicability, with complex_rule=true. source_context must be copied
+character-for-character from the document or left null. Treat each lettered or
+numbered item of a qualifications or required-materials list as a separate fact.
+Never invent a page number. Return strict JSON only."""
 PROMPT_SHA256 = hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()
 
 
@@ -279,6 +309,8 @@ class VerifiedFact:
     char_end: int
     page_number: int | None
     paragraph_number: int | None
+    # MODEL_VERBATIM, SOURCE_WINDOW or NONE; set by analyze_pack_items (see _resolve_context).
+    context_origin: str | None = None
 
 
 class VerifiedFacts(list[VerifiedFact]):
@@ -403,6 +435,103 @@ def _locate(
     return start, end, page_number, paragraph_number
 
 
+CONTEXT_WINDOW_MAX_CHARACTERS = 800
+CONTEXT_LOOKBACK_CHARACTERS = 1_500
+_BLANK_LINE = re.compile(r"\n[ \t\r\f\v]*\n")
+# "5." or "3.2" alone on a line; a bare integer is usually a running page number.
+_BARE_SECTION_NUMBER = re.compile(r"^(?:\d+(?:\.\d+)*\.|\d+(?:\.\d+)+|[A-Z]\.|[IVXLC]+\.)$")
+_NUMBERED_HEADING = re.compile(r"^(?:\d+(?:\.\d+)*\.?|[A-Z]\.|[IVXLC]+\.)\s+\S")
+_CAPS_HEADING_START = re.compile(r"^(?:\d+(?:\.\d+)*\.?\s+)?[^\W\d_]")
+
+
+def _is_context_anchor(line: str) -> bool:
+    """A list preamble (ends with ':') or a short section heading line."""
+    stripped = line.strip()
+    if not stripped or _PAGE_MARKER.fullmatch(stripped):
+        return False
+    if stripped.endswith(":"):
+        return True
+    if len(stripped) > 100:
+        return False
+    if _BARE_SECTION_NUMBER.match(stripped):
+        return True
+    if _NUMBERED_HEADING.match(stripped) and stripped[-1] not in ".;,":
+        return True  # "3.2 Eligibility", but not a numbered list sentence ending in '.'
+    letters = [character for character in stripped if character.isalpha()]
+    return (
+        len(letters) >= 3
+        and all(character.isupper() for character in letters)
+        and bool(_CAPS_HEADING_START.match(stripped))
+    )
+
+
+def _source_window(text: str, start: int, end: int) -> tuple[int, int] | None:
+    """Deterministic verbatim context around ``text[start:end]``.
+
+    Runs from the nearest list preamble or section heading line within
+    ``CONTEXT_LOOKBACK_CHARACTERS`` before the quote (else the start of the quote's
+    paragraph) to the end of the quote's paragraph. If longer than
+    ``CONTEXT_WINDOW_MAX_CHARACTERS`` the tail after the quote is cut first, then the
+    head, always at whitespace and never inside the quote. Returns ``None`` when
+    the quote alone does not fit in the cap.
+    """
+    cap = CONTEXT_WINDOW_MAX_CHARACTERS
+    if end - start > cap:
+        return None
+    breaks = [match.end() for match in _BLANK_LINE.finditer(text, 0, start)]
+    paragraph_start = breaks[-1] if breaks else 0
+    following = _BLANK_LINE.search(text, end)
+    paragraph_end = following.start() if following else len(text)
+
+    window_start = paragraph_start
+    line_start = text.rfind("\n", 0, start) + 1
+    floor = max(0, start - CONTEXT_LOOKBACK_CHARACTERS)
+    cursor = line_start
+    while cursor > floor:
+        previous = text.rfind("\n", 0, cursor - 1) + 1
+        if previous < floor:
+            break
+        if _is_context_anchor(text[previous:cursor]):
+            window_start = previous
+            break
+        cursor = previous
+    window_start = min(window_start, start)
+    window_end = max(paragraph_end, end)
+
+    # Trim at a line break when one is in range, else at any whitespace.
+    if window_end - window_start > cap:
+        candidates = range(max(end, window_start + cap), end - 1, -1)
+        window_end = next((i for i in candidates if i < len(text) and text[i] == "\n"), None) or next(
+            (i for i in candidates if i < len(text) and text[i].isspace()), end
+        )
+    if window_end - window_start > cap:
+        candidates = range(min(start, window_end - cap), start + 1)
+        window_start = next((i for i in candidates if i > 0 and text[i - 1] == "\n"), None) or next(
+            (i for i in candidates if i > 0 and text[i - 1].isspace()), start
+        )
+    while window_start < start and text[window_start].isspace():
+        window_start += 1
+    while window_end > end and text[window_end - 1].isspace():
+        window_end -= 1
+    return window_start, window_end
+
+
+def _resolve_context(fact: ExtractedFact, text: str, start: int, end: int) -> tuple[ExtractedFact, str]:
+    """Keep a verifiable model context; otherwise substitute an exact source window.
+
+    The quote has already been verified. A model context that is not found in the
+    source is never kept: it is replaced by a verbatim window of the sealed text.
+    """
+    if not fact.source_context:
+        return fact, "NONE"
+    if _normalized_contains(text, fact.source_context):
+        return fact, "MODEL_VERBATIM"
+    window = _source_window(text, start, end)
+    if window is None:
+        return fact.model_copy(update={"source_context": None}), "NONE"
+    return fact.model_copy(update={"source_context": text[window[0]:window[1]]}), "SOURCE_WINDOW"
+
+
 def _prompt(item: SealedTextInput, chunk: str, language: str) -> str:
     return (
         analysis_language_prompt_instruction(language)
@@ -511,7 +640,7 @@ def _token_count(usage: object, name: str) -> int | None:
 def _generate_chunk_once(
     prompt: str, model: str, api_key: str
 ) -> tuple[list[ExtractedFact], dict[str, int]]:
-    client = _TimeoutClient(api_key=api_key, http_options={"timeout": REQUEST_TIMEOUT_SECONDS})
+    client = _TimeoutClient(api_key=api_key, http_options={"timeout": _timeout_for(model)})
     response = client.models.generate_content(
         model=model,
         contents=prompt,
@@ -548,7 +677,9 @@ def _extract_chunk_sync(item: SealedTextInput, chunk: str, language: str, api_ke
 
     Only malformed/schema-invalid/empty output, timeouts, and 429/503/504 are
     retried; a 429/503/504 waits a jittered 2-8 s first. No attempt starts if
-    elapsed + timeout would exceed ``CHUNK_BUDGET_SECONDS``. HTTP 401/402/403 fail
+    elapsed + backoff + that model's timeout would exceed ``CHUNK_BUDGET_SECONDS``;
+    such an attempt is skipped and a later model with a shorter timeout may still
+    fit. HTTP 401/402/403 fail
     at once as ``ProviderAccountError``. When every attempt fails, the last
     attempt's exception is raised unchanged so the worker classifies it exactly
     as it did before retries existed.
@@ -561,10 +692,11 @@ def _extract_chunk_sync(item: SealedTextInput, chunk: str, language: str, api_ke
     delay = 0.0
     for attempt, model in enumerate(plan, start=1):
         if last_error is not None:
-            if _monotonic() - started + delay + REQUEST_TIMEOUT_SECONDS > CHUNK_BUDGET_SECONDS:
-                break
+            if _monotonic() - started + delay + _timeout_for(model) > CHUNK_BUDGET_SECONDS:
+                continue
             if delay:
                 _sleep(delay)
+                delay = 0.0
         try:
             facts, counts = _generate_chunk_once(prompt, model, api_key)
         except Exception as exc:
@@ -610,6 +742,8 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
         "normalization_dropped_count": 0,
         "duplicate_count": 0,
     }
+    # provenance_rejected_count counts quote failures only; contexts never reject a fact.
+    context_counts = {"MODEL_VERBATIM": 0, "SOURCE_WINDOW": 0, "NONE": 0}
     jobs = [
         (item_index, chunk_index, item, chunk_start, chunk)
         for item_index, item in enumerate(items)
@@ -683,9 +817,6 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
             if location is None:
                 diagnostics["provenance_rejected_count"] = int(diagnostics["provenance_rejected_count"]) + 1
                 continue
-            if fact.source_context and not _normalized_contains(item.text, fact.source_context):
-                diagnostics["provenance_rejected_count"] = int(diagnostics["provenance_rejected_count"]) + 1
-                continue
             key = hashlib.sha256(
                 json.dumps(
                     [str(item.pack_item_id), fact.kind, fact.original_quote, fact.normalized_text],
@@ -698,11 +829,16 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
                 continue
             seen.add(key)
             start, end, page, paragraph = location
-            verified.append(VerifiedFact(item.pack_item_id, fact, start, end, page, paragraph))
+            fact, origin = _resolve_context(fact, item.text, start, end)
+            context_counts[origin] += 1
+            verified.append(VerifiedFact(item.pack_item_id, fact, start, end, page, paragraph, origin))
     diagnostics["verified_requirement_count"] = sum(
         value.fact.kind == "CORPORATE_REQUIREMENT" for value in verified
     )
     diagnostics["verified_position_count"] = sum(value.fact.kind == "POSITION" for value in verified)
+    diagnostics["context_model_verbatim"] = context_counts["MODEL_VERBATIM"]
+    diagnostics["context_source_window"] = context_counts["SOURCE_WINDOW"]
+    diagnostics["context_none"] = context_counts["NONE"]
     chain = (MODEL_NAME, *FALLBACK_MODEL_NAMES)
     used = list(dict.fromkeys(str(record["model_name"]) for record in chunk_records))
     models_used = [name for name in chain if name in used] + [name for name in used if name not in chain]
@@ -717,6 +853,7 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
         "chunk_concurrency": CHUNK_CONCURRENCY,
         "max_output_tokens": MAX_OUTPUT_TOKENS,
         "request_timeout_seconds": REQUEST_TIMEOUT_SECONDS,
+        "model_timeout_seconds": dict(MODEL_TIMEOUT_SECONDS),
         "chunk_budget_seconds": CHUNK_BUDGET_SECONDS,
         "run_budget_seconds": RUN_BUDGET_SECONDS,
         "chunks": chunk_records,

@@ -221,7 +221,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       PLASMA_SERVICE_NAME: worker_pursuit_analysis
-    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "pursuit_analysis", "--concurrency=1", "--max-tasks-per-child=10" ]
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "pursuit_analysis", "--concurrency=${PURSUIT_ANALYSIS_WORKER_CONCURRENCY:-2}", "--max-tasks-per-child=10" ]
     depends_on:
       - db
       - redis

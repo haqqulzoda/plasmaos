@@ -72,7 +72,12 @@ PRESETS: dict[str, dict[str, dict[str, int]]] = {
         "gemini-3.7-flash": {"b4a_full": 5, "reoi_1": 5, "reoi_2": 5, "long_rfp": 3},
         "gemini-3.8-flash": {"b4a_full": 5, "reoi_1": 5, "reoi_2": 5, "long_rfp": 3},
         "gemini-3.1-pro-preview": {"long_rfp": 3},
-    }
+    },
+    # D1 v3 (source-window contexts): candidates only; the long-RFP reference is reused from r2.
+    "r3": {
+        "gemini-3.8-flash": {"b4a_full": 5, "reoi_1": 5, "reoi_2": 5, "long_rfp": 3},
+        "gemini-3.7-flash": {"b4a_full": 5, "reoi_1": 5, "reoi_2": 5, "long_rfp": 3},
+    },
 }
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 CENTRAL_ASIA = ("Uzbekistan", "Kazakhstan", "Kyrgyz Republic", "Kyrgyzstan", "Tajikistan", "Turkmenistan")
@@ -95,7 +100,9 @@ SPAN_MATCH_MIN_OVERLAP = 0.5
 
 
 def _text(fact: analyzer.ExtractedFact) -> str:
-    parts = [fact.original_quote, fact.normalized_text, fact.source_context or ""]
+    # source_context is deliberately excluded: a context (especially a SOURCE_WINDOW)
+    # can span neighbouring list items the model never extracted as facts.
+    parts = [fact.original_quote, fact.normalized_text]
     if fact.position is not None:
         parts.append(json.dumps(fact.position.model_dump(), ensure_ascii=False))
     return " ".join(parts).casefold()
@@ -460,6 +467,10 @@ async def run_once(
         provenance_rejected=diagnostics["provenance_rejected_count"],
         normalization_dropped=diagnostics["normalization_dropped_count"],
         duplicates=diagnostics["duplicate_count"],
+        context_model_verbatim=diagnostics.get("context_model_verbatim"),
+        context_source_window=diagnostics.get("context_source_window"),
+        context_none=diagnostics.get("context_none"),
+        pipeline_version=analyzer.PIPELINE_VERSION, prompt_version=analyzer.PROMPT_VERSION,
         prompt_tokens=_sum(chunks, "prompt_tokens"), output_tokens=_sum(chunks, "output_tokens"),
         thinking_tokens=_sum(chunks, "thinking_tokens"),
     )
@@ -540,6 +551,26 @@ def summarize(
     return {"per_model": per_model, "planned_runs_per_model_input": runs, "inputs": inputs, "long_rfp_recall": recall}
 
 
+def selection_outcome(summary: dict[str, object]) -> dict[str, dict[str, object]]:
+    """D1 rule: golden 19/19 in >= 4/5 B4a runs AND median per-run long-RFP recall >= 75%."""
+    recall = (summary.get("long_rfp_recall") or {}).get("models", {})  # type: ignore[union-attr]
+    outcome: dict[str, dict[str, object]] = {}
+    for model, entry in summary["per_model"].items():  # type: ignore[union-attr]
+        if entry["reference_only"]:
+            continue
+        runs, full = int(entry["b4a_runs"]), int(entry["b4a_golden_19_of_19_runs"])
+        median_recall = recall.get(model, {}).get("recall_median")
+        outcome[model] = {
+            "golden_19_runs": f"{full}/{runs}",
+            "golden_ok": runs > 0 and full / runs >= 0.8,
+            "recall_median": median_recall,
+            "recall_ok": median_recall is not None and median_recall >= 0.75,
+            "p90_s": entry["latency_p90_s"],
+        }
+        outcome[model]["qualifies"] = bool(outcome[model]["golden_ok"] and outcome[model]["recall_ok"])
+    return outcome
+
+
 def render_markdown(payload: dict[str, object]) -> str:
     records: list[dict[str, object]] = payload["records"]  # type: ignore[assignment]
     summary: dict[str, object] = payload["summary"]  # type: ignore[assignment]
@@ -574,8 +605,8 @@ def render_markdown(payload: dict[str, object]) -> str:
             f"`{item.get('text_sha256', 'n/a')}` | {item['page_markers']} | {item['chunks']} |"
         )
     lines += ["", "## Results by model and input", "",
-              "| Model | Input | Successes | Latency p50 / p90 (s) | Raw requirements (median) | Verified requirements (median, min-max) | Provenance-rejected (median) | Verified positions (median) | Retries used | Failure classes | Golden 19 (min / runs at 19) |",
-              "| --- | --- | ---: | --- | ---: | --- | ---: | ---: | ---: | --- | --- |"]
+              "| Model | Input | Successes | Latency p50 / p90 (s) | Raw requirements (median) | Verified requirements min / median / max | Provenance-rejected (median) | Context origin verbatim / window / none (totals) | Verified positions (median) | Retries used | Failure classes | Golden 19 (min / runs at 19) |",
+              "| --- | --- | ---: | --- | ---: | --- | ---: | --- | ---: | ---: | --- | --- |"]
     for model in models:
         for item in inputs:
             mine = [r for r in records if r["model"] == model and r["input"] == item["name"]]
@@ -587,6 +618,11 @@ def render_markdown(payload: dict[str, object]) -> str:
             poss = [int(r["verified_positions"]) for r in ok]
             raws = [int(r["raw_requirements"]) for r in ok if "raw_requirements" in r]
             rejected = [int(r["provenance_rejected"]) for r in ok if "provenance_rejected" in r]
+            origins = [r for r in ok if r.get("context_source_window") is not None]
+            origin_text = (
+                "/".join(str(sum(int(r[k]) for r in origins)) for k in ("context_model_verbatim", "context_source_window", "context_none"))
+                if origins else "n/a"
+            )
             failures: dict[str, int] = {}
             for r in mine:
                 if r["status"] != "SUCCESS":
@@ -599,8 +635,9 @@ def render_markdown(payload: dict[str, object]) -> str:
             lines.append(
                 f"| {label} | {item['name']} | {len(ok)}/{len(mine)} | {_fmt(p50)} / {_fmt(p90)} | "
                 f"{'n/a' if not raws else f'{statistics.median(raws):g}'} | "
-                f"{'n/a' if not reqs else f'{statistics.median(reqs):g} ({min(reqs)}-{max(reqs)})'} | "
+                f"{'n/a' if not reqs else f'{min(reqs)} / {statistics.median(reqs):g} / {max(reqs)}'} | "
                 f"{'n/a' if not rejected else f'{statistics.median(rejected):g}'} | "
+                f"{origin_text} | "
                 f"{'n/a' if not poss else f'{statistics.median(poss):g}'} | "
                 f"{sum(int(r.get('retry_count', 0)) for r in ok)} | "
                 f"{', '.join(f'{k} x{v}' for k, v in failures.items()) or '-'} | {golden or '-'} |"
@@ -641,6 +678,18 @@ def render_markdown(payload: dict[str, object]) -> str:
             f"{_fmt(m['latency_p50_s'])} / {_fmt(m['latency_p90_s'])} | {'pass' if m['selection_p90'] else 'fail'} | "
             f"{m['b4a_golden_19_of_19_runs']}/{m['b4a_runs']} | {'pass' if m['selection_golden'] else 'fail' if m['b4a_runs'] else 'n/a'} | {meets} |"
         )
+    outcome = selection_outcome(summary)
+    if outcome:
+        lines += ["", "## D1 primary-model rule", "",
+                  "Rule: golden 19/19 in >= 4/5 B4a runs AND median per-run long-RFP recall >= 75% against the reference set.", "",
+                  "| Model | Golden 19/19 runs | Golden rule | Long-RFP recall (median per run) | Recall rule | Qualifies |",
+                  "| --- | --- | --- | ---: | --- | --- |"]
+        for model, entry in outcome.items():
+            recall_text = "n/a" if entry["recall_median"] is None else f"{float(entry['recall_median']):.0%}"
+            lines.append(
+                f"| {model} | {entry['golden_19_runs']} | {'pass' if entry['golden_ok'] else 'fail'} | {recall_text} | "
+                f"{'pass' if entry['recall_ok'] else 'fail'} | {'yes' if entry['qualifies'] else 'no'} |"
+            )
     lines += ["", "## Thinking, latency, and fallback notes", ""]
     for model in models:
         m = per_model[model]
@@ -661,6 +710,19 @@ def render_markdown(payload: dict[str, object]) -> str:
     needed = sum(int(per_model[m]["runs_where_fallback_would_be_needed"]) for m in models if m != REFERENCE_MODEL)
     lines += ["", f"Fallback ever needed among candidate models: {'yes' if needed else 'no'} ({needed} run(s) exhausted the primary retry).", ""]
     return "\n".join(lines)
+
+
+RUN_NOTES_HEADING = "\n## Run notes\n"
+
+
+def write_report(path: Path, markdown: str) -> None:
+    """Write the generated report, keeping any hand-written '## Run notes' section."""
+    notes = ""
+    if path.exists():
+        existing = path.read_text(encoding="utf-8")
+        if RUN_NOTES_HEADING in existing:
+            notes = RUN_NOTES_HEADING + existing.split(RUN_NOTES_HEADING, 1)[1]
+    path.write_text(markdown.rstrip("\n") + "\n" + notes, encoding="utf-8")
 
 
 # --- entry point --------------------------------------------------------------
@@ -696,6 +758,11 @@ async def main_async(args: argparse.Namespace) -> int:
     spans_path = private_dir / "long_rfp_spans.json"
     records: list[dict[str, object]] = []
     spans_by_model = _load_spans(spans_path) if args.resume else {}
+    if args.reference_from:
+        reused = _load_spans(PRIVATE_DIR / args.reference_from / "long_rfp_spans.json").get(REFERENCE_MODEL)
+        if not reused:
+            raise SystemExit(f"No {REFERENCE_MODEL} long-RFP spans stored for tag {args.reference_from!r}.")
+        spans_by_model[REFERENCE_MODEL] = reused
     if args.resume and json_path.exists():
         records = json.loads(json_path.read_text(encoding="utf-8"))["records"]
     done = {(r["model"], r["input"], r["run"]) for r in records}
@@ -714,6 +781,7 @@ async def main_async(args: argparse.Namespace) -> int:
                 "chunk_concurrency": analyzer.CHUNK_CONCURRENCY,
                 "sdk_version": getattr(genai, "__version__", "unknown"),
                 "prompt_version": analyzer.PROMPT_VERSION, "schema_version": analyzer.SCHEMA_VERSION,
+                "pipeline_version": analyzer.PIPELINE_VERSION, "reference_from": args.reference_from,
             },
             "summary": summarize(records, models, public_inputs, args.runs, recall_summary(spans_by_model)),
             "records": records,
@@ -752,7 +820,7 @@ async def main_async(args: argparse.Namespace) -> int:
             break
     final = payload()
     _checkpoint(json_path, final)
-    (args.output_dir / f"model-bench{suffix}.md").write_text(render_markdown(final), encoding="utf-8")
+    write_report(args.output_dir / f"model-bench{suffix}.md", render_markdown(final))
     long_input = next((item for item in inputs if item.name == "long_rfp"), None)
     if long_input is not None and spans_by_model.get(REFERENCE_MODEL):
         listed = export_unmatched_reference_items(private_dir / "unmatched_reference_items.md", long_input.text, spans_by_model)
@@ -768,6 +836,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--preset", choices=sorted(PRESETS), help="named per-model/per-input run matrix (overrides --models/--inputs/--runs)")
     parser.add_argument("--tag", default=None, help="suffix for output files, e.g. r2 -> model-bench-r2.md (defaults to the preset name)")
+    parser.add_argument(
+        "--reference-from", default=None,
+        help="reuse the reference model's long-RFP spans from an earlier tag (e.g. r2) instead of re-running it",
+    )
     parser.add_argument("--long-tender-id", type=UUID, default=None, help="override the auto-selected long RFP")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--resume", action="store_true", help="skip runs already in the JSON output")
@@ -783,7 +855,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.render_only:
         suffix = f"-{args.tag}" if args.tag else ""
         payload = json.loads((args.output_dir / f"model-bench{suffix}.json").read_text(encoding="utf-8"))
-        (args.output_dir / f"model-bench{suffix}.md").write_text(render_markdown(payload), encoding="utf-8")
+        write_report(args.output_dir / f"model-bench{suffix}.md", render_markdown(payload))
         return 0
     return asyncio.run(main_async(args))
 

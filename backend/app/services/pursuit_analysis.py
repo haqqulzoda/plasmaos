@@ -532,6 +532,10 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
                 "char_start": verified.char_start, "char_end": verified.char_end,
                 "page_number": verified.page_number, "paragraph_number": verified.paragraph_number,
                 "page_number_source_verified": verified.page_number is not None,
+                # How source_context was obtained: MODEL_VERBATIM, SOURCE_WINDOW (exact
+                # sealed-text window replacing a non-verbatim model context) or NONE.
+                "context_origin": getattr(verified, "context_origin", None)
+                or ("MODEL_VERBATIM" if fact.source_context else "NONE"),
             }
             span = f"characters {verified.char_start}-{verified.char_end}"
             if fact.kind == "CORPORATE_REQUIREMENT":

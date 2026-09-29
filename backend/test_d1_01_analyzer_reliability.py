@@ -258,7 +258,8 @@ def test_configuration_defaults_and_environment_overrides() -> None:
     code = (
         "import json;from app.core.agents import pursuit_analyzer as a;"
         "print(json.dumps([a.MODEL_NAME, list(a.FALLBACK_MODEL_NAMES), a.MAX_OUTPUT_TOKENS,"
-        " a.REQUEST_TIMEOUT_SECONDS, a.CHUNK_BUDGET_SECONDS, a.RUN_BUDGET_SECONDS, a.CHUNK_CONCURRENCY]))"
+        " a.REQUEST_TIMEOUT_SECONDS, a.CHUNK_BUDGET_SECONDS, a.RUN_BUDGET_SECONDS, a.CHUNK_CONCURRENCY,"
+        " a.MODEL_TIMEOUT_SECONDS]))"
     )
 
     def configured(**environment: str) -> list[object]:
@@ -271,13 +272,17 @@ def test_configuration_defaults_and_environment_overrides() -> None:
         )
         return json.loads(done.stdout.strip().splitlines()[-1])
 
-    assert configured() == ["gemini-3.7-flash", ["gemini-3.8-flash", "gemini-3.6-flash"], 32768, 90, 240, 480, 3]
+    assert configured() == [
+        "gemini-3.1-pro-preview", ["gemini-3.8-flash", "gemini-3.7-flash"], 32768, 90, 240, 480, 3,
+        {"gemini-3.1-pro-preview": 150},
+    ]
     assert configured(
         GEMINI_PURSUIT_MODEL="m1", GEMINI_PURSUIT_FALLBACK_MODELS="m2, m1,m3,m2",
         GEMINI_PURSUIT_MAX_OUTPUT_TOKENS="4096", GEMINI_PURSUIT_TIMEOUT_SECONDS="45",
         PURSUIT_ANALYSIS_CHUNK_BUDGET_SECONDS="100", PURSUIT_ANALYSIS_RUN_BUDGET_SECONDS="300",
-        PURSUIT_ANALYSIS_CHUNK_CONCURRENCY="5",
-    ) == ["m1", ["m2", "m3"], 4096, 45, 100, 300, 5]
+        PURSUIT_ANALYSIS_CHUNK_CONCURRENCY="5", GEMINI_PURSUIT_MODEL_TIMEOUTS="m1=120",
+    ) == ["m1", ["m2", "m3"], 4096, 45, 100, 300, 5, {"m1": 120}]
+    assert configured(GEMINI_PURSUIT_MODEL_TIMEOUTS="")[7] == {}
     assert configured(GEMINI_PURSUIT_FALLBACK_MODELS="", PURSUIT_ANALYSIS_CHUNK_CONCURRENCY="0")[1] == []
     assert configured(PURSUIT_ANALYSIS_CHUNK_CONCURRENCY="0")[6] == 1
     assert configured(PURSUIT_ANALYSIS_CHUNK_CONCURRENCY="many")[6] == 3
@@ -851,3 +856,204 @@ def test_bench_run_once_returns_requirement_spans_for_recall(monkeypatch) -> Non
     record = asyncio.run(bench.run_once("bench-model", item, 1, spans))
     assert record["status"] == "SUCCESS"
     assert len(spans) == record["verified_requirements"] and all(0 <= s < e <= len(text) for s, e in spans)
+
+
+# --- D1 v3: deterministic verbatim source windows ------------------------------
+
+LIST_SOURCE = (
+    "5.\nBIDDER'S PROPOSAL\n\n"
+    "Required Materials. The Bidder must include the following information in the Proposal:\n\n"
+    "a) Resume or corporate profile clearly reflecting qualifications and experiences.\n"
+    "b) Samples of communication and media materials.\n"
+    "c) List of at least three (3) professional references.\n\n"
+    "Format. The Proposal shall not exceed five pages."
+)
+LIST_QUOTE = "b) Samples of communication and media materials."
+
+
+def _window(text: str, quote: str) -> str:
+    start = text.index(quote)
+    bounds = analyzer._source_window(text, start, start + len(quote))
+    assert bounds is not None
+    return text[bounds[0]:bounds[1]]
+
+
+def test_source_window_captures_a_lettered_list_preamble_ending_with_a_colon() -> None:
+    window = _window(LIST_SOURCE, LIST_QUOTE)
+    assert window in LIST_SOURCE and LIST_QUOTE in window
+    assert window.startswith("Required Materials. The Bidder must include the following information in the Proposal:")
+    assert window.endswith("c) List of at least three (3) professional references.")  # end of the quote's paragraph
+    assert "Format." not in window  # the next paragraph is not included
+
+
+def test_source_window_uses_a_section_heading_when_no_preamble_precedes() -> None:
+    text = "Intro text.\n\n3.2 Eligibility\nThe consultant shall hold a licence.\nIt must be current.\n\nNext part."
+    assert _window(text, "It must be current.") == "3.2 Eligibility\nThe consultant shall hold a licence.\nIt must be current."
+    caps = "Preface.\n\nQUALIFICATIONS\n\nMinimum of 5 years experience.\n\nOther."
+    assert _window(caps, "Minimum of 5 years experience.").startswith("QUALIFICATIONS")
+
+
+def test_source_window_falls_back_to_the_paragraph_and_ignores_page_decoration() -> None:
+    text = "Earlier paragraph.\n\nThe bidder shall be registered. It shall also be solvent.\n\nLater."
+    assert _window(text, "It shall also be solvent.") == "The bidder shall be registered. It shall also be solvent."
+    # A page marker, a running header with digits and a bare page number are not headings.
+    decorated = "Heading line:\nfirst item\n\n[[PAGE 7]]\n1-25-2012 FINAL POSTED\n7\n\nsecond item continues here."
+    window = _window(decorated, "second item continues here.")
+    assert window.startswith("Heading line:")
+
+
+def test_numbered_list_sentences_are_not_headings() -> None:
+    assert not analyzer._is_context_anchor("2. The consultant shall mobilize within 14 days.")
+    assert analyzer._is_context_anchor("2. Scope of Services")
+    assert analyzer._is_context_anchor("5.")
+    assert not analyzer._is_context_anchor("7")
+    assert not analyzer._is_context_anchor("[[PAGE 7]]")
+    assert analyzer._is_context_anchor("ТРЕБОВАНИЯ К КВАЛИФИКАЦИИ")  # Unicode upper case
+    assert not analyzer._is_context_anchor("Требования к квалификации")
+
+
+def test_source_window_cap_trims_only_at_whitespace_and_keeps_the_quote(monkeypatch) -> None:
+    monkeypatch.setattr(analyzer, "CONTEXT_WINDOW_MAX_CHARACTERS", 120)
+    items = "\n".join(f"{letter}) Requirement item {letter} with some words." for letter in "abcdefghij")
+    text = "Required documents:\n" + items + "\n\nEnd."
+    quote = "f) Requirement item f with some words."
+    window = _window(text, quote)
+    start = text.index(window)
+    assert quote in window and len(window) <= 120
+    assert start == 0 or text[start - 1].isspace()  # head cut at whitespace
+    end = start + len(window)
+    assert end == len(text) or text[end].isspace()  # tail cut at whitespace
+    assert window == window.strip()
+
+
+def test_a_quote_longer_than_the_cap_gets_no_window(monkeypatch) -> None:
+    monkeypatch.setattr(analyzer, "CONTEXT_WINDOW_MAX_CHARACTERS", 20)
+    text = "Heading:\nThis quote is definitely longer than twenty characters."
+    start = text.index("This")
+    assert analyzer._source_window(text, start, len(text)) is None
+
+
+def _analyze_one(monkeypatch, text: str, facts: list[ExtractedFact]):
+    monkeypatch.setattr(analyzer, "_resolve_gemini_api_key", lambda: "test-key")
+    monkeypatch.setattr(analyzer, "_extract_chunk_sync", lambda *_: list(facts))
+    return asyncio.run(analyzer.analyze_pack_items([SealedTextInput(uuid4(), "sealed.txt", text)], "en"))
+
+
+def test_bad_context_with_a_good_quote_is_kept_with_an_exact_source_window(monkeypatch) -> None:
+    invented = "The consultant must submit samples (paraphrased by the model)."
+    result = _analyze_one(monkeypatch, LIST_SOURCE, [_fact(LIST_QUOTE, "Samples", source_context=invented)])
+    assert len(result) == 1
+    kept = result[0]
+    assert kept.context_origin == "SOURCE_WINDOW"
+    assert kept.fact.source_context != invented and kept.fact.source_context in LIST_SOURCE
+    assert LIST_QUOTE in kept.fact.source_context
+    assert kept.fact.original_quote == LIST_QUOTE  # the quote itself is never altered
+    assert result.diagnostics["provenance_rejected_count"] == 0
+    assert result.diagnostics["context_source_window"] == 1
+
+
+def test_good_context_is_unchanged_and_absent_context_stays_absent(monkeypatch) -> None:
+    preamble = "Required Materials. The Bidder must include the following information in the Proposal:"
+    quote_c = "c) List of at least three (3) professional references."
+    result = _analyze_one(monkeypatch, LIST_SOURCE, [
+        _fact(LIST_QUOTE, "Samples", source_context=preamble),
+        _fact(quote_c, "References"),
+    ])
+    assert [(v.context_origin, v.fact.source_context) for v in result] == [("MODEL_VERBATIM", preamble), ("NONE", None)]
+    d = result.diagnostics
+    assert (d["context_model_verbatim"], d["context_source_window"], d["context_none"]) == (1, 0, 1)
+
+
+def test_a_bad_quote_is_still_rejected_and_counts_as_the_only_provenance_rejection(monkeypatch) -> None:
+    result = _analyze_one(monkeypatch, LIST_SOURCE, [
+        _fact("d) A quote that is not in the document.", "Invented", source_context="Required Materials."),
+        _fact(LIST_QUOTE, "Samples", source_context="not verbatim context"),
+    ])
+    assert [v.fact.original_quote for v in result] == [LIST_QUOTE]
+    d = result.diagnostics
+    assert d["provenance_rejected_count"] == 1  # quote failures only
+    assert d["context_source_window"] == 1 and d["context_model_verbatim"] == 0 and d["context_none"] == 0
+    assert d["verified_requirement_count"] == d["context_source_window"] + d["context_model_verbatim"] + d["context_none"]
+
+
+def test_pipeline_and_prompt_versions_are_bumped_and_the_schema_is_not() -> None:
+    assert analyzer.PIPELINE_VERSION == "pursuit_analysis_pipeline_d1_v3"
+    assert analyzer.PROMPT_VERSION == "pursuit_analysis_d1_v3"
+    assert analyzer.SCHEMA_VERSION == "pursuit_analysis_output_p0_v2"
+    prompt = " ".join(analyzer.SYSTEM_PROMPT.split())
+    # D1 arm B adds exactly these two instructions; the trust rules around them are unchanged.
+    assert "source_context must be copied character-for-character from the document or left null." in prompt
+    assert "Treat each lettered or numbered item of a qualifications or required-materials list as a separate fact." in prompt
+    assert "Return only facts directly supported by an exact verbatim quote." in prompt
+    assert analyzer.PROMPT_SHA256 == __import__("hashlib").sha256(analyzer.SYSTEM_PROMPT.encode()).hexdigest()
+
+
+# --- per-model timeouts --------------------------------------------------------
+
+
+def test_model_timeout_overrides_parse_and_apply(clock, client, monkeypatch) -> None:
+    assert analyzer._model_timeouts("gemini-3.1-pro-preview=150, bad, x=, y=0, z=abc,m2=45") == {
+        "gemini-3.1-pro-preview": 150, "m2": 45,
+    }
+    monkeypatch.setattr(analyzer, "MODEL_TIMEOUT_SECONDS", {PRIMARY: 150})
+    client.script = [_payload(_fact())]
+    _extract()
+    assert client.constructed[-1]["http_options"] == {"timeout": 150}
+
+
+def test_a_slow_primary_retry_that_cannot_fit_is_skipped_for_a_faster_fallback(clock, client, monkeypatch) -> None:
+    monkeypatch.setattr(analyzer, "MODEL_TIMEOUT_SECONDS", {PRIMARY: 150})
+    client.script = [_timeout(clock, 150), _payload(_fact())]
+    facts = _extract()
+    # 150 + 150 > 240, so the primary retry is skipped; 150 + 90 <= 240, so the fallback runs.
+    assert _models_called() == [PRIMARY, FALLBACKS[0]]
+    assert facts.meta["model_name"] == FALLBACKS[0]
+    assert [call["at"] for call in client.calls] == [0, 150]
+
+
+# --- D1 v3: worker concurrency, golden checker, selection rule --------------------
+
+
+def test_pursuit_worker_concurrency_is_env_configurable_with_default_two() -> None:
+    compose = (BACKEND_DIR.parent / "docker-compose.yml").read_text(encoding="utf-8")
+    service = compose.split("  worker_pursuit_analysis:", 1)[1].split("\n  # ----", 1)[0]
+    assert '"-Q", "pursuit_analysis"' in service
+    assert '"--concurrency=${PURSUIT_ANALYSIS_WORKER_CONCURRENCY:-2}"' in service
+    # Concurrent runs are safe because the claim is a row lock plus an owned lease
+    # (proved against a disposable database in test_w4_pursuit_analysis.py).
+    service_source = (BACKEND_DIR / "app" / "services" / "pursuit_analysis.py").read_text(encoding="utf-8")
+    claim = service_source.split("async def process_analysis_run", 1)[1].split("run.status = \"RUNNING\"", 1)[0]
+    assert ".with_for_update()" in claim and "run.lease_owner != worker_id" in claim
+
+
+def test_golden_checker_ignores_source_context_so_windows_cannot_inflate_coverage(monkeypatch) -> None:
+    bench = _bench()
+    window = "a) Resume or corporate profile.\nb) Samples of communication and media materials.\nh) insurance acknowledgement"
+    fact = _fact("b) Samples of communication and media materials.", "Samples", source_context=window)
+    verified = [analyzer.VerifiedFact(uuid4(), fact, 0, 10, None, None, "SOURCE_WINDOW")]
+    covered, missing = bench.golden_coverage(verified)
+    assert "Work samples" not in missing
+    assert "Resume/profile" in missing and "Insurance" in missing  # only present in the window
+
+
+def test_selection_outcome_applies_the_d1_rule() -> None:
+    bench = _bench()
+    per_model = {
+        "fast": {"reference_only": False, "b4a_runs": 5, "b4a_golden_19_of_19_runs": 4, "latency_p90_s": 20.0},
+        "sparse": {"reference_only": False, "b4a_runs": 5, "b4a_golden_19_of_19_runs": 5, "latency_p90_s": 15.0},
+        "weak": {"reference_only": False, "b4a_runs": 5, "b4a_golden_19_of_19_runs": 3, "latency_p90_s": 10.0},
+        bench.REFERENCE_MODEL: {"reference_only": True, "b4a_runs": 0, "b4a_golden_19_of_19_runs": 0, "latency_p90_s": 90.0},
+    }
+    recall = {"models": {"fast": {"recall_median": 0.8}, "sparse": {"recall_median": 0.5}, "weak": {"recall_median": 0.9}}}
+    outcome = bench.selection_outcome({"per_model": per_model, "long_rfp_recall": recall})
+    assert [m for m, e in outcome.items() if e["qualifies"]] == ["fast"]
+    assert outcome["sparse"]["golden_ok"] and not outcome["sparse"]["recall_ok"]
+    assert not outcome["weak"]["golden_ok"] and bench.REFERENCE_MODEL not in outcome
+
+
+def test_report_writes_keep_hand_written_run_notes(tmp_path) -> None:
+    bench = _bench()
+    report = tmp_path / "model-bench-x.md"
+    report.write_text("# old generated\n\n## Run notes\n\n- a human note\n", encoding="utf-8")
+    bench.write_report(report, "# new generated\n")
+    assert report.read_text(encoding="utf-8") == "# new generated\n\n## Run notes\n\n- a human note\n"
