@@ -64,6 +64,22 @@ PROCUREMENT_SIGNALS = (
 )
 
 
+PROVIDER_UNAVAILABLE_MESSAGE = "The analysis provider is temporarily unavailable. Plasma has been notified."
+
+
+def classify_analysis_failure(exc: Exception) -> tuple[str, str | None]:
+    """Customer-safe failure_reason and an operator code for an extraction exception.
+
+    Provider account/billing rejections never reach the customer as raw detail.
+    Everything else keeps the existing behavior (the exception text, bounded).
+    """
+    if isinstance(exc, pursuit_analyzer.ProviderAccountError):
+        return PROVIDER_UNAVAILABLE_MESSAGE, exc.code
+    if isinstance(exc, pursuit_analyzer.RunBudgetExceeded):
+        return str(exc)[:1000], exc.code
+    return str(exc)[:1000], None
+
+
 class AnalysisAdmissionError(ValueError):
     """Selection cannot be sealed into a safe FULL analysis pack."""
 
@@ -345,7 +361,8 @@ async def create_analysis_run(
     run = AnalysisRun(
         organization_id=organization_id, pursuit_id=pursuit_id, pack_id=pack.id,
         requested_by_membership_id=membership_id, analysis_language=language, status="QUEUED",
-        model_provider=pursuit_analyzer.MODEL_PROVIDER, model_name=pursuit_analyzer.MODEL_NAME,
+        model_provider=pursuit_analyzer.MODEL_PROVIDER,
+        model_name=pursuit_analyzer.route_for(character_count).models[0],
         prompt_version=pursuit_analyzer.PROMPT_VERSION, prompt_sha256=pursuit_analyzer.PROMPT_SHA256,
         schema_version=pursuit_analyzer.SCHEMA_VERSION, pipeline_version=pursuit_analyzer.PIPELINE_VERSION,
     )
@@ -516,6 +533,10 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
                 "char_start": verified.char_start, "char_end": verified.char_end,
                 "page_number": verified.page_number, "paragraph_number": verified.paragraph_number,
                 "page_number_source_verified": verified.page_number is not None,
+                # How source_context was obtained: MODEL_VERBATIM, SOURCE_WINDOW (exact
+                # sealed-text window replacing a non-verbatim model context) or NONE.
+                "context_origin": getattr(verified, "context_origin", None)
+                or ("MODEL_VERBATIM" if fact.source_context else "NONE"),
             }
             span = f"characters {verified.char_start}-{verified.char_end}"
             if fact.kind == "CORPORATE_REQUIREMENT":
@@ -585,6 +606,10 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
             return
         run.status = "COMPLETED"
         run.result_completeness = "FULL"
+        # A fallback model may have produced some chunks; record what actually did.
+        accepted_model_name = analyzer_diagnostics.get("model_name")
+        if accepted_model_name:
+            run.model_name = str(accepted_model_name)[:200]
         quality_state, quality_summary, quality_diagnostics = assess_extraction_quality(
             input_texts,
             requirement_count=len(requirements),
@@ -620,7 +645,8 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
                 run.status = "QUEUED"
                 run.next_dispatch_at = datetime.now(timezone.utc) + timedelta(seconds=30)
             run.failure_stage = "EXTRACTION"
-            run.failure_reason = str(exc)[:1000]
+            failure_reason, failure_code = classify_analysis_failure(exc)
+            run.failure_reason = failure_reason
             quality_state, quality_summary, quality_diagnostics = assess_extraction_quality(
                 input_texts,
                 requirement_count=0,
@@ -643,6 +669,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
                 "quality_state": quality_state,
                 "quality_summary": quality_summary,
                 "error_type": type(exc).__name__,
+                **({"failure_code": failure_code} if failure_code else {}),
             }
             run.lease_until = None
             run.lease_owner = None

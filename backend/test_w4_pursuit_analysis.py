@@ -378,7 +378,8 @@ def test_w4_analysis_authority_for_upload_and_source_pursuits(tmp_path: Path, mo
                             normalized_text="Mobilize within 14 days after award", category="MOBILIZATION",
                             requirement_type="CONTRACT_DUTY", stage_scope="POST_AWARD_OBLIGATION",
                             distinction="MANDATORY", predicate=NumericPredicate(operator="<=", threshold=14, unit="days"),
-                        ), 122, 182, 1, 3),
+                            source_context="Team Leader must have ten years of specific experience.\nAfter award, the consultant shall mobilize within 14 days.",
+                        ), 122, 182, 1, 3, "SOURCE_WINDOW"),
                     ]
 
                 from app.services import pursuit_analysis as analysis_service
@@ -390,6 +391,13 @@ def test_w4_analysis_authority_for_upload_and_source_pursuits(tmp_path: Path, mo
                     recoverable.lease_owner = "lost-worker"
                     recoverable.lease_until = datetime.now(timezone.utc) - timedelta(seconds=1)
                     await db.commit()
+                    # next_dispatch_at comes from the database clock (server_default now()) while the
+                    # sweep compares against the host clock; tolerate Docker VM clock skew (seen ~0.6-1.4 s).
+                    queued_at = (await db.get(AnalysisRun, started.analysis_run_id)).next_dispatch_at
+                    for _ in range(50):
+                        if queued_at <= datetime.now(timezone.utc):
+                            break
+                        await asyncio.sleep(0.1)
                     due = await due_analysis_run_ids(db)
                     assert started.analysis_run_id in due and unknown_run.analysis_run_id in due
                     started_row = await db.get(AnalysisRun, started.analysis_run_id)
@@ -440,6 +448,12 @@ def test_w4_analysis_authority_for_upload_and_source_pursuits(tmp_path: Path, mo
                     assert reviewed.coverage_state == "EVIDENCE_MISSING"
                     assert reviewed.effective_coverage_state == "LATER_STAGE_OBLIGATION"
                     assert reviewed.effective_normalized_requirement == "Reviewed: LATER_STAGE_OBLIGATION"
+                    # D1 v3: the context origin is persisted in source_locator and exposed read-only.
+                    assert reviewed.source_locator["context_origin"] == "NONE"
+                    windowed = next(item for item in projection.requirements if item.requirement_id == later.id)
+                    assert windowed.source_locator["context_origin"] == "SOURCE_WINDOW"
+                    assert windowed.source_context and "mobilize within 14 days" in windowed.source_context
+                    assert later.source_locator["context_origin"] == "SOURCE_WINDOW"
                     assert await get_analysis_run(db, organization_id=organization_b, pursuit_id=pursuit.id, run_id=started.analysis_run_id) is None
 
                     old_requirement_count = await db.scalar(select(func.count(PursuitRequirement.id)).where(PursuitRequirement.analysis_run_id == started.analysis_run_id))
@@ -458,7 +472,23 @@ def test_w4_analysis_authority_for_upload_and_source_pursuits(tmp_path: Path, mo
                             private_version_ids=[pdf_candidate.document_version_id],
                         ),
                     )
+                    async def extracted_via_fallback(sealed, language):
+                        # D1-01: the run records the model that produced the accepted output.
+                        return pursuit_analyzer.VerifiedFacts(
+                            await extracted(sealed, language),
+                            {"raw_requirement_count": 2, "raw_position_count": 1, "schema_rejected_count": 0,
+                             "provenance_rejected_count": 0, "normalization_dropped_count": 0,
+                             "duplicate_count": 0, "model_name": "fallback-model-under-test", "retry_count": 2},
+                        )
+
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", extracted_via_fallback)
+                    assert (await db.get(AnalysisRun, rerun.analysis_run_id)).model_name == pursuit_analyzer.MODEL_NAME
                     await process_analysis_run(db, rerun.analysis_run_id, worker_id="w4-rerun")
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", extracted)
+                    rerun_row = await db.get(AnalysisRun, rerun.analysis_run_id)
+                    assert rerun_row.model_name == "fallback-model-under-test"
+                    assert rerun_row.extraction_diagnostics["retry_count"] == 2
+                    assert completed_run.model_name == pursuit_analyzer.MODEL_NAME  # analyzer without model diagnostics leaves the default
                     newer = await db.scalar(select(PursuitRequirement).where(PursuitRequirement.analysis_run_id == rerun.analysis_run_id).order_by(PursuitRequirement.created_at))
                     assert newer and await db.scalar(select(func.count(PursuitRequirement.id)).where(PursuitRequirement.analysis_run_id == started.analysis_run_id)) == old_requirement_count
                     lineage = await append_lineage(
@@ -506,6 +536,83 @@ def test_w4_analysis_authority_for_upload_and_source_pursuits(tmp_path: Path, mo
                     assert failed_row.extraction_diagnostics["schema_rejected_count"] == 1
                     assert failed_row.extraction_diagnostics["input_character_count"] > 0
                     assert failed_row.extraction_diagnostics["input_page_count"] == 1
+                    assert "failure_code" not in failed_row.extraction_diagnostics  # existing failures are unchanged
+
+                    # D1-01: a provider account/billing rejection and a spent run budget use the same
+                    # failure path (QUEUED/FAILED quality, lease cleared, prior success intact) with a
+                    # customer-safe reason and an operator code.
+                    async def account_rejected(*_args, **_kwargs):
+                        raise pursuit_analyzer.ProviderAccountError(402)
+
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", account_rejected)
+                    with pytest.raises(pursuit_analyzer.ProviderAccountError):
+                        await process_analysis_run(db, failed.analysis_run_id, worker_id="w4-account-worker")
+                    failed_row = await db.get(AnalysisRun, failed.analysis_run_id)
+                    assert failed_row.status == "QUEUED" and failed_row.quality_state == "FAILED"
+                    assert failed_row.lease_owner is None and failed_row.lease_until is None
+                    assert failed_row.failure_stage == "EXTRACTION"
+                    assert failed_row.failure_reason == "The analysis provider is temporarily unavailable. Plasma has been notified."
+                    assert failed_row.extraction_diagnostics["failure_code"] == "PROVIDER_ACCOUNT"
+                    assert failed_row.extraction_diagnostics["error_type"] == "ProviderAccountError"
+                    assert "402" not in failed_row.failure_reason
+
+                    async def budget_spent(*_args, **_kwargs):
+                        raise pursuit_analyzer.RunBudgetExceeded("The analysis time budget was exhausted")
+
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", budget_spent)
+                    with pytest.raises(pursuit_analyzer.RunBudgetExceeded):
+                        await process_analysis_run(db, failed.analysis_run_id, worker_id="w4-budget-worker")
+                    failed_row = await db.get(AnalysisRun, failed.analysis_run_id)
+                    assert failed_row.quality_state == "FAILED" and failed_row.lease_owner is None
+                    assert failed_row.extraction_diagnostics["failure_code"] == "RUN_BUDGET_EXCEEDED"
+                    prior = await db.get(AnalysisRun, started.analysis_run_id)
+                    assert prior.status == "COMPLETED" and prior.quality_state == "READY_FOR_REVIEW"
+                    assert await db.scalar(select(func.count(PursuitRequirement.id)).where(PursuitRequirement.analysis_run_id == started.analysis_run_id)) == 2
+
+                    # D1 worker concurrency 2: two workers process different runs at the same
+                    # time, and two workers racing for one run never both execute it.
+                    active = {"now": 0, "peak": 0}
+                    executed: list[UUID] = []
+
+                    async def slow_extracted(sealed, language):
+                        active["now"] += 1
+                        active["peak"] = max(active["peak"], active["now"])
+                        executed.append(sealed[0].pack_item_id)
+                        try:
+                            await asyncio.sleep(0.5)
+                            return await extracted(sealed, language)
+                        finally:
+                            active["now"] -= 1
+
+                    async def queue_run():
+                        fresh = await build_analysis_pack_candidate(db, organization_id=organization_a, pursuit_id=pursuit.id)
+                        started_run = await create_analysis_run(
+                            db, organization_id=organization_a, pursuit_id=pursuit.id, membership_id=owner_a,
+                            request=PursuitAnalysisStartRequest(
+                                candidate_sha256=fresh.candidate_sha256, analysis_language="en",
+                                private_version_ids=[pdf_candidate.document_version_id],
+                            ),
+                        )
+                        return started_run.analysis_run_id
+
+                    async def work(run_id: UUID, worker: str) -> None:
+                        async with sessions() as worker_db:
+                            await process_analysis_run(worker_db, run_id, worker_id=worker)
+
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", slow_extracted)
+                    run_x, run_y = await queue_run(), await queue_run()
+                    await asyncio.gather(work(run_x, "w4-concurrent-a"), work(run_y, "w4-concurrent-b"))
+                    assert active["peak"] == 2 and len(executed) == 2
+                    contested = await queue_run()
+                    executed.clear()
+                    await asyncio.gather(work(contested, "w4-claim-a"), work(contested, "w4-claim-b"))
+                    assert len(executed) == 1
+                    async with sessions() as check:
+                        for run_id in (run_x, run_y, contested):
+                            row = await check.get(AnalysisRun, run_id)
+                            assert row.status == "COMPLETED" and row.attempt_count == 1
+                            assert row.lease_owner is None and row.lease_until is None
+                            assert await check.scalar(select(func.count(PursuitRequirement.id)).where(PursuitRequirement.analysis_run_id == run_id)) == 2
                     monkeypatch.setattr(
                         analysis_service.pursuit_analyzer,
                         "analyze_pack_items",
@@ -621,4 +728,7 @@ def test_w4_static_boundaries_no_pricing_search_or_passive_side_effects() -> Non
     assert "httpx" not in service_source and "requests." not in service_source
     assert "pricing" not in analyzer_source.casefold()
     assert "find_partner" not in service_source and "find_expert" not in service_source
-    assert "gemini-3.1-pro-preview" not in analyzer_source  # inherits the existing extractor model authority
+    # D1 moved model authority to the pursuit analyzer's own GEMINI_PURSUIT_MODEL setting
+    # (owner decision, docs/audits/d1); it no longer inherits the requirement extractor's model.
+    assert 'os.getenv("GEMINI_PURSUIT_MODEL"' in analyzer_source
+    assert "from app.core.agents.requirement_extractor import MODEL_NAME" not in analyzer_source
