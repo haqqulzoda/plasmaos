@@ -58,6 +58,16 @@ services:
     image: clamav/clamav:1.4
     container_name: plasma_clamav
     restart: always
+    # The image keeps running after clamd dies (e.g. OOM-killed), which leaves uploads
+    # unscanned; the wrapper exits instead so `restart: always` restarts it.
+    entrypoint: ["/sbin/tini", "--", "/bin/sh", "/plasma/supervise.sh"]
+    volumes:
+      - ./deploy/clamav/supervise.sh:/plasma/supervise.sh:ro
+    environment:
+      # Reload signatures in place instead of loading a second copy next to the first:
+      # peak memory stays at one signature set (~1.3 GB) instead of two, at the cost of
+      # scans waiting for the reload (tens of seconds, a few times a day).
+      CLAMD_CONF_ConcurrentDatabaseReload: "no"
 
   # ---- Backend (FastAPI) ----
   backend:
