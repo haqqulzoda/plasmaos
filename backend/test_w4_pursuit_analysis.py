@@ -64,7 +64,7 @@ from test_w3_private_document_foundation import W3_HEAD, _docx_bytes, _pdf_bytes
 
 
 W4_HEAD = "20260927_0001_w4_pursuit_analysis"
-CURRENT_HEAD = "20261002_0001_p0_extraction_trust_gate"
+CURRENT_HEAD = "20261003_0001_d1_03_official_notice_unique"
 
 
 def test_w4_gemini_schema_uses_sdk_compatible_explicit_dictionary() -> None:

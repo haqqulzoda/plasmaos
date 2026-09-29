@@ -35,7 +35,7 @@ from app.services.world_bank_projects import (
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
-HEAD = "20261002_0001_p0_extraction_trust_gate"
+HEAD = "20261003_0001_d1_03_official_notice_unique"
 MIGRATION_PATH = BACKEND_DIR / "alembic/versions/20260826_0002_s1_2_wb_project_enrichment.py"
 OBSERVED_AT = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
 
@@ -247,7 +247,8 @@ def test_migration_is_additive_network_free_single_head() -> None:
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
     assert script.get_heads() == [HEAD]
-    assert script.get_revision(HEAD).down_revision == "20261001_0001_w8_proposal_evidence_pack"
+    assert script.get_revision(HEAD).down_revision == "20261002_0001_p0_extraction_trust_gate"
+    assert script.get_revision("20261002_0001_p0_extraction_trust_gate").down_revision == "20261001_0001_w8_proposal_evidence_pack"
     assert script.get_revision("20260925_0001_w2_organization_membership").down_revision == (
         "20260912_0001_s10_5_communications"
     )

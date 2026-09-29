@@ -109,6 +109,15 @@ class TenderDocumentSummaryItem(BaseModel):
     created_at: datetime
 
 
+class TenderOfficialNoticeSummary(BaseModel):
+    """The source's own notice text (D1-03): shown with a link, never downloaded."""
+
+    document_id: UUID
+    source_url: str | None = None
+    character_count: int
+    created_at: datetime
+
+
 class TenderDocumentsSummary(BaseModel):
     items: list[TenderDocumentSummaryItem] = Field(default_factory=list)
     visible_total_count: int
@@ -132,6 +141,8 @@ class TenderDocumentsSummary(BaseModel):
     failed_count: int = 0
     processing_count: int = 0
     remote_count: int = 0
+    # Separate from ``items`` and every count above, which describe attachments.
+    official_notice: TenderOfficialNoticeSummary | None = None
 
 
 class ComplianceSummary(BaseModel):

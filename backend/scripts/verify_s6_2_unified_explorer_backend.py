@@ -31,7 +31,7 @@ from app.services.recommendations import (
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261002_0001_p0_extraction_trust_gate"
+HEAD = "20261003_0001_d1_03_official_notice_unique"
 TENDER_COUNT = 10_000
 RECOMMENDATION_COUNT = 20_000
 

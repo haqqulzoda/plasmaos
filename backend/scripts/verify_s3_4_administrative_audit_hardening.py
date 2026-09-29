@@ -28,7 +28,7 @@ from app.models.all_models import User
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261002_0001_p0_extraction_trust_gate"
+HEAD = "20261003_0001_d1_03_official_notice_unique"
 S31 = "20260828_0001_s3_1_admin_account_lifecycle"
 
 

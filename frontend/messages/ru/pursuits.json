@@ -62,6 +62,7 @@
     "CLARIFICATION": "Разъяснение",
     "FORM": "Форма",
     "ANNEX": "Приложение",
+    "OFFICIAL_NOTICE": "Текст официального объявления",
     "OTHER": "Другое"
   },
   "processing": {
@@ -222,7 +223,7 @@
     "packHelp": "Выберите официальные документы, документы источника и свои документы, которые должна проанализировать Plasma.",
     "sourceDocument": "Официальный документ/источник",
     "privateDocument": "Ваш документ",
-    "documentRoles": { "RFP": "RFP", "TOR": "Техническое задание", "NOTICE": "Извещение", "ADDENDUM": "Дополнение", "CLARIFICATION": "Разъяснение", "FORM": "Форма", "ANNEX": "Приложение", "OTHER": "Другое" },
+    "documentRoles": { "RFP": "RFP", "TOR": "Техническое задание", "NOTICE": "Извещение", "ADDENDUM": "Дополнение", "CLARIFICATION": "Разъяснение", "FORM": "Форма", "ANNEX": "Приложение", "OFFICIAL_NOTICE": "Текст официального объявления", "OTHER": "Другое" },
     "pages": "Страниц: {count}",
     "pagesUnknown": "Число страниц недоступно",
     "version": "Версия {version}",

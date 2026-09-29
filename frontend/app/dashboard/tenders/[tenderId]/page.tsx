@@ -419,6 +419,13 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
         </Button> : undefined}>
         {documents?.acquisition_supported && <p role="status" className="s143-document-status">{documentStatus}</p>}
         {documentActionError && <p role="alert" className="s143-state s143-error">{documentActionError}</p>}
+        {documents?.official_notice && <div className="s143-official-notice">
+          <FileText aria-hidden="true" />
+          <div><strong>{t("officialNotice.title")}</strong><p className="s143-note">{t("officialNotice.help")}</p></div>
+          {safeSourceUrl(documents.official_notice.source_url) && <a href={safeSourceUrl(documents.official_notice.source_url) ?? undefined} target="_blank" rel="noopener noreferrer" className="ds-button ds-button-ghost ds-button-sm" aria-label={`${t("officialNotice.openAtSource")}: ${t("officialNotice.title")}`}>
+            <ExternalLink aria-hidden="true" />{t("officialNotice.openAtSource")}
+          </a>}
+        </div>}
         {documents?.items.length ? <div className="s143-table-wrap">
           <table className="s143-table s143-document-table">
             <thead><tr><th scope="col">{t("s143.name")}</th><th scope="col">{t("s143.type")}</th><th scope="col">{t("s143.size")}</th><th scope="col">{t("s143.download")}</th></tr></thead>
@@ -437,7 +444,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
               </tr>;
             })}</tbody>
           </table>
-        </div> : <StateMessage state={details.documents.state} empty={t("documentsEmpty")} unavailable={t("documentsUnavailable")} />}
+        </div> : documents?.official_notice ? null : <StateMessage state={details.documents.state} empty={t("documentsEmpty")} unavailable={t("documentsUnavailable")} />}
         {documents?.truncated && <p className="s143-note">{t("documentsTruncated", { count: documents.visible_total_count - documents.returned_count })}</p>}
         <SourcePrivateUpload tenderId={tender.id} />
         <details className="s143-disclosure">

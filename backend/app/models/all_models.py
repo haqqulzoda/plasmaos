@@ -673,6 +673,13 @@ class TenderDocument(Base):
     # Indexes
     __table_args__ = (
         Index("ix_tender_documents_tender_id", "tender_id"),
+        # D1-03: at most one system-generated official notice per tender.
+        Index(
+            "uq_tender_documents_official_notice",
+            "tender_id",
+            unique=True,
+            postgresql_where=text("source_document_type = 'OFFICIAL_NOTICE'"),
+        ),
     )
 
 

@@ -39,6 +39,7 @@ from app.db.session import AsyncSessionLocal, engine
 from app.services.tender_sources.base import CanonicalDocument, assert_source_scope
 from app.services.giz_document_hydration import hydrate_giz_tender_documents
 from app.services.notifications import stage_document_acquisition_notification
+from app.services.official_notice import is_official_notice, not_official_notice
 from app.services.tender_sources.uzex import UzExTenderSource
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,9 @@ async def _enrich_adb_document_async(
             document = result.scalar_one_or_none()
             if document is None:
                 return {"status": "missing", "document_id": str(document_uuid)}
+            if is_official_notice(document):
+                await db.rollback()
+                return {"status": "skipped_official_notice", "document_id": str(document_uuid)}
             if str(document.external_file_id or "") != expected_external_file_id:
                 await db.rollback()
                 return {"status": "superseded", "document_id": str(document_uuid)}
@@ -395,7 +399,8 @@ async def _persist_terminal_acquisition_state(
                 (
                     await terminal_db.execute(
                         select(TenderDocument).where(
-                            TenderDocument.tender_id == job.tender_id
+                            TenderDocument.tender_id == job.tender_id,
+                            not_official_notice(),
                         )
                     )
                 ).scalars()
@@ -917,7 +922,10 @@ async def _process_tender_docs_async(
                 )
 
                 existing_result = await db.execute(
-                    select(TenderDocument).where(TenderDocument.tender_id == tender_uuid)
+                    select(TenderDocument).where(
+                        TenderDocument.tender_id == tender_uuid,
+                        not_official_notice(),
+                    )
                 )
                 existing_docs = existing_result.scalars().all()
                 _log_sync_event(
@@ -1326,7 +1334,10 @@ async def _process_tender_docs_async(
 
                 await db.flush()
                 all_docs_result = await db.execute(
-                    select(TenderDocument).where(TenderDocument.tender_id == tender_uuid)
+                    select(TenderDocument).where(
+                        TenderDocument.tender_id == tender_uuid,
+                        not_official_notice(),
+                    )
                 )
                 all_docs = all_docs_result.scalars().all()
                 total_count = len(all_docs)

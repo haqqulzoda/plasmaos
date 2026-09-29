@@ -31,6 +31,7 @@ Sprint 9.2 decisions: [cleanup report](../../docs/S9_2_LEGACY_CONTRACT_TEST_TOPO
 | `backend/scripts/audit_sr2_2_source_refresh_orchestration.py` | Explicit-use diagnostic/report/operator tooling; not an automatic setup step |
 | `backend/scripts/audit_sr2_3_connector_capability_document_decoupling.py` | Explicit-use diagnostic/report/operator tooling; not an automatic setup step |
 | `backend/scripts/audit_sr2_4_refresh_activity_source_catalog_newness.py` | Explicit-use diagnostic/report/operator tooling; not an automatic setup step |
+| `backend/scripts/backfill_official_notices.py` | Explicit-use operator tooling: idempotent D1-03 OFFICIAL_NOTICE backfill; report-only unless `--apply --confirm` |
 | `backend/scripts/bootstrap_database.py` | Canonical empty-disposable bootstrap; keep guards and immutable baseline |
 | `backend/scripts/diff_reproducibility.py` | Explicit-use diagnostic/report/operator tooling; not an automatic setup step |
 | `backend/scripts/enqueue_world_bank_project_enrichment.py` | Explicit-use diagnostic/report/operator tooling; not an automatic setup step |

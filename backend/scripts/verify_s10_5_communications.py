@@ -23,7 +23,7 @@ from app.services import broadcasts as b, notifications as n
 from scripts import test_s0_5b4_baseline as support
 from scripts.release_test_target import assert_local_test_target
 
-HEAD = "20261002_0001_p0_extraction_trust_gate"
+HEAD = "20261003_0001_d1_03_official_notice_unique"
 PREVIOUS = "20260904_0001_s8_2_analysis_language"
 OUT = Path(__file__).resolve().parents[2] / "docs/audits/s10_5"
 

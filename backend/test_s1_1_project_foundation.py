@@ -26,7 +26,7 @@ MIGRATION_PATH = (
     BACKEND_DIR
     / "alembic/versions/20260826_0001_s1_1_project_foundation.py"
 )
-HEAD = "20261002_0001_p0_extraction_trust_gate"
+HEAD = "20261003_0001_d1_03_official_notice_unique"
 
 
 def _load_migration():
@@ -149,7 +149,8 @@ def test_migration_is_the_single_head_after_sprint_zero_b3() -> None:
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
     assert script.get_heads() == [HEAD]
-    assert script.get_revision(HEAD).down_revision == (
+    assert script.get_revision(HEAD).down_revision == "20261002_0001_p0_extraction_trust_gate"
+    assert script.get_revision("20261002_0001_p0_extraction_trust_gate").down_revision == (
         "20261001_0001_w8_proposal_evidence_pack"
     )
     assert script.get_revision("20260925_0001_w2_organization_membership").down_revision == (

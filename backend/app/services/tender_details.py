@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import TenderRecommendation
@@ -25,6 +25,7 @@ from app.models.all_models import (
     TenderSyncStatus,
 )
 from app.core.storage_paths import storage_file_exists
+from app.services.official_notice import not_official_notice, only_official_notice
 from app.models.company import (
     Certification,
     CompanyProfile,
@@ -58,6 +59,7 @@ from app.schemas.tender_details import (
     TenderDocumentSummaryItem,
     TenderDocumentsSection,
     TenderDocumentsSummary,
+    TenderOfficialNoticeSummary,
 )
 from app.schemas.tender import TenderCompetitorIntelligenceResponse
 from app.services.analysis_aggregates import get_owned_analysis_parent_for_tender
@@ -93,7 +95,8 @@ def _safe_name_from_url(value: str | None, fallback: str) -> str:
 def _public_document_condition():
     """Conservatively classify source metadata; ambiguous legacy rows stay hidden."""
     return (
-        TenderDocument.source_document_url.is_not(None)
+        not_official_notice()
+        & TenderDocument.source_document_url.is_not(None)
         & (
             TenderDocument.source_document_url.ilike("http://%")
             | TenderDocument.source_document_url.ilike("https://%")
@@ -221,14 +224,22 @@ async def _documents_section(
         parsed_condition | normalized_status.in_(("processed", "parsed", "usable"))
     )
     processing_condition = stored_condition & ~ready_condition & ~failed_condition
+    # One statement (the read model has a fixed query budget). The notice row is
+    # excluded from every attachment count and reported through its own columns;
+    # a unique index guarantees at most one such row per tender.
+    notice_condition = only_official_notice() & parsed_condition
     counts = (
         await db.execute(
             select(
                 func.count(TenderDocument.id).filter(public_condition),
-                func.count(TenderDocument.id).filter(~public_condition),
+                func.count(TenderDocument.id).filter(~public_condition & not_official_notice()),
                 func.count(TenderDocument.id).filter(public_condition & ready_condition),
                 func.count(TenderDocument.id).filter(public_condition & failed_condition),
                 func.count(TenderDocument.id).filter(public_condition & processing_condition),
+                func.min(cast(TenderDocument.id, String)).filter(notice_condition),
+                func.min(TenderDocument.source_document_url).filter(notice_condition),
+                func.max(func.length(TenderDocument.parsed_text)).filter(notice_condition),
+                func.min(TenderDocument.created_at).filter(notice_condition),
             ).where(TenderDocument.tender_id == tender.id)
         )
     ).one()
@@ -280,6 +291,32 @@ async def _documents_section(
         processing_count=processing_count,
         remote_count=remote_count,
     )
+    official_notice = (
+        TenderOfficialNoticeSummary(
+            document_id=UUID(counts[5]),
+            source_url=(
+                counts[6]
+                if counts[6] and counts[6].lower().startswith(("http://", "https://"))
+                else None
+            ),
+            character_count=int(counts[7] or 0),
+            created_at=counts[8],
+        )
+        if counts[5] is not None
+        else None
+    )
+    summary_fields["official_notice"] = official_notice
+    if visible_total == 0 and official_notice is not None:
+        return TenderDocumentsSection(
+            state=DetailsSectionState.AVAILABLE,
+            data=TenderDocumentsSummary(
+                visible_total_count=0,
+                returned_count=0,
+                omitted_unknown_count=unknown_total,
+                truncated=False,
+                **summary_fields,
+            ),
+        )
     if visible_total == 0:
         return TenderDocumentsSection(
             state=DetailsSectionState.EMPTY,
@@ -303,6 +340,7 @@ async def _documents_section(
                 select(TenderDocument)
                 .where(
                     TenderDocument.tender_id == tender.id,
+                    not_official_notice(),
                     public_condition,
                 )
                 .order_by(TenderDocument.created_at.asc(), TenderDocument.id.asc())

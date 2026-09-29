@@ -55,6 +55,7 @@ from app.schemas.tenancy import (
     AnalysisSourceDocumentSnapshot,
 )
 from app.services.notifications import stage_private_document_notification
+from app.services.official_notice import OFFICIAL_NOTICE_DISPLAY_NAME, is_official_notice
 
 
 TERMINAL_PROCESSING_STATES = frozenset(
@@ -416,7 +417,11 @@ async def build_analysis_pack_candidate(
         source_snapshots.append(
             AnalysisSourceDocumentSnapshot(
                 tender_document_id=item.id,
-                display_name=(item.file_url.rsplit("/", 1)[-1] or str(item.id)),
+                display_name=(
+                    OFFICIAL_NOTICE_DISPLAY_NAME
+                    if is_official_notice(item)
+                    else (item.file_url.rsplit("/", 1)[-1] or str(item.id))
+                ),
                 role=item.source_document_type or "OFFICIAL_SOURCE",
                 snapshot_sha256=snapshot_hash,
                 content_sha256=content_sha256,
@@ -425,7 +430,10 @@ async def build_analysis_pack_candidate(
                 file_type=item.file_type,
                 parse_ready=bool(analyzed_text.strip()),
                 page_count_known=False,
-                source_url=item.source_document_url or item.file_url,
+                source_url=(
+                    item.source_document_url
+                    or (None if is_official_notice(item) else item.file_url)
+                ),
                 captured_at=item.created_at,
             )
         )
