@@ -56,7 +56,8 @@ def test_tracked_compose_database_is_loopback_only_and_has_no_literal_admin_pass
     source = (root / "docker-compose.yml").read_text()
     compose = yaml.safe_load(source)
     assert compose["services"]["db"].get("ports") == ["127.0.0.1:6543:5432"]
-    assert compose["services"]["pgadmin"]["profiles"] == ["development"]
+    # Opt-in only (D1-09): never started by a default `up` in production or staging.
+    assert compose["services"]["pgadmin"]["profiles"] == ["tools"]
     for name in ("POSTGRES_PASSWORD",):
         assert compose["services"]["db"]["environment"][name].startswith("${")
     assert compose["services"]["pgadmin"]["environment"]["PGADMIN_DEFAULT_PASSWORD"].startswith("${")
