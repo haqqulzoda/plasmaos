@@ -1,0 +1,67 @@
+# Plasma AI - Caddy reverse proxy (TLS via Let's Encrypt, automatic renewal)
+#
+# One file for both environments; the domains come from the environment
+# (APP_DOMAIN / API_DOMAIN in .env for production, .env.staging for staging).
+#   APP_DOMAIN  e.g. app.example.com   -> Next.js frontend (which rewrites /api/v1/* to the backend)
+#   API_DOMAIN  e.g. api.example.com   -> FastAPI backend directly (health checks, API clients)
+#
+# Same-host staging + production: run ONE Caddy (production's) and add staging
+# site blocks that proxy to the loopback staging ports instead, e.g.
+#   staging.example.com { reverse_proxy host.docker.internal:13000 }
+#   api-staging.example.com { reverse_proxy host.docker.internal:18000 }
+# A dedicated staging host is strongly preferred.
+{
+	email {$ACME_EMAIL}
+	acme_ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
+}
+
+(security) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+}
+
+# Largest accepted request: the 150 MB private-document pack cap (MAX_PRIVATE_PACK_BYTES)
+# plus multipart overhead; the backend enforces the real per-endpoint limits.
+(uploads) {
+	request_body {
+		max_size 160MB
+	}
+}
+
+{$APP_DOMAIN} {
+	import security
+	import uploads
+
+	# Liveness/release identity for uptime checks (FastAPI /health; Next.js does not serve it).
+	handle /health {
+		reverse_proxy {$BACKEND_UPSTREAM:backend:8000}
+	}
+
+	handle {
+		reverse_proxy {$FRONTEND_UPSTREAM:frontend:3000} {
+			# The backend takes a while to answer analysis/extraction reads.
+			transport http {
+				response_header_timeout 120s
+			}
+		}
+	}
+}
+
+{$API_DOMAIN} {
+	import security
+	import uploads
+
+	# Interactive API docs are not public.
+	@internal path /docs /docs/* /redoc /redoc/* /openapi.json
+	respond @internal 404
+
+	reverse_proxy {$BACKEND_UPSTREAM:backend:8000} {
+		transport http {
+			response_header_timeout 120s
+		}
+	}
+}

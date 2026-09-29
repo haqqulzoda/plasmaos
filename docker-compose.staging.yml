@@ -1,0 +1,93 @@
+# ============================================
+# Plasma AI - Staging override (fully isolated from production)
+# ============================================
+# Use it ONLY through scripts/ops/compose-staging.sh, which passes the project
+# name, this file and .env.staging (never .env):
+#
+#   docker compose --env-file .env.staging -p plasma_staging \
+#     -f docker-compose.yml -f docker-compose.staging.yml [-f docker-compose.proxy.yml] ...
+#
+# Isolation is structural, so a forgotten -p flag cannot reach production:
+#   * project name plasma_staging and a plasma_staging_net network
+#   * every container_name and named volume is explicitly staging-prefixed
+#   * every published host port comes from STAGING_* variables (loopback only)
+#   * env_file is REPLACED (!override) by .env.staging: production secrets in
+#     .env are never read by a staging container
+# Needs Docker Compose >= 2.24 (!override / !reset merge tags).
+
+name: plasma_staging
+
+services:
+  db:
+    container_name: plasma_staging_db
+    ports: !override
+      - "127.0.0.1:${STAGING_DB_PORT:-16543}:5432"
+
+  pgadmin:
+    container_name: plasma_staging_pgadmin
+    ports: !override
+      - "127.0.0.1:${STAGING_PGADMIN_PORT:-15050}:80"
+
+  redis:
+    container_name: plasma_staging_redis
+    ports: !override
+      - "127.0.0.1:${STAGING_REDIS_PORT:-16379}:6379"
+
+  clamav:
+    container_name: plasma_staging_clamav
+
+  backend:
+    container_name: plasma_staging_backend
+    env_file: !override
+      - .env.staging
+    ports: !override
+      - "127.0.0.1:${STAGING_BACKEND_PORT:-18000}:8000"
+
+  frontend:
+    container_name: plasma_staging_frontend
+    ports: !override
+      - "127.0.0.1:${STAGING_FRONTEND_PORT:-13000}:3000"
+
+  celery_worker:
+    container_name: plasma_staging_celery_worker
+    env_file: !override
+      - .env.staging
+
+  worker_heavy:
+    container_name: plasma_staging_worker_heavy
+    env_file: !override
+      - .env.staging
+
+  worker_private_documents:
+    container_name: plasma_staging_worker_private_documents
+    env_file: !override
+      - .env.staging
+
+  worker_pursuit_analysis:
+    container_name: plasma_staging_worker_pursuit_analysis
+    env_file: !override
+      - .env.staging
+
+  celery_beat:
+    container_name: plasma_staging_celery_beat
+    env_file: !override
+      - .env.staging
+
+volumes:
+  postgres_data:
+    name: plasma_staging_postgres_data
+  redis_data:
+    name: plasma_staging_redis_data
+  tender_documents_data:
+    name: plasma_staging_tender_documents_data
+  private_documents_data:
+    name: plasma_staging_private_documents_data
+  # Only used when docker-compose.proxy.yml is also passed.
+  caddy_data:
+    name: plasma_staging_caddy_data
+  caddy_config:
+    name: plasma_staging_caddy_config
+
+networks:
+  default:
+    name: plasma_staging_net

@@ -1,9 +1,13 @@
 .env
 .env/
+.env.staging
+.env.production
 .pgadmin
 .private-storage/
 .docs/
 docs/*
+!docs/ops/
+!docs/ops/*.md
 !docs/W0_CURRENT_BASELINE_NEW_DOMAIN_MAPPING.md
 !docs/W1_PRODUCT_TRUTH_AI_PRICING_REMOVAL.md
 !docs/W2_ORGANIZATION_PURSUIT_FOUNDATION.md
