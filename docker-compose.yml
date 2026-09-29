@@ -19,10 +19,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # ---- Database GUI ----
+  # ---- Database GUI (opt-in only: docker compose --profile tools up -d pgadmin) ----
+  # Never started by a default `up`, in production or staging.
   pgadmin:
     image: dpage/pgadmin4
-    profiles: ["development"]
+    profiles: ["tools"]
     container_name: plasma_pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-}
@@ -208,7 +209,11 @@ services:
       - private_documents_data:/app/private-data
 
   worker_pursuit_analysis:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        PLASMA_BUILD_SHA: ${PLASMA_BUILD_SHA:-unknown}
+        PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_worker_pursuit_analysis
     restart: unless-stopped
     env_file: .env
