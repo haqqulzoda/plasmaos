@@ -1,4 +1,4 @@
-# Rollout: pilot/week1 (D1-01 analyzer reliability, D1-03 official notices, D1-09 ops, OPS-1 host safety)
+# Rollout: pilot/week1 (D1-01 analyzer, D1-03 official notices, D1-04/05 freshness and deadline truth, D1-06 one door, D1-09 ops, OPS-1 host safety, integration fixes)
 
 Status: prepared, **not executed**. Run staging first; production only after staging passes every
 step. All commands run from the repository checkout on the target host, in order. `$` lines are
@@ -17,8 +17,10 @@ What ships:
 | D1-03 official notice | Tenders with a substantive notice get one shared `OFFICIAL_NOTICE` tender document (created by source refresh and by the backfill) | Migration `20261003_0001_d1_03_official_notice_unique`: one partial unique index on `tender_documents`; additive, reversible, no data change. Backfill writes rows. |
 | D1-01 analyzer | Pursuit analysis: length-based model routing, retries, budgets, provider error classes, exact-source contexts, worker concurrency 2 | None (new runs record `pursuit_analysis_pipeline_d1_v3`) |
 | D1-09 ops | Staging stack, Caddy, backup/restore/smoke scripts, pgAdmin only with `--profile tools`, ClamAV watchdog, SHA-tagged release images | None |
-| D1-04 / D1-05 (`pilot/d1-04-freshness`, when included) | Scheduled source refresh (Beat, `SOURCE_REFRESH_SCHEDULE`); ADB hidden from customers; "Not published" budgets; deadlines shown as published with their time basis; open/closed derived from the deadline | None (no migration; the notice header text changes, so step 9 updates notices) |
+| D1-04 / D1-05 freshness and deadline truth | Scheduled source refresh (Beat, `SOURCE_REFRESH_SCHEDULE`); ADB hidden from customers; "Not published" budgets; deadlines shown as published with their time basis; open/closed derived from the deadline | None (no migration; the notice header text changes, so step 9 updates notices) |
+| D1-06 one door | One "Open workspace" action on Explorer, Tender Details and the dashboard (Prepare Bid and score strings removed); fact chips with truthful days left | None |
 | OPS-1 host safety | Memory limits and OOM priorities per service (host profile 4gb/8gb), Celery per-child memory caps, Postgres memory settings, pursuit worker concurrency 1 on 4gb; off-host image build/transfer; streaming off-host backup; disk report and safe prune | None. The `db` and `redis` containers are recreated once (new `command`/`oom_score_adj`): a few seconds of database downtime in step 8. |
+| Integration fixes | (a) A deadline published without a zone uses the capital zone of the tender's country ("country-inferred"); with no country it stays open as "Closing — verify on source" until the latest possible instant (UTC−12) has passed (locally 684 → 694 open). (b) A refresh that saved rows and then lost the connection is recorded `partial` with its true counts and counts as fresh data ("Partial refresh"); World Bank and GIZ retry a connection error once. (c) A provider account error fails the analysis run at once (no retries). (d) "Matches your profile" leaves out tenders the organization dismissed; the Explorer service filter uses the same whole-word rule. (e) 4gb profile: `worker_private_documents` 384m, `worker_heavy` 256m. Frontend: next 16.3.8, axios 1.20.0 (security advisories). `smoke_account.py` for the live smoke. | None |
 
 Alembic head after this release: `20261003_0001_d1_03_official_notice_unique` (single head).
 
@@ -43,6 +45,7 @@ Alembic head after this release: `20261003_0001_d1_03_official_notice_unique` (s
    $ scripts/ops/prune_safe.sh --apply --keep $PREV_SHA   # only if disk_report failed
    $ docker inspect -f '{{.State.Health.Status}} oom={{.State.OOMKilled}}' plasma_clamav   # healthy oom=false
    $ docker ps --format '{{.Names}} {{.Ports}}' | grep -v '127.0.0.1' | grep -E -- '->' ; echo "public ports above: expected none (Caddy 80/443 only)"
+   $ docker ps --format '{{.Names}}' | grep -c pgadmin                    # 0 is the target; step 8 removes it if it runs
    ```
    The import in step 5 needs about 5 GB free for a new release's layers (shared layers are not
    duplicated); disk must stay at or below 80 % afterwards.
@@ -125,13 +128,16 @@ PURSUIT_ANALYSIS_CHUNK_BUDGET_SECONDS=240
 PURSUIT_ANALYSIS_RUN_BUDGET_SECONDS=900
 # PURSUIT_ANALYSIS_WORKER_CONCURRENCY comes from the host profile; remove any line for it here.
 
-# Scheduled source refresh (D1-04; read by builds that include pilot/d1-04-freshness).
+# Scheduled source refresh (D1-04).
 # <source>=<N>m|h|d, comma separated; unset = this default; empty = disabled. An unknown,
 # hidden (adb) or repeated source stops worker, Beat and API at startup.
 # Production:
 SOURCE_REFRESH_SCHEDULE=world_bank=6h,uzex=6h,ebrd=24h,giz=24h
 # Staging (.env.staging): every source once a day, to spare the live sources:
 # SOURCE_REFRESH_SCHEDULE=world_bank=24h,uzex=24h,ebrd=24h,giz=24h
+# Optional: wait before the single retry of a World Bank / GIZ connection error
+# (0-30 s, default 5, plus up to 1 s jitter). Leave unset.
+# SOURCE_CONNECT_RETRY_BACKOFF_SECONDS=5
 ```
 
 `PURSUIT_ANALYSIS_RUN_BUDGET_SECONDS=900` overrides the code default of 480. It is safe with
@@ -273,10 +279,40 @@ once (locally: 577 updated, 1 unchanged because that EBRD notice has no deadline
 $ scripts/ops/smoke.sh --target production --expect-sha $SHA \
     --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
 $ scripts/compose-release.sh exec -T worker_pursuit_analysis python scripts/analysis_smoke.py
-# End to end, one real provider call, only in the dedicated single-member test organization
-# (the script refuses anything else); the token is read from the environment, never argv:
-$ ANALYSIS_SMOKE_TOKEN=<smoke user token> python3 backend/scripts/analysis_smoke.py --live --api-base https://<API_DOMAIN>/api/v1 --org-id <test org id> --org-name "<exact test org name>"
 ```
+
+**Dedicated smoke account (first release only; idempotent afterwards).** The live smoke writes
+one pursuit and one analysis run, so it runs only in a single-member organization named
+"Plasma Smoke Test". `smoke_account.py` creates it: an approved user
+`plasma-smoke-test@plasma.invalid` that cannot sign in with Google (reserved domain, non-Google
+subject), its approved company profile, and the profile's organization with that user as the
+only member. Both approvals are written to the admin audit log (actor `SERVER_COMMAND`). The
+account shows in the admin user list; leave it there for later smokes.
+
+```
+$ scripts/compose-release.sh run --rm --no-deps backend python scripts/smoke_account.py ensure
+#   report only: {"status": "would_create", ...} (or "exists")
+$ scripts/compose-release.sh run --rm --no-deps backend python scripts/smoke_account.py ensure --apply --confirm CREATE_SMOKE_ACCOUNT
+#   {"status": "created", "organization_id": "<SMOKE_ORG_ID>", "organization_name": "Plasma Smoke Test"}
+$ SMOKE_ORG_ID=<organization_id from the line above>
+```
+
+**Live analysis smoke (one real provider call).** The token lives 60 minutes, is captured into the
+environment without being printed (`compose-release.sh` prints its settings first; the token is
+the last line), and is never passed on the command line:
+
+```
+$ export ANALYSIS_SMOKE_TOKEN="$(scripts/compose-release.sh run --rm --no-deps -T backend python scripts/smoke_account.py token | tail -n 1)"
+$ python3 backend/scripts/analysis_smoke.py --live --api-base https://<API_DOMAIN>/api/v1 \
+    --org-id $SMOKE_ORG_ID --org-name "Plasma Smoke Test"
+$ unset ANALYSIS_SMOKE_TOKEN
+```
+
+The live smoke refuses to run unless the token's user belongs to exactly that one organization
+and is its only active member; `smoke_account.py` refuses to mint a token or change anything if
+someone else was added to it, or if the e-mail belongs to an account it did not create. It picks
+the first open World Bank REOI with an official notice and must end
+`live analysis smoke: OK` (COMPLETED, READY_FOR_REVIEW, at least 5 requirements).
 
 `smoke.sh` must report zero failures (health and build SHA, release metadata, readiness, frontend,
 containers, Postgres, Redis, Alembic at head, all five queues consumed, Beat ticking, clamd PING,
@@ -347,6 +383,64 @@ The configuration works on both sizes; only `HOST_PROFILE` changes. Plan a 15-30
 To go back to 4gb before rescaling down (only possible with "CPU and RAM only"), set
 `HOST_PROFILE=4gb` and repeat step 6 first.
 
+## Final command list (production, 4gb, no build on the host)
+
+The same commands as the steps above, in order, for the operator's terminal. `prod$` runs in
+`/opt/plasma-console/plasmaos` on production; `build$` on the build host. Times are local
+measurements or estimates (see the table below); the production window from step 1 to step 10
+is about 20 minutes, plus the transfer in step 5.
+
+```
+# 0. Before the window                                                         ~3 min
+prod$  git fetch origin && SHA=$(git rev-parse origin/pilot/week1) && echo $SHA
+prod$  PREV_SHA=$(curl -fsS http://127.0.0.1:8000/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["build_sha"])') && echo $PREV_SHA
+prod$  docker compose exec -T backend alembic current          # 20261002_0001_p0_extraction_trust_gate (head)
+prod$  free -m && scripts/ops/disk_report.sh --threshold 80 && scripts/ops/prune_safe.sh
+prod$  docker ps --format '{{.Names}}' | grep -c pgadmin        # expect 0 (removed in step 8 otherwise)
+# 1. Off-host backup (DB + private documents)                                  ~1-2 min
+prod$  scripts/ops/backup.sh --target production --skip-tender-documents     # BACKUP_REMOTE from the environment; record RESTORE_POINT
+# 2. Checkout                                                                  seconds
+prod$  git status --porcelain && git checkout -B pilot/week1 origin/pilot/week1 && test "$(git rev-parse HEAD)" = "$SHA"
+# 3. Tag the running images                                                    seconds
+prod$  scripts/compose-release.sh tag $PREV_SHA && scripts/compose-release.sh images
+# 4. .env: PLASMA_NO_BUILD=1, HOST_PROFILE=4gb, pursuit variables, SOURCE_REFRESH_SCHEDULE  ~2 min
+prod$  scripts/compose-release.sh config --quiet
+prod$  scripts/compose-release.sh config | grep -E 'mem_limit|concurrency=' | head
+# 5. Build elsewhere, import, point at the new images                         ~11 min build + transfer
+build$ git checkout $SHA && scripts/compose-release.sh build-only
+build$ scripts/compose-release.sh export $SHA | ssh deploy@<prod-host> 'cd /opt/plasma-console/plasmaos && scripts/compose-release.sh import --expect $SHA'
+prod$  scripts/compose-release.sh use $SHA
+# 6. Migration                                                                 ~15 s
+prod$  scripts/compose-release.sh run --rm --no-deps backend alembic upgrade head
+prod$  scripts/compose-release.sh run --rm --no-deps backend alembic current   # 20261003_0001_d1_03_official_notice_unique (head)
+# 7. Backfill report                                                           ~30 s
+prod$  scripts/compose-release.sh run --rm --no-deps backend python scripts/backfill_official_notices.py
+# 8. Restart in order (pgAdmin removed, never started)                         ~3-4 min
+prod$  docker rm -f plasma_pgadmin 2>/dev/null; docker ps -a --format '{{.Names}}' | grep -c pgadmin   # 0
+prod$  scripts/compose-release.sh up $SHA --no-deps db redis && until docker exec plasma_db pg_isready -q; do sleep 2; done
+prod$  scripts/compose-release.sh up $SHA --no-deps clamav && until [ "$(docker inspect -f '{{.State.Health.Status}}' plasma_clamav)" = healthy ]; do sleep 10; done
+prod$  scripts/compose-release.sh up $SHA --no-deps celery_worker worker_heavy worker_private_documents worker_pursuit_analysis
+prod$  scripts/compose-release.sh up $SHA --no-deps celery_beat
+prod$  scripts/compose-release.sh up $SHA --no-deps backend && until curl -fsS http://127.0.0.1:8000/health/ready >/dev/null; do sleep 3; done
+prod$  scripts/compose-release.sh up $SHA --no-deps frontend
+# 9. Backfill apply (only now: the new API is serving)                          ~45 s
+prod$  scripts/compose-release.sh run --rm --no-deps backend python scripts/backfill_official_notices.py --apply --confirm BACKFILL_OFFICIAL_NOTICES
+prod$  scripts/compose-release.sh run --rm --no-deps backend python scripts/backfill_official_notices.py   # created 0
+# 10. Smoke                                                                    ~5 min
+prod$  scripts/ops/smoke.sh --target production --expect-sha $SHA --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
+prod$  scripts/compose-release.sh exec -T worker_pursuit_analysis python scripts/analysis_smoke.py
+prod$  scripts/compose-release.sh run --rm --no-deps backend python scripts/smoke_account.py ensure --apply --confirm CREATE_SMOKE_ACCOUNT
+prod$  SMOKE_ORG_ID=<organization_id printed above>
+prod$  export ANALYSIS_SMOKE_TOKEN="$(scripts/compose-release.sh run --rm --no-deps -T backend python scripts/smoke_account.py token | tail -n 1)"
+prod$  python3 backend/scripts/analysis_smoke.py --live --api-base https://<API_DOMAIN>/api/v1 --org-id $SMOKE_ORG_ID --org-name "Plasma Smoke Test"
+prod$  unset ANALYSIS_SMOKE_TOKEN
+prod$  scripts/ops/disk_report.sh --threshold 80 && free -m
+# Rollback, if needed (section 11)                                             ~1 min
+prod$  scripts/compose-release.sh rollback $PREV_SHA && scripts/ops/smoke.sh --target production --expect-sha $PREV_SHA
+```
+
+The Hetzner resize to 8 GB (section "Resize" above) is optional and separate: not in this window.
+
 ## Expected durations
 
 Measured on the local stack (developer laptop, Docker Desktop, 3.7 GB VM); migration and backfill on a disposable copy of the local database. Production will differ
@@ -362,6 +456,8 @@ with its data size and CPU; staging gives the real numbers.
 | 7 Backfill report | 21 s (would create 578: World Bank 564, GIZ 13, EBRD 1; UzEx 0 substantive) | none |
 | 8 Restart sequence | about 3 min: containers 15 s, API ready 30 s, ClamAV healthy 130 s (signature load) | uploads wait for ClamAV (about 2 min); API/frontend blips of a few seconds |
 | 9 Backfill apply | 28 s for 578 notices; confirming re-run 12 s, created 0 | none |
-| 10 Smoke | about 1 min | none |
+| 10 Smoke (`smoke.sh`, read-only `analysis_smoke.py`) | about 1 min | none |
+| 10 Smoke account (`smoke_account.py ensure --apply`, `token`) | about 10 s each (container start) | none |
+| 10 Live analysis smoke (one run) | 1-2 min (fails above `--max-latency`, default 60 s of analysis) | none; one provider call billed to the environment's key |
 | Code rollback | about 1 min (no build) | a few seconds per service |
 | Restore from backup | database ~1 min per 100 MB of dump, documents ~5 min per 5 GB | full outage |
