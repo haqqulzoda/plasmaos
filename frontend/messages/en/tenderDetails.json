@@ -200,5 +200,20 @@
     "noRecommendation": "No stored recommendation is available for this tender.",
     "notFound": "Tender not found.",
     "denied": "You do not have access to this tender."
+  },
+  "analysisCard": {
+    "title": "Analysis",
+    "loading": "Checking the workspace…",
+    "unavailable": "Analysis status is unavailable right now.",
+    "none": "Not analysed yet.",
+    "running": "Analysis is running in the workspace.",
+    "failed": "The last analysis did not complete. Open the workspace to retry.",
+    "ready": "Latest analysis",
+    "readyOn": "Latest analysis, {date}",
+    "requirements": "Requirements",
+    "evidenceMissing": "Evidence missing",
+    "gaps": "Open gaps",
+    "positions": "Positions",
+    "notes": "Submission notes"
   }
 }

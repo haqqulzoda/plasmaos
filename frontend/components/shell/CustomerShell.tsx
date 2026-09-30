@@ -9,7 +9,6 @@ import {
   LayoutDashboard,
   Search,
   LogOut,
-  Settings,
   Menu,
   UserCircle,
   ChevronDown,
@@ -88,15 +87,6 @@ export function CustomerShell({
           {t('adminConsole')}
         </Link>
       )}
-      <Link
-        className="shell-nav-link"
-        href="/dashboard/settings"
-        prefetch={false}
-        onClick={() => setMobileOpen(false)}
-      >
-        <Settings aria-hidden />
-        {t('settings')}
-      </Link>
       <Button
         variant="ghost"
         onClick={onLogout}
@@ -185,14 +175,6 @@ export function CustomerShell({
                 prefetch={false}
               >
                 {t('companyExperience')}
-              </Link>
-              <Link
-                role="menuitem"
-                className="ds-button ds-button-ghost"
-                href="/dashboard/settings"
-                prefetch={false}
-              >
-                {t('settings')}
               </Link>
               {canAdmin && (
                 <Link

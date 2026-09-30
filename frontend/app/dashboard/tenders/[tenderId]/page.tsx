@@ -4,12 +4,13 @@ import { use, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowLeft, Building2, Calendar, ChartNoAxesColumnIncreasing,
-  CircleDollarSign, Download, ExternalLink, FileText, Globe2, Landmark,
-  Loader2, MapPin, RefreshCw, ShieldCheck, UserRound, UsersRound,
+  CircleDollarSign, Download, ExternalLink, FileText, Globe2,
+  Loader2, MapPin, RefreshCw, UserRound, UsersRound,
 } from "lucide-react";
 
 import { OpenWorkspaceButton } from "@/components/pursuits/OpenWorkspaceButton";
 import { FactChips } from "@/components/tenders/FactChips";
+import { PursuitAnalysisCard } from "@/components/tenders/PursuitAnalysisCard";
 import { SourcePrivateUpload } from "@/components/pursuits/SourcePrivateUpload";
 import { TenderEngagementPanel } from "@/components/tenders/TenderEngagementPanel";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
@@ -258,10 +259,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
   const documents = details?.documents.data;
   const competitors = details?.competitor_intelligence.data?.groups.flatMap((group) => group.competitors) ?? [];
   const contacts = details?.procurement_contacts.data;
-  const compliance = details?.compliance.data;
-  const readiness = details?.company_readiness.data;
   const pursuit = details?.pursuit.data;
-  const bidPreparation = details?.bid_preparation.data;
   const requirements = details?.requirements.data;
   const canAcquireDocuments = Boolean(documents?.acquisition_supported && actionable &&
     ["AVAILABLE_REMOTE", "PARTIAL", "FAILED"].includes(documents.acquisition_state));
@@ -297,7 +295,8 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
         {sourceUrl && <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="ds-button ds-button-secondary ds-button-sm">
           <ExternalLink aria-hidden="true" />{t("openSource")}
         </a>}
-        <OpenWorkspaceButton tenderId={tender.id} disabled={!pursuit && !actionable} />
+        {/* D2-02: the page's one primary action; stage actions below are secondary. */}
+        <OpenWorkspaceButton tenderId={tender.id} size="md" disabled={!pursuit && !actionable} />
       </div>
     </div>
 
@@ -331,7 +330,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
     {!details && isLoadingDetails ? <>
       <div className="s143-decision-grid" aria-label={t("detailsLoading")}>
         <SectionPlaceholder title={t("sections.pursuit")} />
-        <SectionPlaceholder title={t("complianceTitle")} />
+        <SectionPlaceholder title={t("analysisCard.title")} />
         <SectionPlaceholder title={tFacts("label")} />
       </div>
       <div className="s143-project-grid">
@@ -341,34 +340,16 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
       <SectionPlaceholder title={t("tenderDocuments")} />
       <SectionPlaceholder title={t("competitorsTitle")} />
       <SectionPlaceholder title={t("contactsTitle")} />
-      <SectionPlaceholder title={t("bidTitle")} />
     </> : null}
 
     {details && <>
       <div className="s143-decision-grid">
         <TenderEngagementPanel
-          decisionCard tenderId={tender.id} proposalContext workspaceEntry
-          engagementData={pursuit} proposalIdData={bidPreparation?.proposal_id ?? null}
-          loadingData={false} canStartNew={actionable} onRefresh={loadDetails}
+          decisionCard tenderId={tender.id} secondaryStageActions
+          engagementData={pursuit} loadingData={false} canStartNew={actionable} onRefresh={loadDetails}
         />
 
-        <section className="s143-decision-card" aria-labelledby="s143-compliance-title">
-          <h2 id="s143-compliance-title"><ShieldCheck aria-hidden="true" />{t("complianceTitle")}</h2>
-          <dl className="s143-decision-list">
-            <div><dt>{t("compliance")}</dt><dd>
-              {compliance ? <><span>{compliance.execution_state === "FAILED" ? t("complianceFailed") : compliance.compliance_completeness === "PARTIAL" ? t("compliancePartial") : compliance.version_origin === "LEGACY_BACKFILL" ? t("complianceLegacy") : compliance.decision_label || t("complianceAvailable")}</span>
-                {compliance.key_issue_count !== null && <small>{t("keyIssues")}: {formatNumber(compliance.key_issue_count, locale)}</small>}</>
-                : details.compliance.state === "UNAVAILABLE" ? t("complianceUnavailable") : t("complianceEmpty")}
-            </dd></div>
-            <div><dt>{t("readiness")}</dt><dd>{readiness
-              ? <>{t("availableCount", { count: readiness.readiness_documents_available })} / {t("totalCount", { count: readiness.readiness_documents_total })}</>
-              : details.company_readiness.state === "UNAVAILABLE" ? t("readinessUnavailable") : t("readinessEmpty")}</dd></div>
-            {readiness && <div><dt>{t("missingEvidence")}</dt><dd>{formatNumber(readiness.readiness_documents_missing, locale)}</dd></div>}
-          </dl>
-          <div className="s143-decision-links">
-            <ButtonLink prefetch={false} href="/dashboard/readiness-vault" size="sm">{t("openReadiness")}</ButtonLink>
-          </div>
-        </section>
+        <PursuitAnalysisCard tenderId={tender.id} canStartNew={actionable || Boolean(pursuit)} />
 
         <section className="s143-decision-card" aria-labelledby="s143-recommendation-title">
           <h2 id="s143-recommendation-title"><ChartNoAxesColumnIncreasing aria-hidden="true" />{tFacts("label")}</h2>
@@ -488,10 +469,6 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
         </div> : <StateMessage state={details.procurement_contacts.state} empty={t("contactsEmpty")} unavailable={t("contactsUnavailable")} />}
       </Section>
 
-      <Section id="bid-preparation" title={t("bidTitle")} icon={<Landmark aria-hidden="true" />} className="s143-bid-strip"
-        action={<OpenWorkspaceButton tenderId={tender.id} variant="secondary" disabled={!pursuit && !actionable} />}>
-        <p>{bidPreparation ? t("preparationStatus", { status: bidPreparation.proposal_status }) : t("bidNotStartedHelp")}</p>
-      </Section>
     </>}
   </main>;
 }

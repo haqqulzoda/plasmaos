@@ -123,9 +123,11 @@ test("dead Decision Snapshot contracts stay removed while competitors use the de
 });
 
 test("Tender Details exposes the new decision-and-evidence sections without redundant anchor tabs", () => {
-  for (const id of ["project-context", "project-leadership", "tender-documents", "competitors", "contacts", "bid-preparation"]) {
+  for (const id of ["project-context", "project-leadership", "tender-documents", "competitors", "contacts"]) {
     assert.match(tenderDetail, new RegExp(`id="${id}"`));
   }
+  // D2-02: the bottom Bid Preparation strip is gone; the workspace is the single path.
+  assert.doesNotMatch(tenderDetail, /id="bid-preparation"/);
   assert.match(tenderDetail, /decisionCard tenderId=\{tender\.id\}/);
   assert.doesNotMatch(tenderDetail, /details-anchors/);
 });

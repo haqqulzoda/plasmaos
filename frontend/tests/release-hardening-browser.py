@@ -61,6 +61,8 @@ def main():
         "p0_attention": False, "p0_context_conflict": False,
         "p1_running": False, "p1_failed": False,
         "source_pursuit_created": False,
+        # D2-02 library fixture: the own firm starts "not set up yet" (GET 404).
+        "d202": False, "d202_self_firm": None, "d202_analysis": False,
     }
     rows = []
     # D1-06 one door: the SOURCE pursuit the Explorer/Tender Details CTA creates or resolves.
@@ -338,6 +340,59 @@ def main():
             "created_at":"2026-09-26T10:06:00Z",
         }
 
+    D202_SELF_FIRM_ID = "73000000-0000-4000-8000-000000000201"
+    D202_PARTNER_ID = "73000000-0000-4000-8000-000000000202"
+    D202_EXPERT_ID = "73000000-0000-4000-8000-000000000203"
+
+    def d202_reference(reference_id, firm_id, name, **values):
+        return {
+            "reference_id": reference_id, "firm_id": firm_id, "project_name": name,
+            "client_name": "Regional grid company", "country": "Uzbekistan", "service": "Detailed design",
+            "sector": "Energy", "role": "LEAD", "contract_share_percent": None, "contract_value": "250000.00",
+            "contract_currency": "USD", "value_basis": "CONTRACT_TOTAL", "start_date": "2021-03-01",
+            "completion_date": "2022-11-30", "completion_state": "COMPLETED",
+            "relevant_scope": "Design of two 110 kV substations", "evidence_provenance": {},
+            "evidence_state": "UNVERIFIED", "evidence_basis": "METADATA_ONLY", "supersedes_reference_id": None,
+            "archived_at": None, "created_at": "2026-09-30T08:00:00Z", **values,
+        }
+
+    def d202_firm(firm_id, name, references, **values):
+        return {
+            "firm_id": firm_id, "is_self_firm": False, "scope": "ORGANIZATION_PRIVATE", "canonical_name": name,
+            "display_name": name, "legal_name": None, "country": "Kazakhstan", "regions": [], "services": ["Substation design"],
+            "capabilities": [], "sectors": ["Energy"], "source_type": "MANUAL", "source_provenance": {},
+            "evidence_state": "UNVERIFIED", "project_references": references,
+            "created_at": "2026-09-30T08:00:00Z", "updated_at": "2026-09-30T08:00:00Z", **values,
+        }
+
+    def d202_cv(version):
+        return {
+            "cv_version_id": f"73000000-0000-4000-8000-00000000021{version}", "expert_id": D202_EXPERT_ID,
+            "version_number": version, "education": [{"degree": "MSc Electrical Engineering"}], "qualifications": [],
+            "certifications": [], "assignments": [{"role": "Team Leader", "client": "Grid company", "start": "2020-01"}] * version,
+            "languages": [{"language": "English"}], "evidence_provenance": {}, "evidence_state": "UNVERIFIED",
+            "structured_sha256": f"{version}" * 64, "created_at": f"2026-09-2{version}T08:00:00Z",
+        }
+
+    def d202_library():
+        return {
+            "self_firm": controls["d202_self_firm"],
+            "firms": [d202_firm(D202_PARTNER_ID, "Grid Partner LLP", [
+                d202_reference("73000000-0000-4000-8000-000000000204", D202_PARTNER_ID, "Almaty substation design"),
+            ])],
+            "experts": [{
+                "expert_id": D202_EXPERT_ID, "scope": "ORGANIZATION_PRIVATE", "display_name": "Aziza Karimova",
+                "qualifications": ["MSc Electrical Engineering"], "languages": ["English", "Russian"],
+                "specializations": ["Substation design"], "consent_state": "NOT_REQUIRED_PRIVATE",
+                "evidence_state": "UNVERIFIED", "source_provenance": {}, "cv_versions": [d202_cv(1), d202_cv(2)],
+                "created_at": "2026-09-20T08:00:00Z", "updated_at": "2026-09-22T08:00:00Z",
+            }],
+        }
+
+    def d202_read_json(handler):
+        length = int(handler.headers.get("content-length", "0"))
+        return json.loads(handler.rfile.read(length) or b"{}") if length else {}
+
     class Handler(fixture.Handler):
         def send_json(self, status, payload):
             body = json.dumps(payload).encode()
@@ -384,7 +439,14 @@ def main():
                 if parsed_path == base + "/documents":
                     return self.send_json(200, {"items": []})
                 if parsed_path == base + "/analysis-runs/latest":
-                    return self.send_json(200, None)
+                    if not controls["d202_analysis"]:
+                        return self.send_json(200, None)
+                    requirement = {"effective_coverage_state": "EVIDENCE_MISSING"}
+                    return self.send_json(200, {
+                        "analysis_run_id": "73000000-0000-4000-8000-000000000140", "status": "COMPLETED",
+                        "completed_at": "2026-09-30T09:00:00Z", "requirements": [requirement, {"effective_coverage_state": "PARTIAL"}],
+                        "positions": [], "gaps": [{}, {}], "submission_and_notes": [{}],
+                    })
                 if parsed_path == base + "/team-scenarios":
                     return self.send_json(200, [])
                 if parsed_path == base + "/analysis-pack-candidate":
@@ -420,7 +482,11 @@ def main():
                 }])
             if parsed_path == "/api/v1/pursuits":
                 pursuit = w3_pursuit()
-                return self.send_json(200, {"items":[pursuit],"total":1,"limit":100,"offset":0})
+                items = [pursuit]
+                if controls["d202_analysis"]:
+                    items.append({**pursuit, "pursuit_id": SOURCE_PURSUIT_ID, "origin": "SOURCE",
+                        "source_tender_id": "s72-tender", "title": "Source tender", "external_deadline": "2026-12-15T12:00:00Z"})
+                return self.send_json(200, {"items":items,"total":len(items),"limit":100,"offset":0})
             if parsed_path == "/api/v1/pursuits/73000000-0000-4000-8000-000000000010/documents":
                 return self.send_json(200, {"items":[w3_document()]})
             if parsed_path == "/api/v1/pursuits/73000000-0000-4000-8000-000000000010/context":
@@ -506,6 +572,11 @@ def main():
                         "review_state":"PROVISIONAL","effective_review_state":"PROVISIONAL",
                         "rationale":"No current company record proves or disproves this requirement."}]),
                 })
+            if parsed_path == "/api/v1/candidates/self-firm":
+                firm = controls["d202_self_firm"]
+                return self.send_json(200, firm) if firm else self.send_json(404, {"detail": "Self firm not found"})
+            if parsed_path == "/api/v1/candidates" and controls["d202"]:
+                return self.send_json(200, d202_library())
             if parsed_path == "/api/v1/candidates":
                 return self.send_json(200, {"firms":[{"firm_id":"73000000-0000-4000-8000-000000000050"}] if controls["w5"] else [],"experts":[]})
             if parsed_path == "/api/v1/pursuits/73000000-0000-4000-8000-000000000010/candidate-search-runs":
@@ -568,6 +639,15 @@ def main():
         def do_POST(self):
             requests.append(("POST", self.path))
             parsed_path = urlparse(self.path).path
+            if parsed_path == f"/api/v1/candidates/firms/{D202_SELF_FIRM_ID}/project-references":
+                body = d202_read_json(self)
+                firm = controls["d202_self_firm"]
+                if firm is None:
+                    return self.send_json(404, {"detail": "Firm not found"})
+                reference = d202_reference(f"73000000-0000-4000-8000-{300 + len(firm['project_references']):012d}", D202_SELF_FIRM_ID,
+                    body.get("project_name", ""), **{key: value for key, value in body.items() if key != "project_name"})
+                firm["project_references"].append(reference)
+                return self.send_json(201, reference)
             if parsed_path == "/api/v1/pursuits/source":
                 length = int(self.headers.get("content-length", "0"))
                 body = json.loads(self.rfile.read(length) or b"{}") if length else {}
@@ -620,6 +700,16 @@ def main():
         def do_PATCH(self):
             requests.append(("PATCH", self.path))
             return super().do_PATCH()
+        def do_PUT(self):
+            requests.append(("PUT", self.path))
+            if urlparse(self.path).path == "/api/v1/candidates/self-firm":
+                body = d202_read_json(self)
+                if controls["d202_self_firm"] is None:
+                    controls["d202_self_firm"] = d202_firm(D202_SELF_FIRM_ID, "Synthetic Organization", [],
+                        is_self_firm=True, country=None, services=[], sectors=[])
+                controls["d202_self_firm"].update({key: value for key, value in body.items()})
+                return self.send_json(200, controls["d202_self_firm"])
+            return super().do_PUT()
 
     server = ThreadingHTTPServer((BACKEND_BIND_HOST, 8114), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -1131,6 +1221,134 @@ def main():
                     evidence[locale] = kinds
                 return evidence
             case("d1-08/no-score-fact-chips", d108_no_score)
+            def d202_writes(since):
+                return [(method, path.split("?")[0]) for method, path in requests[since:]
+                        if method != "GET" and path != "/api/v1/auth/refresh"]
+            def d202_own_first_save():
+                controls.update(d202=True, d202_self_firm=None)
+                load("partners-experts?tab=own", "en", 1440)
+                library = messages("en", "pursuits")["library"]
+                assert page.get_by_role("tab", name=library["tabs"]["own"], exact=True).get_attribute("aria-selected") == "true"
+                expect(page.get_by_text(library["own"]["emptyTitle"], exact=True)).to_be_visible()
+                before = len(requests)
+                page.locator('[data-add-reference="own"]').click()
+                form = page.locator("#library-reference-form")
+                expect(form).to_be_visible()
+                assert d202_writes(before) == []  # opening the form writes nothing
+                form.locator('[name="project_name"]').fill("Navoi substation design")
+                form.locator('[name="client_name"]').fill("Regional grid company")
+                form.locator('[name="country"]').fill("Uzbekistan")
+                form.locator('[name="sector"]').fill("Energy")
+                form.locator('[name="service"]').fill("Detailed design")
+                form.locator('[name="contract_value"]').fill("250000")
+                page.locator('button[form="library-reference-form"]').click()
+                # Client-side: a value needs its currency and its basis; nothing is sent.
+                expect(form.locator(".ds-field-error").first).to_be_visible()
+                assert d202_writes(before) == []
+                form.locator('[name="contract_currency"]').fill("USD")
+                form.locator('[name="value_basis"]').select_option("CONTRACT_TOTAL")
+                form.locator('[name="start_date"]').fill("2021-03-01")
+                form.locator('[name="completion_date"]').fill("2022-11-30")
+                form.screenshot(path=str(OUT / "en-d202-reference-form-1440.png"))
+                page.locator('button[form="library-reference-form"]').click()
+                expect(page.locator(".library-reference")).to_have_count(1)
+                writes = d202_writes(before)
+                assert writes == [("PUT", "/api/v1/candidates/self-firm"),
+                                  ("POST", f"/api/v1/candidates/firms/{D202_SELF_FIRM_ID}/project-references")], writes
+                expect(page.locator(".library-reference h4")).to_have_text("Navoi substation design")
+                return {"writes": writes}
+            case("d2-02/library/own-first-save", d202_own_first_save)
+            for locale in ("en", "ru"):
+                for width in (1440, 390):
+                    def d202_tabs(locale=locale, width=width):
+                        controls.update(d202=True)
+                        library = messages(locale, "pursuits")["library"]
+                        load("partners-experts", locale, width)
+                        before = len(requests)
+                        names = [library["tabs"][key] for key in ("own", "partners", "experts")]
+                        assert [text.strip() for text in page.get_by_role("tab").all_inner_texts()] == names
+                        page.screenshot(path=str(OUT / f"{locale}-d202-library-own-{width}.png"), full_page=True)
+                        page.get_by_role("tab", name=names[1], exact=True).click()
+                        page.wait_for_url("**tab=partners")
+                        expect(page.locator('[data-firm-id] .library-reference')).to_have_count(1)
+                        page.screenshot(path=str(OUT / f"{locale}-d202-library-partners-{width}.png"), full_page=True)
+                        page.get_by_role("tab", name=names[2], exact=True).click()
+                        page.wait_for_url("**tab=experts")
+                        versions = page.locator("[data-cv-version]").evaluate_all("els => els.map(e => e.dataset.cvVersion)")
+                        assert versions == ["2", "1"], versions  # newest first
+                        page.screenshot(path=str(OUT / f"{locale}-d202-library-experts-{width}.png"), full_page=True)
+                        assert d202_writes(before) == []
+                        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+                        return {"tabs": names, "cv_versions": versions}
+                    case(f"d2-02/library/tabs/{locale}/{width}", d202_tabs)
+            def d202_csv_preview():
+                controls.update(d202=True)
+                if controls["d202_self_firm"] is None:
+                    controls["d202_self_firm"] = d202_firm(D202_SELF_FIRM_ID, "Synthetic Organization", [], is_self_firm=True)
+                load("partners-experts?tab=own", "en", 1440)
+                library = messages("en", "pursuits")["library"]
+                page.get_by_role("button", name=library["import"]["open"], exact=True).first.click()
+                dialog = page.locator("dialog[open]")
+                columns = "project_name,client_name,country,sector,service,role,contract_share_percent,contract_value,contract_currency,value_basis,start_date,completion_date,completion_state,relevant_scope,evidence_state"
+                content = "\n".join([
+                    columns,
+                    "CSV substation A,Grid,Uzbekistan,Energy,Design,LEAD,,,,,2020-01-01,2021-01-01,COMPLETED,,",
+                    "CSV value without currency,Grid,,,,LEAD,,5000,,,,,COMPLETED,,",
+                    "CSV substation B,Grid,Uzbekistan,Energy,Design,LEAD,,,,,2021-01-01,2022-01-01,COMPLETED,,",
+                ])
+                dialog.locator("[data-import-file]").set_input_files(files=[{"name": "refs.csv", "mimeType": "text/csv", "buffer": content.encode()}])
+                expect(dialog.locator("[data-import-summary]")).to_have_text(library["import"]["summary"].replace("{valid}", "2").replace("{invalid}", "1"))
+                assert dialog.locator("[data-import-row]").evaluate_all("els => els.map(e => e.dataset.valid)") == ["true", "false", "true"]
+                dialog.screenshot(path=str(OUT / "en-d202-csv-preview-1440.png"))
+                before = len(requests)
+                dialog.locator("[data-import-start]").click()
+                expect(dialog.get_by_text("Created: 2. Failed: 0. Not imported because of errors: 1.", exact=True)).to_be_visible()
+                posts = [path for method, path in d202_writes(before)]
+                assert posts == [f"/api/v1/candidates/firms/{D202_SELF_FIRM_ID}/project-references"] * 2, posts
+                return {"posted": len(posts), "skipped": 1}
+            case("d2-02/library/csv-preview", d202_csv_preview)
+            def d202_dashboard():
+                evidence = {}
+                for locale in ("en", "ru"):
+                    s72.State.users["s72-token-a"]["ui_locale"] = locale
+                    page.set_viewport_size({"width": 1440, "height": 900})
+                    response = page.goto(BASE + "/dashboard", wait_until="networkidle")
+                    assert response is not None and response.status == 200, page.url
+                    expect(page.locator("[data-page='dashboard']")).to_be_visible(timeout=30000)
+                    dashboard = messages(locale, "dashboard")
+                    assert page.locator(".dashboard-attention, .dashboard-analyses").count() == 0
+                    expect(page.locator("[data-dashboard-pursuits]")).to_be_visible()
+                    expect(page.locator("[data-dashboard-pursuits] h2")).to_have_text(dashboard["pursuitsTitle"])
+                    href = page.locator("[data-dashboard-pursuits] a[href*='/dashboard/pursuits/']").first.get_attribute("href")
+                    assert href.endswith(f"?organization_id={ORGANIZATION_ID}"), href
+                    assert page.locator("[data-company-link]").get_attribute("href") == "/dashboard/settings"
+                    assert page.locator('a[href="/dashboard/readiness-vault"]').count() == 0
+                    assert not any("latest-analysis" in path for _, path in requests)
+                    assert page.get_by_role("link", name=dashboard["openExplorer"]).count() >= 1
+                    evidence[locale] = href
+                return evidence
+            case("d2-02/dashboard/pursuits-no-legacy-widgets", d202_dashboard)
+            def d202_tender_details():
+                card_states = {}
+                for analysed in (False, True):
+                    controls["d202_analysis"] = analysed
+                    try:
+                        load("tenders/s72-tender", "en", 1440)
+                        card = page.locator("[data-analysis-card]")
+                        expect(card).to_be_visible()
+                        state = "ready" if analysed else "none"
+                        expect(card.locator(f'[data-analysis-state="{state}"]')).to_be_visible()
+                        card_states[state] = card.inner_text()
+                    finally:
+                        controls["d202_analysis"] = False
+                assert page.locator("#bid-preparation, #s143-compliance-title").count() == 0
+                assert page.locator('a[href="/dashboard/readiness-vault"]').count() == 0
+                assert page.locator(".s143-utility-actions [data-open-workspace] .ds-button-primary").count() == 1
+                # Stage actions are secondary (a closed confirmation dialog may hold a hidden primary).
+                assert page.locator(".s143-decision-grid .ds-button-primary:visible").count() == 0
+                return {"states": list(card_states)}
+            case("d2-02/tender-details/analysis-card", d202_tender_details)
+            controls.update(d202=False, d202_analysis=False)
             for name,path in [("proposals","bid-preparation"),("readiness","readiness-vault")]:
                 def pagination(path=path):
                     controls["pagination"] = True

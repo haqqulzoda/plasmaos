@@ -200,5 +200,20 @@
     "noRecommendation": "Ushbu tender uchun saqlangan tavsiya mavjud emas.",
     "notFound": "Tender topilmadi.",
     "denied": "Ushbu tenderga kirish huquqingiz yo‘q."
+  },
+  "analysisCard": {
+    "title": "Tahlil",
+    "loading": "Ish maydoni tekshirilmoqda…",
+    "unavailable": "Tahlil holati hozir mavjud emas.",
+    "none": "Hali tahlil qilinmagan.",
+    "running": "Tahlil ish maydonida bajarilmoqda.",
+    "failed": "Oxirgi tahlil yakunlanmadi. Qayta urinish uchun ish maydonini oching.",
+    "ready": "Oxirgi tahlil",
+    "readyOn": "Oxirgi tahlil, {date}",
+    "requirements": "Talablar",
+    "evidenceMissing": "Tasdiq yoʻq",
+    "gaps": "Ochiq boʻshliqlar",
+    "positions": "Lavozimlar",
+    "notes": "Topshirish boʻyicha koʻrsatmalar"
   }
 }

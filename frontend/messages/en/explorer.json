@@ -1,5 +1,5 @@
 {
-  "title": "Tender Explorer",
+  "title": "Opportunities",
   "subtitle": "Discover and evaluate relevant tenders from global development partners.",
   "newArrivals": "{count, plural, one {# new tender available} other {# new tenders available}}",
   "resultsStable": "Your current results have not moved.",

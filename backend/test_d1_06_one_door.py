@@ -28,6 +28,7 @@ from app.services.explorer import ExplorerQuery, list_explorer_tenders
 from app.services.profile_match import (
     ProfileTargets,
     profile_match_condition,
+    profile_match_tier,
     profile_targets,
     tender_profile_match,
 )
@@ -102,6 +103,7 @@ def test_one_door_is_idempotent_and_matches_view_is_deterministic_on_postgres() 
         async with _database("d1_06_one_door") as (database, ids, sessions, _engine):
             now = datetime.now(UTC)
             rows = {
+                "M-BOTH": dict(country="Uzbekistan", title="D106 Technical assistance for irrigation", deadline=now + timedelta(days=20)),
                 "M-COUNTRY": dict(country="Uzbekistan", title="D106 Supply of pumps", deadline=now + timedelta(days=10)),
                 "M-SERVICE": dict(country="Kenya", title="D106 Technical assistance for water utilities", deadline=now + timedelta(days=3)),
                 "M-NO-DEADLINE": dict(country="Uzbekistan", title="D106 Framework notice", deadline=None),
@@ -175,9 +177,16 @@ def test_one_door_is_idempotent_and_matches_view_is_deterministic_on_postgres() 
                 stored_before = await db.scalar(select(func.count(TenderRecommendation.id)))
                 matches = await list_explorer_tenders(db, user_id=ids["user_a"], query=ExplorerQuery(
                     view=ExplorerView.RECOMMENDED, q="D106", limit=50))
-                # >= 1 country or service match, deadline-open, soonest deadline first (no deadline last).
-                assert [item.tender.external_id for item in matches.items] == ["M-SERVICE", "M-COUNTRY", "M-NO-DEADLINE"]
-                assert matches.counts.active_recommendations == 3 and matches.total == 3
+                # >= 1 country or service match, deadline-open. D2-02 tiers: country and service,
+                # then country, then service; soonest deadline first within a tier (no deadline last).
+                ranked = ["M-BOTH", "M-COUNTRY", "M-NO-DEADLINE", "M-SERVICE"]
+                assert [item.tender.external_id for item in matches.items] == ranked
+                assert matches.counts.active_recommendations == 4 and matches.total == 4
+                tiers = [profile_match_tier(item.profile_match.country, item.profile_match.services) for item in matches.items]
+                assert tiers == sorted(tiers) == [1, 2, 2, 3]
+                newest = await list_explorer_tenders(db, user_id=ids["user_a"], query=ExplorerQuery(
+                    view=ExplorerView.RECOMMENDED, q="D106", sort="newest", limit=50))
+                assert {item.tender.external_id for item in newest.items} == set(ranked)  # explicit sorts stay as asked
                 by_id = {item.tender.external_id: item for item in matches.items}
                 assert by_id["M-SERVICE"].profile_match.model_dump() == {"country": None, "services": ["consulting"]}
                 assert by_id["M-COUNTRY"].profile_match.model_dump() == {"country": "Uzbekistan", "services": []}
@@ -185,7 +194,7 @@ def test_one_door_is_idempotent_and_matches_view_is_deterministic_on_postgres() 
                 assert by_id["M-COUNTRY"].tender.notice_type == "Request for Expression of Interest"
                 legacy_sort = await list_explorer_tenders(db, user_id=ids["user_a"], query=ExplorerQuery(
                     view=ExplorerView.RECOMMENDED, q="D106", sort="best_match", limit=50))
-                assert [item.tender.external_id for item in legacy_sort.items] == ["M-SERVICE", "M-COUNTRY", "M-NO-DEADLINE"]
+                assert [item.tender.external_id for item in legacy_sort.items] == ranked
 
                 everything = await list_explorer_tenders(db, user_id=ids["user_a"], query=ExplorerQuery(q="D106", limit=50))
                 all_items = {item.tender.external_id: item for item in everything.items}

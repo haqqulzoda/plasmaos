@@ -399,11 +399,18 @@ export type CandidateProjectReference = {
   relevant_scope: string | null;
   evidence_provenance: Record<string, unknown>;
   evidence_state: CandidateEvidenceState;
+  /** D2-01: METADATA_ONLY is a recorded claim; FILE_BACKED names a document (not verified). */
+  evidence_basis?: 'METADATA_ONLY' | 'FILE_BACKED';
+  /** D2-01: set when this row replaced an edited reference (the old row is archived). */
+  supersedes_reference_id?: string | null;
+  archived_at?: string | null;
   created_at: string;
 };
 
 export type CandidateFirm = {
   firm_id: string;
+  /** D2-01: true only for the organization's own firm. */
+  is_self_firm?: boolean;
   scope: 'ORGANIZATION_PRIVATE' | 'NETWORK_SHARED';
   canonical_name: string;
   display_name: string;
@@ -452,6 +459,8 @@ export type CandidateExpert = {
 };
 
 export type CandidateLibrary = {
+  /** D2-01: the organization's own firm; never listed in ``firms``. Absent before D2-01. */
+  self_firm?: CandidateFirm | null;
   firms: CandidateFirm[];
   experts: CandidateExpert[];
 };

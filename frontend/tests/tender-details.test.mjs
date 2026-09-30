@@ -22,10 +22,10 @@ test("initial detail load is exactly two composed passive reads", () => {
 
 test("decision-first hierarchy follows mockup without legacy tabs or description", () => {
   const order = [
-    "decisionCard tenderId={tender.id}", 'id="s143-compliance-title"',
+    "decisionCard tenderId={tender.id}", "<PursuitAnalysisCard",
     'id="s143-recommendation-title"', 'id="project-context"',
     'id="project-leadership"', 'id="tender-documents"',
-    'id="competitors"', 'id="contacts"', 'id="bid-preparation"',
+    'id="competitors"', 'id="contacts"',
   ];
   let cursor = -1;
   for (const marker of order) {
@@ -52,14 +52,12 @@ test("pursuit remains TenderEngagement with explicit actions", () => {
   assert.match(dto, /allowed_actions: EngagementAction\[\]/);
 });
 
-test("Compliance and readiness use separate facts without invented percentages", () => {
-  assert.match(page, /details\.compliance\.state/);
-  assert.match(page, /details\.company_readiness\.state/);
-  assert.match(page, /complianceFailed/);
-  assert.match(page, /compliancePartial/);
-  assert.match(page, /complianceLegacy/);
-  assert.match(page, /readiness\.readiness_documents_missing/);
-  assert.match(page, /\/dashboard\/readiness-vault/);
+test("the Analysis card replaces legacy Compliance & Company Readiness (D2-02)", () => {
+  const card = readFileSync(new URL("../components/tenders/PursuitAnalysisCard.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(page, /s143-compliance-title|details\.compliance\.|company_readiness|readiness-vault|openReadiness/);
+  assert.match(card, /analysis-runs\/latest/);
+  assert.doesNotMatch(card, /api\.(?:post|put|patch|delete)/);
+  assert.match(card, /t\('none'\)/);
   assert.doesNotMatch(page, /readiness_score|readiness_percentage|critical records/i);
 });
 
@@ -126,9 +124,9 @@ test("contacts are source-backed and Proposal action remains explicit", () => {
   assert.match(page, /contacts\.contact_person/);
   assert.match(page, /contacts\.address/);
   assert.match(page, /contacts\.submission_method/);
-  // D1-06: the explicit action is "Open workspace"; nothing is posted on render.
-  assert.match(page, /<OpenWorkspaceButton tenderId=\{tender\.id\} variant="secondary"/);
-  assert.doesNotMatch(page, /PrepareBidButton/);
+  // D1-06/D2-02: the explicit action is the header's "Open workspace"; nothing is posted on render.
+  assert.match(page, /<OpenWorkspaceButton tenderId=\{tender\.id\} size="md"/);
+  assert.doesNotMatch(page, /PrepareBidButton|bidTitle|bidNotStartedHelp/);
 });
 
 test("section-level loading, failures and previous successful data are retained", () => {

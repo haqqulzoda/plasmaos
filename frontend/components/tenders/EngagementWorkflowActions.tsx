@@ -79,6 +79,7 @@ const buttonClasses = (tone: ActionDefinition["tone"]) => {
 export function EngagementWorkflowActions({
   foundation = false,
   menuActions = false,
+  secondaryOnly = false,
   engagement,
   tenderId,
   onChanged,
@@ -86,6 +87,8 @@ export function EngagementWorkflowActions({
 }: {
   foundation?: boolean;
   menuActions?: boolean;
+  /** D2-02: stage actions never compete with the page's one primary action. */
+  secondaryOnly?: boolean;
   engagement: TenderEngagementActionContext;
   tenderId: string;
   onChanged?: (engagement: TenderEngagementSummary) => void;
@@ -277,6 +280,7 @@ export function EngagementWorkflowActions({
       {available.includes("SAVE") && (
         <Button
           size="sm"
+          variant={secondaryOnly ? "secondary" : "primary"}
           onClick={() => void saveAgain()}
           loading={submitting === "SAVE"}
           disabled={submitting !== null}
@@ -286,7 +290,7 @@ export function EngagementWorkflowActions({
       )}
       {normal.map((action) => (
         <Button
-          variant={ACTIONS[action].tone ?? "secondary"}
+          variant={secondaryOnly && ACTIONS[action].tone === "primary" ? "secondary" : ACTIONS[action].tone ?? "secondary"}
           size="sm"
           key={action}
           onClick={() => request(ACTIONS[action])}

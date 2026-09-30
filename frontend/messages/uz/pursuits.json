@@ -145,7 +145,7 @@
     "chooseDocuments": "Plasma tahlil qilishi kerak bo‘lgan hujjatlarni tanlang.",
     "analysisInProgress": "Tahlil davom etmoqda.",
     "analysisNeedsAttention": "Tahlil e’tibor talab qiladi — ko‘rib chiqing yoki qayta ishga tushiring.",
-    "reviewRequirementsGaps": "Ajratib olingan talablar va bo‘shliqlarni ko‘rib chiqing.",
+    "reviewRequirementsGaps": "Talablarni koʻrib chiqish",
     "reviewPartnerExpertOptions": "Hamkor va ekspert variantlarini ko‘rib chiqing.",
     "prepareEvidencePack": "Taklif dalillari paketini tayyorlang.",
     "privateEvidence": "Sizning hujjatlaringiz",
@@ -607,34 +607,264 @@
     }
   },
   "library": {
-    "eyebrow": "Reusable candidate records",
+    "eyebrow": "Qayta foydalaniladigan yozuvlar",
     "title": "Hamkorlar va ekspertlar",
-    "description": "Organization-private and explicitly permitted network records. This view is a working library, not a marketplace.",
-    "loading": "Loading candidate library",
-    "failed": "Candidate library could not be loaded",
-    "failedHelp": "Check the organization context and try again.",
-    "retry": "Retry",
-    "empty": "Birinchi hamkor yoki ekspertni qo‘shing",
-    "emptyHelp": "Kutubxona importi bilan birga paydo bo‘ladi.",
+    "description": "Oʻz loyiha tajribangiz, hamkor firmalar va ekspertlar — faqat tashkilotingiz uchun. Yozuvlar tekshirilgunga qadar tashkilot daʼvosi hisoblanadi.",
+    "loading": "Kutubxona yuklanmoqda",
+    "failed": "Kutubxonani yuklab boʻlmadi",
+    "failedHelp": "Tanlangan tashkilotni tekshirib, qayta urinib koʻring.",
+    "retry": "Qayta urinish",
+    "empty": "Birinchi hamkor yoki ekspertni qoʻshing",
+    "emptyHelp": "Ularni shu yerda kiriting yoki CSV fayl import qiling.",
     "firms": "Firmalar",
-    "firmsHelp": "Reusable firm facts and project-reference history.",
+    "firmsHelp": "Firma maʼlumotlari va loyiha referensiyalari tarixi.",
     "experts": "Ekspertlar",
-    "expertsHelp": "Reusable expert facts and immutable structured CV versions.",
-    "referenceHistory": "Project reference history",
-    "noReferences": "No project references recorded.",
-    "cvVersions": "CV versions",
-    "cvVersion": "CV version {version}",
-    "noCvVersions": "No structured CV versions recorded.",
-    "notRecorded": "Not recorded",
+    "expertsHelp": "Ekspert maʼlumotlari va oʻzgarmas tuzilgan CV versiyalari.",
+    "referenceHistory": "Loyiha referensiyalari",
+    "noReferences": "Loyiha referensiyalari kiritilmagan.",
+    "cvVersions": "CV versiyalari",
+    "cvVersion": "CV {version}-versiya",
+    "noCvVersions": "Tuzilgan CV versiyalari kiritilmagan.",
+    "notRecorded": "Koʻrsatilmagan",
     "evidence": {
-      "VERIFIED": "Verified",
-      "REVIEWED": "Reviewed",
-      "UNVERIFIED": "Unverified",
-      "EVIDENCE_MISSING": "Evidence missing"
+      "VERIFIED": "Tasdiqlangan",
+      "REVIEWED": "Tashkilot tekshirgan",
+      "UNVERIFIED": "Tekshirilmagan",
+      "EVIDENCE_MISSING": "Tasdiq yoʻq"
     },
     "scopes": {
-      "ORGANIZATION_PRIVATE": "Organization private",
-      "NETWORK_SHARED": "Network shared"
+      "ORGANIZATION_PRIVATE": "Faqat tashkilot uchun",
+      "NETWORK_SHARED": "Tarmoqda umumiy"
+    },
+    "close": "Yopish",
+    "cancel": "Bekor qilish",
+    "saveFailed": "Saqlab boʻlmadi",
+    "fixErrors": "Belgilangan maydonlarni tuzating ({count}).",
+    "saveChanges": "Oʻzgarishlarni saqlash",
+    "edit": "Tahrirlash",
+    "sharePercent": "Ulush {value}%",
+    "tabs": {
+      "label": "Kutubxona boʻlimlari",
+      "own": "Bizning tajriba",
+      "partners": "Hamkor firmalar",
+      "experts": "Ekspertlar"
+    },
+    "fields": {
+      "project_name": "Loyiha nomi",
+      "client_name": "Buyurtmachi",
+      "country": "Mamlakat",
+      "sector": "Soha",
+      "service": "Xizmat",
+      "role": "Rol",
+      "contract_share_percent": "Shartnomadagi ulush, %",
+      "contract_value": "Shartnoma qiymati",
+      "contract_currency": "Valyuta",
+      "value_basis": "Qiymat asosi",
+      "start_date": "Boshlanish sanasi",
+      "completion_date": "Tugash sanasi",
+      "completion_state": "Yakunlanish",
+      "relevant_scope": "Tegishli ish hajmi",
+      "evidence_state": "Tasdiq",
+      "display_name": "Firma nomi",
+      "legal_name": "Yuridik nomi",
+      "services": "Xizmatlar",
+      "sectors": "Sohalar",
+      "capabilities": "Imkoniyatlar",
+      "regions": "Hududlar",
+      "expert_name": "Ekspert ismi",
+      "specializations": "Mutaxassisliklar",
+      "qualifications": "Malakalar",
+      "languages": "Tillar",
+      "file": "Fayl",
+      "row": "Qator"
+    },
+    "help": {
+      "share": "Shartnomadagi ulushingiz, 0–100. Nomaʼlum boʻlsa, boʻsh qoldiring.",
+      "value": "Qiymat va valyuta birga kiritiladi, qiymat uchun asos kerak (ulushingiz, konsorsium jami yoki shartnoma jami).",
+      "evidence": "Yangi yozuv — tashkilotingiz daʼvosi. Xodim tekshirgach, «Tekshirilgan deb belgilash»dan foydalaning.",
+      "list": "Elementlarni nuqtali vergul bilan ajrating."
+    },
+    "roles": {
+      "LEAD": "Yetakchi",
+      "JV_MEMBER": "QK ishtirokchisi",
+      "CONSORTIUM_MEMBER": "Konsorsium ishtirokchisi",
+      "SUBCONSULTANT": "Subkonsultant",
+      "SUBCONTRACTOR": "Subpudratchi",
+      "OTHER": "Boshqa",
+      "UNKNOWN": "Koʻrsatilmagan"
+    },
+    "valueBases": {
+      "FIRM_SHARE": "Bizning ulush",
+      "CONSORTIUM_TOTAL": "Konsorsium jami",
+      "CONTRACT_TOTAL": "Shartnoma jami",
+      "UNKNOWN": "Koʻrsatilmagan"
+    },
+    "completion": {
+      "COMPLETED": "Yakunlangan",
+      "ONGOING": "Davom etmoqda",
+      "NOT_COMPLETED": "Yakunlanmagan",
+      "UNKNOWN": "Koʻrsatilmagan"
+    },
+    "basis": {
+      "METADATA_ONLY": "Daʼvo",
+      "FILE_BACKED": "Hujjat koʻrsatilgan"
+    },
+    "errors": {
+      "required": "Majburiy maydon.",
+      "tooShort": "Kamida 2 belgi.",
+      "tooLong": "Juda uzun.",
+      "invalid": "Ruxsat etilmagan qiymat.",
+      "share": "0 dan 100 gacha son.",
+      "number": "Boʻsh joy va harflarsiz son.",
+      "currencyFormat": "Uch harfli kod, masalan USD.",
+      "valueNeedsCurrency": "Qiymat uchun valyuta kerak.",
+      "currencyNeedsValue": "Valyuta uchun qiymat kerak.",
+      "valueNeedsBasis": "Qiymat nimani qamrashini tanlang.",
+      "date": "YYYY-MM-DD formatidagi sana.",
+      "datesOrder": "Boshlanishdan oldin boʻlishi mumkin emas.",
+      "tooMany": "Elementlar juda koʻp.",
+      "year": "YYYY formatidagi yil.",
+      "month": "YYYY-MM formatidagi oy.",
+      "emptyCv": "Versiyani saqlashdan oldin kamida bitta qator qoʻshing.",
+      "emptyFile": "Fayl boʻsh.",
+      "unknownColumn": "Nomaʼlum ustun.",
+      "missingColumn": "Majburiy ustun yoʻq.",
+      "noRows": "Faylda sarlavha bor, lekin qatorlar yoʻq.",
+      "tooManyRows": "200 dan ortiq qator; faylni boʻling.",
+      "extraCells": "Kataklar ustunlardan koʻp.",
+      "reviewNotImportable": "Tekshiruvni import qilib boʻlmaydi; importdan keyin belgilang."
+    },
+    "reference": {
+      "addTitle": "Loyiha referensiyasini qoʻshish",
+      "editTitle": "Loyiha referensiyasini tahrirlash",
+      "addHelp": "Bitta yakunlangan yoki davom etayotgan topshiriq. Tahlil talablarni shu faktlar bilan solishtiradi.",
+      "editHelp": "Oldingi versiya tarixda qoladi: unga tayangan tahlillar va jamoalar qayta yozilmaydi.",
+      "save": "Referensiyani saqlash",
+      "saveChanges": "Yangi versiya sifatida saqlash",
+      "valueLegend": "Shartnoma qiymati",
+      "add": "Referensiya qoʻshish"
+    },
+    "expert": {
+      "add": "Ekspert qoʻshish",
+      "addTitle": "Ekspert qoʻshish",
+      "editTitle": "Ekspertni tahrirlash",
+      "save": "Ekspertni saqlash",
+      "saveChanges": "Oʻzgarishlarni saqlash",
+      "privacyHelp": "Faqat tashkilotingizga koʻrinadi; xususiy yozuv uchun rozilik talab qilinmaydi."
+    },
+    "cv": {
+      "addTitle": "CV {version}-versiyasini qoʻshish",
+      "immutableHelp": "Saqlangan CV versiyasini ({name}) oʻzgartirib boʻlmaydi; tuzatish — yangi versiya.",
+      "save": "CV versiyasini saqlash",
+      "removeRow": "Qatorni oʻchirish",
+      "counts": "topshiriqlar: {assignments} · taʼlim: {education} · tillar: {languages} · sertifikatlar: {certifications}",
+      "sections": {
+        "education": "Taʼlim",
+        "assignments": "Topshiriqlar",
+        "languages": "Tillar",
+        "certifications": "Sertifikatlar"
+      },
+      "fields": {
+        "education": {
+          "degree": "Daraja",
+          "institution": "Oʻquv muassasasi",
+          "year": "Yil"
+        },
+        "assignments": {
+          "role": "Rol",
+          "client": "Buyurtmachi",
+          "country": "Mamlakat",
+          "sector": "Soha",
+          "start": "Boshlanish (YYYY-MM)",
+          "end": "Tugash (YYYY-MM)",
+          "description": "Tavsif"
+        },
+        "languages": {
+          "language": "Til",
+          "level": "Daraja"
+        },
+        "certifications": {
+          "name": "Sertifikat",
+          "issuer": "Bergan tashkilot",
+          "year": "Yil"
+        }
+      },
+      "add": {
+        "education": "Taʼlim qoʻshish",
+        "assignments": "Topshiriq qoʻshish",
+        "languages": "Til qoʻshish",
+        "certifications": "Sertifikat qoʻshish",
+        "version": "CV versiyasini qoʻshish"
+      }
+    },
+    "review": {
+      "action": "Tekshirilgan deb belgilash",
+      "title": "Tekshirilgan deb belgilash",
+      "subject": "Yozuv: {subject}",
+      "explanation": "Bu tashkilotingiz xodimi yozuvni hujjatlar bilan solishtirganini qayd etadi.",
+      "notVerification": "Bu tashkilotingizning oʻz daʼvosi. Plasma uni tasdiqlamagan; yozuv siz tekshirgan deb koʻrsatiladi, tasdiqlangan emas.",
+      "confirm": "Tekshirilgan deb belgilash"
+    },
+    "archive": {
+      "action": "Arxivlash",
+      "title": "Referensiyani arxivlash",
+      "subject": "Referensiya: {subject}",
+      "explanation": "Referensiya kutubxonadan, yangi qidiruvlar va yangi tahlillardan chiqadi. Unga tayangan tahlillar va jamoalar tarixida qoladi.",
+      "confirm": "Arxivlash"
+    },
+    "import": {
+      "open": "CSV import",
+      "title": {
+        "references": "Loyiha referensiyalarini import qilish",
+        "experts": "Ekspertlarni import qilish"
+      },
+      "target": "Qayerga: {target}. Faylda {limit} tagacha qator.",
+      "help": {
+        "references": "Shablonni yuklab oling, har qatorga bitta referensiya yozing va faylni tanlang. Import boshlanmaguncha hech narsa saqlanmaydi.",
+        "experts": "Shablonni yuklab oling, har qatorga bitta ekspert yozing (roʻyxatlar nuqtali vergul bilan) va faylni tanlang. Import boshlanmaguncha hech narsa saqlanmaydi."
+      },
+      "template": "Shablonni yuklab olish",
+      "choose": "CSV faylni tanlash",
+      "fileRejected": "Bu faylni import qilib boʻlmaydi",
+      "summary": "Importga tayyor: {valid}. Xatoli qatorlar: {invalid}.",
+      "invalidRows": "Xatoli qatorlar: {count}",
+      "invalidHelp": "Bu qatorlar import qilinmaydi. Ularni faylda tuzatib qayta import qiling yoki tayyor qatorlarni hozir import qiling.",
+      "preview": "Import koʻrinishi",
+      "line": "Qator",
+      "record": "Yozuv",
+      "status": "Holat",
+      "ready": "Tayyor",
+      "cellError": "{field}: {message}",
+      "progress": "{total} tadan {done} tasi saqlandi…",
+      "report": "Yaratildi: {created}. Xato: {failed}. Xatolar sababli import qilinmadi: {skipped}.",
+      "failedRow": "{line}-qator ({label}): {message}",
+      "start": "Qatorlarni import qilish: {count}",
+      "done": "Tayyor"
+    },
+    "own": {
+      "title": "Bizning tajriba",
+      "help": "Firmangizning yakunlangan va davom etayotgan topshiriqlari. Tahlil ular orqali qaysi tajriba talablariga javob berishingiz mumkinligini koʻrsatadi.",
+      "emptyTitle": "Firmangizning oʻz tajribasini kiriting",
+      "emptyHelp": "Birinchi loyihani qoʻshing yoki CSV import qiling. Ungacha har bir tajriba talabi «tasdiq yoʻq» deb koʻrsatiladi.",
+      "addFirst": "Birinchi loyihani qoʻshish",
+      "editFirm": "Firma maʼlumotlarini tahrirlash",
+      "firmHelp": "Firmangiz tahlilda shunday koʻrinadi. U hech qachon hamkor sifatida taklif qilinmaydi."
+    },
+    "partners": {
+      "title": "Hamkor firmalar",
+      "help": "Birga ishlashingiz mumkin boʻlgan firmalar va ularning referensiyalari.",
+      "add": "Hamkor firma qoʻshish",
+      "emptyTitle": "Hozircha hamkor firmalar yoʻq",
+      "emptyHelp": "Hamkorlik qiladigan firmani qoʻshing, soʻng referensiyalarini import qiling.",
+      "addTitle": "Hamkor firma qoʻshish",
+      "editTitle": "Hamkor firmani tahrirlash",
+      "save": "Firmani saqlash",
+      "privacyHelp": "Faqat tashkilotingizga koʻrinadi."
+    },
+    "expertsTab": {
+      "help": "Taklif qilishingiz mumkin boʻlgan ekspertlar va ularning oʻzgarmas tuzilgan CV versiyalari.",
+      "emptyTitle": "Hozircha ekspertlar yoʻq",
+      "emptyHelp": "Ekspert qoʻshing yoki CSV import qiling, soʻng CV versiyasini qoʻshing."
     }
   },
   "proposal": {
