@@ -26,7 +26,7 @@ def test_dead_hunter_frontend_type_is_removed() -> None:
 
 
 def test_customer_runtime_has_no_hunter_product_surface() -> None:
-    layout = source("frontend/components/shell/CustomerShell.tsx")
+    layout = source("frontend/components/shell/CustomerShell.tsx") + source("frontend/lib/customerNavigation.ts")
     explorer = source("frontend/app/dashboard/tenders/page.tsx")
     assert "Hunter" not in layout
     assert "Hunter" not in explorer
@@ -80,20 +80,23 @@ def test_canonical_and_legacy_openapi_routes_remain_registered() -> None:
 
 
 def test_navigation_and_customer_copy_are_converged() -> None:
-    layout = source("frontend/components/shell/CustomerShell.tsx")
+    layout = source("frontend/lib/customerNavigation.ts")
     navigation = source("frontend/messages/en/navigation.json")
-    recommendation = source("frontend/components/tenders/RecommendationSummary.tsx")
+    facts = source("frontend/components/tenders/FactChips.tsx")
     explorer_messages = source("frontend/messages/en/explorer.json")
-    for key in ("tenders", "myTenders", "bidPreparation"):
+    # D1-07: one product menu.
+    for key in ("opportunities", "pursuits", "partnersExperts", "companyExperience"):
         assert f"nameKey: '{key}'" in layout
-    for label in ("Tenders", "My Tenders", "Bid Preparation"):
+    for label in ("Opportunities", "Pursuits", "Partners & Experts", "Company & Experience"):
         assert label in navigation
-    for key in ("matchScore", "why", "recommendedOn", "dismiss", "restore"):
-        assert f't("{key}"' in recommendation
-    for copy in ("Match score", "Why this may match", "Recommended on", "Dismiss recommendation", "Restore recommendation"):
+    # D1-08: deterministic facts replace the recommendation score and rationale.
+    assert not (ROOT / "frontend/components/tenders/RecommendationSummary.tsx").exists()
+    for key in ("countryMatch", "serviceMatch", "daysLeft"):
+        assert f't("{key}"' in facts
+    for copy in ("Country match: {country}", "Service match: {service}", "Matches your profile"):
         assert copy in explorer_messages
-    for forbidden in ("Win probability", "Guaranteed fit", "Last refreshed", "Dismiss Tender"):
-        assert forbidden not in recommendation
+    for forbidden in ("Win probability", "Guaranteed fit", "Last refreshed", "Dismiss Tender", "match_score"):
+        assert forbidden not in facts
 
 
 def test_no_migration_and_single_head() -> None:

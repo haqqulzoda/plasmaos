@@ -97,7 +97,6 @@
   "startBid": "Taklif tayyorlashni boshlash",
   "recommendation": {
     "label": "Tavsiya xulosasi",
-    "matchScore": "Moslik bali",
     "why": "Bu nima uchun mos kelishi mumkin",
     "dismissed": "Tavsiya rad etilgan",
     "recommendedOn": "{date} kuni tavsiya qilingan",
@@ -127,10 +126,25 @@
     "resultsToolbar": "Tender natijalarini boshqarish",
     "resultCount": "{count} ta tender topildi",
     "deadlineUnavailable": "Muddat mavjud emas",
-    "match": "{score}% moslik",
     "openSource": "Manbani ochish",
     "openSourceFor": "{title} manbasini yangi oynada ochish",
     "partialTitle": "Ayrim manbalar to‘liq bo‘lmasligi mumkin",
     "partialHelp": "{sources} uchun so‘nggi yangilanish qisman yoki muvaffaqiyatsiz tugadi. Faqat mavjud yozuvlar ko‘rsatilgan."
+  },
+  "facts": {
+    "label": "Ushbu tender haqidagi faktlar",
+    "countryMatch": "Mamlakat mos: {country}",
+    "serviceMatch": "Xizmat mos: {service}",
+    "noticeType": {
+      "eoi": "Qiziqish bildirish",
+      "ifb": "Takliflar berishga taklif",
+      "prequalification": "Dastlabki malaka tanlovi"
+    },
+    "daysLeft": "{count, plural, =0 {Bugun yopiladi} other {# kun qoldi}}"
+  },
+  "matches": {
+    "tab": "Profilingizga mos",
+    "empty": "Profilingizdagi mamlakat yoki xizmatlarga mos ochiq tenderlar yo‘q.",
+    "profileHelp": "Mos tenderlarni ko‘rish uchun kompaniya profiliga maqsadli mamlakat va xizmatlarni qo‘shing."
   }
 }

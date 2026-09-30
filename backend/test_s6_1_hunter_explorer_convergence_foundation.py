@@ -177,9 +177,10 @@ def test_preflight_exposes_count_only_recommendation_foundation_metrics() -> Non
 def test_s6_4_frontend_converges_with_passive_route_retirement() -> None:
     explorer_page = source("frontend/app/dashboard/tenders/page.tsx")
     hunter_page = source("frontend/app/dashboard/hunter/page.tsx")
-    layout = source("frontend/components/shell/CustomerShell.tsx")
-    assert re.search(r'[\"\']recommended[\"\']\s*,\s*t\(\s*[\"\']views\.recommended[\"\']', explorer_page)
-    assert translated(explorer_page, "explorer", "views.recommended") == "Recommended"
+    layout = source("frontend/lib/customerNavigation.ts")
+    # D1-08: the "recommended" view is the deterministic "Matches your profile" view.
+    assert re.search(r'[\"\']recommended[\"\']\s*,\s*t\(\s*[\"\']matches\.tab[\"\']', explorer_page)
+    assert translated(explorer_page, "explorer", "matches.tab") == "Matches your profile"
     assert "permanentRedirect" not in hunter_page
     assert "redirect('/dashboard/tenders?view=recommended')" in hunter_page
     assert "href: '/dashboard/hunter'" not in layout

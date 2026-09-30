@@ -14,7 +14,9 @@ function keys(value, prefix = '') {
 
 test('Upload Tender is a persistent customer-shell action and route', () => {
   const shell = read('components/shell/CustomerShell.tsx');
-  assert.match(shell, /uploadedTenders/);
+  // D1-07: the uploaded list is a segment of Pursuits, not a separate menu item.
+  assert.doesNotMatch(shell, /uploadedTenders/);
+  assert.match(read('lib/customerNavigation.ts'), /'\/dashboard\/uploaded-tenders'/);
   assert.match(shell, /\/dashboard\/uploaded-tenders\/upload/);
   assert.match(shell, /shell-upload-action/);
 });

@@ -3588,3 +3588,15 @@
     padding: var(--ds-space-4);
   }
 }
+
+/* D1-08 deterministic fact chips (replace the numeric match score) */
+.fact-chips { display: flex; flex-wrap: wrap; gap: var(--ds-space-3); list-style: none; margin: 0; padding: 0; }
+.fact-chip { color: var(--ds-text-secondary); background: var(--ds-background-subtle); border-radius: var(--ds-radius-pill); padding: var(--ds-space-2) var(--ds-space-5); font-size: var(--ds-metadata); white-space: nowrap; }
+.fact-chip-match { color: var(--ds-accent); background: var(--ds-accent-subtle); font-weight: 650; }
+/* D1-06 one door */
+.open-workspace { display: grid; gap: var(--ds-space-3); justify-items: start; }
+.open-workspace-organization { display: grid; gap: var(--ds-space-2); inline-size: 100%; }
+/* D1-07 Pursuits segmented control */
+.pursuit-segments { display: inline-flex; gap: var(--ds-space-2); padding: var(--ds-space-2); border-radius: var(--ds-radius-pill); background: var(--ds-background-subtle); }
+.pursuit-segments a { padding: var(--ds-space-3) var(--ds-space-6); border-radius: var(--ds-radius-pill); color: var(--ds-text-secondary); font-size: var(--ds-label); font-weight: 600; text-decoration: none; }
+.pursuit-segments a[aria-current="page"] { background: var(--ds-surface); color: var(--ds-text-primary); }

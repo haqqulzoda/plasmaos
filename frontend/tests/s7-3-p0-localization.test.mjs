@@ -138,19 +138,19 @@ test("canonical query, enum, and action codes remain untranslated", () => {
   assert.match(actions, /expected_status: engagement\.engagement_status/);
 });
 
-test("source, user, Proposal, and AI narrative fields remain original", () => {
+test("source, user and Proposal narrative fields remain original", () => {
   const explorer = read("app/dashboard/tenders/page.tsx");
   const details = read("app/dashboard/tenders/[tenderId]/page.tsx");
-  const recommendation = read("components/tenders/RecommendationSummary.tsx");
   const workspace = read("app/dashboard/bid-preparation/[proposalId]/page.tsx");
   assert.match(explorer, /\{tender\.title\}/);
   assert.doesNotMatch(details, /tender\.description/);
   assert.match(details, /<BidiText>\{item\.label\}<\/BidiText>/);
-  assert.match(recommendation, /\{recommendation\.rationale_summary\}/);
   assert.match(workspace, /value=\{strategicSummary\}/);
+  // D1-08: the generated recommendation rationale is no longer rendered anywhere.
+  assert.doesNotMatch(`${explorer}\n${details}`, /rationale_summary/);
   assert.doesNotMatch(
-    `${explorer}\n${details}\n${recommendation}\n${workspace}`,
-    /(?:^|[^A-Za-z])t\((tender\.title|tender\.description|item\.label|recommendation\.rationale_summary|strategicSummary)/,
+    `${explorer}\n${details}\n${workspace}`,
+    /(?:^|[^A-Za-z])t\((tender\.title|tender\.description|item\.label|strategicSummary)/,
   );
 });
 
@@ -181,19 +181,20 @@ test("new badge and high-significance actions have localized accessible copy", (
 
 test("claim-safe terminology renders natively in all P0 locales", () => {
   const expected = {
-    en: ["Tender Explorer", "Match score", "Compliance"],
-    uz: ["Tenderlar katalogi", "Moslik bali", "Muvofiqlik tahlili"],
-    ru: ["Каталог тендеров", "Оценка соответствия", "Анализ соответствия"],
-    ar: ["مستكشف المناقصات", "درجة المطابقة", "الامتثال"],
+    // D1-08: the numeric match score is gone; the deterministic profile match replaces it.
+    en: ["Tender Explorer", "Matches your profile", "Compliance"],
+    uz: ["Tenderlar katalogi", "Profilingizga mos", "Muvofiqlik tahlili"],
+    ru: ["Каталог тендеров", "Соответствует вашему профилю", "Анализ соответствия"],
+    ar: ["مستكشف المناقصات", "يطابق ملفك", "الامتثال"],
   };
   for (const locale of CUSTOMER_SELECTABLE_LOCALES) {
     const t = createTranslator({ locale, messages: catalogs[locale] });
     assert.equal(t("explorer.title"), expected[locale][0]);
-    assert.equal(t("explorer.recommendation.matchScore"), expected[locale][1]);
+    assert.equal(t("explorer.matches.tab"), expected[locale][1]);
     assert.ok(t("tenderDetails.compliance").includes(expected[locale][2]));
     assert.doesNotMatch(
       [
-        t("explorer.recommendation.matchScore"),
+        t("explorer.matches.tab"),
         t("explorer.recommendation.why"),
         t("refresh.partial", { source: "World Bank", count: 2 }),
       ].join(" "),

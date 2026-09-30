@@ -135,14 +135,19 @@ class S21ReadinessVaultTests(unittest.TestCase):
     def test_frontend_pages_exist_for_profile_and_readiness_vault(self) -> None:
         settings_page = read("../frontend/app/dashboard/settings/page.tsx")
         readiness_page = read("../frontend/app/dashboard/readiness-vault/page.tsx")
-        layout = read("../frontend/components/shell/CustomerShell.tsx")
+        # D1-07: destinations live in lib/customerNavigation.ts; the shell renders them.
+        layout = read("../frontend/components/shell/CustomerShell.tsx") + read("../frontend/lib/customerNavigation.ts")
 
         self.assertEqual(translated(settings_page, "settings", "title"), "Company profile")
         self.assertEqual(translated(readiness_page, "readiness", "title"), "Readiness Vault")
         self.assertIn("optional_file_url", readiness_page)
-        self.assertRegex(layout, r"nameKey: 'companyProfile',\s*href: '/dashboard/settings'")
-        self.assertEqual(catalog_message("navigation", "companyProfile"), "Company Profile")
-        self.assertRegex(layout, r"nameKey: 'readinessVault',\s*href: '/dashboard/readiness-vault'")
+        self.assertRegex(layout, r"nameKey: 'companyExperience',\s*href: '/dashboard/settings'")
+        self.assertEqual(catalog_message("navigation", "companyExperience"), "Company & Experience")
+        # Readiness Vault is no longer a menu item: it belongs to Company & Experience
+        # (active state) and the Company page links to it.
+        self.assertNotIn("nameKey: 'readinessVault'", layout)
+        self.assertRegex(layout, r"also: \['/dashboard/readiness-vault'\]")
+        self.assertIn('href="/dashboard/readiness-vault"', settings_page)
         self.assertEqual(catalog_message("navigation", "readinessVault"), "Readiness Vault")
 
 

@@ -124,7 +124,13 @@
     "reviewApproveTeam": "Jamoa variantini ko‘rib chiqib tasdiqlang.",
     "completeTeamParticipation": "Jamoa variantini yaratishdan oldin ishtirokni tasdiqlang.",
     "navigationLabel": "Tender ish maydoni",
-    "tabs": { "overview": "Umumiy", "requirements": "Talablar", "team": "Jamoa", "documents": "Hujjatlar va dalillar", "proposal": "Taklif" },
+    "tabs": {
+      "overview": "Umumiy",
+      "requirements": "Talablar",
+      "team": "Jamoa",
+      "documents": "Hujjatlar va dalillar",
+      "proposal": "Taklif"
+    },
     "identity": "Tender manbasi",
     "uploadedTender": "Tashkilotingiz yuklagan",
     "officialSourceTender": "Rasmiy manba yozuvi",
@@ -228,7 +234,17 @@
     "packHelp": "Plasma tahlil qilishi kerak bo‘lgan rasmiy/manba va o‘zingizning hujjatlaringizni tanlang.",
     "sourceDocument": "Rasmiy/manba hujjati",
     "privateDocument": "Sizning hujjatingiz",
-    "documentRoles": { "RFP": "RFP", "TOR": "Texnik topshiriq", "NOTICE": "E’lon", "ADDENDUM": "Qo‘shimcha", "CLARIFICATION": "Tushuntirish", "FORM": "Shakl", "ANNEX": "Ilova", "OFFICIAL_NOTICE": "Rasmiy e’lon matni", "OTHER": "Boshqa" },
+    "documentRoles": {
+      "RFP": "RFP",
+      "TOR": "Texnik topshiriq",
+      "NOTICE": "E’lon",
+      "ADDENDUM": "Qo‘shimcha",
+      "CLARIFICATION": "Tushuntirish",
+      "FORM": "Shakl",
+      "ANNEX": "Ilova",
+      "OFFICIAL_NOTICE": "Rasmiy e’lon matni",
+      "OTHER": "Boshqa"
+    },
     "pages": "{count} sahifa",
     "pagesUnknown": "Sahifalar soni mavjud emas",
     "version": "{version}-versiya",
@@ -276,7 +292,11 @@
     "runningTitle": "Tahlil davom etmoqda",
     "runningHelp": "Tenderning boshqa bo‘limlarida ishlashni davom ettirishingiz mumkin. Natija tayyor bo‘lganda sahifa yangilanadi.",
     "previousResultVisible": "Oxirgi urinish ko‘rib chiqishga yaroqsiz bo‘lgani uchun avvalgi muvaffaqiyatli tahlil ko‘rsatilmoqda.",
-    "runStates": { "inProgress": "Jarayonda", "failed": "Bajarilmadi", "complete": "Tayyor" },
+    "runStates": {
+      "inProgress": "Jarayonda",
+      "failed": "Bajarilmadi",
+      "complete": "Tayyor"
+    },
     "needsAttentionCount": "E’tibor talab qiladi",
     "evidenceMissingCount": "Dalil yetishmaydi",
     "interpretationCount": "Talqin kerak",
@@ -296,7 +316,13 @@
     "assessmentState": "Joriy baho",
     "organizationEvidence": "Tashkilot dalili",
     "organizationEvidenceHelp": "Bahoni tasdiqlang yoki tashkilotingiz daliliga asoslangan tuzatishni qayd eting.",
-    "distinctions": { "MANDATORY": "Majburiy", "PREFERRED": "Afzal", "DESIRED": "Istalgan", "INFORMATIONAL": "Ma’lumot uchun", "SCORED": "Ball beriladi" },
+    "distinctions": {
+      "MANDATORY": "Majburiy",
+      "PREFERRED": "Afzal",
+      "DESIRED": "Istalgan",
+      "INFORMATIONAL": "Ma’lumot uchun",
+      "SCORED": "Ball beriladi"
+    },
     "page": "{page}-sahifa",
     "paragraph": "{paragraph}-xatboshi",
     "correctedFact": "Tuzatilgan me’yorlashtirilgan fakt",
@@ -588,8 +614,8 @@
     "failed": "Candidate library could not be loaded",
     "failedHelp": "Check the organization context and try again.",
     "retry": "Retry",
-    "empty": "No candidate records yet",
-    "emptyHelp": "Authorized data entry can add evidence-backed Firm and Expert records through the candidate authority API.",
+    "empty": "Birinchi hamkor yoki ekspertni qo‘shing",
+    "emptyHelp": "Kutubxona importi bilan birga paydo bo‘ladi.",
     "firms": "Firmalar",
     "firmsHelp": "Reusable firm facts and project-reference history.",
     "experts": "Ekspertlar",
@@ -668,5 +694,17 @@
     "evidenceManifest": "Dalillar manifesti",
     "download": "Download",
     "exportFailed": "The artifact could not be generated or downloaded."
+  },
+  "oneDoor": {
+    "openWorkspace": "Ish maydonini ochish",
+    "opening": "Ochilmoqda…",
+    "chooseOrganization": "Ushbu tender uchun tashkilotni tanlang.",
+    "noOrganization": "Ish maydonini ochish uchun tashkilotda faol a’zolik kerak.",
+    "failed": "Ish maydonini ochib bo‘lmadi. Qayta urinib ko‘ring."
+  },
+  "segments": {
+    "label": "Ishdagi tenderlar ro‘yxati",
+    "fromSources": "Manbalardan",
+    "uploaded": "Yuklanganlar"
   }
 }

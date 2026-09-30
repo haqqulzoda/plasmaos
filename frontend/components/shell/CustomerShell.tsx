@@ -4,11 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  Archive,
   Bookmark,
   Building2,
   LayoutDashboard,
-  FileText,
   Search,
   LogOut,
   Settings,
@@ -17,31 +15,28 @@ import {
   ChevronDown,
   ShieldCheck,
   Bell,
-  Files,
   Upload,
+  Users,
 } from 'lucide-react';
 import { PlasmaLogo, PlasmaMark } from '@/components/brand/PlasmaLogo';
 import { Button } from '@/components/ui/Button';
 import { Drawer, Dropdown } from '@/components/ui/Overlay';
 import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
-const navigation = [
-  { nameKey: 'dashboard', href: '/dashboard', Icon: LayoutDashboard },
-  { nameKey: 'tenders', href: '/dashboard/tenders', Icon: Search },
-  { nameKey: 'myTenders', href: '/dashboard/my-tenders', Icon: Bookmark },
-  { nameKey: 'uploadedTenders', href: '/dashboard/uploaded-tenders', Icon: Files },
-  {
-    nameKey: 'bidPreparation',
-    href: '/dashboard/bid-preparation',
-    Icon: FileText,
-  },
-  { nameKey: 'companyProfile', href: '/dashboard/settings', Icon: Building2 },
-  {
-    nameKey: 'readinessVault',
-    href: '/dashboard/readiness-vault',
-    Icon: Archive,
-  },
-  { nameKey: 'notifications', href: '/dashboard/notifications', Icon: Bell },
-] as const;
+import {
+  CUSTOMER_NAVIGATION,
+  activeNavigationKey,
+  type CustomerNavigationKey,
+} from '@/lib/customerNavigation';
+// D1-07: one product. Destinations and active-state rules live in lib/customerNavigation.
+const NAVIGATION_ICONS: Record<CustomerNavigationKey, typeof LayoutDashboard> = {
+  dashboard: LayoutDashboard,
+  opportunities: Search,
+  pursuits: Bookmark,
+  partnersExperts: Users,
+  companyExperience: Building2,
+  notifications: Bell,
+};
+const navigation = CUSTOMER_NAVIGATION.map((item) => ({ ...item, Icon: NAVIGATION_ICONS[item.nameKey] }));
 export function CustomerShell({
   children,
   name,
@@ -66,11 +61,8 @@ export function CustomerShell({
   const t = useTranslations('navigation');
   const path = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const active = navigation.find(
-    (item) =>
-      path === item.href ||
-      (item.href !== '/dashboard' && path.startsWith(item.href + '/')),
-  );
+  const activeKey = activeNavigationKey(path);
+  const active = navigation.find((item) => item.nameKey === activeKey);
   const nav = (
     <nav className="shell-navigation" aria-label={t('navigationLabel')}>
       {navigation.map(({ nameKey, href, Icon }) => (
@@ -192,7 +184,7 @@ export function CustomerShell({
                 href="/dashboard/settings"
                 prefetch={false}
               >
-                {t('companyProfile')}
+                {t('companyExperience')}
               </Link>
               <Link
                 role="menuitem"

@@ -14,11 +14,12 @@ test("source navigation uses only valid authoritative web URLs", () => {
   assert.match(page, /rel="noopener noreferrer external"/);
 });
 
-test("unsupported mockup controls are omitted and recommendation state stays distinct", () => {
+test("unsupported mockup controls are omitted and profile matches are facts, not a score", () => {
   assert.doesNotMatch(page, /Saved searches|Create saved search|Compact mode/);
-  assert.match(page, /recommendation\.match_score/);
+  // D1-08: no numeric match and no recommendation commands on the Explorer.
+  assert.doesNotMatch(page, /match_score|dismissRecommendation/);
+  assert.match(page, /<FactChips tender=\{tender\} profileMatch=\{item\.profile_match\} \/>/);
   assert.match(page, /DashboardBookmarkButton/);
-  assert.match(page, /dismissRecommendation/);
   assert.match(page, /new_only: query\.newOnly/);
 });
 

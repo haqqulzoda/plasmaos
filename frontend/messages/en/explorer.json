@@ -97,7 +97,6 @@
   "startBid": "Start bid preparation",
   "recommendation": {
     "label": "Recommendation summary",
-    "matchScore": "Match score",
     "why": "Why this may match",
     "dismissed": "Recommendation dismissed",
     "recommendedOn": "Recommended on {date}",
@@ -127,10 +126,25 @@
     "resultsToolbar": "Manage tender results",
     "resultCount": "{count, plural, one {# tender found} other {# tenders found}}",
     "deadlineUnavailable": "Deadline unavailable",
-    "match": "{score}% match",
     "openSource": "Open source",
     "openSourceFor": "Open source for {title} in a new tab",
     "partialTitle": "Some sources may be incomplete",
     "partialHelp": "Recent refreshes for {sources} were partial or failed. Results show available records only."
+  },
+  "facts": {
+    "label": "Facts about this tender",
+    "countryMatch": "Country match: {country}",
+    "serviceMatch": "Service match: {service}",
+    "noticeType": {
+      "eoi": "Expression of interest",
+      "ifb": "Invitation for bids",
+      "prequalification": "Prequalification"
+    },
+    "daysLeft": "{count, plural, =0 {Closes today} one {# day left} other {# days left}}"
+  },
+  "matches": {
+    "tab": "Matches your profile",
+    "empty": "No open tenders match your profile's countries or services.",
+    "profileHelp": "Add target countries and services to your company profile to see tenders that match it."
   }
 }

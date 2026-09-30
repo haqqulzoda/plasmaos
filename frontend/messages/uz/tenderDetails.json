@@ -174,7 +174,7 @@
   "readinessUnavailable": "Kompaniya tayyorgarligi ma’lumotlari hozircha mavjud emas.",
   "openReadiness": "Tayyorgarlik hujjatlarini ochish",
   "bidCreated": "{date} kuni yaratilgan. Ishtirok holati yuqorida alohida ko‘rsatilgan.",
-  "bidNotStartedHelp": "Boshlash uchun kuzatuv bo‘limidagi taklif tayyorlash amalidan foydalaning.",
+  "bidNotStartedHelp": "Talablarni ko‘rib chiqish, jamoa tuzish va taklif tayyorlash uchun ish maydonini oching.",
   "s143": {
     "projectName": "Nomi",
     "projectStatus": "Holat",
@@ -196,7 +196,6 @@
   "redesign": {
     "glance": "Tender haqida qisqacha",
     "recommendation": "AI tavsiyasi",
-    "match": "Moslik bali",
     "dismissed": "Tavsiya rad etilgan",
     "noRecommendation": "Ushbu tender uchun saqlangan tavsiya mavjud emas.",
     "notFound": "Tender topilmadi.",

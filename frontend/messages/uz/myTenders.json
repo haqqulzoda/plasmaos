@@ -1,5 +1,5 @@
 {
-  "title": "Mening tenderlarim",
+  "title": "Ishdagi tenderlar",
   "subtitle": "Kompaniyangiz saqlagan yoki ishtirok etayotgan imkoniyatlar.",
   "filtersLabel": "Ishtirok holati filtrlari",
   "statuses": {
@@ -104,7 +104,6 @@
     "eyebrow": "Ishtirok jarayoni",
     "deadline": "Muddat",
     "estimatedValue": "Taxminiy qiymat",
-    "matchScore": "Moslik bahosi",
     "unavailable": "Mavjud emas",
     "clearSearch": "Qidiruvni tozalash",
     "retry": "Qayta urinish",

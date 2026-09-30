@@ -58,7 +58,9 @@ test("Tender Details and Bid Preparation share the compact pursuit panel", () =>
     /<TenderEngagementPanel[\s\S]{0,120}tenderId=\{proposal\.tender_id\}[\s\S]{0,80}proposalContext/,
   );
   assert.match(panel, /t\("panel\.openMy"\)/);
-  assert.match(panel, /t\("panel\.openBid"\)/);
+  // D1-06: the workspace is the one door; the legacy "Open bid" link is gone.
+  assert.doesNotMatch(panel, /panel\.openBid/);
+  assert.match(panel, /workspaceEntry && <OpenWorkspaceButton/);
 });
 
 test("legacy proposal is continued only by explicit click", () => {

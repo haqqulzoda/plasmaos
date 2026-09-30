@@ -66,5 +66,7 @@
     "at_risk": "Xavf ostida",
     "converted": "Mijozga aylangan",
     "paused": "To‘xtatilgan"
-  }
+  },
+  "readinessLink": "Tayyorgarlik hujjatlari",
+  "readinessHelp": "Dalil sifatida ishlatiladigan sertifikat, litsenziya va boshqa hujjatlar."
 }

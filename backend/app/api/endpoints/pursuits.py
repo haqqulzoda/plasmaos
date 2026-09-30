@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -434,12 +434,23 @@ async def upload_source_pursuit_documents(
     )
 
 
-@router.post("/source", response_model=PursuitResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/source",
+    response_model=PursuitResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={status.HTTP_200_OK: {"model": PursuitResponse, "description": "The organization's existing pursuit for this tender."}},
+)
 async def create_source_pursuit(
     payload: SourcePursuitCreateRequest,
+    response: Response,
     x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> PursuitResponse:
+    """Create-or-resolve the organization's SOURCE pursuit for a tender (D1-06 one door).
+
+    Idempotent per (organization, tender): 201 when this call created the pursuit (one
+    CREATE lifecycle event), 200 when it already existed (no event, stage untouched).
+    """
     context = await _context(db, current_user, x_organization_id)
     try:
         result = await get_or_create_source_pursuit(
@@ -451,6 +462,8 @@ async def create_source_pursuit(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Tender not found") from exc
     except PursuitTransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not result.created:
+        response.status_code = status.HTTP_200_OK
     return _response(result.pursuit)
 
 

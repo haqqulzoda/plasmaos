@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, literal, select
+from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
@@ -26,6 +26,7 @@ from app.models.base import MembershipState
 from app.models.tenancy import Membership, Organization, OrganizationPursuit
 from app.schemas.explorer import (
     ExplorerCounts,
+    ExplorerProfileMatch,
     ExplorerPursuitSummary,
     ExplorerRecommendationSummary,
     ExplorerTenderItem,
@@ -33,6 +34,12 @@ from app.schemas.explorer import (
     ExplorerTenderSummary,
     ExplorerView,
     RecommendationAvailability,
+)
+from app.services.profile_match import (
+    ProfileTargets,
+    profile_match_condition,
+    profile_targets,
+    tender_profile_match,
 )
 from app.services.tender_engagements import allowed_actions_for_status
 from app.services.tender_sources.uzex_scope import customer_visible_tender_condition
@@ -101,6 +108,27 @@ def _recommendation_order(statement, sort_value: str | None):
     return _apply_tender_sort(statement, normalized)
 
 
+def _profile_match_order(statement, sort_value: str | None):
+    """"Matches your profile" is ordered by deadline, soonest first (D1-08).
+
+    ``best_match`` is accepted for older clients and means the same; there is no score.
+    """
+    normalized = (sort_value or "deadline_soonest").strip().casefold().replace("-", "_")
+    if normalized in {"", "default", "best_match"}:
+        normalized = "deadline_soonest"
+    return _apply_tender_sort(statement, normalized)
+
+
+def _profile_match_scope(targets: ProfileTargets, reference_time: datetime | None):
+    """Visible tenders with at least one profile match whose deadline has not passed."""
+    now = reference_time or datetime.now(timezone.utc)
+    return and_(
+        customer_visible_tender_condition(Tender),
+        profile_match_condition(targets),
+        or_(Tender.deadline.is_(None), Tender.deadline >= now),
+    )
+
+
 def _all_order(statement, sort_value: str | None):
     normalized = (sort_value or "newest").strip().casefold().replace("-", "_")
     if normalized == "best_match":
@@ -149,11 +177,33 @@ async def resolve_owned_profile_id(
     )
 
 
+async def owned_profile_targets(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> tuple[UUID | None, ProfileTargets]:
+    """The viewer's single CompanyProfile id and its normalized targets, in one read."""
+    row = (
+        await db.execute(
+            select(
+                CompanyProfile.id,
+                CompanyProfile.target_countries,
+                CompanyProfile.target_regions,
+                CompanyProfile.target_services,
+            ).where(CompanyProfile.user_id == user_id)
+        )
+    ).first()
+    if row is None:
+        return None, ProfileTargets()
+    return row[0], profile_targets(row[1], row[2], row[3])
+
+
 async def _filtered_counts(
     db: AsyncSession,
     *,
     profile_id: UUID | None,
     query: ExplorerQuery,
+    targets: ProfileTargets = ProfileTargets(),
 ) -> ExplorerCounts:
     all_count = _filtered(
         select(func.count(Tender.id)).where(
@@ -173,17 +223,15 @@ async def _filtered_counts(
             )
         ).one()
     else:
-        active_count = _filtered(
-            select(func.count(TenderRecommendation.id))
-            .select_from(TenderRecommendation)
-            .join(Tender, Tender.id == TenderRecommendation.tender_id)
-            .where(
-                TenderRecommendation.company_profile_id == profile_id,
-                TenderRecommendation.is_dismissed.is_(False),
-                customer_visible_tender_condition(Tender),
-            ),
-            query,
-        ).scalar_subquery()
+        # "Matches your profile" (D1-08): a deterministic count, not stored recommendations.
+        active_count = (
+            literal(0)
+            if targets.empty
+            else _filtered(
+                select(func.count(Tender.id)).where(_profile_match_scope(targets, query.reference_time)),
+                query,
+            ).scalar_subquery()
+        )
         dismissed_count = _filtered(
             select(func.count(TenderRecommendation.id))
             .select_from(TenderRecommendation)
@@ -235,9 +283,21 @@ async def _page_rows(
     user_id: UUID,
     profile_id: UUID | None,
     query: ExplorerQuery,
+    targets: ProfileTargets = ProfileTargets(),
 ) -> list[tuple[Tender, TenderRecommendation | None, OrganizationPursuit | None]]:
     if query.view != ExplorerView.ALL and profile_id is None:
         return []
+    if query.view == ExplorerView.RECOMMENDED:
+        if targets.empty:
+            return []
+        statement = (
+            select(Tender, OrganizationPursuit).options(defer(Tender.compiled_master_text, raiseload=True))
+            .outerjoin(OrganizationPursuit, _owned_engagement_join(user_id=user_id, profile_id=profile_id))
+            .where(_profile_match_scope(targets, query.reference_time))
+        )
+        statement = _profile_match_order(_filtered(statement, query), query.sort)
+        rows = (await db.execute(statement.offset(query.offset).limit(query.limit))).all()
+        return [(tender, None, engagement) for tender, engagement in rows]
 
     if query.view == ExplorerView.ALL and profile_id is None:
         statement = _filtered(
@@ -307,7 +367,7 @@ async def list_explorer_tenders(
     """Run fixed-count SQL reads and bounded response-only composition."""
     server_time = datetime.now(timezone.utc)
     query = replace(query, reference_time=server_time)
-    profile_id = await resolve_owned_profile_id(db, user_id=user_id)
+    profile_id, targets = await owned_profile_targets(db, user_id=user_id)
     document_tender_ids = await resolve_filesystem_document_filter_tender_ids(
         db=db,
         document_status=query.document_status,
@@ -319,12 +379,13 @@ async def list_explorer_tenders(
         if profile_id is not None
         else RecommendationAvailability.PROFILE_REQUIRED
     )
-    counts = await _filtered_counts(db, profile_id=profile_id, query=query)
+    counts = await _filtered_counts(db, profile_id=profile_id, query=query, targets=targets)
     rows = await _page_rows(
         db,
         user_id=user_id,
         profile_id=profile_id,
         query=query,
+        targets=targets,
     )
     summaries = await _batched_tender_summaries(
         db=db,
@@ -335,6 +396,9 @@ async def list_explorer_tenders(
     for tender, recommendation, engagement in rows:
         serialized = _serialize_tender(tender, summary=summaries.get(tender.id))
         newness = tender_newness(serialized.created_at, server_time=server_time)
+        matched_country, matched_services = (
+            (None, []) if targets.empty else tender_profile_match(tender, targets)
+        )
         items.append(
             ExplorerTenderItem(
                 tender=ExplorerTenderSummary(
@@ -363,12 +427,22 @@ async def list_explorer_tenders(
                     category=serialized.category,
                     document_status=serialized.document_status,
                     document_count=serialized.document_count,
+                    notice_type=serialized.notice_type,
                     created_at=newness.created_at,
                     is_new=newness.is_new,
                     new_until=newness.new_until,
                 ),
-                recommendation=recommendation_summary(recommendation),
+                # Stored recommendations (numeric score, generated rationale) are only
+                # returned on the dismissed view; they are not surfaced elsewhere (D1-08).
+                recommendation=(
+                    recommendation_summary(recommendation) if query.view == ExplorerView.DISMISSED else None
+                ),
                 pursuit=_pursuit_summary(engagement),
+                profile_match=(
+                    ExplorerProfileMatch(country=matched_country, services=matched_services)
+                    if matched_country or matched_services
+                    else None
+                ),
             )
         )
 

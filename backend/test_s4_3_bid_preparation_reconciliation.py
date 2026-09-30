@@ -97,10 +97,12 @@ def test_no_passive_frontend_proposal_creation_remains():
 
 
 def test_navigation_and_copy_use_bid_preparation():
-    layout = frontend("components/shell/CustomerShell.tsx")
+    layout = frontend("lib/customerNavigation.ts")
     navigation = frontend("messages/en/navigation.json")
     listing = frontend("app/dashboard/bid-preparation/page.tsx")
-    assert "nameKey: 'bidPreparation'" in layout
+    # D1-07: Bid Preparation is reachable by route (under Pursuits), not from the menu.
+    assert "nameKey: 'bidPreparation'" not in layout
+    assert "'/dashboard/bid-preparation'" in layout
     assert '"bidPreparation": "Bid Preparation"' in navigation
     assert "My Bids" not in navigation
     assert "Completed preparation" in frontend("types/bid-preparation.ts")

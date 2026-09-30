@@ -81,14 +81,19 @@ test("save happens only in explicit click handler and represents re-engagement",
   assert.match(pursuitPanel, /t\("panel\.save"\)/);
 });
 
-test("navigation exposes My Tenders and Bid Preparation separately", () => {
-  assert.match(layout, /nameKey: 'myTenders'/);
-  assert.match(layout, /nameKey: 'bidPreparation'/);
+test("navigation exposes Pursuits; Bid Preparation is a route, not a menu item (D1-07)", () => {
+  const navigationSource = readFileSync(
+    new URL("../lib/customerNavigation.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(layout, /CUSTOMER_NAVIGATION/);
+  assert.match(navigationSource, /nameKey: 'pursuits',\s+href: '\/dashboard\/my-tenders'/);
+  assert.doesNotMatch(navigationSource, /nameKey: 'bidPreparation'/);
   const english = readFileSync(
     new URL("../messages/en/navigation.json", import.meta.url),
     "utf8",
   );
-  assert.match(english, /"myTenders": "My Tenders"/);
+  assert.match(english, /"pursuits": "Pursuits"/);
   assert.match(english, /"bidPreparation": "Bid Preparation"/);
   assert.doesNotMatch(english, /My Bids/);
 });

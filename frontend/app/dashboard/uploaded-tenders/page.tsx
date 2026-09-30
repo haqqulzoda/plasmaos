@@ -5,6 +5,7 @@ import { CalendarDays, FileStack, Plus, RefreshCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { OrganizationContextPicker } from '@/components/pursuits/OrganizationContextPicker';
+import { PursuitSegments } from '@/components/pursuits/PursuitSegments';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { EmptyState, PageHeader, PageSkeleton, StatusBadge, Surface } from '@/components/ui/Display';
 import { BidiText } from '@/components/i18n/BidiText';
@@ -50,6 +51,7 @@ export default function UploadedTendersPage() {
         <Plus aria-hidden />{t('actions.uploadTender')}
       </ButtonLink>}
     />
+    <PursuitSegments active="uploaded" />
     <Surface className="pursuit-org-context">
       <OrganizationContextPicker value={organizationId} onChange={chooseOrganization} />
     </Surface>

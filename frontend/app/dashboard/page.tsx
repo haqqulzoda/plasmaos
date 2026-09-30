@@ -38,6 +38,8 @@ import {
 } from "@/lib/dashboard";
 import { api } from "@/lib/api";
 import { listExplorer } from "@/lib/explorer";
+import { OpenWorkspaceButton } from "@/components/pursuits/OpenWorkspaceButton";
+import { FactChips } from "@/components/tenders/FactChips";
 import {
   daysLeft,
   formatPublishedDeadline,
@@ -204,7 +206,7 @@ function buildActionItems(
             issue: t("issues.analysisFailed"),
             subject: tender.title,
             date: analysis.created_at,
-            href: `/dashboard/tenders/${tender.id}/compliance`,
+            href: `/dashboard/tenders/${tender.id}`,
             tone: "danger",
             priority: 1,
           },
@@ -220,7 +222,7 @@ function buildActionItems(
                 : t("issues.partialReview"),
             subject: tender.title,
             date: analysis.created_at,
-            href: `/dashboard/tenders/${tender.id}/compliance`,
+            href: `/dashboard/tenders/${tender.id}`,
             tone: "warning",
             priority: status === "review" ? 2 : 3,
           },
@@ -401,7 +403,7 @@ export default function DashboardPage() {
             limit: 100,
             offset: 0,
             status: "OPEN",
-            sort: "best_match",
+            sort: "deadline_soonest",
           }),
           api.get<Tender[]>("/tenders", {
             params: { limit: 24, sort: "newest" },
@@ -597,7 +599,7 @@ export default function DashboardPage() {
             <SectionHeader
               icon={<Target aria-hidden />}
               title={t("opportunitiesTitle")}
-              description={t("opportunitiesHelp")}
+              description={t("matchesHelp")}
               action={
                 <ButtonLink
                   variant="ghost"
@@ -617,7 +619,7 @@ export default function DashboardPage() {
                 className="dashboard-opportunities"
                 data-opportunity-count={opportunities.length}
               >
-                {opportunities.map(({ tender, recommendation, pursuit }) => (
+                {opportunities.map(({ tender, profile_match: profileMatch, pursuit }) => (
                   <article
                     className="dashboard-opportunity"
                     key={tender.id}
@@ -644,11 +646,7 @@ export default function DashboardPage() {
                         <span aria-hidden>·</span>
                         <TechnicalText>{tender.external_id}</TechnicalText>
                       </p>
-                      {recommendation?.rationale_summary && (
-                        <BidiText className="dashboard-opportunity-context ds-muted">
-                          {recommendation.rationale_summary}
-                        </BidiText>
-                      )}
+                      <FactChips tender={tender} profileMatch={profileMatch} now={now} />
                       <div className="dashboard-opportunity-tags ds-muted">
                         {tender.category && (
                           <BidiText>{tender.category}</BidiText>
@@ -696,6 +694,7 @@ export default function DashboardPage() {
                           </strong>
                         )}
                       </div>
+                      <OpenWorkspaceButton tenderId={tender.id} />
                       <ButtonLink
                         variant="secondary"
                         size="sm"
@@ -796,7 +795,7 @@ export default function DashboardPage() {
                       <ButtonLink
                         variant="secondary"
                         size="sm"
-                        href={`/dashboard/tenders/${tender.id}/compliance`}
+                        href={`/dashboard/tenders/${tender.id}`}
                       >
                         {t("open")}
                         <ArrowRight className="rtl-mirror" aria-hidden />

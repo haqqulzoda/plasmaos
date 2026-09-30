@@ -63,10 +63,9 @@ test("Compliance and readiness use separate facts without invented percentages",
   assert.doesNotMatch(page, /readiness_score|readiness_percentage|critical records/i);
 });
 
-test("recommendation is stored-only and never generated on page load", () => {
-  assert.match(page, /details\.recommendation\.match_score/);
-  assert.match(page, /details\.recommendation\.rationale_summary/);
-  assert.match(page, /copy\("noRecommendation"\)/);
+test("the stored recommendation is not rendered; deterministic facts are (D1-08)", () => {
+  assert.doesNotMatch(page, /details\.recommendation/);
+  assert.match(page, /<FactChips tender=\{tender\} profileMatch=\{details\.profile_match\} \/>/);
   assert.doesNotMatch(page, /api\.post.*recommendation|generateRecommendation/);
 });
 
@@ -127,8 +126,9 @@ test("contacts are source-backed and Proposal action remains explicit", () => {
   assert.match(page, /contacts\.contact_person/);
   assert.match(page, /contacts\.address/);
   assert.match(page, /contacts\.submission_method/);
-  assert.match(page, /`\/dashboard\/bid-preparation\/\$\{bidPreparation\.detail_route_id\}`/);
-  assert.match(page, /<PrepareBidButton foundation tenderId=\{tender\.id\}/);
+  // D1-06: the explicit action is "Open workspace"; nothing is posted on render.
+  assert.match(page, /<OpenWorkspaceButton tenderId=\{tender\.id\} variant="secondary"/);
+  assert.doesNotMatch(page, /PrepareBidButton/);
 });
 
 test("section-level loading, failures and previous successful data are retained", () => {

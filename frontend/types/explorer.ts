@@ -24,6 +24,7 @@ export interface ExplorerTenderSummary {
     category: string;
     document_status: TenderDocumentStatus;
     document_count: number;
+    notice_type?: string | null;
     created_at: string;
     is_new: boolean;
     new_until: string;
@@ -54,6 +55,8 @@ export interface ExplorerItem {
     tender: ExplorerTenderSummary;
     recommendation: RecommendationSummary | null;
     pursuit: PursuitSummary | null;
+    /** Deterministic profile-match facts (D1-08): why this tender matches the company profile. */
+    profile_match?: { country: string | null; services: string[] } | null;
 }
 
 export interface ExplorerCounts {
