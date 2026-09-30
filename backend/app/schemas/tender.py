@@ -25,6 +25,27 @@ class TenderBase(BaseModel):
     category: str = "Other"
 
 
+DeadlineTimeBasisValue = Literal["UTC", "EXPLICIT_TZ", "SOURCE_LOCAL_UNSPECIFIED", "DATE_ONLY"]
+
+
+class TenderTruthFields(BaseModel):
+    """Deadline-derived lifecycle and deadline time basis (D1-05b/c), shared by tender reads.
+
+    ``status`` on customer reads is derived: a passed deadline (read conservatively
+    for the source) closes an OPEN/UNKNOWN tender and ``status_reason`` says so.
+    ``source_status`` is the stored source value. ``deadline`` stays the stored
+    value (sorting); display uses ``deadline_published_local`` unconverted, and
+    countdowns use ``deadline_effective_at``.
+    """
+
+    source_status: TenderStatus | None = None
+    status_reason: Literal["DEADLINE_PASSED"] | None = None
+    deadline_time_basis: DeadlineTimeBasisValue | None = None
+    deadline_timezone: str | None = None
+    deadline_published_local: str | None = None
+    deadline_effective_at: datetime | None = None
+
+
 class TenderContactSubmissionResponse(BaseModel):
     """Safe contact and submission fields derived for tender detail views."""
 
@@ -42,7 +63,7 @@ class TenderContactSubmissionResponse(BaseModel):
     document_access_notes: str | None = None
 
 
-class TenderResponse(TenderBase):
+class TenderResponse(TenderTruthFields, TenderBase):
     """Response schema for tender details."""
     id: UUID
     external_id: str

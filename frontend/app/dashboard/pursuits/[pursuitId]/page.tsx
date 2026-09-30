@@ -27,6 +27,8 @@ import { Button, ButtonLink } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Forms';
 import { EmptyState, PageHeader, PageSkeleton, StatusBadge, Surface } from '@/components/ui/Display';
 import { formatDateTime, formatFileSize } from '@/i18n/formatters';
+import { formatPublishedDeadline, isDeadlinePassed, type TenderTruth } from '@/lib/tenderTruth';
+import { useTenderTruthLabels } from '@/lib/useTenderTruthLabels';
 import type { CustomerSelectableLocale } from '@/i18n/locales';
 import { api } from '@/lib/api';
 import type { TenderDetailsResponse } from '@/types/tender-details';
@@ -74,6 +76,7 @@ function OverviewList({ title, items, empty }: { title: string; items: string[];
 function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
   const t = useTranslations('pursuits');
   const locale = useLocale() as CustomerSelectableLocale;
+  const truthLabels = useTenderTruthLabels();
   const search = useSearchParams();
   const initialTab = search.get('tab');
   const [activeTab, setActiveTab] = useState<WorkspaceTab>(isWorkspaceTab(initialTab) ? initialTab : 'overview');
@@ -305,7 +308,19 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
   const title = pursuit.title || pursuit.tender_title || t('values.untitled');
   const sourceDeadline = context?.field_provenance.find((item) => item.field_name === 'external_deadline')?.source_value || null;
   const deadline = sourceDeadline || pursuit.external_deadline || pursuit.source_deadline;
-  const historicalDeadline = Boolean(deadline && new Date(deadline).getTime() < Date.now());
+  // The linked source tender's deadline is a published wall time: shown as published
+  // and judged at its conservative instant (D1-05b). User-entered deadlines are instants.
+  const sourceTruth: TenderTruth = {
+    status: pursuit.source_tender_status, status_reason: pursuit.source_tender_status_reason,
+    deadline: pursuit.source_deadline, deadline_time_basis: pursuit.source_deadline_time_basis,
+    deadline_timezone: pursuit.source_deadline_timezone, deadline_published_local: pursuit.source_deadline_published_local,
+    deadline_effective_at: pursuit.source_deadline_effective_at,
+  };
+  const usesSourceDeadline = !sourceDeadline && !pursuit.external_deadline && Boolean(pursuit.source_deadline);
+  const historicalDeadline = usesSourceDeadline
+    ? isDeadlinePassed(sourceTruth)
+    : Boolean(deadline && new Date(deadline).getTime() < Date.now());
+  const presentDeadline = (value: string) => usesSourceDeadline ? formatPublishedDeadline(sourceTruth, locale, truthLabels) : formatDateTime(value, locale);
   const reviewedCandidateGap = Boolean(analysis?.gaps.some((gap) =>
     ['CONFIRMED', 'CORRECTED'].includes(gap.effective_review_state) &&
     ['PARTNER_FIRM', 'EXPERT'].includes(gap.effective_resolution_category) &&
@@ -360,7 +375,7 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
       metadata={<>
         <span>{t(`stages.${pursuit.stage}`)}</span>
         {pursuit.reference && <span><BidiText>{pursuit.reference}</BidiText></span>}
-        {deadline && <span>{formatDateTime(deadline, locale)}</span>}
+        {deadline && <span>{presentDeadline(deadline)}</span>}
         {historicalDeadline && <StatusBadge tone="warning">{t('context.historicalRfp')} · {t('context.deadlinePassed')}</StatusBadge>}
       </>}
       primaryAction={<Button onClick={() => selectTab(nextActionTab)}>{nextAction}</Button>}
@@ -390,7 +405,7 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
             <div><dt>{t('fields.buyer')}</dt><dd><BidiText>{pursuit.buyer || t('values.unknown')}</BidiText></dd></div>
             <div><dt>{t('fields.funder')}</dt><dd><BidiText>{pursuit.declared_funder || t('values.unknown')}</BidiText></dd></div>
             <div><dt>{t('fields.reference')}</dt><dd><BidiText>{pursuit.reference || t('values.unknown')}</BidiText></dd></div>
-            <div><dt>{t('fields.deadline')}</dt><dd>{pursuit.external_deadline || pursuit.source_deadline ? formatDateTime(pursuit.external_deadline || pursuit.source_deadline, locale) : t('values.unknown')}{historicalDeadline && <small className="pursuit-historical-deadline">{sourceDeadline && sourceDeadline !== pursuit.external_deadline ? `${formatDateTime(sourceDeadline, locale)} · ` : ''}{t('context.historicalDeadline')}</small>}</dd></div>
+            <div><dt>{t('fields.deadline')}</dt><dd>{pursuit.external_deadline ? formatDateTime(pursuit.external_deadline, locale) : pursuit.source_deadline ? formatPublishedDeadline(sourceTruth, locale, truthLabels) : t('values.unknown')}{historicalDeadline && <small className="pursuit-historical-deadline">{sourceDeadline && sourceDeadline !== pursuit.external_deadline ? `${formatDateTime(sourceDeadline, locale)} · ` : ''}{t('context.historicalDeadline')}</small>}</dd></div>
             <div><dt>{t('fields.stage')}</dt><dd>{t(`stages.${pursuit.stage}`)}</dd></div>
             <div><dt>{t('workspace.identity')}</dt><dd>{pursuit.origin === 'UPLOAD' ? t('workspace.uploadedTender') : t('workspace.officialSourceTender')}</dd></div>
           </dl>

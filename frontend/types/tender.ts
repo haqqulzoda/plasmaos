@@ -1,3 +1,4 @@
+import { isTenderOpen } from '../lib/tenderTruth.ts';
 export type SourceSystem = 'uzex' | 'world_bank' | 'adb' | 'giz' | 'ebrd';
 export type TenderStatus = 'OPEN' | 'CLOSED' | 'CANCELLED' | 'UNKNOWN';
 
@@ -22,6 +23,13 @@ export type DocumentDownloadStatus =
 export type TenderAvailabilityStatus = 'available' | 'unavailable';
 
 export interface Tender {
+    /** Deadline truth (D1-05b/c); see lib/tenderTruth.ts. */
+    source_status?: TenderStatus | null;
+    status_reason?: 'DEADLINE_PASSED' | null;
+    deadline_time_basis?: 'UTC' | 'EXPLICIT_TZ' | 'SOURCE_LOCAL_UNSPECIFIED' | 'DATE_ONLY' | null;
+    deadline_timezone?: string | null;
+    deadline_published_local?: string | null;
+    deadline_effective_at?: string | null;
     id: string;
     external_id: string;
     source_system: SourceSystem;
@@ -108,10 +116,10 @@ export const sourceBadgeClasses = (source?: string | null) => {
 };
 
 export const isTenderActionable = (tenderOrStatus?: Tender | TenderStatus | string | null) => {
-    const status = typeof tenderOrStatus === 'object' && tenderOrStatus !== null
-        ? tenderOrStatus.status
-        : tenderOrStatus;
-    return String(status ?? '').trim().toUpperCase() === 'OPEN';
+    // A tender object is judged on its derived status and conservative deadline
+    // (D1-05c); a bare status on the status alone.
+    if (typeof tenderOrStatus === 'object' && tenderOrStatus !== null) return isTenderOpen(tenderOrStatus);
+    return String(tenderOrStatus ?? '').trim().toUpperCase() === 'OPEN';
 };
 
 export const tenderStatusLabel = (status?: TenderStatus | string | null) => {

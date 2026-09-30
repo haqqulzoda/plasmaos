@@ -33,7 +33,9 @@ from sqlalchemy import or_, select, text as sql_text
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deadline_truth import deadline_time
 from app.models.all_models import Tender, TenderDocument
+from app.services.source_registry import DeadlineTimeBasis
 
 logger = logging.getLogger(__name__)
 
@@ -210,19 +212,28 @@ def _format_publication(value: datetime | None) -> str | None:
     return _as_utc(value).strftime("%Y-%m-%d") if value else None
 
 
-def _format_deadline(value: datetime | None) -> str | None:
-    """UTC date, plus a time only when the stored instant carries a real one.
+def _format_deadline(value: datetime | None, source_system: str | None = None) -> str | None:
+    """The deadline exactly as the source published it, with its time basis (D1-05b).
 
-    Connectors store midnight (date-only source) or 23:59:59.999999 (end of the
-    stated day) when a source gave no time; printing those would invent a time.
+    Connectors store the published wall time labelled UTC; it is printed unconverted
+    and labelled by the source's basis (app.core.deadline_truth). A date-only
+    deadline gets no invented clock time.
     """
     if value is None:
         return None
+    truth = deadline_time(source_system, value)
     instant = _as_utc(value)
     clock = (instant.hour, instant.minute, instant.second, instant.microsecond)
-    if clock in _DATE_ONLY_TIMES:
-        return f"{instant:%Y-%m-%d} (UTC date; no time stated)"
-    return f"{instant:%Y-%m-%d %H:%M} UTC"
+    if truth.basis is DeadlineTimeBasis.DATE_ONLY or (
+        source_system is None and clock in _DATE_ONLY_TIMES
+    ):
+        return f"{instant:%Y-%m-%d} (date as published; no time stated)"
+    published = f"{instant:%Y-%m-%d %H:%M}"
+    if truth.basis is DeadlineTimeBasis.UTC:
+        return f"{published} UTC"
+    if truth.basis is DeadlineTimeBasis.EXPLICIT_TZ and truth.timezone:
+        return f"{published} {truth.timezone} time (as published)"
+    return f"{published} local time (as published)"
 
 
 def notice_body_text(
@@ -264,6 +275,7 @@ def compose_notice_text(
     deadline: datetime | None,
     source_url: str | None,
     body: str,
+    source_system: str | None = None,
 ) -> str:
     fields = (
         ("Title", _single_line(title)),
@@ -272,7 +284,7 @@ def compose_notice_text(
         ("Borrower/client", _single_line(buyer)),
         ("Country", _single_line(country)),
         ("Publication date", _format_publication(publication_date)),
-        ("Deadline", _format_deadline(deadline)),
+        ("Deadline", _format_deadline(deadline, source_system)),
         ("Source URL", _single_line(source_url)),
     )
     header = [HEADER_OPEN, *(f"{label}: {value}" for label, value in fields if value)]
@@ -298,6 +310,7 @@ def build_official_notice_text(tender: Tender) -> str | None:
         deadline=tender.deadline,
         source_url=tender.source_url,
         body=body,
+        source_system=tender.source_system,
     )
 
 

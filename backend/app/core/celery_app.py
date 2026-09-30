@@ -14,6 +14,11 @@ from celery.signals import beat_init, worker_ready
 from kombu import Queue
 
 from app.core.release import public_release_metadata
+from app.services.source_refresh_schedule import (
+    build_beat_schedule,
+    configured_source_refresh_schedule,
+    schedule_tick_seconds,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +93,15 @@ celery_app.conf.update(
             },
         },
     },
+)
+
+# Scheduled source refresh (D1-04): one entry per source in SOURCE_REFRESH_SCHEDULE.
+# A malformed schedule raises here, so worker, Beat and API all fail at startup.
+celery_app.conf.beat_schedule.update(
+    build_beat_schedule(
+        configured_source_refresh_schedule(),
+        tick_seconds=schedule_tick_seconds(),
+    )
 )
 
 celery_app.conf.task_queues = (

@@ -12,6 +12,7 @@ from app.models.base import (
     TenderEngagementStatus,
     TenderStatus,
 )
+from app.schemas.tender import TenderTruthFields
 
 
 class TenderEngagementSummary(BaseModel):
@@ -25,7 +26,9 @@ class TenderEngagementSummary(BaseModel):
     allowed_actions: list[str] = Field(default_factory=list)
 
 
-class MyTenderListItem(TenderEngagementSummary):
+class MyTenderListItem(TenderTruthFields, TenderEngagementSummary):
+    """``tender_status`` is the deadline-derived lifecycle (D1-05c); ``source_status`` the stored one."""
+
     tender_title: str
     buyer: str | None = None
     source_system: str

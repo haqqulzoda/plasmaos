@@ -24,6 +24,26 @@ class DocumentPolicy(str, Enum):
     ACCESS_REQUIRED = "access_required"
 
 
+class DeadlineTimeBasis(str, Enum):
+    """How a source's stored deadline wall time relates to a real instant (D1-05b).
+
+    Connectors store the published wall time with a UTC label; this says what that
+    wall time actually is. Evidence per source: docs/audits/d1/d1-05-deadline-open-truth.md.
+    """
+
+    UTC = "UTC"  # the source publishes UTC
+    EXPLICIT_TZ = "EXPLICIT_TZ"  # the source states (or is bound to) one IANA zone
+    SOURCE_LOCAL_UNSPECIFIED = "SOURCE_LOCAL_UNSPECIFIED"  # local time of an unknown zone
+    DATE_ONLY = "DATE_ONLY"  # a calendar date without a time of day
+
+
+class DateOnlyMarker(str, Enum):
+    """The wall time a connector writes when the source published only a date."""
+
+    END_OF_DAY = "END_OF_DAY"  # datetime.combine(date, time.max)
+    MIDNIGHT = "MIDNIGHT"  # strptime of a date-only format
+
+
 class OptionKind(str, Enum):
     BOOLEAN = "boolean"
     INTEGER = "integer"
@@ -113,6 +133,9 @@ class SourceDefinition:
     fallback_supported: bool = False
     max_fetch_concurrency: int = 1
     max_document_concurrency: int = 1
+    deadline_time_basis: DeadlineTimeBasis = DeadlineTimeBasis.SOURCE_LOCAL_UNSPECIFIED
+    deadline_timezone: str | None = None  # IANA zone, only with EXPLICIT_TZ
+    deadline_date_only_marker: DateOnlyMarker | None = None
 
     def validate_options(self, values: Mapping[str, Any] | None) -> dict[str, Any]:
         raw = dict(values or {})
@@ -224,11 +247,18 @@ def _integer(minimum: int, maximum: int) -> SourceOption:
 
 
 _DEFINITIONS = (
-    SourceDefinition("uzex", "UzEx", _run_uzex, RefreshStrategy.BOUNDED_LATEST_WINDOW, DocumentPolicy.SEPARATE_TARGETED, supports_checkpoint=False),
-    SourceDefinition("world_bank", "World Bank", _run_world_bank, RefreshStrategy.BOUNDED_CURRENT_SET, DocumentPolicy.METADATA_ONLY, MappingProxyType({"max_pages": 25, "rows": 100, "active_only": True, "dry_run": False}), MappingProxyType({"max_pages": _integer(1, 100), "rows": _integer(1, 100), "active_only": BOOL, "dry_run": BOOL})),
-    SourceDefinition("giz", "GIZ", _run_giz, RefreshStrategy.BOUNDED_SURFACES, DocumentPolicy.EXPLICIT_HYDRATION, MappingProxyType({"max_pages": 6, "dry_run": False, "download_documents": False}), MappingProxyType({"max_pages": _integer(1, 12), "dry_run": BOOL, "download_documents": BOOL})),
-    SourceDefinition("ebrd", "EBRD", _run_ebrd, RefreshStrategy.BOUNDED_LISTING, DocumentPolicy.ACCESS_REQUIRED, MappingProxyType({"max_items": 50, "detail_items": 25, "active_only": True, "dry_run": False}), MappingProxyType({"max_items": _integer(1, 200), "detail_items": _integer(0, 100), "active_only": BOOL, "dry_run": BOOL})),
-    SourceDefinition("adb", "ADB", _run_adb, RefreshStrategy.BOUNDED_LISTING, DocumentPolicy.ASYNC_ENRICHMENT, MappingProxyType({"max_items": 500, "max_pages": 25, "feed_type": "invitation_for_bids", "dry_run": False, "download_documents": False}), MappingProxyType({"max_items": _integer(1, 2000), "max_pages": _integer(1, 100), "feed_type": SourceOption(OptionKind.CHOICE, choices=("invitation_for_bids",)), "dry_run": BOOL, "download_documents": BOOL}), fallback_supported=True),
+    # UzEx publishes naive Tashkent wall times (lot end_date / submission_deadline);
+    # Uzbekistan is UTC+5 all year.
+    SourceDefinition("uzex", "UzEx", _run_uzex, RefreshStrategy.BOUNDED_LATEST_WINDOW, DocumentPolicy.SEPARATE_TARGETED, supports_checkpoint=False, deadline_time_basis=DeadlineTimeBasis.EXPLICIT_TZ, deadline_timezone="Asia/Tashkent"),
+    # submission_deadline_date/_time carry no zone (borrower local time); a missing
+    # time is stored as time.max by parse_world_bank_deadline.
+    SourceDefinition("world_bank", "World Bank", _run_world_bank, RefreshStrategy.BOUNDED_CURRENT_SET, DocumentPolicy.METADATA_ONLY, MappingProxyType({"max_pages": 25, "rows": 100, "active_only": True, "dry_run": False}), MappingProxyType({"max_pages": _integer(1, 100), "rows": _integer(1, 100), "active_only": BOOL, "dry_run": BOOL}), deadline_time_basis=DeadlineTimeBasis.SOURCE_LOCAL_UNSPECIFIED, deadline_date_only_marker=DateOnlyMarker.END_OF_DAY),
+    # "dd.mm.yyyy HH:MM Uhr" with no zone; regional pages publish a date only.
+    SourceDefinition("giz", "GIZ", _run_giz, RefreshStrategy.BOUNDED_SURFACES, DocumentPolicy.EXPLICIT_HYDRATION, MappingProxyType({"max_pages": 6, "dry_run": False, "download_documents": False}), MappingProxyType({"max_pages": _integer(1, 12), "dry_run": BOOL, "download_documents": BOOL}), deadline_time_basis=DeadlineTimeBasis.SOURCE_LOCAL_UNSPECIFIED, deadline_date_only_marker=DateOnlyMarker.MIDNIGHT),
+    # eCEPP "Closing Date ... UK Time" (the parser strips the label).
+    SourceDefinition("ebrd", "EBRD", _run_ebrd, RefreshStrategy.BOUNDED_LISTING, DocumentPolicy.ACCESS_REQUIRED, MappingProxyType({"max_items": 50, "detail_items": 25, "active_only": True, "dry_run": False}), MappingProxyType({"max_items": _integer(1, 200), "detail_items": _integer(0, 100), "active_only": BOOL, "dry_run": BOOL}), deadline_time_basis=DeadlineTimeBasis.EXPLICIT_TZ, deadline_timezone="Europe/London", deadline_date_only_marker=DateOnlyMarker.MIDNIGHT),
+    # Hidden from customers (D1-04b); listing deadlines are dates ("30 Sep 2026").
+    SourceDefinition("adb", "ADB", _run_adb, RefreshStrategy.BOUNDED_LISTING, DocumentPolicy.ASYNC_ENRICHMENT, MappingProxyType({"max_items": 500, "max_pages": 25, "feed_type": "invitation_for_bids", "dry_run": False, "download_documents": False}), MappingProxyType({"max_items": _integer(1, 2000), "max_pages": _integer(1, 100), "feed_type": SourceOption(OptionKind.CHOICE, choices=("invitation_for_bids",)), "dry_run": BOOL, "download_documents": BOOL}), fallback_supported=True, customer_visible=False, deadline_time_basis=DeadlineTimeBasis.DATE_ONLY, deadline_date_only_marker=DateOnlyMarker.MIDNIGHT),
 )
 
 SOURCE_REGISTRY: Mapping[str, SourceDefinition] = MappingProxyType(
@@ -242,6 +272,11 @@ def get_source_definition(source_system: str) -> SourceDefinition:
         return SOURCE_REGISTRY[raw_key]
     except KeyError as exc:
         raise KeyError(f"unknown tender source: {source_system!r}") from exc
+
+
+def customer_hidden_source_keys() -> tuple[str, ...]:
+    """Registry sources customers must not see (their tenders, counts, catalog, refresh)."""
+    return tuple(sorted(key for key, definition in SOURCE_REGISTRY.items() if not definition.customer_visible))
 
 
 def validate_source_refresh_options(source_system: str, options: Mapping[str, Any] | None) -> dict[str, Any]:

@@ -62,12 +62,7 @@ import {
   nextBadgeTickDelay,
   type ServerClockReference,
 } from "@/lib/tenderNewness";
-import {
-  INVALID_FORMAT_VALUE,
-  formatCurrency,
-  formatDate,
-  formatRelativeTime,
-} from "@/i18n/formatters";
+import { formatRelativeTime } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { localizeTaxonomyValue } from "@/i18n/taxonomy";
 import { safeSourceUrl } from "@/lib/sourceUrl";
@@ -79,6 +74,15 @@ import type {
 } from "@/types/explorer";
 import type { TenderStatus } from "@/types/tender";
 import { isTenderActionable } from "@/types/tender";
+import {
+  effectiveDeadlineMs,
+  formatBudget,
+  formatPublishedDeadline,
+  isClosedByDeadline,
+  isDeadlinePassed,
+  type TenderTruth,
+} from "@/lib/tenderTruth";
+import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 
 const PAGE_SIZE = 25;
 const SOURCE_LOGOS: Record<string, string> = {
@@ -210,8 +214,8 @@ export function buildExplorerSearch(query: ExplorerQueryState): string {
   return params.toString();
 }
 
-const isExpiredDeadline = (value: string | null) =>
-  Boolean(value && new Date(value).getTime() < Date.now());
+// Conservative effective instant from the API (D1-05b), never the raw wall time.
+const isExpiredDeadline = (truth: TenderTruth) => isDeadlinePassed(truth);
 
 function TendersPageContent() {
   const router = useRouter();
@@ -969,24 +973,18 @@ function ExplorerCard({
   const [initialNow] = useState(() => Date.now());
   const [pursuitState, setPursuitState] = useState<PursuitSummary | null>(item.pursuit);
   const { tender, recommendation } = item;
+  const truthLabels = useTenderTruthLabels();
   const actionable = isTenderActionable(tender.status);
-  const expired = isExpiredDeadline(tender.deadline);
-  const status = t(
-    `status.${tender.status === "OPEN" ? "open" : tender.status === "CLOSED" ? "closed" : tender.status === "CANCELLED" ? "cancelled" : "unknown"}`,
-  );
+  const expired = isExpiredDeadline(tender);
+  const status = isClosedByDeadline(tender)
+    ? truthLabels.closedDeadlinePassed
+    : t(
+        `status.${tender.status === "OPEN" ? "open" : tender.status === "CLOSED" ? "closed" : tender.status === "CANCELLED" ? "cancelled" : "unknown"}`,
+      );
+  const effectiveDeadline = effectiveDeadlineMs(tender);
   const sourceUrl = safeSourceUrl(tender.source_url);
   const tags = [...new Set([tender.sector, tender.category, tender.country, tender.region].filter((value): value is string => Boolean(value && value.trim())))].slice(0, 4);
-  const formattedBudget = tender.budget > 0 && Number.isFinite(tender.budget)
-    ? formatCurrency(
-        tender.budget,
-        tender.currency,
-        locale,
-        Number.isInteger(tender.budget) ? { maximumFractionDigits: 0 } : {},
-      )
-    : INVALID_FORMAT_VALUE;
-  const budget = formattedBudget === INVALID_FORMAT_VALUE
-    ? t("valueMissing")
-    : formattedBudget;
+  const budget = formatBudget(tender.budget, tender.currency, locale, truthLabels.notPublished);
   return (
     <Surface
       className="explorer-card"
@@ -1005,8 +1003,8 @@ function ExplorerCard({
         <span className="explorer-status" data-status={tender.status}>{status}</span>
         <div className="explorer-card-date">
           <span className="explorer-card-deadline-label">{t("deadlineFilter")}</span>
-          <strong>{tender.deadline ? formatDate(tender.deadline, locale) : copy("deadlineUnavailable")}</strong>
-          {tender.deadline && tender.status === "OPEN" && <span className="ds-muted ds-text-small">{formatRelativeTime(tender.deadline, clock ? adjustedServerNow(clock, monotonicNow) : initialNow, locale)}</span>}
+          <strong>{tender.deadline ? formatPublishedDeadline(tender, locale, truthLabels) : copy("deadlineUnavailable")}</strong>
+          {effectiveDeadline !== null && tender.status === "OPEN" && !expired && <span className="ds-muted ds-text-small">{formatRelativeTime(effectiveDeadline, clock ? adjustedServerNow(clock, monotonicNow) : initialNow, locale)}</span>}
         </div>
         <div className="explorer-card-budget">
           <span>{copy("budget")}</span>
@@ -1059,6 +1057,7 @@ function ExplorerPreview({
   const t = useTranslations("explorer");
   const tMy = useTranslations("myTenders");
   const locale = useLocale() as CustomerSelectableLocale;
+  const truthLabels = useTenderTruthLabels();
   const { tender, recommendation, pursuit } = item;
   return (
     <div className="explorer-preview">
@@ -1080,13 +1079,8 @@ function ExplorerPreview({
             t("category"),
             tender.sector || tender.category || t("uncategorized"),
           ],
-          [t("deadlineFilter"), formatDate(tender.deadline, locale)],
-          [
-            t("redesign.value"),
-            tender.budget > 0
-              ? formatCurrency(tender.budget, tender.currency || "USD", locale)
-              : t("valueMissing"),
-          ],
+          [t("deadlineFilter"), formatPublishedDeadline(tender, locale, truthLabels)],
+          [t("redesign.value"), formatBudget(tender.budget, tender.currency, locale, truthLabels.notPublished)],
         ].map(([label, value]) => (
           <div key={label}>
             <dt>{label}</dt>
@@ -1113,7 +1107,7 @@ function ExplorerPreview({
           />
         </div>
       ) : (
-        <PrepareBidButton foundation tenderId={tender.id} disabled={!isTenderActionable(tender.status) || isExpiredDeadline(tender.deadline)} title={t("startBid")} />
+        <PrepareBidButton foundation tenderId={tender.id} disabled={!isTenderActionable(tender.status) || isExpiredDeadline(tender)} title={t("startBid")} />
       )}
       {recommendation && (
         <RecommendationSummary

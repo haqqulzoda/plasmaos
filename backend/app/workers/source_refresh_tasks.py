@@ -324,3 +324,81 @@ def refresh_tender_source(self: Any, source_system: str, job_id: str) -> dict[st
             await engine.dispose()
 
     return asyncio.run(run_and_dispose())
+
+
+async def dispatch_scheduled_refresh(
+    db: Any,
+    source_system: str,
+    *,
+    cadence: Any,
+    now: Any = None,
+) -> dict[str, Any]:
+    """Start a SYSTEM ("scheduled") refresh for one source when it is due (D1-04).
+
+    Reuses the durable request path of POST /tenders/sources/{source}/refresh, so the
+    job, lease, publish and recovery rules are exactly the customer/operator ones. It
+    never overlaps: a queued job or a running job with a live lease is left alone, and
+    the due check counts the latest attempt of any trigger.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from app.api.endpoints.tenders import _request_source_refresh
+    from app.services.source_refresh_jobs import (
+        SOURCE_REFRESH_TRIGGER_SCHEDULED,
+        active_job_needs_republish,
+    )
+    from app.services.source_refresh_schedule import refresh_is_due
+    from app.services.source_registry import get_source_definition
+
+    reference = now or datetime.now(timezone.utc)
+    definition = get_source_definition(source_system)
+    if not definition.customer_visible or not definition.refresh_enabled:
+        return {"source_system": definition.key, "outcome": "skipped_hidden"}
+    latest = (
+        await db.execute(
+            select(SourceRefreshJob)
+            .where(SourceRefreshJob.source_system == definition.key)
+            .order_by(SourceRefreshJob.created_at.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    if latest is not None and latest.status in {"queued", "running"} and not active_job_needs_republish(latest, now=reference):
+        return {"source_system": definition.key, "outcome": "skipped_active", "job_id": str(latest.id)}
+    if latest is not None and latest.status not in {"queued", "running"} and not refresh_is_due(
+        last_attempt_at=latest.created_at, cadence=cadence, now=reference
+    ):
+        return {"source_system": definition.key, "outcome": "not_due", "job_id": str(latest.id)}
+    response = await _request_source_refresh(
+        source_system=definition.key,
+        force=False,
+        current_user=None,
+        db=db,
+        trigger_kind=SOURCE_REFRESH_TRIGGER_SCHEDULED,
+    )
+    outcome = "recovered" if response.reused else "dispatched"
+    logger.info(
+        "scheduled_source_refresh source_system=%s outcome=%s job_id=%s status=%s",
+        definition.key, outcome, response.job_id, response.status,
+    )
+    return {"source_system": definition.key, "outcome": outcome, "job_id": str(response.job_id), "status": response.status}
+
+
+@celery_app.task(name="app.workers.source_refresh_tasks.dispatch_scheduled_source_refresh")
+def dispatch_scheduled_source_refresh(source_system: str) -> dict[str, Any]:
+    """Beat entrypoint: one tick for one scheduled source."""
+    from app.services.source_refresh_schedule import configured_source_refresh_schedule
+
+    cadence = configured_source_refresh_schedule().get(source_system)
+    if cadence is None:
+        return {"source_system": source_system, "outcome": "not_scheduled"}
+
+    async def run_and_dispose() -> dict[str, Any]:
+        try:
+            async with AsyncSessionLocal() as db:
+                return await dispatch_scheduled_refresh(db, source_system, cadence=cadence)
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(run_and_dispose())

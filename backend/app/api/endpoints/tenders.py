@@ -30,7 +30,7 @@ from app.core.pagination import page_rows
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import case, exists, func, or_, select
+from sqlalchemy import and_, case, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only, selectinload
@@ -94,10 +94,16 @@ from app.core.reproducibility import (
 )
 from app.core.scraper import UzExScraper
 from app.core.storage_paths import normalize_storage_path, storage_file_exists
+from app.core.deadline_truth import (
+    deadline_not_passed_sql,
+    deadline_passed_sql,
+    truth_fields,
+)
 from app.core.tender_actionability import (
     TENDER_NOT_ACTIONABLE_DETAIL,
     actionable_tender_condition,
     is_tender_actionable,
+    lifecycle_condition,
 )
 from app.core.services import normalize_target_services, service_label
 from app.crud.crud_profile import get_profile_for_compliance_match
@@ -216,6 +222,7 @@ from app.services.source_refresh_jobs import (
 )
 from app.services.source_registry import (
     SOURCE_REGISTRY,
+    customer_hidden_source_keys,
     execute_source_refresh,
     get_source_definition,
 )
@@ -2278,7 +2285,8 @@ def _tender_lifecycle_condition(value: str | None):
         lifecycle_status = TenderStatus(normalized.upper())
     except ValueError as exc:
         raise ValueError("Unsupported tender status") from exc
-    return Tender.status == lifecycle_status
+    # Customer lifecycle is derived from the deadline (D1-05c).
+    return lifecycle_condition(Tender, lifecycle_status)
 
 
 def _split_query_values(values: list[str] | str | None) -> list[str]:
@@ -2608,9 +2616,9 @@ def apply_explorer_tender_filters(
     if normalized_deadline_status:
         now = datetime.now(timezone.utc)
         if normalized_deadline_status == "active":
-            query = query.where(Tender.deadline.is_not(None), Tender.deadline >= now)
+            query = query.where(Tender.deadline.is_not(None), deadline_not_passed_sql(Tender, now=now))
         elif normalized_deadline_status == "expired":
-            query = query.where(Tender.deadline.is_not(None), Tender.deadline < now)
+            query = query.where(deadline_passed_sql(Tender, now=now))
         elif normalized_deadline_status == "unknown":
             query = query.where(Tender.deadline.is_(None))
         elif normalized_deadline_status not in {"all", "any"}:
@@ -3396,6 +3404,32 @@ async def _apply_live_uzex_dates(
     return live_dates
 
 
+TENDER_SOURCE_UNAVAILABLE_DETAIL = "Tender source temporarily unavailable"
+
+
+async def _raise_customer_tender_missing(db: AsyncSession, tender_id: UUID) -> None:
+    """404 for a customer read; say so when the tender exists but its source is hidden (D1-04b)."""
+    hidden = customer_hidden_source_keys()
+    if hidden and await db.scalar(
+        select(Tender.id).where(Tender.id == tender_id, Tender.source_system.in_(hidden))
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TENDER_SOURCE_UNAVAILABLE_DETAIL)
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tender not found")
+
+
+def apply_tender_truth(
+    payload: Any,
+    *,
+    source_system: str | None,
+    stored_status: Any,
+    now: datetime | None = None,
+) -> Any:
+    """Set derived status and deadline time fields on any TenderTruthFields payload."""
+    for name, value in truth_fields(source_system, stored_status, payload.deadline, now=now).items():
+        setattr(payload, name, value)
+    return payload
+
+
 def _serialize_tender(
     tender: Tender,
     *,
@@ -3411,6 +3445,7 @@ def _serialize_tender(
             payload.publication_date = live_publication_date
         if live_deadline is not None:
             payload.deadline = live_deadline
+    apply_tender_truth(payload, source_system=tender.source_system, stored_status=tender.status)
     payload.source_url = _safe_source_notice_url(payload.source_url)
     payload.contact_submission = _contact_submission_response(
         tender,
@@ -3541,7 +3576,10 @@ def _decision_snapshot_response(
         region=tender.region,
         service_category=_snapshot_service_category(tender),
         deadline=tender.deadline,
-        deadline_urgency=_deadline_urgency(tender.deadline, now=now),
+        # Urgency counts down to the conservative effective instant (D1-05b).
+        deadline_urgency=_deadline_urgency(
+            tender.deadline_effective_at if tender.deadline is not None else None, now=now
+        ),
         price_amount=tender.price_amount,
         price_currency=tender.price_currency,
         price_display=tender.price_display,
@@ -5438,10 +5476,7 @@ async def get_tender_details(
         )
     )
     if tender is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tender not found",
-        )
+        await _raise_customer_tender_missing(db, tender_id)
 
     contact = _contact_submission_response(
         tender,
@@ -5534,10 +5569,7 @@ async def get_tender(
     tender = result.scalar_one_or_none()
     
     if not tender:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tender not found",
-        )
+        await _raise_customer_tender_missing(db, tender_id)
     
     summary = await _single_tender_summary(db=db, tender_id=tender.id)
     live_dates = {}
@@ -5792,10 +5824,7 @@ async def get_tender_decision_snapshot(
     )
     tender = result.scalar_one_or_none()
     if tender is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tender not found",
-        )
+        await _raise_customer_tender_missing(db, tender_id)
 
     summary = await _single_tender_summary(db=db, tender_id=tender.id)
     live_dates = {}
@@ -5860,10 +5889,7 @@ async def get_tender_competitors(
     )
     target_tender = target_result.scalar_one_or_none()
     if target_tender is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tender not found",
-        )
+        await _raise_customer_tender_missing(db, tender_id)
 
     return await _build_tender_competitor_intelligence(
         db=db,

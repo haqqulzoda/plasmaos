@@ -44,6 +44,10 @@ export interface SourceRefreshStatusItem {
     last_clean_completed: SourceRefreshTerminalSummary | null;
     last_partial: SourceRefreshTerminalSummary | null;
     last_failure: SourceRefreshTerminalSummary | null;
+    /** Scheduled refresh (D1-04); null/undefined when the source is not scheduled. */
+    scheduled_cadence_seconds?: number | null;
+    last_success_at?: string | null;
+    stale?: boolean | null;
     activity_cursor: string;
 }
 

@@ -42,6 +42,7 @@ from app.models.all_models import AdminActivityEvent, Proposal, ProposalStatus, 
 from app.models.audit import AnalysisVersion
 from app.models.company import CompanyProfile, ReadinessDocument
 from app.schemas.vault import ReadinessDocumentResponse
+from app.services.source_registry import customer_hidden_source_keys
 from app.services.admin_activity import (
     ACTION_COMPANY_APPROVED,
     ACTION_COMPANY_DISABLED,
@@ -222,6 +223,9 @@ class AdminCorpusHealthResponse(BaseModel):
     adb_visible_count: int
     hidden_legacy_uzex_count: int
     small_uzex_count: int
+    # Operators still see sources hidden from customers (D1-04b).
+    adb_total_count: int = 0
+    customer_hidden_sources: list[str] = []
 
 
 async def _count_model_rows(db: AsyncSession, model: Any, *conditions: Any) -> int:
@@ -487,6 +491,8 @@ async def get_admin_corpus_health(
             Tender,
             small_uzex_condition,
         ),
+        adb_total_count=await _count_model_rows(db, Tender, Tender.source_system == "adb"),
+        customer_hidden_sources=list(customer_hidden_source_keys()),
     )
 
 

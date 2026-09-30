@@ -20,10 +20,11 @@ import {
 
 import { api } from "@/lib/api";
 import {
-  formatCurrency as formatLocaleCurrency,
   formatDate as formatLocaleDate,
   formatNumber,
 } from "@/i18n/formatters";
+import { formatBudget } from "@/lib/tenderTruth";
+import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { BidiText } from "@/components/i18n/BidiText";
 import { Button } from "@/components/ui/Button";
@@ -235,6 +236,7 @@ export default function BidPreparationWorkspacePage({
   const tExplorer = useTranslations("explorer");
   const tMy = useTranslations("myTenders");
   const locale = useLocale() as CustomerSelectableLocale;
+  const truthLabels = useTenderTruthLabels();
   const translateRef = useRef(t);
   translateRef.current = t;
 
@@ -654,10 +656,11 @@ export default function BidPreparationWorkspacePage({
           </h1>
           <p className="ds-muted">
             {t("summaryLine", {
-              budget: formatLocaleCurrency(
+              budget: formatBudget(
                 proposal.tender_budget,
                 proposal.tender_currency,
                 locale,
+                truthLabels.notPublished,
               ),
               deadline: formatLocaleDate(proposal.tender_deadline, locale),
               region: proposal.tender_region || t("noRegion"),

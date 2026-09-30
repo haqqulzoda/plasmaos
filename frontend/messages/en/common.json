@@ -33,7 +33,11 @@
   },
   "pagination": "Page {page} of {totalPages}",
   "paginationResults": "Page {page} of {totalPages} · {count, plural, one {# result} other {# results}}",
-  "notFound": {"title": "Page not found", "help": "The requested customer page does not exist or is no longer available.", "back": "Back to dashboard"},
+  "notFound": {
+    "title": "Page not found",
+    "help": "The requested customer page does not exist or is no longer available.",
+    "back": "Back to dashboard"
+  },
   "taxonomy": {
     "regions": {
       "centralAsia": "Central Asia",
@@ -59,5 +63,15 @@
       "equipmentSupply": "Equipment Supply",
       "other": "Other"
     }
+  },
+  "tenderTruth": {
+    "notPublished": "Not published",
+    "localTimeAsPublished": "local time (as published)",
+    "zoneTimeAsPublished": "{zone} time (as published)",
+    "dateAsPublished": "date as published",
+    "closedDeadlinePassed": "Closed (deadline passed)",
+    "sourceUnavailableTitle": "Source temporarily unavailable",
+    "sourceUnavailableBody": "Tenders from this source are temporarily unavailable in Plasma. Your saved work is kept.",
+    "sourceStale": "Stale"
   }
 }

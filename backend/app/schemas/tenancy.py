@@ -66,6 +66,13 @@ class PursuitResponse(BaseModel):
     stage_changed_at: datetime
     tender_title: str | None = None
     source_deadline: datetime | None = None
+    # Truth of the linked source tender (D1-05b/c); see app.schemas.tender.TenderTruthFields.
+    source_tender_status: str | None = None
+    source_tender_status_reason: str | None = None
+    source_deadline_time_basis: str | None = None
+    source_deadline_timezone: str | None = None
+    source_deadline_published_local: str | None = None
+    source_deadline_effective_at: datetime | None = None
     title: str | None = None
     buyer: str | None = None
     declared_funder: str | None = None

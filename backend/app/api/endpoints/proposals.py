@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 from typing import Annotated
 from fastapi import Query, Response
+from app.core.budget_display import budget_is_published, not_published_label
 from app.core.pagination import page_rows
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
@@ -119,6 +120,13 @@ SENSITIVE_STRUCTURED_DATA_KEYS = {
     "uploaded_tz_path",
     "uploaded_tz_text",
 }
+
+
+def _source_budget_text(tender: Any) -> str:
+    """Source budget for Uzbek exports; an unpublished (null/zero) budget is never an amount."""
+    if not budget_is_published(tender.budget):
+        return f"{not_published_label('uz')} ({not_published_label('en')})"
+    return f"{tender.budget:,.0f} {tender.currency}"
 
 
 def _export_scope_items(structured_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1160,7 +1168,7 @@ async def generate_proposal_pdf(
 
     summary_data = [
         ["Tavsif (Description)", "Qiymat (Value)"],
-        ["Tender byudjeti (source)", f"{tender.budget:,.0f} {tender.currency}"],
+        ["Tender byudjeti (source)", _source_budget_text(tender)],
         ["Siz kiritgan narx", f"{our_price:,.0f} {tender.currency}"],
     ]
     summary_table = Table(summary_data, colWidths=[8 * cm, 8 * cm])
@@ -1383,7 +1391,7 @@ async def export_proposal_docx(
 
     p_budget = doc.add_paragraph()
     r_budget = p_budget.add_run(
-        f"Tender byudjeti (source): {tender.budget:,.0f} {tender.currency}"
+        f"Tender byudjeti (source): {_source_budget_text(tender)}"
     )
     _style_run(r_budget, size=10)
     p_price = doc.add_paragraph()

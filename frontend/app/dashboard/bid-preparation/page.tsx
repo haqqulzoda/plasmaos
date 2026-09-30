@@ -12,6 +12,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import { useCollectionOffset } from "@/lib/useCollectionOffset";
 import { formatCurrency, formatDate } from "@/i18n/formatters";
+import { formatBudget } from "@/lib/tenderTruth";
+import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import type { BidPreparationArtifact } from "@/types/bid-preparation";
 import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
@@ -34,6 +36,7 @@ export default function BidPreparationPage() {
   const tExplorer = useTranslations("explorer");
   const tMy = useTranslations("myTenders");
   const locale = useLocale() as CustomerSelectableLocale;
+  const truthLabels = useTenderTruthLabels();
   const { displayNameForSource } = useSourceRefresh();
   const [offset, setOffset] = useCollectionOffset();
   const [hasMore, setHasMore] = useState(false);
@@ -218,7 +221,7 @@ export default function BidPreparationPage() {
                 <div>
                   <dt>{t("value")}</dt>
                   <dd className="ds-numeric">
-                    {money(proposal.tender_budget, proposal.tender_currency)}
+                    {formatBudget(proposal.tender_budget, proposal.tender_currency, locale, truthLabels.notPublished, { maximumFractionDigits: 1 })}
                   </dd>
                 </div>
                 <div>

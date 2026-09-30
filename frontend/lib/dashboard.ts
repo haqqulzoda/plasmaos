@@ -1,4 +1,5 @@
 import type { ExplorerItem, ExplorerTenderSummary } from "@/types/explorer";
+import { isTenderOpen } from "./tenderTruth.ts";
 import type { SourceRefreshStatusItem } from "@/types/source-refresh";
 
 export const DASHBOARD_OPPORTUNITY_LIMIT = 3;
@@ -28,10 +29,9 @@ export function isCurrentTender(
   tender: ExplorerTenderSummary,
   now = Date.now(),
 ): boolean {
-  if (String(tender.status).trim().toUpperCase() !== "OPEN") return false;
-  if (!tender.deadline) return true;
-  const deadline = timestamp(tender.deadline);
-  return deadline !== null && deadline >= now;
+  // Derived status and the conservative effective deadline (D1-05b/c); sorting
+  // below still uses the stored deadline.
+  return isTenderOpen(tender, now);
 }
 
 function stableTenderIdentity(tender: ExplorerTenderSummary): string {
