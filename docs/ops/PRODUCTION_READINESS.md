@@ -131,17 +131,17 @@ Private-document uploads are scanned by ClamAV; the backend reaches it over TCP 
 | celery_worker | 0.23 GiB | 384m | 768m | 600 |
 | backend | 0.19 GiB | 320m | 768m | 100 |
 | worker_pursuit_analysis | 0.18 GiB | 288m (concurrency 1) | 768m (concurrency 2) | 500 |
-| worker_private_documents | 0.17 GiB | 288m | 768m | 400 |
-| worker_heavy | 0.12 GiB | 192m | 512m | 800 |
+| worker_private_documents | 0.17 GiB | 384m | 768m | 400 |
+| worker_heavy | 0.12 GiB | 256m | 512m | 800 |
 | celery_beat | 0.10 GiB | 160m | 256m | 300 |
 | frontend | 0.08 GiB | 128m | 384m | 200 |
-| **sum of limits** | **2.2 GiB** all services incl. db/redis | **3.22 GiB** | **6.13 GiB** | |
+| **sum of limits** | **2.2 GiB** all services incl. db/redis | **3.38 GiB** | **6.13 GiB** | |
 | postgres | 0.25 GiB | none | none | -800 |
 | redis | 0.02 GiB | none | none | -500 |
 
-4gb limits are the measured steady state +~50 % (32 MiB steps), except ClamAV, which is sized for its reload peak. PostgreSQL settings per profile (`command` args; defaults without a profile are PostgreSQL's own): 4gb `shared_buffers=256MB`, `effective_cache_size=1GB`, `work_mem=4MB`, `maintenance_work_mem=64MB`; 8gb `512MB`, `3GB`, `8MB`, `128MB`; `max_connections=100` on both. Changing them recreates the `db` container (seconds of downtime), never the data.
+4gb limits are the measured steady state +~50 % (32 MiB steps), except ClamAV, which is sized for its reload peak, and the two document workers, raised after review to leave room for one large file: `worker_private_documents` 384m (parsing an uploaded pack) and `worker_heavy` 256m (downloading and unpacking tender archives). PostgreSQL settings per profile (`command` args; defaults without a profile are PostgreSQL's own): 4gb `shared_buffers=256MB`, `effective_cache_size=1GB`, `work_mem=4MB`, `maintenance_work_mem=64MB`; 8gb `512MB`, `3GB`, `8MB`, `128MB`; `max_connections=100` on both. Changing them recreates the `db` container (seconds of downtime), never the data.
 
-**Why the 4gb sum (3.22 GiB + unlimited PostgreSQL/Redis ≈ 3.5 GiB of ceilings) may exceed what the 3.7 GiB host can give safely.** A limit is a ceiling for one container, not a reservation: nothing is set aside, and the services peak at different times (ClamAV during a signature reload, a worker while parsing one large document). Steady state is ~2.2 GiB. The limits bound each service so one runaway process cannot take the host; if several peaks do coincide, the kernel's OOM killer picks the process with the highest score, and `oom_score_adj` makes that a Celery worker (heavy downloads first, +800) rather than PostgreSQL (-800) or Redis (-500). A killed worker is restarted by Docker and its task is retried (acks late). What must not happen is the host swapping: container swap is disabled (`memswap_limit` = `mem_limit`), and builds no longer run on the host.
+**Why the 4gb sum (3.38 GiB + unlimited PostgreSQL/Redis ≈ 3.65 GiB of ceilings) may exceed what the 3.7 GiB host can give safely.** A limit is a ceiling for one container, not a reservation: nothing is set aside, and the services peak at different times (ClamAV during a signature reload, a worker while parsing one large document). Steady state is ~2.2 GiB. The limits bound each service so one runaway process cannot take the host; if several peaks do coincide, the kernel's OOM killer picks the process with the highest score, and `oom_score_adj` makes that a Celery worker (heavy downloads first, +800) rather than PostgreSQL (-800) or Redis (-500). A killed worker is restarted by Docker and its task is retried (acks late). What must not happen is the host swapping: container swap is disabled (`memswap_limit` = `mem_limit`), and builds no longer run on the host.
 
 - [ ] `HOST_PROFILE` is set on production and staging; after a deploy `docker inspect -f '{{.Name}} {{.HostConfig.Memory}} {{.HostConfig.OomScoreAdj}}' $(docker ps -q)` shows the profile's values.
 - [ ] Watch for OOM kills after the first days on 4gb: `docker inspect -f '{{.Name}} {{.State.OOMKilled}} {{.RestartCount}}' $(docker ps -aq)`. A worker that is killed repeatedly while parsing large documents needs a higher limit (edit the profile, redeploy with `up <SHA>`), or the 8gb host.

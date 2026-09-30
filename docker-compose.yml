@@ -206,8 +206,8 @@ services:
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_worker_heavy
     restart: always
-    mem_limit: ${PLASMA_MEM_WORKER_HEAVY:-192m}
-    memswap_limit: ${PLASMA_MEM_WORKER_HEAVY:-192m}
+    mem_limit: ${PLASMA_MEM_WORKER_HEAVY:-256m}
+    memswap_limit: ${PLASMA_MEM_WORKER_HEAVY:-256m}
     oom_score_adj: 800
     depends_on:
       - db
@@ -237,8 +237,8 @@ services:
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_worker_private_documents
     restart: always
-    mem_limit: ${PLASMA_MEM_WORKER_PRIVATE_DOCUMENTS:-288m}
-    memswap_limit: ${PLASMA_MEM_WORKER_PRIVATE_DOCUMENTS:-288m}
+    mem_limit: ${PLASMA_MEM_WORKER_PRIVATE_DOCUMENTS:-384m}
+    memswap_limit: ${PLASMA_MEM_WORKER_PRIVATE_DOCUMENTS:-384m}
     oom_score_adj: 400
     depends_on:
       - db

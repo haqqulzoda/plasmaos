@@ -80,7 +80,7 @@ def test_4gb_profile_fits_the_measured_host_and_8gb_scales_up() -> None:
     assert small["PURSUIT_ANALYSIS_WORKER_CONCURRENCY"] == "1"
     assert large["PURSUIT_ANALYSIS_WORKER_CONCURRENCY"] == "2"
     limits = [key for key in small if key.startswith("PLASMA_MEM_")]
-    assert sum(_mib(small[key]) for key in limits) == 3296  # documented 3.22 GiB
+    assert sum(_mib(small[key]) for key in limits) == 3456  # documented 3.38 GiB (private documents 384m, heavy 256m)
     assert sum(_mib(large[key]) for key in limits) == 6272
     for key in limits:
         assert _mib(large[key]) >= _mib(small[key]), key
