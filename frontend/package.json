@@ -41,10 +41,10 @@
     "test:dashboard": "node --no-warnings --experimental-strip-types --test tests/s14-1-dashboard.test.mjs"
   },
   "dependencies": {
-    "axios": "1.18.0",
+    "axios": "1.20.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
-    "next": "16.3.4",
+    "next": "16.3.8",
     "next-auth": "5.0.0-beta.32",
     "next-intl": "4.14.2",
     "react": "19.2.3",
@@ -56,7 +56,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
