@@ -66,5 +66,7 @@
     "at_risk": "At risk",
     "converted": "Converted",
     "paused": "Paused"
-  }
+  },
+  "readinessLink": "Readiness records",
+  "readinessHelp": "Certificates, licences and other records used as evidence."
 }

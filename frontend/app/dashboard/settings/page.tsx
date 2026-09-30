@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Building2, Save } from "lucide-react";
+import { Archive, Building2, Save } from "lucide-react";
 import {
   PageHeader,
   SectionHeader,
@@ -9,7 +9,7 @@ import {
   StatusBadge,
   PageSkeleton,
 } from "@/components/ui/Display";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Input, Select, Checkbox } from "@/components/ui/Forms";
 import { Alert } from "@/components/ui/Feedback";
 import { BidiText, TechnicalText } from "@/components/i18n/BidiText";
@@ -292,6 +292,17 @@ export default function CompanyProfilePage() {
         eyebrow={t("redesign.context")}
         title={t("title")}
         description={t("redesign.description")}
+        primaryAction={
+          <ButtonLink
+            variant="secondary"
+            href="/dashboard/readiness-vault"
+            title={t("readinessHelp")}
+            data-readiness-link
+          >
+            <Archive aria-hidden />
+            {t("readinessLink")}
+          </ButtonLink>
+        }
       />
       {error && (
         <Alert

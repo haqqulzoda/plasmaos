@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, FileSearch, RefreshCw, Sparkles, UserRoundSearch } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Forms';
 import { EmptyState, StatusBadge, Surface } from '@/components/ui/Display';
 import { api } from '@/lib/api';
+import { analysisLanguageForLocale, initialPackSelection, type AnalysisLanguage } from '@/lib/packSelection';
 import type {
   AnalysisPackCandidate,
   CoverageState,
@@ -89,7 +90,9 @@ export function PursuitRequirements({ pursuitId, headers, initialReviewableAnaly
   const [lastReadyAnalysis, setLastReadyAnalysis] = useState<PursuitAnalysis | null>(initialReviewableAnalysis || null);
   const [selectedSource, setSelectedSource] = useState<Set<string>>(new Set());
   const [selectedPrivate, setSelectedPrivate] = useState<Set<string>>(new Set());
-  const [language, setLanguage] = useState<'en' | 'uz' | 'ru'>('en');
+  const locale = useLocale();
+  // Defaults to the UI locale (en/ru/uz, else en); the customer can still change it.
+  const [language, setLanguage] = useState<AnalysisLanguage>(() => analysisLanguageForLocale(locale));
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,8 +110,10 @@ export function PursuitRequirements({ pursuitId, headers, initialReviewableAnaly
       }
       onAnalysisChange?.(analysisResponse.data);
       if (initializeSelection) {
-        setSelectedSource(new Set(candidateResponse.data.source_documents.filter((item) => item.parse_ready).map((item) => item.tender_document_id)));
-        setSelectedPrivate(new Set(candidateResponse.data.private_versions.filter((item) => item.parse_ready).map((item) => item.document_version_id)));
+        // D1-06: a SOURCE pursuit starts with its OFFICIAL_NOTICE pre-selected.
+        const selection = initialPackSelection(candidateResponse.data);
+        setSelectedSource(new Set(selection.source));
+        setSelectedPrivate(new Set(selection.private));
       }
       setError(null);
     } catch { setError(t('loadFailed')); }
@@ -173,7 +178,7 @@ export function PursuitRequirements({ pursuitId, headers, initialReviewableAnaly
             <StatusBadge tone={item.parse_ready ? 'success' : 'warning'}>{item.parse_ready ? t('ready') : t('notReady')}</StatusBadge>
           </label>)}
         </div>
-        <div className="analysis-pack-actions"><label><span>{t('analysisLanguage')}</span><select className="ds-control" value={language} onChange={(event) => setLanguage(event.target.value as 'en' | 'uz' | 'ru')} disabled={busy}><option value="en">English</option><option value="uz">O‘zbekcha</option><option value="ru">Русский</option></select></label>
+        <div className="analysis-pack-actions"><label><span>{t('analysisLanguage')}</span><select className="ds-control" value={language} onChange={(event) => setLanguage(event.target.value as AnalysisLanguage)} disabled={busy}><option value="en">English</option><option value="uz">O‘zbekcha</option><option value="ru">Русский</option></select></label>
           <Button onClick={() => void start()} loading={busy} disabled={!selectedSource.size && !selectedPrivate.size} leadingIcon={<Sparkles aria-hidden />}>{t('analyzeSelected')}</Button></div>
         <p className="ds-muted ds-text-small">{candidate.page_count_total === null ? t('alternateLimitDisclosure') : t('candidatePages', { count: candidate.page_count_total })}</p>
       </>}

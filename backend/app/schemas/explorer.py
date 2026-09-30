@@ -42,6 +42,7 @@ class ExplorerTenderSummary(BaseModel):
     category: str
     document_status: str
     document_count: int = 0
+    notice_type: str | None = None
     created_at: datetime = Field(description="Immutable first durable insertion time in Plasma.")
     is_new: bool = Field(description="True only inside the server-authoritative 24-hour discovery window.")
     new_until: datetime = Field(description="UTC instant when the Tender stops being New.")
@@ -61,10 +62,20 @@ class ExplorerPursuitSummary(BaseModel):
     allowed_actions: list[str] = Field(default_factory=list)
 
 
+class ExplorerProfileMatch(BaseModel):
+    """Deterministic facts about why a tender matches the viewer's company profile (D1-08)."""
+
+    country: str | None = Field(default=None, description="The profile target country found in the tender's country.")
+    services: list[str] = Field(default_factory=list, description="Profile target services found in the tender.")
+
+
 class ExplorerTenderItem(BaseModel):
     tender: ExplorerTenderSummary
+    # Stored Hunter recommendations are no longer surfaced on the all/recommended views
+    # (D1-08); the field stays for the dismissed view and API compatibility.
     recommendation: ExplorerRecommendationSummary | None = None
     pursuit: ExplorerPursuitSummary | None = None
+    profile_match: ExplorerProfileMatch | None = None
 
 
 class ExplorerCounts(BaseModel):

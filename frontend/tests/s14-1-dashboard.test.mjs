@@ -19,8 +19,7 @@ function item({
   canonical = id,
   status = "OPEN",
   deadline = "2026-10-20T10:00:00Z",
-  score = 80,
-  recommendation = true,
+  matches = true,
 }) {
   return {
     tender: {
@@ -46,15 +45,9 @@ function item({
       is_new: false,
       new_until: "2026-09-02T00:00:00Z",
     },
-    recommendation: recommendation
-      ? {
-          recommendation_id: `rec-${id}`,
-          match_score: score,
-          rationale_summary: "Stored rationale",
-          is_dismissed: false,
-          created_at: "2026-09-01T00:00:00Z",
-        }
-      : null,
+    // D1-08: the stored recommendation is not surfaced; a profile-match fact is.
+    recommendation: null,
+    profile_match: matches ? { country: "Uzbekistan", services: [] } : null,
     pursuit: null,
   };
 }
@@ -72,16 +65,14 @@ test("active shortlist enforces 0/1/3/4+ cardinality and the three-item cap", ()
   );
   assert.deepEqual(
     activeOpportunityShortlist(
-      ["a", "b", "c", "d"].map((id, index) =>
-        item({ id, score: 90 - index }),
-      ),
+      ["a", "b", "c", "d"].map((id) => item({ id })),
       NOW,
     ).map(({ tender }) => tender.id),
     ["a", "b", "c"],
   );
 });
 
-test("closed, cancelled, unknown, expired, invalid and un-recommended rows cannot leak", () => {
+test("closed, cancelled, unknown, expired, invalid and non-matching rows cannot leak", () => {
   const candidates = [
     item({ id: "open" }),
     item({ id: "closed", status: "CLOSED" }),
@@ -89,7 +80,7 @@ test("closed, cancelled, unknown, expired, invalid and un-recommended rows canno
     item({ id: "unknown", status: "UNKNOWN" }),
     item({ id: "expired", deadline: "2026-09-16T09:00:00Z" }),
     item({ id: "invalid", deadline: "not-a-date" }),
-    item({ id: "unrecommended", recommendation: false }),
+    item({ id: "unmatched", matches: false }),
   ];
   assert.equal(isCurrentTender(candidates[0].tender, NOW), true);
   assert.deepEqual(
@@ -98,42 +89,43 @@ test("closed, cancelled, unknown, expired, invalid and un-recommended rows canno
   );
 });
 
-test("ranking uses stored relevance, then deadline urgency, then stable identity", () => {
+test("ranking uses deadline urgency, then stable identity; there is no score", () => {
   const selected = activeOpportunityShortlist(
     [
-      item({ id: "later", canonical: "z", score: 90, deadline: "2026-11-01T00:00:00Z" }),
-      item({ id: "lower", canonical: "a", score: 89, deadline: "2026-09-18T00:00:00Z" }),
-      item({ id: "same-z", canonical: "c", score: 90, deadline: "2026-09-20T00:00:00Z" }),
-      item({ id: "same-a", canonical: "b", score: 90, deadline: "2026-09-20T00:00:00Z" }),
+      item({ id: "later", canonical: "z", deadline: "2026-11-01T00:00:00Z" }),
+      item({ id: "soonest", canonical: "a", deadline: "2026-09-18T00:00:00Z" }),
+      item({ id: "same-z", canonical: "c", deadline: "2026-09-20T00:00:00Z" }),
+      item({ id: "same-a", canonical: "b", deadline: "2026-09-20T00:00:00Z" }),
     ],
     NOW,
   );
   assert.deepEqual(
     selected.map(({ tender }) => tender.id),
-    ["same-a", "same-z", "later"],
+    ["soonest", "same-a", "same-z"],
   );
 });
 
 test("canonical source identity is deduplicated before the cap", () => {
   const selected = activeOpportunityShortlist(
     [
-      item({ id: "old", canonical: "same", score: 70 }),
-      item({ id: "best", canonical: "same", score: 95 }),
-      item({ id: "other", canonical: "other", score: 80 }),
+      item({ id: "later-copy", canonical: "same", deadline: "2026-10-25T00:00:00Z" }),
+      item({ id: "sooner-copy", canonical: "same", deadline: "2026-10-10T00:00:00Z" }),
+      item({ id: "other", canonical: "other", deadline: "2026-10-15T00:00:00Z" }),
     ],
     NOW,
   );
+  // One row per canonical notice (the soonest deadline wins), then deadline order.
   assert.deepEqual(
     selected.map(({ tender }) => tender.id),
-    ["best", "other"],
+    ["sooner-copy", "other"],
   );
 });
 
 test("similar EBRD titles remain distinct when their canonical notices differ", () => {
   const selected = activeOpportunityShortlist(
     [
-      item({ id: "ebrd-a", canonical: "ebrd:46012817", score: 90 }),
-      item({ id: "ebrd-b", canonical: "ebrd:46255706", score: 89 }),
+      item({ id: "ebrd-a", canonical: "ebrd:46012817" }),
+      item({ id: "ebrd-b", canonical: "ebrd:46255706" }),
     ].map((entry) => ({
       ...entry,
       tender: {

@@ -25,6 +25,8 @@ import { formatCurrency, formatDate } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
 import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";
+import { OpenWorkspaceButton } from "@/components/pursuits/OpenWorkspaceButton";
+import { PursuitSegments } from "@/components/pursuits/PursuitSegments";
 import type {
   MyTenderListItem,
   MyTendersListResponse,
@@ -173,12 +175,9 @@ function MyTenderCard({
           <dt>{copy("estimatedValue")}</dt>
           <dd className="ds-numeric">{value}</dd>
         </div>
-        <div>
-          <dt>{copy("matchScore")}</dt>
-          <dd className="ds-muted">{copy("unavailable")}</dd>
-        </div>
       </dl>
       <div className="pipeline-actions">
+        <OpenWorkspaceButton tenderId={item.tender_id} />
         <ButtonLink
           variant="secondary"
           size="sm"
@@ -471,6 +470,7 @@ function MyTendersContent() {
           </ButtonLink>
         }
       />
+      <PursuitSegments active="sources" />
       <Tabs
         label={t("filtersLabel")}
         value={status}

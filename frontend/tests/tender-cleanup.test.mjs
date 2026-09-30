@@ -8,7 +8,7 @@ const bidDetail = read("app/dashboard/bid-preparation/[proposalId]/page.tsx");
 const tenderDetail = read("app/dashboard/tenders/[tenderId]/page.tsx");
 const compliance = read("app/dashboard/tenders/[tenderId]/compliance/page.tsx");
 const myTenders = read("app/dashboard/my-tenders/page.tsx");
-const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx");
+const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx") + read("lib/customerNavigation.ts");
 const legacyBidList = read("app/dashboard/bids/page.tsx");
 const legacyBidDetail = read("app/dashboard/bids/[id]/page.tsx");
 const legacyProposals = read("app/dashboard/proposals/page.tsx");
@@ -92,14 +92,9 @@ test("Bid Preparation mutations remain explicit event handlers", () => {
 
 test("canonical cross-surface links use the correct identifiers", () => {
   assert.match(bidDetail, /`\/dashboard\/tenders\/\$\{proposal\.tender_id\}`/);
-  assert.match(
-    tenderDetail,
-    /`\/dashboard\/bid-preparation\/\$\{bidPreparation\.detail_route_id\}`/,
-  );
-  assert.match(
-    tenderDetail,
-    /`\/dashboard\/tenders\/\$\{tender\.id\}\/compliance`/,
-  );
+  // D1-06: Tender Details leads to the pursuit workspace, not to Bid Preparation or compliance.
+  assert.doesNotMatch(tenderDetail, /\/dashboard\/bid-preparation\/|\/compliance`/);
+  assert.match(tenderDetail, /<OpenWorkspaceButton tenderId=\{tender\.id\}/);
   assert.match(compliance, /`\/dashboard\/tenders\/\$\{tenderId\}`/);
   assert.match(myTenders, /`\/dashboard\/tenders\/\$\{item\.tender_id\}`/);
 });
@@ -107,12 +102,11 @@ test("canonical cross-surface links use the correct identifiers", () => {
 test("canonical navigation and runtime copy omit obsolete product terminology", () => {
   const navigation = read("messages/en/navigation.json");
   const runtime = `${layout}\n${navigation}\n${bidDetail}\n${tenderDetail}\n${compliance}\n${myTenders}`;
-  assert.match(layout, /nameKey: 'tenders'/);
-  assert.match(layout, /nameKey: 'myTenders'/);
-  assert.match(layout, /nameKey: 'bidPreparation'/);
-  assert.match(navigation, /"tenders": "Tender Explorer"/);
-  assert.match(navigation, /"myTenders": "My Tenders"/);
-  assert.match(navigation, /"bidPreparation": "Bid Preparation"/);
+  assert.match(layout, /nameKey: 'opportunities'/);
+  assert.match(layout, /nameKey: 'pursuits'/);
+  assert.doesNotMatch(layout, /nameKey: 'bidPreparation'/);
+  assert.match(navigation, /"opportunities": "Opportunities"/);
+  assert.match(navigation, /"pursuits": "Pursuits"/);
   assert.doesNotMatch(
     runtime,
     /My Bids|Tender Workspace|Tender Draft|Draft Tender|Submit Bid|Submit Tender|Fully compliant|Ready %/,

@@ -124,7 +124,13 @@
     "reviewApproveTeam": "Review and approve a team option.",
     "completeTeamParticipation": "Confirm participation before creating a team option.",
     "navigationLabel": "Pursuit workspace",
-    "tabs": { "overview": "Overview", "requirements": "Requirements", "team": "Team", "documents": "Documents & Evidence", "proposal": "Proposal" },
+    "tabs": {
+      "overview": "Overview",
+      "requirements": "Requirements",
+      "team": "Team",
+      "documents": "Documents & Evidence",
+      "proposal": "Proposal"
+    },
     "identity": "Tender source",
     "uploadedTender": "Uploaded by your organization",
     "officialSourceTender": "Official source record",
@@ -228,7 +234,17 @@
     "packHelp": "Choose the official/source and your documents that Plasma should analyze.",
     "sourceDocument": "Official/source document",
     "privateDocument": "Your document",
-    "documentRoles": { "RFP": "RFP", "TOR": "Terms of reference", "NOTICE": "Notice", "ADDENDUM": "Addendum", "CLARIFICATION": "Clarification", "FORM": "Form", "ANNEX": "Annex", "OFFICIAL_NOTICE": "Official notice text", "OTHER": "Other" },
+    "documentRoles": {
+      "RFP": "RFP",
+      "TOR": "Terms of reference",
+      "NOTICE": "Notice",
+      "ADDENDUM": "Addendum",
+      "CLARIFICATION": "Clarification",
+      "FORM": "Form",
+      "ANNEX": "Annex",
+      "OFFICIAL_NOTICE": "Official notice text",
+      "OTHER": "Other"
+    },
     "pages": "{count} pages",
     "pagesUnknown": "Page count unavailable",
     "version": "Version {version}",
@@ -276,7 +292,11 @@
     "runningTitle": "Analysis is in progress",
     "runningHelp": "You can continue working elsewhere in this pursuit. This page will update when the result is ready.",
     "previousResultVisible": "Showing the last successful analysis while the latest attempt is not reviewable.",
-    "runStates": { "inProgress": "In progress", "failed": "Failed", "complete": "Complete" },
+    "runStates": {
+      "inProgress": "In progress",
+      "failed": "Failed",
+      "complete": "Complete"
+    },
     "needsAttentionCount": "Needs attention",
     "evidenceMissingCount": "Evidence missing",
     "interpretationCount": "Needs interpretation",
@@ -296,7 +316,13 @@
     "assessmentState": "Current assessment",
     "organizationEvidence": "Organization evidence",
     "organizationEvidenceHelp": "Confirm the assessment or record a correction based on your organization’s evidence.",
-    "distinctions": { "MANDATORY": "Required", "PREFERRED": "Preferred", "DESIRED": "Desired", "INFORMATIONAL": "Informational", "SCORED": "Scored" },
+    "distinctions": {
+      "MANDATORY": "Required",
+      "PREFERRED": "Preferred",
+      "DESIRED": "Desired",
+      "INFORMATIONAL": "Informational",
+      "SCORED": "Scored"
+    },
     "page": "Page {page}",
     "paragraph": "Paragraph {paragraph}",
     "correctedFact": "Corrected normalized fact",
@@ -588,8 +614,8 @@
     "failed": "Candidate library could not be loaded",
     "failedHelp": "Check the organization context and try again.",
     "retry": "Retry",
-    "empty": "No candidate records yet",
-    "emptyHelp": "Authorized data entry can add evidence-backed Firm and Expert records through the candidate authority API.",
+    "empty": "Add your first partner or expert",
+    "emptyHelp": "Coming with library import.",
     "firms": "Firms",
     "firmsHelp": "Reusable firm facts and project-reference history.",
     "experts": "Experts",
@@ -668,5 +694,17 @@
     "evidenceManifest": "Evidence manifest",
     "download": "Download",
     "exportFailed": "The artifact could not be generated or downloaded."
+  },
+  "oneDoor": {
+    "openWorkspace": "Open workspace",
+    "opening": "Opening…",
+    "chooseOrganization": "Choose the organization for this pursuit.",
+    "noOrganization": "You need an active organization membership to open a workspace.",
+    "failed": "The workspace could not be opened. Try again."
+  },
+  "segments": {
+    "label": "Pursuit list",
+    "fromSources": "From sources",
+    "uploaded": "Uploaded"
   }
 }

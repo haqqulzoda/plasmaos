@@ -206,9 +206,9 @@ def test_queries_use_uuid_authority_and_independent_pursuit_overlay() -> None:
 def test_sprint_6_4_frontend_consumes_contract_with_passive_compatibility_redirect() -> None:
     explorer_page = source("frontend/app/dashboard/tenders/page.tsx")
     hunter_page = source("frontend/app/dashboard/hunter/page.tsx")
-    navigation = source("frontend/components/shell/CustomerShell.tsx")
+    navigation = source("frontend/lib/customerNavigation.ts")
     assert "listExplorer(" in explorer_page
-    assert 't("views.recommended")' in explorer_page
+    assert 't("matches.tab")' in explorer_page  # D1-08: "Matches your profile"
     assert "permanentRedirect" not in hunter_page
     assert "redirect('/dashboard/tenders?view=recommended')" in hunter_page
     assert "href: '/dashboard/hunter'" not in navigation

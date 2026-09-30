@@ -8,7 +8,8 @@ import {
   Loader2, MapPin, RefreshCw, ShieldCheck, UserRound, UsersRound,
 } from "lucide-react";
 
-import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
+import { OpenWorkspaceButton } from "@/components/pursuits/OpenWorkspaceButton";
+import { FactChips } from "@/components/tenders/FactChips";
 import { SourcePrivateUpload } from "@/components/pursuits/SourcePrivateUpload";
 import { TenderEngagementPanel } from "@/components/tenders/TenderEngagementPanel";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
@@ -113,7 +114,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
   const { tenderId } = use(params);
   const t = useTranslations("tenderDetails");
   const tExplorer = useTranslations("explorer");
-  const tBid = useTranslations("bidPreparation");
+  const tFacts = useTranslations("explorer.facts");
   const copy = useTranslations("tenderDetails.redesign");
   const locale = useLocale() as CustomerSelectableLocale;
   const { displayNameForSource } = useSourceRefresh();
@@ -296,9 +297,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
         {sourceUrl && <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="ds-button ds-button-secondary ds-button-sm">
           <ExternalLink aria-hidden="true" />{t("openSource")}
         </a>}
-        <ButtonLink prefetch={false} href={`/dashboard/tenders/${tender.id}/compliance`} size="sm" variant="secondary">
-          <ExternalLink aria-hidden="true" />{t("openCompliance")}
-        </ButtonLink>
+        <OpenWorkspaceButton tenderId={tender.id} disabled={!pursuit && !actionable} />
       </div>
     </div>
 
@@ -333,7 +332,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
       <div className="s143-decision-grid" aria-label={t("detailsLoading")}>
         <SectionPlaceholder title={t("sections.pursuit")} />
         <SectionPlaceholder title={t("complianceTitle")} />
-        <SectionPlaceholder title={copy("recommendation")} />
+        <SectionPlaceholder title={tFacts("label")} />
       </div>
       <div className="s143-project-grid">
         <SectionPlaceholder title={t("projectTitle")} />
@@ -348,7 +347,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
     {details && <>
       <div className="s143-decision-grid">
         <TenderEngagementPanel
-          decisionCard tenderId={tender.id} proposalContext
+          decisionCard tenderId={tender.id} proposalContext workspaceEntry
           engagementData={pursuit} proposalIdData={bidPreparation?.proposal_id ?? null}
           loadingData={false} canStartNew={actionable} onRefresh={loadDetails}
         />
@@ -367,18 +366,13 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
             {readiness && <div><dt>{t("missingEvidence")}</dt><dd>{formatNumber(readiness.readiness_documents_missing, locale)}</dd></div>}
           </dl>
           <div className="s143-decision-links">
-            <ButtonLink prefetch={false} href={`/dashboard/tenders/${tender.id}/compliance`} variant="secondary" size="sm">{t("openCompliance")}</ButtonLink>
             <ButtonLink prefetch={false} href="/dashboard/readiness-vault" size="sm">{t("openReadiness")}</ButtonLink>
           </div>
         </section>
 
         <section className="s143-decision-card" aria-labelledby="s143-recommendation-title">
-          <h2 id="s143-recommendation-title"><ChartNoAxesColumnIncreasing aria-hidden="true" />{copy("recommendation")}</h2>
-          {details.recommendation ? <>
-            <div className="s143-score"><span>{copy("match")}</span><strong>{formatNumber(details.recommendation.match_score, locale)}/100</strong></div>
-            <p className="s143-decision-copy"><BidiText>{details.recommendation.rationale_summary}</BidiText></p>
-            {details.recommendation.is_dismissed && <p className="s143-note">{copy("dismissed")}</p>}
-          </> : <p className="s143-decision-copy">{copy("noRecommendation")}</p>}
+          <h2 id="s143-recommendation-title"><ChartNoAxesColumnIncreasing aria-hidden="true" />{tFacts("label")}</h2>
+          <FactChips tender={tender} profileMatch={details.profile_match} />
           <dl className="s143-classification">
             <div><dt>{t("category")}</dt><dd><BidiText>{tender.procurement_category || tender.category || t("notSpecified")}</BidiText></dd></div>
             <div><dt>{t("method")}</dt><dd><BidiText>{tender.procurement_method || t("notSpecified")}</BidiText></dd></div>
@@ -495,8 +489,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
       </Section>
 
       <Section id="bid-preparation" title={t("bidTitle")} icon={<Landmark aria-hidden="true" />} className="s143-bid-strip"
-        action={bidPreparation ? <ButtonLink prefetch={false} href={`/dashboard/bid-preparation/${bidPreparation.detail_route_id}`} size="sm">{tBid("open")}</ButtonLink>
-          : actionable ? <PrepareBidButton foundation tenderId={tender.id} /> : undefined}>
+        action={<OpenWorkspaceButton tenderId={tender.id} variant="secondary" disabled={!pursuit && !actionable} />}>
         <p>{bidPreparation ? t("preparationStatus", { status: bidPreparation.proposal_status }) : t("bidNotStartedHelp")}</p>
       </Section>
     </>}

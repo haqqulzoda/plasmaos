@@ -51,7 +51,7 @@ const inbox = source('app/dashboard/notifications/page.tsx');
 const provider = source('components/notifications/NotificationProvider.tsx');
 const broadcasts = source('app/admin/broadcasts/page.tsx');
 const accounts = source('app/admin/approvals/page.tsx');
-const shell = source('components/shell/CustomerShell.tsx');
+const shell = source('components/shell/CustomerShell.tsx') + source('lib/customerNavigation.ts');
 
 for (const [name, pattern, text] of [
   ['cursor inbox', /next_cursor/, inbox], ['delivery id patch', /notifications\/\$\{encodeURIComponent\(item\.id\)\}/, inbox],

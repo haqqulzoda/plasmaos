@@ -111,7 +111,7 @@ def test_frontend_my_tenders_has_no_legacy_data_source_or_workflow_leakage() -> 
     messages = source("frontend/messages/en/myTenders.json")
     assert '"/my-tenders"' in page
     assert 'useTranslations("myTenders")' in page
-    assert '"title": "My Tenders"' in messages
+    assert '"title": "Pursuits"' in messages  # D1-07: My Tenders is the Pursuits page
     assert '"emptyTitle": "No tenders saved yet"' in messages
     assert '"explore": "Explore Tenders"' in messages
     assert '"engagement": "Engagement: {status}"' in messages
@@ -132,13 +132,14 @@ def test_frontend_my_tenders_has_no_legacy_data_source_or_workflow_leakage() -> 
 
 
 def test_frontend_navigation_separates_bid_preparation_and_my_tenders() -> None:
-    layout = source("frontend/components/shell/CustomerShell.tsx")
+    # D1-07: Pursuits is the menu item; Bid Preparation remains a route under it.
+    layout = source("frontend/lib/customerNavigation.ts")
     navigation = source("frontend/messages/en/navigation.json")
-    assert "nameKey: 'myTenders'" in layout
+    assert "nameKey: 'pursuits'" in layout
     assert "href: '/dashboard/my-tenders'" in layout
-    assert "nameKey: 'bidPreparation'" in layout
-    assert "href: '/dashboard/bid-preparation'" in layout
-    assert '"myTenders": "My Tenders"' in navigation
+    assert "nameKey: 'bidPreparation'" not in layout
+    assert "'/dashboard/bid-preparation'" in layout
+    assert '"pursuits": "Pursuits"' in navigation
     assert '"bidPreparation": "Bid Preparation"' in navigation
     bids = source("frontend/app/dashboard/bid-preparation/page.tsx")
     assert 'api.get("/proposals",{params:{limit:25,offset}})' in ''.join(bids.split())

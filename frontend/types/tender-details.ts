@@ -226,6 +226,8 @@ export interface TenderDetailsBidPreparation {
 
 export interface TenderDetailsResponse {
     recommendation?: RecommendationSummary | null;
+    /** Deterministic profile-match facts (D1-08); the stored recommendation is no longer rendered. */
+    profile_match?: { country: string | null; services: string[] } | null;
     tender_id: string;
     project_context: DetailsSection<TenderDetailsProjectContext>;
     project_leadership: DetailsSection<TenderDetailsProjectLeadership>;

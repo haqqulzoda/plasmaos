@@ -128,5 +128,6 @@
     "complete": "Complete",
     "opportunitiesHelp": "Stored recommendations for your company.",
     "match": "Match score: {score}/100"
-  }
+  },
+  "matchesHelp": "Up to 3 open tenders that match your profile's countries or services, soonest deadline first."
 }

@@ -60,8 +60,13 @@ def main():
         "w8_pack_created": False, "w8_seal_payload": None,
         "p0_attention": False, "p0_context_conflict": False,
         "p1_running": False, "p1_failed": False,
+        "source_pursuit_created": False,
     }
     rows = []
+    # D1-06 one door: the SOURCE pursuit the Explorer/Tender Details CTA creates or resolves.
+    SOURCE_PURSUIT_ID = "73000000-0000-4000-8000-000000000110"
+    W3_PURSUIT_ID = "73000000-0000-4000-8000-000000000010"
+    ORGANIZATION_ID = "73000000-0000-4000-8000-000000000001"
 
     def w3_context():
         source_buyer = "Town of University Park" if controls["p0_context_conflict"] else "Synthetic Transport Authority"
@@ -349,6 +354,63 @@ def main():
             parsed_path = urlparse(self.path).path
             if controls["revoked"] and urlparse(self.path).path.startswith("/api/v1/"):
                 return self.send_json(401, {"detail":"Session revoked"})
+            if parsed_path == "/api/v1/explorer/tenders":
+                # D1-08: a stored recommendation (score 88 + rationale) is still in the payload of
+                # older backends; the UI must not render it. Facts come from profile_match.
+                row = {**fixture.mixed_tender(), "notice_type": "Request for Expression of Interest"}
+                return self.send_json(200, {
+                    "view": "all", "items": [{
+                        "tender": row,
+                        "recommendation": {
+                            "recommendation_id": "rec-d108", "match_score": 88,
+                            "rationale_summary": "Generated rationale that must not be rendered.",
+                            "is_dismissed": False, "created_at": "2026-09-02T10:00:00Z",
+                        },
+                        "pursuit": None,
+                        "profile_match": {"country": "Uzbekistan", "services": ["consulting"]},
+                    }],
+                    "total": 1, "limit": 25, "offset": 0,
+                    "counts": {"all_tenders": 1, "active_recommendations": 1, "dismissed_recommendations": 0},
+                    "recommendation_availability": "AVAILABLE", "server_time": "2026-09-02T10:00:00Z",
+                })
+            if SOURCE_PURSUIT_ID in parsed_path:
+                base = f"/api/v1/pursuits/{SOURCE_PURSUIT_ID}"
+                if parsed_path == base:
+                    return self.send_json(200, {
+                        **w3_pursuit(), "pursuit_id": SOURCE_PURSUIT_ID, "origin": "SOURCE",
+                        "source_tender_id": "s72-tender", "tender_title": "Source tender",
+                        "title": "Source tender", "file_count": 0, "processed_count": 0, "processing_state": None,
+                    })
+                if parsed_path == base + "/documents":
+                    return self.send_json(200, {"items": []})
+                if parsed_path == base + "/analysis-runs/latest":
+                    return self.send_json(200, None)
+                if parsed_path == base + "/team-scenarios":
+                    return self.send_json(200, [])
+                if parsed_path == base + "/analysis-pack-candidate":
+                    def source_document(identity, role, name):
+                        return {
+                            "tender_document_id": identity, "display_name": name, "role": role,
+                            "snapshot_sha256": "d" * 64, "content_sha256": "e" * 64, "analyzed_text_sha256": "f" * 64,
+                            "extracted_character_count": 5300, "file_type": "text/plain", "parse_ready": True,
+                            "page_count": None, "page_count_known": False, "language": None,
+                            "source_url": "https://example.invalid/s72", "duplicate_warning": None,
+                            "provenance": "SHARED_SOURCE", "captured_at": "2026-09-26T08:16:00Z",
+                        }
+                    return self.send_json(200, {
+                        "schema_version": "w4-analysis-pack-candidate-v1", "candidate_sha256": "c" * 64,
+                        "organization_id": ORGANIZATION_ID, "pursuit_id": SOURCE_PURSUIT_ID,
+                        "pursuit_origin": "SOURCE", "source_tender_id": "s72-tender", "parse_ready": True,
+                        "page_count_total": None,
+                        "source_documents": [
+                            source_document("73000000-0000-4000-8000-000000000121", "OFFICIAL_SOURCE", "terms-of-reference.pdf"),
+                            source_document("73000000-0000-4000-8000-000000000122", "OFFICIAL_NOTICE", "Official notice"),
+                        ],
+                        "private_versions": [], "generated_at": "2026-09-26T08:16:00Z",
+                    })
+                # Everything else about the pursuit behaves like the W3 fixture pursuit.
+                self.path = self.path.replace(SOURCE_PURSUIT_ID, W3_PURSUIT_ID)
+                parsed_path = urlparse(self.path).path
             if parsed_path == "/api/v1/organizations":
                 return self.send_json(200, [{
                     "organization_id":"73000000-0000-4000-8000-000000000001",
@@ -506,6 +568,17 @@ def main():
         def do_POST(self):
             requests.append(("POST", self.path))
             parsed_path = urlparse(self.path).path
+            if parsed_path == "/api/v1/pursuits/source":
+                length = int(self.headers.get("content-length", "0"))
+                body = json.loads(self.rfile.read(length) or b"{}") if length else {}
+                if self.headers.get("X-Organization-ID") != ORGANIZATION_ID or body.get("tender_id") != "s72-tender":
+                    return self.send_json(409, {"detail": "Organization context required"})
+                created = not controls["source_pursuit_created"]
+                controls["source_pursuit_created"] = True
+                # Idempotent: 201 the first time, 200 for the existing pursuit afterwards.
+                return self.send_json(201 if created else 200, {
+                    **w3_pursuit(), "pursuit_id": SOURCE_PURSUIT_ID, "origin": "SOURCE", "source_tender_id": "s72-tender",
+                })
             if parsed_path == "/api/v1/pursuits/73000000-0000-4000-8000-000000000010/analysis-runs":
                 length = int(self.headers.get("content-length", "0"))
                 if length:
@@ -958,7 +1031,8 @@ def main():
             controls["outage"] = False
             for name,path in surfaces + [("details","tenders/s72-tender"),("compliance","tenders/s72-tender/compliance"),("readiness","readiness-vault"),("settings","settings")]:
                 case(f"production-passivity/{name}", lambda path=path: load(path,"en",390))
-            for name,path in core_surfaces + [("uploaded-tenders","uploaded-tenders"),("settings","settings")]:
+            # D1-07: six destinations; Bid Preparation, Readiness Vault and Uploaded Tenders are routes, not menu items.
+            for name,path in [("opportunities","tenders"),("pursuits","my-tenders"),("partners-experts","partners-experts"),("company","settings"),("notifications","notifications")]:
                 def navigate(path=path):
                     load("settings","en",390)
                     before = len(requests)
@@ -970,6 +1044,93 @@ def main():
                     assert "pending-approval" not in page.url
                     return dict(counts)
                 case(f"production-client-navigation/{name}", navigate)
+            navigation_keys = ["dashboard", "opportunities", "pursuits", "partnersExperts", "companyExperience", "notifications"]
+            navigation_hrefs = ["/dashboard", "/dashboard/tenders", "/dashboard/my-tenders", "/dashboard/partners-experts", "/dashboard/settings", "/dashboard/notifications"]
+            def messages(locale, name):
+                return json.loads((FRONT / "messages" / locale / f"{name}.json").read_text(encoding="utf-8"))
+            def shell_navigation(width):
+                if page.locator("aside.shell-sidebar").is_visible():
+                    return page.locator("aside.shell-sidebar nav.shell-navigation")
+                page.locator(".shell-mobile-trigger").click()
+                return page.locator("dialog[open] nav.shell-navigation")
+            for locale in ("en", "ru", "uz", "ar"):
+                for width in (1440, 390):
+                    def d107_navigation(locale=locale, width=width):
+                        labels = [messages(locale, "navigation")[key] for key in navigation_keys]
+                        segments = messages(locale, "pursuits")["segments"]
+                        load("my-tenders", locale, width)
+                        assert page.locator("h1").first.inner_text().strip() == labels[2]
+                        assert page.locator('.pursuit-segments a[aria-current="page"]').inner_text().strip() == segments["fromSources"]
+                        nav = shell_navigation(width)
+                        assert [text.strip() for text in nav.locator("a.shell-nav-link").all_inner_texts()] == labels
+                        assert nav.locator("a.shell-nav-link").evaluate_all("els => els.map(e => e.getAttribute('href'))") == navigation_hrefs
+                        assert nav.locator('a[aria-current="page"]').inner_text().strip() == labels[2]
+                        assert nav.locator('a[href*="bid-preparation"], a[href*="readiness-vault"], a[href*="uploaded-tenders"]').count() == 0
+                        if width <= 390:
+                            page.screenshot(path=str(OUT / f"{locale}-d107-navigation-{width}.png"))
+                        load("uploaded-tenders", locale, width)
+                        assert page.locator('.pursuit-segments a[aria-current="page"]').inner_text().strip() == segments["uploaded"]
+                        assert shell_navigation(width).locator('a[aria-current="page"]').inner_text().strip() == labels[2]
+                        assert page.locator(".shell-upload-action").count() == 1  # persistent Upload Tender
+                        return {"labels": labels, "active": labels[2]}
+                    case(f"d1-07/navigation/{locale}/{width}", d107_navigation)
+            def d106_one_door():
+                controls["source_pursuit_created"] = False
+                load("tenders?view=all", "en", 1440)  # load() proves the render issued GETs only
+                before = len(requests)
+                card = page.locator(".explorer-card").first
+                expect(card.locator("[data-open-workspace] button")).to_have_text("Open workspace")
+                card.locator("[data-open-workspace] button").click()
+                page.wait_for_url(f"**/dashboard/pursuits/{SOURCE_PURSUIT_ID}?organization_id={ORGANIZATION_ID}")
+                page.wait_for_load_state("networkidle")
+                posts = [path for method, path in requests[before:] if method == "POST"]
+                assert posts == ["/api/v1/pursuits/source"], posts
+                assert ("GET", "/api/v1/organizations") in requests[before:]
+                page.get_by_role("tab", name="Requirements", exact=True).click()
+                boxes = page.locator(".analysis-candidate-row input[type=checkbox]")
+                expect(boxes).to_have_count(2)
+                # The OFFICIAL_NOTICE is pre-selected; the other source document is not.
+                assert [boxes.nth(index).is_checked() for index in range(2)] == [False, True]
+                assert page.locator(".analysis-pack-actions select").input_value() == "en"
+                assert not any(method == "POST" and "/analysis-runs" in path for method, path in requests[before:])
+                expect(page.get_by_role("button", name="Analyze selected", exact=True)).to_be_enabled()
+                # A second click on the same tender resolves the existing pursuit (no duplicate).
+                load("tenders?view=all", "en", 1440)
+                again = len(requests)
+                page.locator(".explorer-card").first.locator("[data-open-workspace] button").click()
+                page.wait_for_url(f"**/dashboard/pursuits/{SOURCE_PURSUIT_ID}?organization_id={ORGANIZATION_ID}")
+                assert [path for method, path in requests[again:] if method == "POST"] == ["/api/v1/pursuits/source"]
+                return {"post_on_render": 0, "post_on_click": 1, "notice_preselected": True, "language": "en"}
+            case("d1-06/one-door/source-tender-to-workspace", d106_one_door)
+            def d106_language_follows_locale():
+                values = {}
+                for locale in ("ru", "uz", "ar"):
+                    load(f"pursuits/{SOURCE_PURSUIT_ID}?organization_id={ORGANIZATION_ID}", locale, 1440)
+                    page.locator("#pursuit-tab-requirements").click()
+                    expect(page.locator(".analysis-pack-actions select")).to_be_visible()
+                    values[locale] = page.locator(".analysis-pack-actions select").input_value()
+                assert values == {"ru": "ru", "uz": "uz", "ar": "en"}, values
+                return values
+            case("d1-06/analysis-language-defaults-to-ui-locale", d106_language_follows_locale)
+            def d108_no_score():
+                evidence = {}
+                for locale in ("en", "ru"):
+                    load("tenders?view=all", locale, 1440)
+                    text = page.locator("main").inner_text()
+                    assert "88" not in text and "/100" not in text and "Generated rationale" not in text, text[:400]
+                    facts = messages(locale, "explorer")["facts"]
+                    chips = page.locator(".explorer-card .fact-chip")
+                    kinds = chips.evaluate_all("els => els.map(e => e.dataset.fact)")
+                    assert kinds == ["country", "service", "notice-type", "days-left"], kinds
+                    assert chips.nth(0).inner_text().strip() == facts["countryMatch"].replace("{country}", "Uzbekistan")
+                    assert chips.nth(2).inner_text().strip() == facts["noticeType"]["eoi"]
+                    tabs = [item.strip() for item in page.get_by_role("tab").all_inner_texts()]
+                    assert any(messages(locale, "explorer")["matches"]["tab"] in item for item in tabs), tabs
+                    # All | Matches your profile: the dismissed-recommendations view is not offered.
+                    assert not any(messages(locale, "explorer")["views"]["dismissed"] in item for item in tabs), tabs
+                    evidence[locale] = kinds
+                return evidence
+            case("d1-08/no-score-fact-chips", d108_no_score)
             for name,path in [("proposals","bid-preparation"),("readiness","readiness-vault")]:
                 def pagination(path=path):
                     controls["pagination"] = True

@@ -14,8 +14,8 @@ const read = (path) =>
 const page = read("app/dashboard/tenders/page.tsx");
 const client = read("lib/explorer.ts");
 const types = read("types/explorer.ts");
-const recommendation = read("components/tenders/RecommendationSummary.tsx");
-const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx");
+const factChips = read("components/tenders/FactChips.tsx");
+const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx") + read("lib/customerNavigation.ts");
 const hunter = read("app/dashboard/hunter/page.tsx");
 const detail = read("app/dashboard/tenders/[tenderId]/page.tsx");
 const returnState = read("lib/explorerReturnState.ts");
@@ -45,7 +45,7 @@ test("explicit types and canonical recommendation commands", () => {
 });
 
 test("URL-backed modes, filters, reset, and pagination", () => {
-  for (const value of ["all", "recommended", "dismissed"])
+  for (const value of ["all", "recommended"])
     assert.match(page, new RegExp(`["']${value}["']`));
   for (const name of [
     "view",
@@ -132,19 +132,12 @@ test("authoritative refresh and stale-response protection", () => {
   assert.match(page, /query\.page > finalPage/);
 });
 
-test("truthful recommendation presentation", () => {
-  for (const key of [
-    "matchScore",
-    "why",
-    "recommendedOn",
-    "dismiss",
-    "restore",
-  ]) {
-    assert.match(
-      recommendation,
-      new RegExp(`t\\(["']${key}["']`),
-    );
+test("profile matches are presented as facts, never as a score (D1-08)", () => {
+  for (const key of ["countryMatch", "serviceMatch", "daysLeft", "label"]) {
+    assert.match(factChips, new RegExp(`t\\(["']${key}["']`));
   }
+  assert.doesNotMatch(`${factChips}\n${page}`, /match_score|rationale_summary/);
+  const recommendation = factChips;
   for (const forbidden of [
     "Win probability",
     "Chance to win",
@@ -159,9 +152,8 @@ test("truthful recommendation presentation", () => {
 test("empty and profile-required states are truthful", () => {
   for (const key of [
     "empty.all",
-    "empty.recommended",
-    "empty.active",
-    "empty.dismissed",
+    "matches.empty",
+    "matches.profileHelp",
     "profileTitle",
   ]) {
     assert.match(page, new RegExp(`t\\(["']${key.replace(".", "\\.")}["']`));
@@ -176,7 +168,8 @@ test("pursuit is independent and uses shared workflow actions", () => {
   assert.match(page, /t\("pursuit",\s*\{\s*status: tMy/);
   assert.match(page, /EngagementWorkflowActions/);
   assert.match(page, /allowed_actions: pursuit\.allowed_actions/);
-  assert.match(page, /PrepareBidButton/);
+  assert.match(page, /OpenWorkspaceButton/);
+  assert.doesNotMatch(page, /PrepareBidButton/);
   assert.doesNotMatch(
     page,
     /recommendation[^\n]*(engagement|proposal|compliance)/i,
@@ -210,6 +203,5 @@ test("accessibility and responsive contracts are present", () => {
       shared,
       new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
     );
-  assert.match(recommendation, /type="button"/);
-  assert.match(recommendation, /aria-label=/);
+  assert.match(factChips, /aria-label=/);
 });

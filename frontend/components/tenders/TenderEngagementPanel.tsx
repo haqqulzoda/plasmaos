@@ -6,6 +6,7 @@ import { Bookmark, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
+import { OpenWorkspaceButton } from "@/components/pursuits/OpenWorkspaceButton";
 import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Surface, SectionHeader, StatusBadge } from "@/components/ui/Display";
@@ -23,6 +24,8 @@ interface TenderEngagementPanelProps {
   decisionCard?: boolean;
   tenderId: string;
   proposalContext?: boolean;
+  /** D1-06 one door: offer "Open workspace" and no legacy Prepare-bid CTA (Tender Details). */
+  workspaceEntry?: boolean;
   engagementData?: TenderEngagementActionContext | null;
   proposalIdData?: string | null;
   loadingData?: boolean;
@@ -35,6 +38,7 @@ export function TenderEngagementPanel({
   decisionCard = false,
   tenderId,
   proposalContext = false,
+  workspaceEntry = false,
   engagementData,
   proposalIdData,
   loadingData = false,
@@ -128,24 +132,23 @@ export function TenderEngagementPanel({
             : t("panel.none")}
         </p>
         <div className="s143-pursuit-actions">
+          {/* D1-06 one door: the workspace is the single next step; stage actions stay. */}
+          {/* A new pursuit starts only from an actionable tender; an existing one always opens. */}
+          {!loading && workspaceEntry && <OpenWorkspaceButton tenderId={tenderId} size="md" disabled={!engagement && !canStartNew} />}
           {!loading && engagement ? (
             <EngagementWorkflowActions
               foundation
               engagement={engagement}
               tenderId={tenderId}
-              proposalId={proposalId}
               onChanged={setEngagement}
               onRefresh={load}
             />
-          ) : !loading && proposalContext && proposalId ? (
+          ) : !loading && !workspaceEntry && proposalContext && proposalId ? (
             <PrepareBidButton foundation proposalId={proposalId} />
           ) : !loading && canStartNew ? (
-            <>
-              <Button variant="secondary" onClick={save} loading={saving} leadingIcon={<Bookmark aria-hidden="true" />}>
-                {saving ? t("panel.saving") : t("panel.save")}
-              </Button>
-              <PrepareBidButton foundation tenderId={tenderId} />
-            </>
+            <Button variant="secondary" onClick={save} loading={saving} leadingIcon={<Bookmark aria-hidden="true" />}>
+              {saving ? t("panel.saving") : t("panel.save")}
+            </Button>
           ) : !loading ? <p className="ds-muted">{t("panel.noAction")}</p> : null}
         </div>
         {error && <Alert tone="danger" title={error} />}
@@ -169,16 +172,16 @@ export function TenderEngagementPanel({
           ) : (
             <p className="ds-muted">{t("panel.none")}</p>
           )}
+          {!loading && workspaceEntry && <OpenWorkspaceButton tenderId={tenderId} disabled={!engagement && !canStartNew} />}
           {!loading && engagement ? (
             <EngagementWorkflowActions
               foundation
               engagement={engagement}
               tenderId={tenderId}
-              proposalId={proposalId}
               onChanged={setEngagement}
               onRefresh={load}
             />
-          ) : !loading && proposalContext && proposalId ? (
+          ) : !loading && !workspaceEntry && proposalContext && proposalId ? (
             <PrepareBidButton foundation proposalId={proposalId} />
           ) : !loading && canStartNew ? (
             <div className="ds-row">
@@ -191,7 +194,6 @@ export function TenderEngagementPanel({
               >
                 {saving ? t("panel.saving") : t("panel.save")}
               </Button>
-              <PrepareBidButton foundation tenderId={tenderId} />
             </div>
           ) : !loading ? (
             <p className="ds-muted">{t("panel.noAction")}</p>
@@ -200,15 +202,6 @@ export function TenderEngagementPanel({
             <ButtonLink variant="ghost" size="sm" href="/dashboard/my-tenders">
               {t("panel.openMy")}
             </ButtonLink>
-            {proposalId && (
-              <ButtonLink
-                variant="ghost"
-                size="sm"
-                href={`/dashboard/bid-preparation/${proposalId}`}
-              >
-                {t("panel.openBid")}
-              </ButtonLink>
-            )}
           </div>
           {error && <Alert tone="danger" title={error} />}
         </div>
@@ -248,15 +241,15 @@ export function TenderEngagementPanel({
             <p className="mt-2 text-sm text-zinc-400">{t("panel.none")}</p>
           )}
         </div>
+        {!loading && workspaceEntry && <OpenWorkspaceButton tenderId={tenderId} disabled={!engagement && !canStartNew} />}
         {!loading && engagement ? (
           <EngagementWorkflowActions
             engagement={engagement}
             tenderId={tenderId}
-            proposalId={proposalId}
             onChanged={setEngagement}
             onRefresh={load}
           />
-        ) : !loading && proposalContext && proposalId ? (
+        ) : !loading && !workspaceEntry && proposalContext && proposalId ? (
           <PrepareBidButton proposalId={proposalId} />
         ) : !loading && canStartNew ? (
           <div className="flex flex-wrap gap-2">
@@ -273,7 +266,6 @@ export function TenderEngagementPanel({
               )}
               {saving ? t("panel.saving") : t("panel.save")}
             </button>
-            <PrepareBidButton tenderId={tenderId} />
           </div>
         ) : !loading ? (
           <p className="text-xs text-zinc-500">{t("panel.noAction")}</p>
@@ -286,14 +278,6 @@ export function TenderEngagementPanel({
         >
           {t("panel.openMy")}
         </Link>
-        {proposalId ? (
-          <Link
-            href={`/dashboard/bid-preparation/${proposalId}`}
-            className="text-indigo-300 hover:text-indigo-200"
-          >
-            {t("panel.openBid")}
-          </Link>
-        ) : null}
       </div>
       {error ? (
         <p role="alert" className="mt-2 text-xs text-red-300">

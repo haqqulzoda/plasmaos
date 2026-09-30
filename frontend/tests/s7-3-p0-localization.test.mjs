@@ -138,19 +138,19 @@ test("canonical query, enum, and action codes remain untranslated", () => {
   assert.match(actions, /expected_status: engagement\.engagement_status/);
 });
 
-test("source, user, Proposal, and AI narrative fields remain original", () => {
+test("source, user and Proposal narrative fields remain original", () => {
   const explorer = read("app/dashboard/tenders/page.tsx");
   const details = read("app/dashboard/tenders/[tenderId]/page.tsx");
-  const recommendation = read("components/tenders/RecommendationSummary.tsx");
   const workspace = read("app/dashboard/bid-preparation/[proposalId]/page.tsx");
   assert.match(explorer, /\{tender\.title\}/);
   assert.doesNotMatch(details, /tender\.description/);
   assert.match(details, /<BidiText>\{item\.label\}<\/BidiText>/);
-  assert.match(recommendation, /\{recommendation\.rationale_summary\}/);
   assert.match(workspace, /value=\{strategicSummary\}/);
+  // D1-08: the generated recommendation rationale is no longer rendered anywhere.
+  assert.doesNotMatch(`${explorer}\n${details}`, /rationale_summary/);
   assert.doesNotMatch(
-    `${explorer}\n${details}\n${recommendation}\n${workspace}`,
-    /(?:^|[^A-Za-z])t\((tender\.title|tender\.description|item\.label|recommendation\.rationale_summary|strategicSummary)/,
+    `${explorer}\n${details}\n${workspace}`,
+    /(?:^|[^A-Za-z])t\((tender\.title|tender\.description|item\.label|strategicSummary)/,
   );
 });
 

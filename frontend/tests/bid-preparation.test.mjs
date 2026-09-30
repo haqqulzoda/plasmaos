@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx");
+const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx") + read("lib/customerNavigation.ts");
 const list = read("app/dashboard/bid-preparation/page.tsx");
 const detail = read("app/dashboard/bid-preparation/[proposalId]/page.tsx");
 const legacyList = read("app/dashboard/bids/page.tsx");
@@ -14,10 +14,10 @@ const legacyWorkspace = read("app/dashboard/workspace/page.tsx");
 const prepareButton = read("components/bid-preparation/PrepareBidButton.tsx");
 const compliance = read("app/dashboard/tenders/[tenderId]/compliance/page.tsx");
 
-test("canonical customer navigation is Bid Preparation", () => {
+test("Bid Preparation stays reachable by route but is no longer a menu item (D1-07)", () => {
   const navigation = read("messages/en/navigation.json");
-  assert.match(layout, /nameKey: 'bidPreparation'/);
-  assert.match(layout, /href: '\/dashboard\/bid-preparation'/);
+  assert.doesNotMatch(layout, /nameKey: 'bidPreparation'/);
+  assert.match(layout, /'\/dashboard\/bid-preparation'/); // belongs to Pursuits for the active state
   assert.match(navigation, /"bidPreparation": "Bid Preparation"/);
   assert.doesNotMatch(navigation, /My Bids/);
 });

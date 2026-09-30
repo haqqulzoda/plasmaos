@@ -7,7 +7,7 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 const redirectPage = read("app/dashboard/hunter/page.tsx");
 const explorerPage = read("app/dashboard/tenders/page.tsx");
 const explorerClient = read("lib/explorer.ts");
-const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx");
+const layout = read("app/dashboard/layout.tsx") + read("components/shell/CustomerShell.tsx") + read("lib/customerNavigation.ts");
 const backendHunter = read("../backend/app/api/endpoints/hunter.py");
 const worker = read("../backend/app/workers/hunter_tasks.py");
 const celery = read("../backend/app/core/celery_app.py");
@@ -69,12 +69,12 @@ test("unified Explorer remains canonical frontend authority", () => {
 
 test("primary navigation has no duplicate discovery product", () => {
   const navigation = read("messages/en/navigation.json");
-  assert.match(layout, /nameKey: 'tenders'/);
-  assert.match(layout, /nameKey: 'myTenders'/);
-  assert.match(layout, /nameKey: 'bidPreparation'/);
-  assert.match(navigation, /"tenders": "Tender Explorer"/);
-  assert.match(navigation, /"myTenders": "My Tenders"/);
-  assert.match(navigation, /"bidPreparation": "Bid Preparation"/);
+  // D1-07: one discovery destination (Opportunities) and one pipeline (Pursuits).
+  assert.match(layout, /nameKey: 'opportunities'/);
+  assert.match(layout, /nameKey: 'pursuits'/);
+  assert.doesNotMatch(layout, /nameKey: 'bidPreparation'/);
+  assert.match(navigation, /"opportunities": "Opportunities"/);
+  assert.match(navigation, /"pursuits": "Pursuits"/);
   assert.doesNotMatch(layout, /Hunter|AI Hunter|Recommendations.*href/);
 });
 

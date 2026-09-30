@@ -38,17 +38,13 @@ import { DashboardBookmarkButton } from "@/components/customer/DashboardBookmark
 import { useLocale, useTranslations } from "next-intl";
 
 import { BidiText, TechnicalText } from "@/components/i18n/BidiText";
-import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
+import { OpenWorkspaceButton } from "@/components/pursuits/OpenWorkspaceButton";
+import { FactChips } from "@/components/tenders/FactChips";
 import { SourceRefreshMenu } from "@/components/source-refresh/SourceRefreshMenu";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
 import { NewTenderBadge } from "@/components/tenders/NewTenderBadge";
 import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";
-import { RecommendationSummary } from "@/components/tenders/RecommendationSummary";
-import {
-  dismissRecommendation,
-  listExplorer,
-  restoreRecommendation,
-} from "@/lib/explorer";
+import { listExplorer } from "@/lib/explorer";
 import {
   clearExplorerReturnState,
   readExplorerReturnState,
@@ -113,10 +109,6 @@ const TENDER_SORT_VALUES = [
   "document_availability",
   "source",
 ] as const;
-const RECOMMENDATION_SORT_VALUES = [
-  "best_match",
-  ...TENDER_SORT_VALUES,
-] as const;
 
 interface ExplorerQueryState {
   view: ExplorerView;
@@ -148,14 +140,15 @@ const positiveInteger = (value: string | null) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 const defaultSort = (view: ExplorerView) =>
-  view === "all" ? "newest" : "best_match";
+  view === "all" ? "newest" : "deadline_soonest";
 
 export function parseExplorerQuery(
   params: URLSearchParams,
 ): ExplorerQueryState {
   const rawView = params.get("view");
-  const view: ExplorerView =
-    rawView === "recommended" || rawView === "dismissed" ? rawView : "all";
+  // D1-08: "recommended" is the deterministic "Matches your profile" view; the
+  // dismissed-recommendations view is no longer offered.
+  const view: ExplorerView = rawView === "recommended" ? rawView : "all";
   const rawStatus = (params.get("status") || "OPEN").toUpperCase();
   const lifecycleStatus = LIFECYCLE_STATUSES.some(
     (value) => value === rawStatus,
@@ -163,9 +156,7 @@ export function parseExplorerQuery(
     ? (rawStatus as TenderStatus | "ALL")
     : "OPEN";
   const requestedSort = params.get("sort") || defaultSort(view);
-  const availableSorts =
-    view === "all" ? TENDER_SORT_VALUES : RECOMMENDATION_SORT_VALUES;
-  const sort = availableSorts.some((value) => value === requestedSort)
+  const sort = TENDER_SORT_VALUES.some((value) => value === requestedSort)
     ? requestedSort
     : defaultSort(view);
   const cursorPage =
@@ -232,10 +223,6 @@ function TendersPageContent() {
   const [response, setResponse] = useState<ExplorerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mutationError, setMutationError] = useState<string | null>(null);
-  const [pendingRecommendation, setPendingRecommendation] = useState<
-    string | null
-  >(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [searchDraft, setSearchDraft] = useState(query.keyword);
   const [categoryDraft, setCategoryDraft] = useState(query.category);
@@ -270,10 +257,14 @@ function TendersPageContent() {
     if (canonical !== searchString)
       router.replace(`/dashboard/tenders?${canonical}`);
   }, [query, router, searchString]);
+  // Existing URL -> draft synchronisation (unchanged behaviour). The rule only started
+  // analysing this component once the recommendation mutation was removed (D1-08).
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => setSearchDraft(query.keyword), [query.keyword]);
   useEffect(() => setCategoryDraft(query.category), [query.category]);
   useEffect(() => setMinimumDraft(query.priceMin), [query.priceMin]);
   useEffect(() => setMaximumDraft(query.priceMax), [query.priceMax]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (searchDraft === query.keyword) return;
     const timer = window.setTimeout(
@@ -286,6 +277,7 @@ function TendersPageContent() {
   useEffect(() => {
     const controller = new AbortController();
     const sequence = ++requestSequence.current;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- existing fetch-state reset, unchanged
     setLoading(true);
     setError(null);
     void listExplorer(
@@ -383,27 +375,6 @@ function TendersPageContent() {
       priceMin: minimumDraft,
       priceMax: maximumDraft,
     });
-  const mutateRecommendation = async (id: string, restore: boolean) => {
-    setPendingRecommendation(id);
-    setMutationError(null);
-    try {
-      if (restore) await restoreRecommendation(id);
-      else await dismissRecommendation(id);
-      setRefreshVersion((value) => value + 1);
-    } catch (requestError: unknown) {
-      const status = (requestError as { response?: { status?: number } })
-        .response?.status;
-      setMutationError(
-        status === 401 || status === 403
-          ? t("recommendationDenied")
-          : status === 404
-            ? t("recommendationMissing")
-            : t("recommendationFailed"),
-      );
-    } finally {
-      setPendingRecommendation(null);
-    }
-  };
   const counts = response?.counts ?? {
     all_tenders: 0,
     active_recommendations: 0,
@@ -411,8 +382,7 @@ function TendersPageContent() {
   };
   const modes: Array<[ExplorerView, string, number]> = [
     ["all", t("views.all"), counts.all_tenders],
-    ["recommended", t("views.recommended"), counts.active_recommendations],
-    ["dismissed", t("views.dismissed"), counts.dismissed_recommendations],
+    ["recommended", t("matches.tab"), counts.active_recommendations],
   ];
   const statuses: ReadonlyArray<readonly [TenderStatus | "ALL", string]> = [
     ["OPEN", t("status.open")],
@@ -457,19 +427,11 @@ function TendersPageContent() {
                 : t("sorts.source"),
       ] as const,
   );
-  const recommendationSorts = [
-    ["best_match", t("sorts.match")] as const,
-    ...tenderSorts,
-  ];
   const lastPage = response
     ? Math.max(1, Math.ceil(response.total / response.limit))
     : 1;
   const profileRequired =
     response?.recommendation_availability === "PROFILE_REQUIRED";
-  const allDismissed =
-    query.view === "recommended" &&
-    counts.active_recommendations === 0 &&
-    counts.dismissed_recommendations > 0;
   const newArrival =
     latestActivityBatch &&
     latestActivityBatch.id > dismissedBatchId &&
@@ -558,9 +520,6 @@ function TendersPageContent() {
       item={selected}
       source={displayNameForSource(selected.tender.source_system)}
       remember={remember}
-      pending={pendingRecommendation}
-      onDismiss={(id) => void mutateRecommendation(id, false)}
-      onRestore={(id) => void mutateRecommendation(id, true)}
       onRefresh={() => setRefreshVersion((value) => value + 1)}
     />
   ) : (
@@ -609,7 +568,7 @@ function TendersPageContent() {
                 </ButtonLink>
               }
             >
-              {t("profileHelp")}
+              {t("matches.profileHelp")}
             </Alert>
           )}
           <Surface
@@ -833,7 +792,6 @@ function TendersPageContent() {
               </Button>
             </div>
           )}
-          {mutationError && <Alert tone="danger" title={mutationError} />}
           {degradedSources.length > 0 && (
             <Alert tone="warning" title={copy("partialTitle")}>
               {copy("partialHelp", { sources: degradedSources.map((source) => source.display_name).join(", ") })}
@@ -849,7 +807,7 @@ function TendersPageContent() {
                 value={query.sort}
                 onChange={(e) => navigate({ sort: e.target.value })}
               >
-                {(query.view === "all" ? tenderSorts : recommendationSorts).map(([v, l]) => (
+                {tenderSorts.map(([v, l]) => (
                   <option key={v} value={v}>{l}</option>
                 ))}
               </Select>
@@ -875,13 +833,7 @@ function TendersPageContent() {
             <Surface>
               <EmptyState
                 title={
-                  query.view === "all"
-                    ? t("empty.all")
-                    : query.view === "dismissed"
-                      ? t("empty.dismissed")
-                      : allDismissed
-                        ? t("empty.active")
-                        : t("empty.recommended")
+                  query.view === "all" ? t("empty.all") : t("matches.empty")
                 }
                 action={<Button variant="secondary" onClick={() => {
                   setSearchDraft("");
@@ -968,7 +920,7 @@ function ExplorerCard({
   const locale = useLocale() as CustomerSelectableLocale;
   const [initialNow] = useState(() => Date.now());
   const [pursuitState, setPursuitState] = useState<PursuitSummary | null>(item.pursuit);
-  const { tender, recommendation } = item;
+  const { tender } = item;
   const actionable = isTenderActionable(tender.status);
   const expired = isExpiredDeadline(tender.deadline);
   const status = t(
@@ -1000,6 +952,7 @@ function ExplorerCard({
         <div className="explorer-card-title-row"><h2><Link prefetch={false} onClick={() => onOpen(tender.id)} href={`/dashboard/tenders/${tender.id}`}><BidiText>{tender.title}</BidiText></Link></h2><NewTenderBadge foundation isNew={tender.is_new} newUntil={tender.new_until} clock={clock} monotonicNow={monotonicNow} /><Button variant="icon" size="sm" className="explorer-preview-control" aria-label={copy("preview")} aria-pressed={selected} onClick={onPreview}><Eye aria-hidden /></Button></div>
         <p className="explorer-card-reference"><MapPin aria-hidden /><BidiText>{tender.country || tender.region || t("locationMissing")}</BidiText><span aria-hidden>·</span><TechnicalText>{tender.external_id}</TechnicalText></p>
         {tags.length > 0 && <div className="explorer-card-tags">{tags.map((tag) => <span key={tag} className="explorer-card-tag"><BidiText>{tag}</BidiText></span>)}</div>}
+        <FactChips tender={tender} profileMatch={item.profile_match} />
       </div>
       <div className="explorer-card-facts">
         <span className="explorer-status" data-status={tender.status}>{status}</span>
@@ -1015,12 +968,12 @@ function ExplorerCard({
       </div>
       <div className="explorer-card-actions">
         <div className="explorer-card-action-top">
-          {recommendation && <span className="explorer-match">{copy("match", { score: recommendation.match_score })}</span>}
           <span className="explorer-card-action-icons">
             <DashboardBookmarkButton tenderId={tender.id} pursuit={pursuitState} disabled={!actionable || expired} onChanged={(value) => { setPursuitState(value); onRefresh(); }} />
           </span>
         </div>
         <ButtonLink href={`/dashboard/tenders/${tender.id}`} onClick={() => onOpen(tender.id)} size="sm" className="explorer-view-tender">{t("viewTender")}<ArrowRight className="rtl-mirror" aria-hidden /></ButtonLink>
+        <OpenWorkspaceButton tenderId={tender.id} variant="secondary" disabled={!pursuitState && (!actionable || expired)} />
         {sourceUrl && <a className="ds-button ds-button-secondary ds-button-sm explorer-open-source" href={sourceUrl} target="_blank" rel="noopener noreferrer external" aria-label={copy("openSourceFor", { title: tender.title })}><ExternalLink aria-hidden />{copy("openSource")}</a>}
       </div>
     </Surface>
@@ -1043,23 +996,17 @@ function ExplorerPreview({
   item,
   source,
   remember,
-  pending,
-  onDismiss,
-  onRestore,
   onRefresh,
 }: {
   item: ExplorerItem;
   source: string;
   remember: (id: string) => void;
-  pending: string | null;
-  onDismiss: (id: string) => void;
-  onRestore: (id: string) => void;
   onRefresh: () => void;
 }) {
   const t = useTranslations("explorer");
   const tMy = useTranslations("myTenders");
   const locale = useLocale() as CustomerSelectableLocale;
-  const { tender, recommendation, pursuit } = item;
+  const { tender, pursuit } = item;
   return (
     <div className="explorer-preview">
       <Badge icon={<Globe2 aria-hidden />}>
@@ -1105,6 +1052,7 @@ function ExplorerPreview({
       {pursuit ? (
         <div className="ds-stack">
           <span className="ds-muted ds-text-small">{t("pursuit", { status: tMy(`statuses.${pursuit.status.toLowerCase() as "saved" | "evaluating" | "preparing" | "submitted" | "won" | "lost" | "dismissed"}`) })}</span>
+          <OpenWorkspaceButton tenderId={tender.id} />
           <EngagementWorkflowActions
             foundation
             engagement={{ engagement_id: pursuit.engagement_id, engagement_status: pursuit.status, allowed_actions: pursuit.allowed_actions }}
@@ -1113,17 +1061,9 @@ function ExplorerPreview({
           />
         </div>
       ) : (
-        <PrepareBidButton foundation tenderId={tender.id} disabled={!isTenderActionable(tender.status) || isExpiredDeadline(tender.deadline)} title={t("startBid")} />
+        <OpenWorkspaceButton tenderId={tender.id} disabled={!isTenderActionable(tender.status) || isExpiredDeadline(tender.deadline)} />
       )}
-      {recommendation && (
-        <RecommendationSummary
-          foundation
-          recommendation={recommendation}
-          pending={pending === recommendation.recommendation_id}
-          onDismiss={onDismiss}
-          onRestore={onRestore}
-        />
-      )}
+      <FactChips tender={tender} profileMatch={item.profile_match} />
     </div>
   );
 }

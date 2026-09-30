@@ -128,5 +128,6 @@
     "complete": "Bajarildi",
     "opportunitiesHelp": "Kompaniyangiz uchun saqlangan tavsiyalar.",
     "match": "Moslik bali: {score}/100"
-  }
+  },
+  "matchesHelp": "Profilingizdagi mamlakat yoki xizmatlarga mos 3 tagacha ochiq tender; muddati yaqinlari birinchi."
 }

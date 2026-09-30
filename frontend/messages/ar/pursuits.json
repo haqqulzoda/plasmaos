@@ -124,7 +124,13 @@
     "reviewApproveTeam": "راجع خيار الفريق واعتمده.",
     "completeTeamParticipation": "أكد المشاركة قبل إنشاء خيار فريق.",
     "navigationLabel": "مساحة عمل المناقصة",
-    "tabs": { "overview": "نظرة عامة", "requirements": "المتطلبات", "team": "الفريق", "documents": "الوثائق والأدلة", "proposal": "العرض" },
+    "tabs": {
+      "overview": "نظرة عامة",
+      "requirements": "المتطلبات",
+      "team": "الفريق",
+      "documents": "الوثائق والأدلة",
+      "proposal": "العرض"
+    },
     "identity": "مصدر المناقصة",
     "uploadedTender": "رفعته مؤسستك",
     "officialSourceTender": "سجل مصدر رسمي",
@@ -190,7 +196,12 @@
     "deadlinePassed": "انقضى الموعد",
     "confirmedHelp": "يظهر سياق المناقصة المؤكد أدناه. حرره عند الحاجة إلى تصحيح حقل أو استكماله.",
     "edit": "تحرير السياق",
-    "provenance": { "SOURCE_DETECTED": "مكتشف من المصدر", "USER_CONFIRMED": "أكدته مؤسستك", "USER_OVERRIDE_CONFLICTS_WITH_SOURCE": "القيمة المؤكدة تتعارض مع المصدر", "UNKNOWN": "المصدر غير مسجل" }
+    "provenance": {
+      "SOURCE_DETECTED": "مكتشف من المصدر",
+      "USER_CONFIRMED": "أكدته مؤسستك",
+      "USER_OVERRIDE_CONFLICTS_WITH_SOURCE": "القيمة المؤكدة تتعارض مع المصدر",
+      "UNKNOWN": "المصدر غير مسجل"
+    }
   },
   "documents": {
     "version": "الإصدار {version}",
@@ -223,7 +234,17 @@
     "packHelp": "اختر المستندات الرسمية أو مستندات المصدر ومستنداتك التي ينبغي لـ Plasma تحليلها.",
     "sourceDocument": "وثيقة رسمية/مصدر",
     "privateDocument": "مستندك",
-    "documentRoles": { "RFP": "طلب عروض", "TOR": "الشروط المرجعية", "NOTICE": "إشعار", "ADDENDUM": "ملحق", "CLARIFICATION": "توضيح", "FORM": "نموذج", "ANNEX": "مرفق", "OFFICIAL_NOTICE": "نص الإشعار الرسمي", "OTHER": "أخرى" },
+    "documentRoles": {
+      "RFP": "طلب عروض",
+      "TOR": "الشروط المرجعية",
+      "NOTICE": "إشعار",
+      "ADDENDUM": "ملحق",
+      "CLARIFICATION": "توضيح",
+      "FORM": "نموذج",
+      "ANNEX": "مرفق",
+      "OFFICIAL_NOTICE": "نص الإشعار الرسمي",
+      "OTHER": "أخرى"
+    },
     "pages": "{count} صفحة",
     "pagesUnknown": "عدد الصفحات غير متاح",
     "version": "الإصدار {version}",
@@ -271,7 +292,11 @@
     "runningTitle": "التحليل قيد التنفيذ",
     "runningHelp": "يمكنك مواصلة العمل في أقسام أخرى. ستتحدث الصفحة عندما تصبح النتيجة جاهزة.",
     "previousResultVisible": "يظهر آخر تحليل ناجح لأن المحاولة الأخيرة غير قابلة للمراجعة.",
-    "runStates": { "inProgress": "قيد التنفيذ", "failed": "فشل", "complete": "مكتمل" },
+    "runStates": {
+      "inProgress": "قيد التنفيذ",
+      "failed": "فشل",
+      "complete": "مكتمل"
+    },
     "needsAttentionCount": "يحتاج إلى اهتمام",
     "evidenceMissingCount": "الدليل مفقود",
     "interpretationCount": "يحتاج إلى تفسير",
@@ -291,7 +316,13 @@
     "assessmentState": "التقييم الحالي",
     "organizationEvidence": "أدلة المؤسسة",
     "organizationEvidenceHelp": "أكد التقييم أو سجل تصحيحاً يستند إلى أدلة مؤسستك.",
-    "distinctions": { "MANDATORY": "إلزامي", "PREFERRED": "مفضل", "DESIRED": "مرغوب", "INFORMATIONAL": "للمعلومات", "SCORED": "خاضع للتقييم" },
+    "distinctions": {
+      "MANDATORY": "إلزامي",
+      "PREFERRED": "مفضل",
+      "DESIRED": "مرغوب",
+      "INFORMATIONAL": "للمعلومات",
+      "SCORED": "خاضع للتقييم"
+    },
     "page": "الصفحة {page}",
     "paragraph": "الفقرة {paragraph}",
     "correctedFact": "الحقيقة المعيارية المصححة",
@@ -583,8 +614,8 @@
     "failed": "Candidate library could not be loaded",
     "failedHelp": "Check the organization context and try again.",
     "retry": "Retry",
-    "empty": "No candidate records yet",
-    "emptyHelp": "Authorized data entry can add evidence-backed Firm and Expert records through the candidate authority API.",
+    "empty": "أضف أول شريك أو خبير",
+    "emptyHelp": "سيتوفر مع استيراد المكتبة.",
     "firms": "الشركات",
     "firmsHelp": "Reusable firm facts and project-reference history.",
     "experts": "الخبراء",
@@ -663,5 +694,17 @@
     "evidenceManifest": "بيان الأدلة",
     "download": "Download",
     "exportFailed": "The artifact could not be generated or downloaded."
+  },
+  "oneDoor": {
+    "openWorkspace": "فتح مساحة العمل",
+    "opening": "جارٍ الفتح…",
+    "chooseOrganization": "اختر المؤسسة لهذه المناقصة.",
+    "noOrganization": "تحتاج إلى عضوية نشطة في مؤسسة لفتح مساحة العمل.",
+    "failed": "تعذر فتح مساحة العمل. حاول مرة أخرى."
+  },
+  "segments": {
+    "label": "قائمة المناقصات الجارية",
+    "fromSources": "من المصادر",
+    "uploaded": "المرفوعة"
   }
 }

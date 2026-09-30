@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.schemas.explorer import ExplorerRecommendationSummary
+from app.schemas.explorer import ExplorerProfileMatch, ExplorerRecommendationSummary
 from app.schemas.tender import TenderCompetitorIntelligenceResponse
 from app.models.base import ProposalStatus, TenderEngagementOrigin, TenderEngagementStatus
 
@@ -253,6 +253,9 @@ class CompetitorIntelligenceSection(BaseModel):
 
 class TenderDetailsResponse(BaseModel):
     recommendation: ExplorerRecommendationSummary | None = None
+    # Deterministic profile-match facts (D1-08); customer surfaces render these
+    # instead of the stored recommendation's score and rationale.
+    profile_match: ExplorerProfileMatch | None = None
     tender_id: UUID
     project_context: ProjectContextSection
     project_leadership: ProjectLeadershipSection

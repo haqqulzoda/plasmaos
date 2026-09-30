@@ -124,7 +124,13 @@
     "reviewApproveTeam": "Проверьте и утвердите вариант команды.",
     "completeTeamParticipation": "Подтвердите участие перед созданием варианта команды.",
     "navigationLabel": "Рабочее пространство тендера",
-    "tabs": { "overview": "Обзор", "requirements": "Требования", "team": "Команда", "documents": "Документы и доказательства", "proposal": "Предложение" },
+    "tabs": {
+      "overview": "Обзор",
+      "requirements": "Требования",
+      "team": "Команда",
+      "documents": "Документы и доказательства",
+      "proposal": "Предложение"
+    },
     "identity": "Источник тендера",
     "uploadedTender": "Загружен вашей организацией",
     "officialSourceTender": "Запись официального источника",
@@ -190,7 +196,12 @@
     "deadlinePassed": "Срок истёк",
     "confirmedHelp": "Подтверждённый контекст тендера показан ниже. Измените его, если нужно исправить или дополнить поле.",
     "edit": "Изменить контекст",
-    "provenance": { "SOURCE_DETECTED": "Обнаружено в источнике", "USER_CONFIRMED": "Подтверждено вашей организацией", "USER_OVERRIDE_CONFLICTS_WITH_SOURCE": "Подтверждённое значение противоречит источнику", "UNKNOWN": "Источник не указан" }
+    "provenance": {
+      "SOURCE_DETECTED": "Обнаружено в источнике",
+      "USER_CONFIRMED": "Подтверждено вашей организацией",
+      "USER_OVERRIDE_CONFLICTS_WITH_SOURCE": "Подтверждённое значение противоречит источнику",
+      "UNKNOWN": "Источник не указан"
+    }
   },
   "documents": {
     "version": "Версия {version}",
@@ -223,7 +234,17 @@
     "packHelp": "Выберите официальные документы, документы источника и свои документы, которые должна проанализировать Plasma.",
     "sourceDocument": "Официальный документ/источник",
     "privateDocument": "Ваш документ",
-    "documentRoles": { "RFP": "RFP", "TOR": "Техническое задание", "NOTICE": "Извещение", "ADDENDUM": "Дополнение", "CLARIFICATION": "Разъяснение", "FORM": "Форма", "ANNEX": "Приложение", "OFFICIAL_NOTICE": "Текст официального объявления", "OTHER": "Другое" },
+    "documentRoles": {
+      "RFP": "RFP",
+      "TOR": "Техническое задание",
+      "NOTICE": "Извещение",
+      "ADDENDUM": "Дополнение",
+      "CLARIFICATION": "Разъяснение",
+      "FORM": "Форма",
+      "ANNEX": "Приложение",
+      "OFFICIAL_NOTICE": "Текст официального объявления",
+      "OTHER": "Другое"
+    },
     "pages": "Страниц: {count}",
     "pagesUnknown": "Число страниц недоступно",
     "version": "Версия {version}",
@@ -271,7 +292,11 @@
     "runningTitle": "Анализ выполняется",
     "runningHelp": "Вы можете продолжить работу в других разделах. Страница обновится, когда результат будет готов.",
     "previousResultVisible": "Показан последний успешный анализ, поскольку последняя попытка не готова для проверки.",
-    "runStates": { "inProgress": "Выполняется", "failed": "Ошибка", "complete": "Завершён" },
+    "runStates": {
+      "inProgress": "Выполняется",
+      "failed": "Ошибка",
+      "complete": "Завершён"
+    },
     "needsAttentionCount": "Требует внимания",
     "evidenceMissingCount": "Не хватает доказательств",
     "interpretationCount": "Нужна интерпретация",
@@ -291,7 +316,13 @@
     "assessmentState": "Текущая оценка",
     "organizationEvidence": "Доказательства организации",
     "organizationEvidenceHelp": "Подтвердите оценку или запишите исправление на основе доказательств вашей организации.",
-    "distinctions": { "MANDATORY": "Обязательно", "PREFERRED": "Предпочтительно", "DESIRED": "Желательно", "INFORMATIONAL": "Для информации", "SCORED": "Оценивается" },
+    "distinctions": {
+      "MANDATORY": "Обязательно",
+      "PREFERRED": "Предпочтительно",
+      "DESIRED": "Желательно",
+      "INFORMATIONAL": "Для информации",
+      "SCORED": "Оценивается"
+    },
     "page": "Страница {page}",
     "paragraph": "Абзац {paragraph}",
     "correctedFact": "Исправленный нормализованный факт",
@@ -583,8 +614,8 @@
     "failed": "Candidate library could not be loaded",
     "failedHelp": "Check the organization context and try again.",
     "retry": "Retry",
-    "empty": "No candidate records yet",
-    "emptyHelp": "Authorized data entry can add evidence-backed Firm and Expert records through the candidate authority API.",
+    "empty": "Добавьте первого партнёра или эксперта",
+    "emptyHelp": "Появится вместе с импортом библиотеки.",
     "firms": "Фирмы",
     "firmsHelp": "Reusable firm facts and project-reference history.",
     "experts": "Эксперты",
@@ -663,5 +694,17 @@
     "evidenceManifest": "Манифест доказательств",
     "download": "Download",
     "exportFailed": "The artifact could not be generated or downloaded."
+  },
+  "oneDoor": {
+    "openWorkspace": "Открыть рабочее пространство",
+    "opening": "Открываем…",
+    "chooseOrganization": "Выберите организацию для этого тендера.",
+    "noOrganization": "Чтобы открыть рабочее пространство, нужно активное членство в организации.",
+    "failed": "Не удалось открыть рабочее пространство. Повторите попытку."
+  },
+  "segments": {
+    "label": "Список тендеров в работе",
+    "fromSources": "Из источников",
+    "uploaded": "Загруженные"
   }
 }

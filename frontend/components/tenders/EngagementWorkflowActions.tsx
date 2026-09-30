@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Loader2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { PrepareBidButton } from "@/components/bid-preparation/PrepareBidButton";
-import { Button, ButtonLink } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { Dialog, Dropdown } from "@/components/ui/Overlay";
 import { Alert } from "@/components/ui/Feedback";
 import { api } from "@/lib/api";
@@ -82,7 +81,6 @@ export function EngagementWorkflowActions({
   menuActions = false,
   engagement,
   tenderId,
-  proposalId,
   onChanged,
   onRefresh,
 }: {
@@ -90,7 +88,6 @@ export function EngagementWorkflowActions({
   menuActions?: boolean;
   engagement: TenderEngagementActionContext;
   tenderId: string;
-  proposalId?: string | null;
   onChanged?: (engagement: TenderEngagementSummary) => void;
   onRefresh?: () => void | Promise<void>;
 }) {
@@ -298,26 +295,8 @@ export function EngagementWorkflowActions({
           {actionLabel(action)}
         </Button>
       ))}
-      {(available.includes("PREPARE_BID") ||
-        engagement.engagement_status === "PREPARING") &&
-        (proposalId ? (
-          <ButtonLink
-            size="sm"
-            href={`/dashboard/bid-preparation/${proposalId}`}
-          >
-            {t("openBid")}
-          </ButtonLink>
-        ) : (
-          <PrepareBidButton
-            foundation
-            tenderId={tenderId}
-            label={
-              engagement.engagement_status === "PREPARING"
-                ? t("openBid")
-                : undefined
-            }
-          />
-        ))}
+      {/* D1-06: the legacy Prepare bid / Open bid CTA is gone; the parent surface
+          offers "Open workspace". Stage actions below are unchanged. */}
       {secondary.length > 0 &&
         (menuActions ? (
           <>
@@ -434,26 +413,6 @@ export function EngagementWorkflowActions({
             </button>
           );
         })}
-        {available.includes("PREPARE_BID") ||
-        engagement.engagement_status === "PREPARING" ? (
-          proposalId ? (
-            <a
-              href={`/dashboard/bid-preparation/${proposalId}`}
-              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            >
-              {t("openBid")}
-            </a>
-          ) : (
-            <PrepareBidButton
-              tenderId={tenderId}
-              label={
-                engagement.engagement_status === "PREPARING"
-                  ? t("openBid")
-                  : undefined
-              }
-            />
-          )
-        ) : null}
         {secondary.length ? (
           <details className="relative">
             <summary className="cursor-pointer list-none rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-300 hover:border-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">

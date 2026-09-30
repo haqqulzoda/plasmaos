@@ -13,7 +13,7 @@ from sqlalchemy import String, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import TenderRecommendation
-from app.schemas.explorer import ExplorerRecommendationSummary
+from app.schemas.explorer import ExplorerProfileMatch, ExplorerRecommendationSummary
 from app.models.all_models import (
     Project,
     ProjectRoleAssignment,
@@ -26,6 +26,7 @@ from app.models.all_models import (
 )
 from app.core.storage_paths import storage_file_exists
 from app.services.official_notice import not_official_notice, only_official_notice
+from app.services.profile_match import profile_targets, tender_profile_match
 from app.models.company import (
     Certification,
     CompanyProfile,
@@ -702,6 +703,21 @@ async def _private_sections(
     return compliance, requirements, readiness_section, pursuit, bid_preparation
 
 
+def _profile_match(tender: Tender, profile: CompanyProfile | None) -> ExplorerProfileMatch | None:
+    """Why this tender matches the viewer's company profile: facts, not a score (D1-08)."""
+    if profile is None:
+        return None
+    targets = profile_targets(
+        getattr(profile, "target_countries", None),
+        getattr(profile, "target_regions", None),
+        getattr(profile, "target_services", None),
+    )
+    if targets.empty:
+        return None
+    country, services = tender_profile_match(tender, targets)
+    return ExplorerProfileMatch(country=country, services=services) if country or services else None
+
+
 async def compose_tender_details(
     db: AsyncSession,
     *,
@@ -771,6 +787,7 @@ async def compose_tender_details(
             is_dismissed=recommendation.is_dismissed,
             created_at=recommendation.created_at,
         ) if recommendation is not None else None,
+        profile_match=_profile_match(tender, profile),
         tender_id=tender.id,
         project_context=project_context,
         project_leadership=project_leadership,

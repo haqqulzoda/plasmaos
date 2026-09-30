@@ -1,4 +1,5 @@
 import type { ExplorerItem, ExplorerTenderSummary } from "@/types/explorer";
+import { matchesProfile } from "./factChips.ts";
 import type { SourceRefreshStatusItem } from "@/types/source-refresh";
 
 export const DASHBOARD_OPPORTUNITY_LIMIT = 3;
@@ -39,12 +40,8 @@ function stableTenderIdentity(tender: ExplorerTenderSummary): string {
   return canonical || `${tender.source_system}:${tender.external_id}`;
 }
 
+// D1-08: no score. Soonest deadline first, then a stable identity order.
 function compareOpportunities(a: ExplorerItem, b: ExplorerItem): number {
-  const scoreDifference =
-    (b.recommendation?.match_score ?? -1) -
-    (a.recommendation?.match_score ?? -1);
-  if (scoreDifference) return scoreDifference;
-
   const aDeadline = timestamp(a.tender.deadline);
   const bDeadline = timestamp(b.tender.deadline);
   if (aDeadline !== null && bDeadline === null) return -1;
@@ -61,8 +58,9 @@ function compareOpportunities(a: ExplorerItem, b: ExplorerItem): number {
 }
 
 /**
- * Select the passive Dashboard shortlist from stored Recommendation rows.
- * No matching, generation, or domain write is performed here.
+ * Select the passive Dashboard shortlist: current tenders that match the company
+ * profile on at least one country or service fact (D1-08), soonest deadline first.
+ * No generation or domain write is performed here.
  */
 export function activeOpportunityShortlist(
   items: readonly ExplorerItem[],
@@ -70,7 +68,7 @@ export function activeOpportunityShortlist(
 ): ExplorerItem[] {
   const byIdentity = new Map<string, ExplorerItem>();
   for (const item of items) {
-    if (!item.recommendation || !isCurrentTender(item.tender, now)) continue;
+    if (!matchesProfile(item.profile_match) || !isCurrentTender(item.tender, now)) continue;
     const identity = stableTenderIdentity(item.tender);
     const current = byIdentity.get(identity);
     if (!current || compareOpportunities(item, current) < 0) {
