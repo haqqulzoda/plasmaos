@@ -25,6 +25,8 @@ type AdminCorpusHealth = {
     adb_visible_count: number;
     hidden_legacy_uzex_count: number;
     small_uzex_count: number;
+    adb_total_count?: number;
+    customer_hidden_sources?: string[];
 };
 
 type CountRow = [label: string, value?: number];
@@ -94,6 +96,7 @@ export default function AdminPage() {
         ['UzEx enterprise visible', corpusHealth?.uzex_visible_count],
         ['World Bank visible', corpusHealth?.world_bank_visible_count],
         ['ADB visible', corpusHealth?.adb_visible_count],
+        [corpusHealth?.customer_hidden_sources?.includes('adb') ? 'ADB total (hidden from customers)' : 'ADB total', corpusHealth?.adb_total_count],
         ['Hidden legacy UzEx', corpusHealth?.hidden_legacy_uzex_count],
         ['Small UzEx excluded', corpusHealth?.small_uzex_count],
     ];

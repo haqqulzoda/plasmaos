@@ -52,6 +52,13 @@ export interface MyTenderListItem extends TenderEngagementSummary {
     source_system: SourceSystem;
     tender_status: TenderStatus;
     deadline: string | null;
+    /** Deadline truth (D1-05b/c): tender_status is derived; see lib/tenderTruth.ts. */
+    source_status?: TenderStatus | null;
+    status_reason?: 'DEADLINE_PASSED' | null;
+    deadline_time_basis?: 'UTC' | 'EXPLICIT_TZ' | 'SOURCE_LOCAL_UNSPECIFIED' | 'DATE_ONLY' | null;
+    deadline_timezone?: string | null;
+    deadline_published_local?: string | null;
+    deadline_effective_at?: string | null;
     estimated_value: number | null;
     currency: string | null;
     notice_type: string | null;

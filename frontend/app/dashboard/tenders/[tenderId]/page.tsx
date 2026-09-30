@@ -17,7 +17,7 @@ import { Skeleton, StatusBadge } from "@/components/ui/Display";
 import { BidiText } from "@/components/i18n/BidiText";
 import { api } from "@/lib/api";
 import { safeSourceUrl } from "@/lib/sourceUrl";
-import { formatCurrency, formatDate, formatDateTime, formatFileSize, formatNumber } from "@/i18n/formatters";
+import { formatDate, formatDateTime, formatFileSize, formatNumber } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { EXPLORER_PATH, readExplorerReturnState } from "@/lib/explorerReturnState";
 import { leadershipListPresentation } from "@/lib/projectLeadership";
@@ -27,6 +27,8 @@ import type {
 } from "@/types/tender-details";
 import type { Tender } from "@/types/tender";
 import { isTenderActionable } from "@/types/tender";
+import { formatBudget, formatPublishedDeadline, isClosedByDeadline, TENDER_SOURCE_UNAVAILABLE_MESSAGE } from "@/lib/tenderTruth";
+import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 
 const activeAcquisitionState = (state?: TenderDocumentAcquisitionState) =>
   state === "QUEUED" || state === "DOWNLOADING" || state === "PROCESSING";
@@ -116,6 +118,8 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
   const tBid = useTranslations("bidPreparation");
   const copy = useTranslations("tenderDetails.redesign");
   const locale = useLocale() as CustomerSelectableLocale;
+  const tTruth = useTranslations("common.tenderTruth");
+  const truthLabels = useTenderTruthLabels();
   const { displayNameForSource } = useSourceRefresh();
   const displaySource = (source: string) => {
     const catalogName = displayNameForSource(source);
@@ -146,7 +150,9 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
     } catch (error: unknown) {
       setTender(null);
       const status = (error as { response?: { status?: number } }).response?.status;
-      setTenderError(status === 404 ? "notFound" : status === 401 || status === 403 ? "denied" : "loadFailed");
+      const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+      setTenderError(status === 404 && detail === TENDER_SOURCE_UNAVAILABLE_MESSAGE ? "sourceUnavailable"
+        : status === 404 ? "notFound" : status === 401 || status === 403 ? "denied" : "loadFailed");
     } finally { setIsLoadingTender(false); }
   }, [tenderId]);
 
@@ -268,16 +274,17 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
   if (isLoadingTender) return <div className="customer-page s143-page" data-page="tender-details"><SectionPlaceholder title={t("loading")} /></div>;
   if (tenderError || !tender) return <div className="customer-page s143-page" data-page="tender-details">
     <ButtonLink prefetch={false} href={returnHref}><ArrowLeft className="rtl-mirror" aria-hidden="true" />{t("back")}</ButtonLink>
-    <p role="alert" className="s143-state s143-error">{tenderError === "notFound" ? copy("notFound") : tenderError === "denied" ? copy("denied") : t("loadFailed")}</p>
+    {tenderError === "sourceUnavailable"
+      ? <div role="alert" className="s143-state" data-state="source-unavailable"><strong>{tTruth("sourceUnavailableTitle")}</strong><p>{tTruth("sourceUnavailableBody")}</p></div>
+      : <p role="alert" className="s143-state s143-error">{tenderError === "notFound" ? copy("notFound") : tenderError === "denied" ? copy("denied") : t("loadFailed")}</p>}
   </div>;
 
   const sourceUrl = safeSourceUrl(tender.source_url);
-  const tenderStatus = tender.status === "OPEN" ? tExplorer("status.open")
+  const tenderStatus = isClosedByDeadline(tender) ? truthLabels.closedDeadlinePassed
+    : tender.status === "OPEN" ? tExplorer("status.open")
     : tender.status === "CLOSED" ? tExplorer("status.closed")
     : tender.status === "CANCELLED" ? tExplorer("status.cancelled") : tExplorer("status.unknown");
-  const presentMoney = tender.price_display || (tender.budget > 0
-    ? formatCurrency(tender.budget, tender.currency, locale, { maximumFractionDigits: 2 })
-    : t("notSpecified"));
+  const presentMoney = formatBudget(tender.budget, tender.currency, locale, truthLabels.notPublished, { maximumFractionDigits: 2 });
   const documentStatus = documents?.acquisition_state === "QUEUED" ? t("documentAcquisition.queued")
     : documents?.acquisition_state === "DOWNLOADING" ? t("documentAcquisition.downloading")
     : documents?.acquisition_state === "PROCESSING" ? t("documentAcquisition.processing")
@@ -312,7 +319,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
       <dl className="s143-facts">
         {[
           { icon: <Building2 aria-hidden="true" />, label: t("procuringEntity"), value: tender.buyer?.trim() || t("notSpecified") },
-          { icon: <Calendar aria-hidden="true" />, label: t("deadline"), value: presentDate(tender.deadline) },
+          { icon: <Calendar aria-hidden="true" />, label: t("deadline"), value: tender.deadline ? formatPublishedDeadline(tender, locale, truthLabels) : presentDate(tender.deadline) },
           { icon: <CircleDollarSign aria-hidden="true" />, label: t("estimatedValue"), value: presentMoney },
           { icon: <MapPin aria-hidden="true" />, label: t("location"), value: [tender.country, tender.region].filter(Boolean).join(" / ") || t("notSpecified") },
         ].map((fact) => <div key={fact.label}>
@@ -487,8 +494,8 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
           </dl>
           <dl className="s143-label-value">
             <div><dt>{t("submissionMethod")}</dt><dd><BidiText>{contacts.submission_method || t("notProvided")}</BidiText></dd></div>
-            <div><dt>{t("submissionDeadline")}</dt><dd>{presentDate(contacts.submission_deadline)}</dd></div>
-            <div><dt>{t("questionDeadline")}</dt><dd>{presentDate(contacts.question_deadline)}</dd></div>
+            <div><dt>{t("submissionDeadline")}</dt><dd>{contacts.submission_deadline ? formatPublishedDeadline(tender, locale, truthLabels, contacts.submission_deadline) : presentDate(contacts.submission_deadline)}</dd></div>
+            <div><dt>{t("questionDeadline")}</dt><dd>{contacts.question_deadline ? formatPublishedDeadline(tender, locale, truthLabels, contacts.question_deadline) : presentDate(contacts.question_deadline)}</dd></div>
             <div><dt>{t("procedure")}</dt><dd><BidiText>{contacts.procedure_type || t("notProvided")}</BidiText></dd></div>
           </dl>
         </div> : <StateMessage state={details.procurement_contacts.state} empty={t("contactsEmpty")} unavailable={t("contactsUnavailable")} />}

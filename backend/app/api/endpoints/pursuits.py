@@ -17,6 +17,7 @@ from sqlalchemy.orm import aliased
 from pydantic import ValidationError
 
 from app.api.deps import get_current_user, require_approved_user
+from app.core.deadline_truth import truth_fields
 from app.core.security import authenticated_dependency
 from app.db.session import get_db
 from app.models.all_models import Tender
@@ -105,7 +106,14 @@ def _response(
     file_count: int = 0,
     owner_name: str | None = None,
 ) -> PursuitResponse:
+    truth = truth_fields(tender.source_system, tender.status, tender.deadline) if tender else {}
     return PursuitResponse(
+        source_tender_status=truth["status"].value if truth else None,
+        source_tender_status_reason=truth.get("status_reason"),
+        source_deadline_time_basis=truth.get("deadline_time_basis"),
+        source_deadline_timezone=truth.get("deadline_timezone"),
+        source_deadline_published_local=truth.get("deadline_published_local"),
+        source_deadline_effective_at=truth.get("deadline_effective_at"),
         pursuit_id=pursuit.id, organization_id=pursuit.organization_id,
         source_tender_id=pursuit.source_tender_id, origin=pursuit.origin,
         legacy_engagement_id=pursuit.legacy_engagement_id,

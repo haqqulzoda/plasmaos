@@ -17,6 +17,7 @@ export function SourceRefreshMenu({
   triggerLabel?: string;
 }) {
   const t = useTranslations("refresh");
+  const tTruth = useTranslations("common.tenderTruth");
   const {
     catalog,
     catalogLoading,
@@ -61,6 +62,8 @@ export function SourceRefreshMenu({
                 source.source_system,
               )?.active_job;
               const pending = pendingSources.has(source.source_system);
+              // Scheduled source whose last success is older than 2x its cadence (D1-04).
+              const stale = statusBySource.get(source.source_system)?.stale === true;
               const state = !source.can_refresh
                 ? t("unavailable")
                 : active?.status === "queued"
@@ -84,6 +87,11 @@ export function SourceRefreshMenu({
                   <span className="ds-muted">
                     {pending ? t("requesting") : state}
                   </span>
+                  {stale && (
+                    <span className="ds-muted" data-source-stale="true">
+                      {tTruth("sourceStale")}
+                    </span>
+                  )}
                 </Button>
               );
             })
@@ -138,6 +146,8 @@ export function SourceRefreshMenu({
           const item = statusBySource.get(source.source_system);
           const active = item?.active_job;
           const pending = pendingSources.has(source.source_system);
+              // Scheduled source whose last success is older than 2x its cadence (D1-04).
+              const stale = statusBySource.get(source.source_system)?.stale === true;
           const state = !source.can_refresh
             ? t("unavailable")
             : active?.status === "queued"
@@ -168,6 +178,7 @@ export function SourceRefreshMenu({
                   />
                 ) : null}
                 {pending ? t("requesting") : state}
+                {stale && <span data-source-stale="true">· {tTruth("sourceStale")}</span>}
               </span>
             </button>
           );

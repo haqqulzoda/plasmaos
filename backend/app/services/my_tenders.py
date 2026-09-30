@@ -9,6 +9,8 @@ from uuid import UUID
 from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deadline_truth import truth_fields
+from app.core.tender_actionability import lifecycle_condition
 from app.models.all_models import Project, Tender, TenderProject
 from app.models.base import MembershipState, TenderEngagementOrigin, TenderEngagementStatus, TenderStatus
 from app.models.tenancy import Membership, Organization, OrganizationPursuit
@@ -62,7 +64,7 @@ def _base_list_statement(*, user_id: UUID, company_profile_id: UUID, query: MyTe
     if query.source_system:
         statement = statement.where(Tender.source_system == query.source_system)
     if query.tender_status:
-        statement = statement.where(Tender.status == query.tender_status)
+        statement = statement.where(lifecycle_condition(Tender, query.tender_status))
     if query.search:
         pattern = f"%{_escaped_like(query.search.strip())}%"
         statement = statement.where(or_(Tender.title.ilike(pattern, escape="\\"), Tender.buyer.ilike(pattern, escape="\\")))
@@ -81,7 +83,10 @@ def _item(pursuit: OrganizationPursuit, tender: Tender, project: Project | None)
     if pursuit.legacy_engagement_id is None:
         raise RuntimeError("source pursuit is missing legacy compatibility ID")
     estimated_value = float(tender.budget) if tender.budget and tender.budget > 0 else None
+    truth = truth_fields(tender.source_system, tender.status, tender.deadline)
+    derived = truth.pop("status")
     return MyTenderListItem(
+        **truth,
         engagement_id=pursuit.legacy_engagement_id,
         tender_id=tender.id,
         engagement_status=pursuit.stage,
@@ -91,7 +96,7 @@ def _item(pursuit: OrganizationPursuit, tender: Tender, project: Project | None)
         status_changed_at=pursuit.stage_changed_at,
         allowed_actions=list(allowed_actions_for_status(pursuit.stage)),
         tender_title=tender.title, buyer=tender.buyer, source_system=tender.source_system,
-        tender_status=tender.status, deadline=tender.deadline,
+        tender_status=derived, deadline=tender.deadline,
         estimated_value=estimated_value, currency=tender.currency if estimated_value is not None else None,
         notice_type=tender.notice_type, procurement_method=tender.procurement_method,
         country=tender.country, region=tender.region,

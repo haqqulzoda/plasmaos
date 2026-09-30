@@ -23,6 +23,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.core.budget_display import budget_is_published, not_published_label
+
 # ── Register DejaVu Sans (Cyrillic-capable Unicode font) ──
 FONTS_DIR = Path(__file__).resolve().parent.parent / "fonts"
 
@@ -158,7 +160,9 @@ def generate_quick_proposal_pdf(
     elements.append(Spacer(1, 8))
     
     # ── Budget ──
-    if tender_budget >= 1_000_000_000:
+    if not budget_is_published(tender_budget):
+        budget_str = not_published_label("ru")
+    elif tender_budget >= 1_000_000_000:
         budget_str = f"{tender_budget / 1_000_000_000:.2f} млрд {currency}"
     elif tender_budget >= 1_000_000:
         budget_str = f"{tender_budget / 1_000_000:.1f} млн {currency}"

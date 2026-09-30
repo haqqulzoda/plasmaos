@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.models.base import TenderEngagementStatus, TenderStatus
+from app.schemas.tender import TenderTruthFields
 
 
 class ExplorerView(str, Enum):
@@ -22,7 +23,7 @@ class RecommendationAvailability(str, Enum):
     PROFILE_REQUIRED = "PROFILE_REQUIRED"
 
 
-class ExplorerTenderSummary(BaseModel):
+class ExplorerTenderSummary(TenderTruthFields):
     id: UUID
     external_id: str
     source_system: str

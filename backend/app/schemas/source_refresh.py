@@ -51,6 +51,11 @@ class SourceRefreshStatusItem(BaseModel):
     last_clean_completed: SourceRefreshTerminalSummary | None = None
     last_partial: SourceRefreshTerminalSummary | None = None
     last_failure: SourceRefreshTerminalSummary | None = None
+    # Scheduled refresh (D1-04): cadence from SOURCE_REFRESH_SCHEDULE and whether the
+    # last successful (completed or partial) refresh is older than twice that cadence.
+    scheduled_cadence_seconds: int | None = None
+    last_success_at: datetime | None = None
+    stale: bool | None = Field(default=None, description="None when the source is not scheduled.")
     activity_cursor: str
 
 

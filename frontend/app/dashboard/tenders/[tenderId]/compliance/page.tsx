@@ -18,6 +18,8 @@ import { Dialog, Drawer } from "@/components/ui/Overlay";
 import { Alert } from "@/components/ui/Feedback";
 import { BidiText, TechnicalText } from "@/components/i18n/BidiText";
 import { formatDate } from "@/i18n/formatters";
+import { formatPublishedDeadline } from "@/lib/tenderTruth";
+import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { useCollectionOffset } from "@/lib/useCollectionOffset";
 import { useState, useEffect, use, useId, useMemo, useRef } from "react";
@@ -370,6 +372,7 @@ export default function CompliancePage({
 }) {
   const t = useTranslations("compliance");
   const locale = useLocale() as CustomerSelectableLocale;
+  const truthLabels = useTenderTruthLabels();
   const tCommon = useTranslations("common");
   const translateRef = useRef(t);
   useEffect(() => {
@@ -981,7 +984,7 @@ export default function CompliancePage({
               {tender.deadline && (
                 <span>
                   {t("workspace.closes", {
-                    date: formatDate(tender.deadline, locale),
+                    date: formatPublishedDeadline(tender, locale, truthLabels),
                   })}
                 </span>
               )}

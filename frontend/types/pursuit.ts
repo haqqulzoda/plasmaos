@@ -51,6 +51,13 @@ export type Pursuit = {
   country: string | null;
   reference: string | null;
   source_deadline: string | null;
+  /** Truth of the linked source tender (D1-05b/c); see lib/tenderTruth.ts. */
+  source_tender_status?: string | null;
+  source_tender_status_reason?: 'DEADLINE_PASSED' | null;
+  source_deadline_time_basis?: 'UTC' | 'EXPLICIT_TZ' | 'SOURCE_LOCAL_UNSPECIFIED' | 'DATE_ONLY' | null;
+  source_deadline_timezone?: string | null;
+  source_deadline_published_local?: string | null;
+  source_deadline_effective_at?: string | null;
   external_deadline: string | null;
   deadline_timezone: string | null;
   source_url: string | null;

@@ -24,9 +24,9 @@ test("unsupported mockup controls are omitted and recommendation state stays dis
 
 test("Explorer cards use the supplied World Bank mark and canonical budget", () => {
   assert.match(page, /world-bank-supplied\.png/);
-  assert.match(page, /tender\.budget > 0 && Number\.isFinite\(tender\.budget\)/);
-  assert.match(page, /formatCurrency\([\s\S]*?tender\.currency/);
-  assert.match(page, /formattedBudget === INVALID_FORMAT_VALUE[\s\S]*?t\("valueMissing"\)/);
+  // D1-05: one shared helper; null/zero budgets render the localized "Not published".
+  assert.match(page, /formatBudget\(tender\.budget, tender\.currency, locale, truthLabels\.notPublished\)/);
+  assert.doesNotMatch(page, /tender\.budget > 0/);
   assert.match(page, /className="explorer-card-budget"/);
 });
 

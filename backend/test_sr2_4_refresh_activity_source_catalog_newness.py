@@ -32,7 +32,7 @@ BACKEND = Path(__file__).resolve().parent
 
 class CatalogContractTests(TestCase):
     def test_catalog_uses_registry_visibility_and_disabled_semantics(self) -> None:
-        visible = replace(SOURCE_REGISTRY["adb"], key="visible", display_name="Visible")
+        visible = replace(SOURCE_REGISTRY["adb"], key="visible", display_name="Visible", customer_visible=True)
         hidden = replace(SOURCE_REGISTRY["giz"], key="hidden", customer_visible=False)
         disabled = replace(
             SOURCE_REGISTRY["ebrd"], key="disabled", display_name="Disabled",

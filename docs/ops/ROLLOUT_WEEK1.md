@@ -11,6 +11,7 @@ What ships:
 | D1-03 official notice | Tenders with a substantive notice get one shared `OFFICIAL_NOTICE` tender document (created by source refresh and by the backfill) | Migration `20261003_0001_d1_03_official_notice_unique`: one partial unique index on `tender_documents`; additive, reversible, no data change. Backfill writes rows. |
 | D1-01 analyzer | Pursuit analysis: length-based model routing, retries, budgets, provider error classes, exact-source contexts, worker concurrency 2 | None (new runs record `pursuit_analysis_pipeline_d1_v3`) |
 | D1-09 ops | Staging stack, Caddy, backup/restore/smoke scripts, pgAdmin only with `--profile tools`, ClamAV watchdog, SHA-tagged release images | None |
+| D1-04 / D1-05 (`pilot/d1-04-freshness`, when included) | Scheduled source refresh (Beat, `SOURCE_REFRESH_SCHEDULE`); ADB hidden from customers; "Not published" budgets; deadlines shown as published with their time basis; open/closed derived from the deadline | None (no migration; the notice header text changes, so step 9 updates notices) |
 
 Alembic head after this release: `20261003_0001_d1_03_official_notice_unique` (single head).
 
@@ -82,10 +83,13 @@ PURSUIT_ANALYSIS_CHUNK_BUDGET_SECONDS=240
 PURSUIT_ANALYSIS_RUN_BUDGET_SECONDS=900
 PURSUIT_ANALYSIS_WORKER_CONCURRENCY=2
 
-# Source refresh schedule: PLACEHOLDER. This build does not read it (source refresh has no
-# Beat schedule; it runs when an operator triggers it). Leave it commented until a build
-# that implements a schedule ships.
-# SOURCE_REFRESH_SCHEDULE=
+# Scheduled source refresh (D1-04; read by builds that include pilot/d1-04-freshness).
+# <source>=<N>m|h|d, comma separated; unset = this default; empty = disabled. An unknown,
+# hidden (adb) or repeated source stops worker, Beat and API at startup.
+# Production:
+SOURCE_REFRESH_SCHEDULE=world_bank=6h,uzex=6h,ebrd=24h,giz=24h
+# Staging (.env.staging): every source once a day, to spare the live sources:
+# SOURCE_REFRESH_SCHEDULE=world_bank=24h,uzex=24h,ebrd=24h,giz=24h
 ```
 
 `PURSUIT_ANALYSIS_RUN_BUDGET_SECONDS=900` overrides the code default of 480. It is safe with
@@ -93,6 +97,11 @@ the lease: the worker renews its 300 s lease every 60 s for the whole run, and t
 task has no time limit (acks late, Redis visibility timeout 3600 s).
 `PURSUIT_ANALYSIS_WORKER_CONCURRENCY` is read by Compose (worker command line), so it must be
 in `.env`, which `compose-release.sh` passes as `--env-file`.
+`SOURCE_REFRESH_SCHEDULE` is read by Beat, the workers and the API (they share `.env`). Beat
+ticks every `SOURCE_REFRESH_SCHEDULE_TICK_SECONDS` (default 300) per source and starts a
+refresh only when that source's latest attempt is one cadence old, through the same durable
+job path as the refresh buttons (`trigger_kind = scheduled`, no requesting user). A source
+whose last success is older than twice its cadence shows "Stale" in the refresh menu.
 
 Check the configuration renders: `$ scripts/compose-release.sh config --quiet`.
 
@@ -166,12 +175,20 @@ $ scripts/compose-release.sh run --rm --no-deps backend python scripts/backfill_
 The apply counts must match the report from step 7 (source refresh may have created a few in
 between). A second run creates nothing.
 
+With `pilot/d1-04-freshness` the notice header prints the deadline as published ("17:00 local
+time (as published)" instead of "17:00 UTC"), so the apply *updates* every existing notice
+once (locally: 577 updated, 1 unchanged because that EBRD notice has no deadline line, 0 created) and analysis runs sealed on the old text show the
+"inputs changed" banner. That is expected.
+
 ## 10. Smoke
 
 ```
 $ scripts/ops/smoke.sh --target production --expect-sha $SHA \
     --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
 $ scripts/compose-release.sh exec -T worker_pursuit_analysis python scripts/analysis_smoke.py
+# End to end, one real provider call, only in the dedicated single-member test organization
+# (the script refuses anything else); the token is read from the environment, never argv:
+$ ANALYSIS_SMOKE_TOKEN=<smoke user token> python3 backend/scripts/analysis_smoke.py --live --api-base https://<API_DOMAIN>/api/v1 --org-id <test org id> --org-name "<exact test org name>"
 ```
 
 `smoke.sh` must report zero failures (health and build SHA, release metadata, readiness, frontend,

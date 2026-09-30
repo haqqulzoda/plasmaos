@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { BidiText } from "@/components/i18n/BidiText";
-import { formatCurrency, formatDate } from "@/i18n/formatters";
+import { formatBudget, formatPublishedDeadline, isClosedByDeadline } from "@/lib/tenderTruth";
+import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
 import { EngagementWorkflowActions } from "@/components/tenders/EngagementWorkflowActions";
@@ -67,6 +68,7 @@ function MyTenderCard({
 }) {
   const t = useTranslations("myTenders");
   const locale = useLocale() as CustomerSelectableLocale;
+  const truthLabels = useTenderTruthLabels();
   const engagementLabel =
     item.engagement_status === "SAVED"
       ? t("statuses.saved")
@@ -81,8 +83,10 @@ function MyTenderCard({
               : item.engagement_status === "LOST"
                 ? t("statuses.lost")
                 : t("statuses.dismissed");
-  const tenderLabel =
-    item.tender_status === "OPEN"
+  const truth = { ...item, status: item.tender_status };
+  const tenderLabel = isClosedByDeadline(truth)
+    ? truthLabels.closedDeadlinePassed
+    : item.tender_status === "OPEN"
       ? t("tenderStatuses.open")
       : item.tender_status === "CLOSED"
         ? t("tenderStatuses.closed")
@@ -90,14 +94,11 @@ function MyTenderCard({
           ? t("tenderStatuses.cancelled")
           : t("tenderStatuses.unknown");
   const deadline = item.deadline
-    ? formatDate(item.deadline, locale)
+    ? formatPublishedDeadline(truth, locale, truthLabels)
     : t("deadlineMissing");
-  const value =
-    item.estimated_value === null
-      ? t("valueMissing")
-      : formatCurrency(item.estimated_value, item.currency, locale, {
-          maximumFractionDigits: 2,
-        });
+  const value = formatBudget(item.estimated_value, item.currency, locale, truthLabels.notPublished, {
+    maximumFractionDigits: 2,
+  });
   const copy = useTranslations("myTenders.redesign");
   return (
     <Surface

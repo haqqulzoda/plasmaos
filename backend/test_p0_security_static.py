@@ -109,9 +109,10 @@ class P0SecurityStaticTests(unittest.TestCase):
             self.assertIn(param, list_block)
 
         self.assertIn('normalized_deadline_status == "active"', filter_block)
-        self.assertIn("Tender.deadline >= now", filter_block)
+        # D1-05b: deadlines are compared at their conservative effective instant.
+        self.assertIn("deadline_not_passed_sql(Tender, now=now)", filter_block)
         self.assertIn('normalized_deadline_status == "expired"', filter_block)
-        self.assertIn("Tender.deadline < now", filter_block)
+        self.assertIn("deadline_passed_sql(Tender, now=now)", filter_block)
         self.assertIn('normalized_deadline_status == "unknown"', filter_block)
         self.assertIn("Tender.deadline.is_(None)", filter_block)
         self.assertIn("_batched_tender_summaries", list_block)

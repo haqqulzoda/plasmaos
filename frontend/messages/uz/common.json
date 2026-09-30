@@ -33,7 +33,11 @@
   },
   "pagination": "{totalPages} sahifadan {page}-sahifa",
   "paginationResults": "{totalPages} sahifadan {page}-sahifa · {count, plural, other {# ta natija}}",
-  "notFound": {"title": "Sahifa topilmadi", "help": "So‘ralgan mijoz sahifasi mavjud emas yoki boshqa taqdim etilmaydi.", "back": "Boshqaruv paneliga qaytish"},
+  "notFound": {
+    "title": "Sahifa topilmadi",
+    "help": "So‘ralgan mijoz sahifasi mavjud emas yoki boshqa taqdim etilmaydi.",
+    "back": "Boshqaruv paneliga qaytish"
+  },
   "taxonomy": {
     "regions": {
       "centralAsia": "Markaziy Osiyo",
@@ -59,5 +63,15 @@
       "equipmentSupply": "Uskuna yetkazib berish",
       "other": "Boshqa"
     }
+  },
+  "tenderTruth": {
+    "notPublished": "E'lon qilinmagan",
+    "localTimeAsPublished": "mahalliy vaqt (e'lon qilinganidek)",
+    "zoneTimeAsPublished": "{zone} vaqti (e'lon qilinganidek)",
+    "dateAsPublished": "e'lon qilingan sana",
+    "closedDeadlinePassed": "Yopilgan (muddat o'tgan)",
+    "sourceUnavailableTitle": "Manba vaqtincha mavjud emas",
+    "sourceUnavailableBody": "Ushbu manbadagi tenderlar Plasma'da vaqtincha mavjud emas. Saqlangan ishingiz saqlanib qoladi.",
+    "sourceStale": "Eskirgan"
   }
 }

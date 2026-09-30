@@ -74,7 +74,13 @@ def uzex_enterprise_tender_condition(tender_model: Any):
 
 
 def customer_visible_tender_condition(tender_model: Any):
-    """Customer corpus guard: keep valid non-UzEx sources and confirmed enterprise UzEx."""
+    """Customer corpus guard: keep valid non-UzEx sources and confirmed enterprise UzEx.
+
+    Sources the registry marks customer_visible=False (ADB, D1-04b) are excluded
+    entirely; operator and admin reads that must see them do not use this guard.
+    """
+    from app.services.source_registry import customer_hidden_source_keys
+
     metadata_text = func.lower(func.coalesce(cast(tender_model.source_metadata_json, Text), ""))
     hidden_giz_condition = and_(
         tender_model.source_system == "giz",
@@ -83,10 +89,14 @@ def customer_visible_tender_condition(tender_model: Any):
             metadata_text.like('%"giz_visibility":"hidden"%'),
         ),
     )
-    return or_(
+    visible = or_(
         and_(
             tender_model.source_system != "uzex",
             ~hidden_giz_condition,
         ),
         uzex_enterprise_tender_condition(tender_model),
     )
+    hidden_sources = customer_hidden_source_keys()
+    if not hidden_sources:
+        return visible
+    return and_(tender_model.source_system.notin_(hidden_sources), visible)

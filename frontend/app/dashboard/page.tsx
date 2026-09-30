@@ -38,6 +38,14 @@ import {
 } from "@/lib/dashboard";
 import { api } from "@/lib/api";
 import { listExplorer } from "@/lib/explorer";
+import {
+  daysLeft,
+  formatPublishedDeadline,
+  isDeadlinePassed,
+  isTenderOpen,
+  type TenderTruth,
+} from "@/lib/tenderTruth";
+import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 import { expiryState, documentTypeMessageKey } from "@/lib/readiness";
 import {
   formatDate as formatLocaleDate,
@@ -45,7 +53,7 @@ import {
 } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import type { ExplorerItem, ExplorerTenderSummary } from "@/types/explorer";
-import { isTenderActionable, type Tender } from "@/types/tender";
+import type { Tender } from "@/types/tender";
 
 type CompanyProfile = {
   company_profile_id?: string | null;
@@ -135,10 +143,8 @@ const SOURCE_LOGOS: Record<string, string> = {
 };
 
 function isCurrentTender(tender: ExplorerTenderSummary) {
-  return (
-    isTenderActionable(tender.status) &&
-    (!tender.deadline || new Date(tender.deadline).getTime() >= Date.now())
-  );
+  // Derived status plus the conservative effective deadline (D1-05b/c).
+  return isTenderOpen(tender);
 }
 
 function customerDate(
@@ -150,15 +156,14 @@ function customerDate(
 }
 
 function deadlineState(
-  deadline: string | null,
+  truth: TenderTruth,
   now: number,
   t: DashboardTranslator,
 ) {
-  if (!deadline) return t("deadline.unknown");
-  const deadlineTime = new Date(deadline).getTime();
-  if (!Number.isFinite(deadlineTime)) return t("deadline.unknown");
-  const days = Math.ceil((deadlineTime - now) / (1000 * 60 * 60 * 24));
-  if (days < 0) return t("deadline.expired");
+  // Days left count down to the conservative effective instant, never beyond it.
+  const days = daysLeft(truth, now);
+  if (days === null) return t("deadline.unknown");
+  if (isDeadlinePassed(truth, now)) return t("deadline.expired");
   if (days === 0) return t("deadline.today");
   if (days === 1) return t("deadline.one");
   return t("deadline.many", { count: days });
@@ -350,6 +355,7 @@ function SourceIdentity({ source, name }: { source: string; name: string }) {
 
 export default function DashboardPage() {
   const locale = useLocale() as CustomerSelectableLocale;
+  const truthLabels = useTenderTruthLabels();
   const translate = useTranslations("dashboard");
   const translateReadiness = useTranslations("readiness");
   const t = translate as DashboardTranslator;
@@ -678,10 +684,10 @@ export default function DashboardPage() {
                         {tender.deadline ? (
                           <>
                             <strong>
-                              {formatLocaleDate(tender.deadline, locale)}
+                              {formatPublishedDeadline(tender, locale, truthLabels)}
                             </strong>
                             <span>
-                              {deadlineState(tender.deadline, now, t)}
+                              {deadlineState(tender, now, t)}
                             </span>
                           </>
                         ) : (

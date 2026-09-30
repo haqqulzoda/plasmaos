@@ -113,7 +113,7 @@ test("P0 pages use translations and shared locale formatters", () => {
     assert.match(source, /useTranslations\(/, path);
     assert.match(
       source,
-      /format(Date|DateTime|Number|Currency|RelativeTime)/,
+      /format(Date|DateTime|Number|Currency|RelativeTime|Budget|PublishedDeadline)/,
       path,
     );
   }

@@ -23,6 +23,7 @@ from app.schemas.source_refresh import (
     SourceRefreshTerminalSummary,
 )
 from app.services.source_refresh_jobs import TERMINAL_SOURCE_REFRESH_STATUSES
+from app.services.source_refresh_schedule import configured_source_refresh_schedule, is_stale
 from app.services.source_registry import SOURCE_REGISTRY, SourceDefinition
 
 
@@ -204,6 +205,14 @@ async def source_refresh_status(
         high_water.completed_at if high_water else None,
         high_water.id if high_water else None,
     )
+    schedule = configured_source_refresh_schedule()
+    now = datetime.now(timezone.utc)
+    last_success: dict[str, datetime] = {}
+    for jobs in (clean, partial):
+        for key, job in jobs.items():
+            completed = _utc(job.completed_at)
+            if key not in last_success or completed > last_success[key]:
+                last_success[key] = completed
     return [
         SourceRefreshStatusItem(
             source_system=definition.key,
@@ -229,6 +238,15 @@ async def source_refresh_status(
             last_clean_completed=terminal_summary(clean[definition.key]) if definition.key in clean else None,
             last_partial=terminal_summary(partial[definition.key]) if definition.key in partial else None,
             last_failure=terminal_summary(failure[definition.key]) if definition.key in failure else None,
+            scheduled_cadence_seconds=(
+                int(schedule[definition.key].total_seconds()) if definition.key in schedule else None
+            ),
+            last_success_at=last_success.get(definition.key),
+            stale=is_stale(
+                last_success_at=last_success.get(definition.key),
+                cadence=schedule.get(definition.key),
+                now=now,
+            ),
             activity_cursor=cursor,
         )
         for definition in definitions

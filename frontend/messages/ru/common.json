@@ -33,7 +33,11 @@
   },
   "pagination": "Страница {page} из {totalPages}",
   "paginationResults": "Страница {page} из {totalPages} · {count, plural, one {# результат} few {# результата} many {# результатов} other {# результата}}",
-  "notFound": {"title": "Страница не найдена", "help": "Запрошенная пользовательская страница не существует или больше недоступна.", "back": "Вернуться на панель управления"},
+  "notFound": {
+    "title": "Страница не найдена",
+    "help": "Запрошенная пользовательская страница не существует или больше недоступна.",
+    "back": "Вернуться на панель управления"
+  },
   "taxonomy": {
     "regions": {
       "centralAsia": "Центральная Азия",
@@ -59,5 +63,15 @@
       "equipmentSupply": "Поставка оборудования",
       "other": "Другое"
     }
+  },
+  "tenderTruth": {
+    "notPublished": "Не опубликован",
+    "localTimeAsPublished": "местное время (как опубликовано)",
+    "zoneTimeAsPublished": "время {zone} (как опубликовано)",
+    "dateAsPublished": "дата как опубликована",
+    "closedDeadlinePassed": "Закрыт (срок истёк)",
+    "sourceUnavailableTitle": "Источник временно недоступен",
+    "sourceUnavailableBody": "Тендеры из этого источника временно недоступны в Plasma. Ваши сохранённые данные сохранены.",
+    "sourceStale": "Устарело"
   }
 }

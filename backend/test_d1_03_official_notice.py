@@ -132,7 +132,7 @@ def test_header_block_is_delimited_and_omits_missing_fields() -> None:
     assert full == (
         f"{HEADER_OPEN}\nTitle: Detailed design\nReference: OP1\nNotice type: REOI\n"
         "Borrower/client: Ministry of Energy\nCountry: Mongolia\n"
-        "Publication date: 2026-09-15\nDeadline: 2026-10-16 17:00 UTC\n"
+        "Publication date: 2026-09-15\nDeadline: 2026-10-16 17:00 local time (as published)\n"
         f"Source URL: https://example.test/n\n\n{BODY_OPEN}\nBody line."
     )
     sparse = compose_notice_text(
@@ -154,7 +154,7 @@ def test_deadline_without_a_stated_time_is_not_given_an_invented_clock_time(inst
         title="t", reference=None, notice_type=None, buyer=None, country=None,
         publication_date=None, deadline=instant, source_url=None, body="b",
     )
-    assert "Deadline: 2026-10-16 (UTC date; no time stated)" in text_value
+    assert "Deadline: 2026-10-16 (date as published; no time stated)" in text_value
     assert "00:00" not in text_value and "23:59" not in text_value
 
 
@@ -251,7 +251,9 @@ def test_notice_builder_reads_only_shared_tender_columns() -> None:
         for node in ast.walk(tree)
         if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("app.")
     }
-    assert imported == {"app.models.all_models"}
+    # D1-05b: the deadline line reads the source's deadline time basis; both modules are
+    # pure configuration/rules and read no tenant or private data.
+    assert imported == {"app.models.all_models", "app.core.deadline_truth", "app.services.source_registry"}
 
 
 def _unguarded_document_selects(rel: str) -> list[str]:
@@ -506,7 +508,9 @@ def test_refresh_hook_is_set_wise_idempotent_race_safe_and_excluded_from_acquisi
                     assert row["sha256"] == hashlib.sha256(row["parsed_text"].encode()).hexdigest()
                     assert row["parsed_text"].startswith(HEADER_OPEN) and BODY_OPEN in row["parsed_text"]
                     assert f"Reference: {external_id}" in row["parsed_text"]
-                    assert "Deadline: 2026-12-01 09:30 UTC" in row["parsed_text"]
+                    # D1-05b: the published wall time with its source basis, never "UTC".
+                    label = {"world_bank": "local time", "uzex": "Asia/Tashkent time", "giz": "local time"}[tender["source_system"]]
+                    assert f"Deadline: 2026-12-01 09:30 {label} (as published)" in row["parsed_text"]
                 assert "&amp;" not in rows[tenders["N-GIZ"]["id"]]["parsed_text"]
                 wb_text = rows[tenders["N-WB"]["id"]]["parsed_text"]
                 assert "\n- Shortlisting criteria A\n- Criteria B" in wb_text  # structure restored from raw HTML
@@ -558,7 +562,7 @@ def test_refresh_hook_is_set_wise_idempotent_race_safe_and_excluded_from_acquisi
                                     deadline=datetime(2026, 12, 2, 9, 30, tzinfo=timezone.utc)),
                     ])
                     await db.commit()
-                assert "Deadline: 2026-12-02 09:30 UTC" in (await _notice_rows(connection))[tenders["N-UZ"]["id"]]["parsed_text"]
+                assert "Deadline: 2026-12-02 09:30 Asia/Tashkent time (as published)" in (await _notice_rows(connection))[tenders["N-UZ"]["id"]]["parsed_text"]
                 # A budget-only change is not part of the notice: no notice write.
                 statements.clear()
                 async with sessions() as db:
