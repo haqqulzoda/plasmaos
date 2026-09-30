@@ -253,11 +253,17 @@ def test_published_wall_time_and_conservative_effective_instant(source, stored, 
 
 
 def test_derived_status_closes_only_open_or_unknown_rows_with_a_passed_deadline() -> None:
-    now = datetime(2026, 10, 16, 10, 0, tzinfo=UTC)
-    wall = datetime(2026, 10, 16, 17, 0, tzinfo=UTC)  # effective 03:00 UTC: passed at 10:00
+    # Zone unknown (no country): countdown at 17:00 UTC+14 = 03:00 UTC, status closes at
+    # 17:00 UTC-12 = 05:00 UTC the next day; in between it is "verify on source" (open).
+    now = datetime(2026, 10, 17, 6, 0, tzinfo=UTC)
+    window = datetime(2026, 10, 16, 10, 0, tzinfo=UTC)
+    wall = datetime(2026, 10, 16, 17, 0, tzinfo=UTC)
     assert truth.derived_status("OPEN", "world_bank", wall, now=now) == (TenderStatus.CLOSED, "DEADLINE_PASSED")
     assert truth.derived_status(TenderStatus.UNKNOWN, "world_bank", wall, now=now) == (TenderStatus.CLOSED, "DEADLINE_PASSED")
+    assert truth.derived_status("OPEN", "world_bank", wall, now=window) == (TenderStatus.OPEN, "DEADLINE_VERIFY_ON_SOURCE")
     assert truth.derived_status("OPEN", "world_bank", wall, now=datetime(2026, 10, 16, 2, tzinfo=UTC)) == (TenderStatus.OPEN, None)
+    # Country known: one instant (Ulaanbaatar UTC+8 -> 09:00 UTC).
+    assert truth.derived_status("OPEN", "world_bank", wall, now=window, country="Mongolia") == (TenderStatus.CLOSED, "DEADLINE_PASSED")
     assert truth.derived_status("OPEN", "world_bank", None, now=now) == (TenderStatus.OPEN, None)
     assert truth.derived_status("CANCELLED", "world_bank", wall, now=now) == (TenderStatus.CANCELLED, None)
     assert truth.derived_status("CLOSED", "world_bank", None, now=now) == (TenderStatus.CLOSED, None)
@@ -366,11 +372,13 @@ def test_every_customer_surface_derives_open_status_and_hides_adb_on_postgres(mo
             # SQL and Python agree on every row's effective instant.
             async with sessions() as db:
                 result = await db.execute(
-                    select(Tender.id, Tender.source_system, Tender.deadline, truth.effective_deadline_sql(Tender))
+                    select(Tender.id, Tender.source_system, Tender.deadline, Tender.country,
+                           truth.effective_deadline_sql(Tender), truth.closing_deadline_sql(Tender))
                     .where(Tender.id.in_(tender_ids.values()))
                 )
-                for tender_id, source, deadline, effective in result.all():
-                    assert effective == truth.effective_deadline(source, deadline), (source, deadline)
+                for tender_id, source, deadline, country, effective, closes in result.all():
+                    assert effective == truth.effective_deadline(source, deadline, country=country), (source, deadline)
+                    assert closes == truth.closing_deadline(source, deadline, country=country), (source, deadline)
                 # A date-only and an explicit-zone row, directly.
                 for source, stored in (
                     ("world_bank", datetime(2026, 10, 16, 23, 59, 59, 999999, tzinfo=UTC)),
@@ -381,6 +389,7 @@ def test_every_customer_surface_derives_open_status_and_hides_adb_on_postgres(mo
                     probe = SimpleNamespace(
                         source_system=literal_column(f"'{source}'::varchar"),
                         deadline=literal_column(f"TIMESTAMPTZ '{stored.isoformat()}'"),
+                        country=literal_column("NULL::varchar"),
                     )
                     value = await db.scalar(select(truth.effective_deadline_sql(probe)))
                     assert value == truth.effective_deadline(source, stored), source
@@ -410,7 +419,10 @@ def test_every_customer_surface_derives_open_status_and_hides_adb_on_postgres(mo
                 assert set(by_id) == {"WB-PASSED", "UZ-PASSED", "EBRD-PASSED", "WB-STORED-CLOSED"}
                 assert by_id["WB-PASSED"].status_reason == "DEADLINE_PASSED"
                 assert by_id["WB-PASSED"].source_status == TenderStatus.OPEN
-                assert by_id["WB-PASSED"].deadline_time_basis == "SOURCE_LOCAL_UNSPECIFIED"
+                # World Bank publishes no zone; the tender's country (Mongolia) gives one.
+                assert by_id["WB-PASSED"].deadline_time_basis == "COUNTRY_INFERRED"
+                assert by_id["WB-PASSED"].deadline_timezone == "Asia/Ulaanbaatar"
+                assert by_id["WB-PASSED"].deadline_closes_at == by_id["WB-PASSED"].deadline_effective_at
                 assert by_id["UZ-PASSED"].deadline_timezone == "Asia/Tashkent"
                 assert by_id["WB-STORED-CLOSED"].status_reason is None
                 expired = await list_explorer_tenders(db, user_id=ids["user_a"], query=ExplorerQuery(
@@ -429,7 +441,7 @@ def test_every_customer_surface_derives_open_status_and_hides_adb_on_postgres(mo
                 # Tender reads (Tender Details header, notification destinations).
                 read = await tenders_endpoint.get_tender(tender_ids["WB-PASSED"], current_user=user, db=db)
                 assert (read.status, read.status_reason, read.source_status) == (TenderStatus.CLOSED, "DEADLINE_PASSED", TenderStatus.OPEN)
-                assert read.deadline_effective_at == read.deadline - timedelta(hours=14)
+                assert read.deadline_effective_at == read.deadline - timedelta(hours=8)  # Ulaanbaatar, UTC+8
                 for endpoint in (tenders_endpoint.get_tender, tenders_endpoint.get_tender_details):
                     with pytest.raises(HTTPException) as hidden:
                         await endpoint(tender_ids["ADB-FUTURE"], current_user=user, db=db)
@@ -466,7 +478,8 @@ def test_every_customer_surface_derives_open_status_and_hides_adb_on_postgres(mo
                 tender = await db.get(Tender, tender_ids["WB-PASSED"])
                 response = pursuits_endpoint._response(pursuit, tender)
                 assert (response.source_tender_status, response.source_tender_status_reason) == ("CLOSED", "DEADLINE_PASSED")
-                assert response.source_deadline_time_basis == "SOURCE_LOCAL_UNSPECIFIED"
+                assert response.source_deadline_time_basis == "COUNTRY_INFERRED"
+                assert response.source_deadline_timezone == "Asia/Ulaanbaatar"
             assert not {verb for verb in writes if verb in {"INSERT", "UPDATE", "DELETE"}}, writes
 
             # Admin still sees ADB.

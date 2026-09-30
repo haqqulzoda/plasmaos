@@ -430,6 +430,7 @@ async def list_explorer_tenders(
                     deadline_timezone=serialized.deadline_timezone,
                     deadline_published_local=serialized.deadline_published_local,
                     deadline_effective_at=serialized.deadline_effective_at,
+                    deadline_closes_at=serialized.deadline_closes_at,
                     category=serialized.category,
                     document_status=serialized.document_status,
                     document_count=serialized.document_count,

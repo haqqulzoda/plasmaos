@@ -18,8 +18,9 @@ TENDER_NOT_ACTIONABLE_DETAIL = (
 def actionable_tender_condition(tender_model: Any, *, now: datetime | None = None) -> Any:
     """SQL predicate for an affirmatively actionable tender.
 
-    The stored source status must be OPEN *and* the deadline, read conservatively
-    for its source (app.core.deadline_truth), must not have passed (D1-05c).
+    The stored source status must be OPEN *and* the deadline must not have passed in
+    every zone it could be in (app.core.deadline_truth). A tender in the "verify on
+    source" window is still open.
     """
     return (tender_model.status == TenderStatus.OPEN) & deadline_not_passed_sql(tender_model, now=now)
 
@@ -37,6 +38,7 @@ def is_tender_actionable(tender: Any, *, now: datetime | None = None) -> bool:
         getattr(tender, "source_system", None),
         getattr(tender, "deadline", None),
         now=now,
+        country=getattr(tender, "country", None),
     )
     return status is TenderStatus.OPEN
 

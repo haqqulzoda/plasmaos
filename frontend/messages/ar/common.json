@@ -68,8 +68,10 @@
     "notPublished": "غير منشور",
     "localTimeAsPublished": "التوقيت المحلي (كما نُشر)",
     "zoneTimeAsPublished": "توقيت {zone} (كما نُشر)",
+    "zoneInferredFromCountry": "توقيت {zone} (مستنتج من البلد)",
     "dateAsPublished": "التاريخ كما نُشر",
     "closedDeadlinePassed": "مغلق (انتهى الموعد النهائي)",
+    "closingVerifyOnSource": "يُغلق قريبًا — تحقّق من المصدر",
     "sourceUnavailableTitle": "المصدر غير متاح مؤقتًا",
     "sourceUnavailableBody": "المناقصات من هذا المصدر غير متاحة مؤقتًا في Plasma. يتم الاحتفاظ بعملك المحفوظ.",
     "sourceStale": "قديم"

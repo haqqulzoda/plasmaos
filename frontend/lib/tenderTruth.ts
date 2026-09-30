@@ -5,18 +5,24 @@
  * - Deadlines: the API sends the published wall time (`deadline`, stored with a UTC
  *   label) plus its basis. It is displayed unconverted (UTC formatting of the stored
  *   value) with a basis label, never converted to the viewer's time zone.
- *   Countdowns, "days left", urgency and "passed" use `deadline_effective_at`, the
- *   server's conservative instant (published local time read at UTC+14 when the
- *   zone is unknown), so remaining time is never overstated.
+ *   Every deadline has two server instants:
+ *   - `deadline_effective_at` for countdowns, "days left" and urgency: the earliest
+ *     the deadline can be (local time read at UTC+14 when the zone is unknown), so
+ *     remaining time is never overstated;
+ *   - `deadline_closes_at` for the open/closed status: the latest it can be (UTC-12
+ *     when the zone is unknown), so a tender is never shown closed too early.
+ *   They are equal when the zone is known, including COUNTRY_INFERRED (the capital
+ *   zone of the tender's country).
  * - Status: the API's `status` is already deadline-derived; `status_reason`
- *   DEADLINE_PASSED means "Closed (deadline passed)".
+ *   DEADLINE_PASSED means "Closed (deadline passed)" and DEADLINE_VERIFY_ON_SOURCE
+ *   "Closing — verify on source" (still open).
  *
  * Pure functions (labels are passed in) so node tests can run them directly.
  */
 import {INVALID_FORMAT_VALUE, formatCurrency, formatDate, formatDateTime} from '../i18n/formatters.ts';
 import type {CustomerSelectableLocale} from '../i18n/locales.ts';
 
-export type DeadlineTimeBasis = 'UTC' | 'EXPLICIT_TZ' | 'SOURCE_LOCAL_UNSPECIFIED' | 'DATE_ONLY';
+export type DeadlineTimeBasis = 'UTC' | 'EXPLICIT_TZ' | 'SOURCE_LOCAL_UNSPECIFIED' | 'COUNTRY_INFERRED' | 'DATE_ONLY';
 
 export type TenderTruth = {
     status?: string | null;
@@ -26,6 +32,7 @@ export type TenderTruth = {
     deadline_timezone?: string | null;
     deadline_published_local?: string | null;
     deadline_effective_at?: string | null;
+    deadline_closes_at?: string | null;
 };
 
 export type TenderTruthLabels = {
@@ -33,11 +40,15 @@ export type TenderTruthLabels = {
     localTimeAsPublished: string;
     /** Receives the IANA zone, e.g. "Asia/Tashkent". */
     zoneTimeAsPublished: (zone: string) => string;
+    /** Receives the IANA zone inferred from the tender's country. */
+    zoneInferredFromCountry: (zone: string) => string;
     dateAsPublished: string;
     closedDeadlinePassed: string;
+    closingVerifyOnSource: string;
 };
 
 export const DEADLINE_PASSED = 'DEADLINE_PASSED';
+export const DEADLINE_VERIFY_ON_SOURCE = 'DEADLINE_VERIFY_ON_SOURCE';
 /** Backend 404 detail for a tender whose source is hidden from customers (D1-04b). */
 export const TENDER_SOURCE_UNAVAILABLE_MESSAGE = 'Tender source temporarily unavailable';
 
@@ -71,6 +82,8 @@ export function deadlineBasisLabel(truth: TenderTruth, labels: TenderTruthLabels
     switch (truth.deadline_time_basis) {
         case 'SOURCE_LOCAL_UNSPECIFIED':
             return labels.localTimeAsPublished;
+        case 'COUNTRY_INFERRED':
+            return truth.deadline_timezone ? labels.zoneInferredFromCountry(truth.deadline_timezone) : labels.localTimeAsPublished;
         case 'EXPLICIT_TZ':
             return truth.deadline_timezone ? labels.zoneTimeAsPublished(truth.deadline_timezone) : labels.localTimeAsPublished;
         case 'DATE_ONLY':
@@ -102,17 +115,41 @@ export function formatPublishedDeadline(
     return label ? `${text} (${label})` : text;
 }
 
-/** Epoch ms to count down to: the server's conservative instant, else the stored value. */
-export function effectiveDeadlineMs(truth: TenderTruth): number | null {
-    const raw = truth.deadline_effective_at || truth.deadline;
+function epochMs(raw: string | null | undefined): number | null {
     if (!raw) return null;
     const ms = new Date(raw).getTime();
     return Number.isFinite(ms) ? ms : null;
 }
 
-export function isDeadlinePassed(truth: TenderTruth, now: number = Date.now()): boolean {
+/** Epoch ms to count down to: the server's earliest possible instant, else the stored value. */
+export function effectiveDeadlineMs(truth: TenderTruth): number | null {
+    return epochMs(truth.deadline_effective_at || truth.deadline);
+}
+
+/** Epoch ms at which the status becomes closed: the latest possible instant, else the countdown instant. */
+export function closingDeadlineMs(truth: TenderTruth): number | null {
+    return epochMs(truth.deadline_closes_at) ?? effectiveDeadlineMs(truth);
+}
+
+/** The countdown has reached zero (the earliest possible deadline has passed). */
+export function isCountdownOver(truth: TenderTruth, now: number = Date.now()): boolean {
     const ms = effectiveDeadlineMs(truth);
     return ms !== null && ms < now;
+}
+
+/** The deadline has passed in every zone it could be in: the tender is closed. */
+export function isDeadlinePassed(truth: TenderTruth, now: number = Date.now()): boolean {
+    const ms = closingDeadlineMs(truth);
+    return ms !== null && ms < now;
+}
+
+/**
+ * "Closing — verify on source": the deadline has passed in some zones it could be in
+ * but not all (the zone is unknown). The tender is still listed as open.
+ */
+export function isDeadlineUncertain(truth: TenderTruth, now: number = Date.now()): boolean {
+    if (isDeadlinePassed(truth, now)) return false;
+    return truth.status_reason === DEADLINE_VERIFY_ON_SOURCE || isCountdownOver(truth, now);
 }
 
 /** Whole days left (ceil), negative once passed; null without a deadline. */
@@ -122,8 +159,9 @@ export function daysLeft(truth: TenderTruth, now: number = Date.now()): number |
 }
 
 /**
- * Open only when the (derived) status is OPEN and the effective deadline has not
- * passed. A deadline that is present but unreadable cannot be verified: not open.
+ * Open only when the (derived) status is OPEN and the deadline has not passed
+ * everywhere (a tender in the "verify on source" window is open). A deadline that is
+ * present but unreadable cannot be verified: not open.
  */
 export function isTenderOpen(truth: TenderTruth, now: number = Date.now()): boolean {
     if (String(truth.status ?? '').trim().toUpperCase() !== 'OPEN') return false;

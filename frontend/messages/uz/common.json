@@ -68,8 +68,10 @@
     "notPublished": "E'lon qilinmagan",
     "localTimeAsPublished": "mahalliy vaqt (e'lon qilinganidek)",
     "zoneTimeAsPublished": "{zone} vaqti (e'lon qilinganidek)",
+    "zoneInferredFromCountry": "{zone} vaqti (mamlakat bo'yicha)",
     "dateAsPublished": "e'lon qilingan sana",
     "closedDeadlinePassed": "Yopilgan (muddat o'tgan)",
+    "closingVerifyOnSource": "Yopilmoqda — manbada tekshiring",
     "sourceUnavailableTitle": "Manba vaqtincha mavjud emas",
     "sourceUnavailableBody": "Ushbu manbadagi tenderlar Plasma'da vaqtincha mavjud emas. Saqlangan ishingiz saqlanib qoladi.",
     "sourceStale": "Eskirgan"

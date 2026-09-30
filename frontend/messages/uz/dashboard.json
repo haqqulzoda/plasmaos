@@ -61,6 +61,7 @@
     "unavailable": "Mavjud emas",
     "expired": "Muddati o‘tgan",
     "today": "Bugun tugaydi",
+    "verifyOnSource": "Yopilmoqda — manbada tekshiring",
     "one": "1 kun qoldi",
     "many": "{count} kun qoldi"
   },

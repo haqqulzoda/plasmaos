@@ -68,8 +68,10 @@
     "notPublished": "Not published",
     "localTimeAsPublished": "local time (as published)",
     "zoneTimeAsPublished": "{zone} time (as published)",
+    "zoneInferredFromCountry": "{zone} time (inferred from country)",
     "dateAsPublished": "date as published",
     "closedDeadlinePassed": "Closed (deadline passed)",
+    "closingVerifyOnSource": "Closing — verify on source",
     "sourceUnavailableTitle": "Source temporarily unavailable",
     "sourceUnavailableBody": "Tenders from this source are temporarily unavailable in Plasma. Your saved work is kept.",
     "sourceStale": "Stale"

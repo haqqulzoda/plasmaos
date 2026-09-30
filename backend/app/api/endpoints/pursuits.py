@@ -106,7 +106,7 @@ def _response(
     file_count: int = 0,
     owner_name: str | None = None,
 ) -> PursuitResponse:
-    truth = truth_fields(tender.source_system, tender.status, tender.deadline) if tender else {}
+    truth = truth_fields(tender.source_system, tender.status, tender.deadline, country=tender.country) if tender else {}
     return PursuitResponse(
         source_tender_status=truth["status"].value if truth else None,
         source_tender_status_reason=truth.get("status_reason"),
@@ -114,6 +114,7 @@ def _response(
         source_deadline_timezone=truth.get("deadline_timezone"),
         source_deadline_published_local=truth.get("deadline_published_local"),
         source_deadline_effective_at=truth.get("deadline_effective_at"),
+        source_deadline_closes_at=truth.get("deadline_closes_at"),
         pursuit_id=pursuit.id, organization_id=pursuit.organization_id,
         source_tender_id=pursuit.source_tender_id, origin=pursuit.origin,
         legacy_engagement_id=pursuit.legacy_engagement_id,

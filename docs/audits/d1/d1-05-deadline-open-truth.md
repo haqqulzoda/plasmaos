@@ -98,3 +98,47 @@ UzEx tenders arrived, and the derived rule still hides the ones already past the
 Notice backfill after the header change: 577 notices updated (World Bank 564, GIZ 13), 1 EBRD
 notice unchanged (no deadline line), 0 created; a re-run updates 0. The two Step 0 REOI runs
 sealed on the old notice text now report `inputs_changed: true`.
+
+## Lenient open/closed truth (integration fix 3a, pilot/week1)
+
+The UTC+14 rule above never overstates the time left, but it also closed World Bank and GIZ
+tenders up to 26 hours before they really closed (their deadlines carry no zone). Since then
+every deadline has **two** instants (`deadline_effective_at`, `deadline_closes_at`):
+
+| Case | Countdown / urgency (`effective_at`) | Open/closed status (`closes_at`) | Basis label |
+| --- | --- | --- | --- |
+| Zone known (UTC, EXPLICIT_TZ) | the instant | the same instant | unchanged |
+| No source zone, country known | wall time in the capital zone of the tender's country | the same instant | `COUNTRY_INFERRED` + zone ("Asia/Ulaanbaatar time (inferred from country)") |
+| No source zone, no country zone (regions such as "Central Asia", empty country) | wall time at UTC+14 | wall time at UTC−12 | `SOURCE_LOCAL_UNSPECIFIED` |
+| DATE_ONLY | end of the date in the source zone, else the country zone, else UTC+14 | … else UTC−12 | `DATE_ONLY` |
+
+Between the two instants the tender stays **open** with `status_reason =
+DEADLINE_VERIFY_ON_SOURCE` ("Closing — verify on source", en/ru/uz/ar); only after
+`closes_at` is it "Closed (deadline passed)". Open lists, counts, filters, "Matches your
+profile" and bid/workspace actions follow `closes_at`; countdowns, "days left" chips and
+urgency follow `effective_at`.
+
+Country → zone: `backend/app/core/country_timezones.py`, generated from tzdata 2026c
+(`iso3166.tab`, `zone.tab`): 246 countries, 304 spellings including the World Bank/GIZ/EBRD
+variants ("Kyrgyz Republic", "Congo, Democratic Republic of", "Gambia, The", "Turkiye",
+"West Bank and Gaza", "Kosovo", …). Multi-zone countries use the capital's zone (US
+New York, Russia Moscow, Brazil São Paulo, Kazakhstan Almaty, Indonesia Jakarta, Mexico
+Mexico City, …). PostgreSQL uses the same table as one constant JSONB lookup on
+`lower(btrim(country))`; Python/SQL parity is tested on a source × country × time matrix
+(`backend/test_int_3a_lenient_deadline_truth.py`). The official notice header deliberately
+does not use the country (its text is part of sealed analysis inputs), so notice hashes do
+not change.
+
+Counts (local database, customer-visible tenders, both rules evaluated back to back at
+2026-09-30 17:30 UTC):
+
+| Source | Open, strict (UTC+14) | Open, lenient | of which "verify on source" |
+| --- | --- | --- | --- |
+| World Bank | 562 | 571 | 5 |
+| GIZ | 4 | 5 | 1 |
+| UzEx | 48 | 48 | 0 |
+| EBRD | 70 | 70 | 0 |
+| **Total** | **684** | **694** | **6** |
+
+The other 4 newly open tenders are closed at their country's capital time rather than at
+UTC+14.

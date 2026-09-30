@@ -83,7 +83,7 @@ def _item(pursuit: OrganizationPursuit, tender: Tender, project: Project | None)
     if pursuit.legacy_engagement_id is None:
         raise RuntimeError("source pursuit is missing legacy compatibility ID")
     estimated_value = float(tender.budget) if tender.budget and tender.budget > 0 else None
-    truth = truth_fields(tender.source_system, tender.status, tender.deadline)
+    truth = truth_fields(tender.source_system, tender.status, tender.deadline, country=tender.country)
     derived = truth.pop("status")
     return MyTenderListItem(
         **truth,

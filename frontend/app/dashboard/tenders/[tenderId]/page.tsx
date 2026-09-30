@@ -28,7 +28,7 @@ import type {
 } from "@/types/tender-details";
 import type { Tender } from "@/types/tender";
 import { isTenderActionable } from "@/types/tender";
-import { formatBudget, formatPublishedDeadline, isClosedByDeadline, TENDER_SOURCE_UNAVAILABLE_MESSAGE } from "@/lib/tenderTruth";
+import { formatBudget, formatPublishedDeadline, isClosedByDeadline, isDeadlineUncertain, TENDER_SOURCE_UNAVAILABLE_MESSAGE } from "@/lib/tenderTruth";
 import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 
 const activeAcquisitionState = (state?: TenderDocumentAcquisitionState) =>
@@ -282,6 +282,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
 
   const sourceUrl = safeSourceUrl(tender.source_url);
   const tenderStatus = isClosedByDeadline(tender) ? truthLabels.closedDeadlinePassed
+    : isDeadlineUncertain(tender) ? truthLabels.closingVerifyOnSource
     : tender.status === "OPEN" ? tExplorer("status.open")
     : tender.status === "CLOSED" ? tExplorer("status.closed")
     : tender.status === "CANCELLED" ? tExplorer("status.cancelled") : tExplorer("status.unknown");

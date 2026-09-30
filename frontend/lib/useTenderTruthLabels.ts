@@ -13,8 +13,10 @@ export function useTenderTruthLabels(): TenderTruthLabels {
       notPublished: t("notPublished"),
       localTimeAsPublished: t("localTimeAsPublished"),
       zoneTimeAsPublished: (zone: string) => t("zoneTimeAsPublished", {zone}),
+      zoneInferredFromCountry: (zone: string) => t("zoneInferredFromCountry", {zone}),
       dateAsPublished: t("dateAsPublished"),
       closedDeadlinePassed: t("closedDeadlinePassed"),
+      closingVerifyOnSource: t("closingVerifyOnSource"),
     }),
     [t],
   );

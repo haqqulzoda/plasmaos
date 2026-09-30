@@ -25,11 +25,12 @@ export type TenderAvailabilityStatus = 'available' | 'unavailable';
 export interface Tender {
     /** Deadline truth (D1-05b/c); see lib/tenderTruth.ts. */
     source_status?: TenderStatus | null;
-    status_reason?: 'DEADLINE_PASSED' | null;
-    deadline_time_basis?: 'UTC' | 'EXPLICIT_TZ' | 'SOURCE_LOCAL_UNSPECIFIED' | 'DATE_ONLY' | null;
+    status_reason?: 'DEADLINE_PASSED' | 'DEADLINE_VERIFY_ON_SOURCE' | null;
+    deadline_time_basis?: 'UTC' | 'EXPLICIT_TZ' | 'SOURCE_LOCAL_UNSPECIFIED' | 'COUNTRY_INFERRED' | 'DATE_ONLY' | null;
     deadline_timezone?: string | null;
     deadline_published_local?: string | null;
     deadline_effective_at?: string | null;
+    deadline_closes_at?: string | null;
     id: string;
     external_id: string;
     source_system: SourceSystem;

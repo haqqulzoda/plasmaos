@@ -315,6 +315,7 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
     deadline: pursuit.source_deadline, deadline_time_basis: pursuit.source_deadline_time_basis,
     deadline_timezone: pursuit.source_deadline_timezone, deadline_published_local: pursuit.source_deadline_published_local,
     deadline_effective_at: pursuit.source_deadline_effective_at,
+    deadline_closes_at: pursuit.source_deadline_closes_at,
   };
   const usesSourceDeadline = !sourceDeadline && !pursuit.external_deadline && Boolean(pursuit.source_deadline);
   const historicalDeadline = usesSourceDeadline

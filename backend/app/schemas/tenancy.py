@@ -73,6 +73,7 @@ class PursuitResponse(BaseModel):
     source_deadline_timezone: str | None = None
     source_deadline_published_local: str | None = None
     source_deadline_effective_at: datetime | None = None
+    source_deadline_closes_at: datetime | None = None
     title: str | None = None
     buyer: str | None = None
     declared_funder: str | None = None

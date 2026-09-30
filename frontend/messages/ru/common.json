@@ -68,8 +68,10 @@
     "notPublished": "Не опубликован",
     "localTimeAsPublished": "местное время (как опубликовано)",
     "zoneTimeAsPublished": "время {zone} (как опубликовано)",
+    "zoneInferredFromCountry": "время {zone} (по стране)",
     "dateAsPublished": "дата как опубликована",
     "closedDeadlinePassed": "Закрыт (срок истёк)",
+    "closingVerifyOnSource": "Закрывается — проверьте на источнике",
     "sourceUnavailableTitle": "Источник временно недоступен",
     "sourceUnavailableBody": "Тендеры из этого источника временно недоступны в Plasma. Ваши сохранённые данные сохранены.",
     "sourceStale": "Устарело"

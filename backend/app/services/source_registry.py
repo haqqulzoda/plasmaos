@@ -34,6 +34,9 @@ class DeadlineTimeBasis(str, Enum):
     UTC = "UTC"  # the source publishes UTC
     EXPLICIT_TZ = "EXPLICIT_TZ"  # the source states (or is bound to) one IANA zone
     SOURCE_LOCAL_UNSPECIFIED = "SOURCE_LOCAL_UNSPECIFIED"  # local time of an unknown zone
+    # Per tender, never a source setting: an unspecified-zone deadline read in the capital
+    # zone of the tender's country (app.core.deadline_truth, app.core.country_timezones).
+    COUNTRY_INFERRED = "COUNTRY_INFERRED"
     DATE_ONLY = "DATE_ONLY"  # a calendar date without a time of day
 
 

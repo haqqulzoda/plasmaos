@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { BidiText } from "@/components/i18n/BidiText";
-import { formatBudget, formatPublishedDeadline, isClosedByDeadline } from "@/lib/tenderTruth";
+import { formatBudget, formatPublishedDeadline, isClosedByDeadline, isDeadlineUncertain } from "@/lib/tenderTruth";
 import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
@@ -88,6 +88,8 @@ function MyTenderCard({
   const truth = { ...item, status: item.tender_status };
   const tenderLabel = isClosedByDeadline(truth)
     ? truthLabels.closedDeadlinePassed
+    : isDeadlineUncertain(truth)
+    ? truthLabels.closingVerifyOnSource
     : item.tender_status === "OPEN"
       ? t("tenderStatuses.open")
       : item.tender_status === "CLOSED"

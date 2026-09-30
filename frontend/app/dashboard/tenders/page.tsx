@@ -76,6 +76,7 @@ import {
   formatPublishedDeadline,
   isClosedByDeadline,
   isDeadlinePassed,
+  isDeadlineUncertain,
   type TenderTruth,
 } from "@/lib/tenderTruth";
 import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
@@ -930,6 +931,8 @@ function ExplorerCard({
   const expired = isExpiredDeadline(tender);
   const status = isClosedByDeadline(tender)
     ? truthLabels.closedDeadlinePassed
+    : isDeadlineUncertain(tender)
+    ? truthLabels.closingVerifyOnSource
     : t(
         `status.${tender.status === "OPEN" ? "open" : tender.status === "CLOSED" ? "closed" : tender.status === "CANCELLED" ? "cancelled" : "unknown"}`,
       );

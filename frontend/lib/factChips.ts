@@ -12,7 +12,7 @@
  *
  * Pure functions so node tests can run them directly.
  */
-import {daysLeft, isDeadlinePassed, type TenderTruth} from './tenderTruth.ts';
+import {daysLeft, isCountdownOver, type TenderTruth} from './tenderTruth.ts';
 
 export type NoticeKind = 'eoi' | 'ifb' | 'prequalification';
 
@@ -53,7 +53,7 @@ export function deriveFactChips(
     }
     const notice = noticeKind(tender.notice_type);
     if (notice) chips.push({kind: 'noticeType', type: notice});
-    const days = isDeadlinePassed(tender, now) ? null : daysLeft(tender, now);
+    const days = isCountdownOver(tender, now) ? null : daysLeft(tender, now);
     if (days !== null) chips.push({kind: 'daysLeft', days});
     return chips;
 }

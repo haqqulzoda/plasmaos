@@ -61,6 +61,7 @@
     "unavailable": "Unavailable",
     "expired": "Expired",
     "today": "Due today",
+    "verifyOnSource": "Closing — verify on source",
     "one": "1 day left",
     "many": "{count} days left"
   },

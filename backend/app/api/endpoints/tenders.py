@@ -3423,9 +3423,10 @@ def apply_tender_truth(
     source_system: str | None,
     stored_status: Any,
     now: datetime | None = None,
+    country: str | None = None,
 ) -> Any:
     """Set derived status and deadline time fields on any TenderTruthFields payload."""
-    for name, value in truth_fields(source_system, stored_status, payload.deadline, now=now).items():
+    for name, value in truth_fields(source_system, stored_status, payload.deadline, now=now, country=country).items():
         setattr(payload, name, value)
     return payload
 
@@ -3445,7 +3446,7 @@ def _serialize_tender(
             payload.publication_date = live_publication_date
         if live_deadline is not None:
             payload.deadline = live_deadline
-    apply_tender_truth(payload, source_system=tender.source_system, stored_status=tender.status)
+    apply_tender_truth(payload, source_system=tender.source_system, stored_status=tender.status, country=tender.country)
     payload.source_url = _safe_source_notice_url(payload.source_url)
     payload.contact_submission = _contact_submission_response(
         tender,

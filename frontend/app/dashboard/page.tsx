@@ -43,6 +43,7 @@ import { FactChips } from "@/components/tenders/FactChips";
 import {
   daysLeft,
   formatPublishedDeadline,
+  isCountdownOver,
   isDeadlinePassed,
   isTenderOpen,
   type TenderTruth,
@@ -166,6 +167,8 @@ function deadlineState(
   const days = daysLeft(truth, now);
   if (days === null) return t("deadline.unknown");
   if (isDeadlinePassed(truth, now)) return t("deadline.expired");
+  // Passed in some possible zones, not all (zone unknown): still open.
+  if (isCountdownOver(truth, now)) return t("deadline.verifyOnSource");
   if (days === 0) return t("deadline.today");
   if (days === 1) return t("deadline.one");
   return t("deadline.many", { count: days });
