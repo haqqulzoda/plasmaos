@@ -21,7 +21,8 @@ Status legend: **[ ]** open, **[x]** done. Items marked **GAP** are things the r
 - [ ] Staging runs on its own host or VM. (Same-host staging is possible, see the note in `deploy/caddy/Caddyfile`, but shares CPU, disk and the 80/443 ports.)
 - [ ] Docker Compose **>= 2.24** on every host (`docker compose version`): the staging file uses the `!override` merge tag.
 - [ ] `python3 scripts/ops/verify_staging_isolation.py` passes on the staging host. It renders both stacks and fails on any shared project, container, volume, network, host port or `.env` file, on leftover `CHANGE_ME` placeholders, and (when a production `.env` is present) on reused secrets. `scripts/ops/compose-staging.sh` runs it before every `up`/`build`/`create`/`start`/`restart`/`run`.
-- [ ] pgAdmin is behind the `tools` profile and is not running: `docker compose ps` shows no `pgadmin`; `smoke.sh` warns if it is.
+- [ ] pgAdmin is behind the `tools` profile and is not running: `docker ps -a --format '{{.Names}}' | grep pgadmin` prints nothing (a container left over from before the profile must be removed: `docker rm -f plasma_pgadmin`); `smoke.sh` warns if it runs.
+- [ ] **No admin UI or internal port is publicly bound.** `docker ps --format '{{.Names}} {{.Ports}}'` shows every published port as `127.0.0.1:...` (Caddy's 80/443 are the only `0.0.0.0` ports), and on the host `sudo ss -tlnp | grep -vE '127\.0\.0\.1|\[::1\]'` lists only sshd and Caddy. pgAdmin (5050), PostgreSQL (6543), Redis (6379), backend (8000) and frontend (3000) must never appear there.
 
 ## 2. Environment variables
 
@@ -61,13 +62,28 @@ Checklist:
 
 ## 4. Backups and restore
 
-Tools: `scripts/ops/backup.sh` (PostgreSQL `pg_dump -Fc` verified with `pg_restore --list`, plus a tarball of the backend's `private-data` and `data` volumes, SHA-256 manifest, timestamped `plasma_<label>_<UTC>_<hash12>.*`, retention) and `scripts/ops/restore_to_staging.sh`.
+Tools: `scripts/ops/backup.sh` and `scripts/ops/restore_to_staging.sh`. Every backup run sends one set off-host (`BACKUP_REMOTE`; the script refuses to run without it):
 
-- [ ] Backup runs on the production host on a schedule, for example (as the deploy user):
-  `15 2 * * *  cd /srv/plasmaos && BACKUP_REMOTE=user@backup-host:/srv/plasma-backups/ scripts/ops/backup.sh --target production >> /var/log/plasma-backup.log 2>&1`
-- [ ] `BACKUP_REMOTE` (rsync target or `s3://` bucket) is configured and the off-host copy succeeded (the script warns loudly if it is not set). Keep at least one copy in a different failure domain.
-- [ ] Off-host copies are encrypted at rest (bucket encryption, or encrypt with `age`/`gpg` before upload): dumps contain customer data and private documents.
-- [ ] Retention set to your policy (`BACKUP_KEEP_DAYS`, default 14; the newest 3 sets are always kept) and disk use of the backup directory is monitored. The document volumes are large (the developer stack's exceed 3 GB and archiving them took several minutes), so size the backup disk and the off-host bandwidth accordingly.
+| Component | Content | When | Local disk |
+| --- | --- | --- | --- |
+| `.dump` | `pg_dump -Fc`, verified with `pg_restore --list` (~110 MB) | every run | written locally first (kept `BACKUP_LOCAL_KEEP_DAYS`, default 7, as a fast restore point) |
+| `.private.tar.gz` | `/app/private-data` (organization-private uploads, ~200 KB today) | every run | none: streamed |
+| `.tender.tar.gz` | `/app/data` (public tender documents, ~3.8 GB, re-acquirable) | unless `--skip-tender-documents` | none: streamed |
+| `.sha256`, `.manifest` | checksums; sizes, source commit; the manifest is uploaded last and marks the set complete | every run | none |
+
+The archives are streamed from the backend container straight to the remote; on the way they are hashed, counted and gzip/tar-verified through FIFOs, never stored locally. After each upload the remote copy is re-hashed (`sha256sum` on ssh and mounted remotes) or its size compared (S3/rclone; `BACKUP_VERIFY_DOWNLOAD=1` re-hashes by download). A mismatch deletes the remote object and fails the run. The last output line is `BACKUP_RESULT set=... seconds=... bytes=...` for monitoring.
+
+- [ ] **`BACKUP_REMOTE` configured** on production, for example a Hetzner Storage Box over ssh (port 23), with a dedicated key: `BACKUP_REMOTE=ssh://uNNNNNN@uNNNNNN.your-storagebox.de:23/./plasma`, `BACKUP_SSH_OPTS="-i /home/deploy/.ssh/plasma_backup_ed25519"`. The ssh remote only uses `mkdir`, `ls`, `rm`, `mv`, `sha256sum` and `dd`, which the Storage Box restricted shell provides; confirm with a first manual run. Alternatives: `s3://bucket/prefix` (aws CLI; `AWS_ENDPOINT_URL` for Hetzner Object Storage), `rclone:remote:path`.
+- [ ] Backups run on a schedule on the production host (as the deploy user), database and private documents daily, tender documents weekly:
+  ```
+  15 2 * * 1-6  cd /opt/plasma-console/plasmaos && scripts/ops/backup.sh --target production --skip-tender-documents >> /var/log/plasma-backup.log 2>&1
+  15 2 * * 0    cd /opt/plasma-console/plasmaos && scripts/ops/backup.sh --target production >> /var/log/plasma-backup.log 2>&1
+  ```
+  (with `BACKUP_REMOTE` and `BACKUP_SSH_OPTS` in the crontab's environment or a sourced file readable only by the deploy user).
+- [ ] Before every migration: an on-demand backup to the remote (`ROLLOUT_WEEK1.md` step 1).
+- [ ] Off-host copies are encrypted at rest (bucket encryption, or a Storage Box that only this host can reach plus disk encryption on restore hosts): dumps contain customer data and private documents.
+- [ ] Retention on the remote matches your policy: complete sets older than `BACKUP_KEEP_DAYS` (default 14) are deleted, but the newest `BACKUP_MIN_KEEP` (3) are always kept; only the newest `BACKUP_TENDER_KEEP` (2) tender archives are kept; incomplete sets older than a day are removed. Size the remote for about 14 × 115 MB + 2 × 4 GB today.
+- [ ] Restore to staging needs the set on the staging host: `BACKUP_FETCH_CMD="rsync -a -e 'ssh -p 23 -i <key>' uNNNNNN@uNNNNNN.your-storagebox.de:plasma/ ./backups/"`. `restore_to_staging.sh` reads the new layout (and older `.files.tar.gz` sets); a set without a tender archive restores the database and private documents and leaves staging's tender documents in place.
 - [ ] Backup failures alert someone (cron mail or a heartbeat monitor that expects a ping after each success).
 - [ ] **Tested restore**: at least monthly, and before the first production deploy, run the drill and record the result:
   1. copy the latest production backup set to the staging host's `BACKUP_SRC_DIR` (or set `BACKUP_FETCH_CMD`);
@@ -92,7 +108,7 @@ Private-document uploads are scanned by ClamAV; the backend reaches it over TCP 
 
 - [ ] `scripts/ops/smoke.sh` passes the ClamAV checks: `clamd` answers `PING` from the backend container, and the signature date (`freshclam --version`) is at most 3 days old (`SMOKE_CLAMAV_MAX_AGE_DAYS`).
 - [ ] The container healthcheck is healthy (`docker ps`), and `docker inspect -f '{{.State.OOMKilled}} {{.State.Health.Status}}' plasma_clamav` does not show `true`. On the developer machine `clamd` had been OOM-killed (3.7 GB Docker VM, swap full) while the container stayed "Up (unhealthy)": the image's `/init` blocks on `tail -f /dev/null`, so nothing restarted it. Since pilot/week1 the service runs `deploy/clamav/supervise.sh`, which exits after 5 missed PINGs (30 s apart) so `restart: always` restarts it (tested: back to healthy about 4 minutes after `clamd` was killed), and `ConcurrentDatabaseReload no` keeps one signature set in memory during reloads.
-- [ ] Memory headroom for `clamd`: about 1 GB resident after loading signatures (measured 0.94 GB), more while loading. The host must hold it next to Postgres, the API, five Celery workers and Next.js without swapping.
+- [ ] Memory headroom for `clamd`: about 0.85-0.95 GiB resident after loading signatures and ~1.3 GiB during a signature reload (even with `ConcurrentDatabaseReload no`). Its container limit is 1.5 GiB on the 4gb profile and 2 GiB on 8gb (section 8); do not lower it below the reload peak, or reloads end in an OOM kill and a restart.
 - [ ] Signature freshness is alerted on (the official image runs `freshclam` itself, which needs outbound access to the ClamAV mirrors).
 
 ## 7. Celery Beat and workers
@@ -100,10 +116,47 @@ Private-document uploads are scanned by ClamAV; the backend reaches it over TCP 
 - [ ] Exactly **one** Beat instance runs per environment (two would duplicate every schedule). `smoke.sh` requires recent "Sending due task" lines in its log.
 - [ ] Every queue has a live consumer: `celery`, `ai_fast_queue`, `heavy_dl_queue`, `private_documents`, `pursuit_analysis` (`smoke.sh` runs `celery inspect active_queues`).
 - [ ] Beat drives the pursuit-analysis and private-document dispatch sweeps (every 10 s), notifications and source refresh; an alert fires when Beat is silent for 5 minutes.
-- [ ] The pursuit-analysis worker's concurrency is set on purpose (`PURSUIT_ANALYSIS_WORKER_CONCURRENCY`, D1 build) and matches the provider's rate limits.
+- [ ] The pursuit-analysis worker's concurrency is set on purpose: the host profile sets `PURSUIT_ANALYSIS_WORKER_CONCURRENCY` (1 on 4gb, 2 on 8gb); it must also match the provider's rate limits.
+- [ ] Celery workers recycle pool processes: `--max-tasks-per-child=10` where it was set before, plus `--max-memory-per-child` from the host profile (a pool process above the cap is replaced after its current task, not killed mid-task).
 
 ## 8. Disk, memory and host
 
+### Host profiles
+
+`HOST_PROFILE=4gb|8gb` in `.env` (and `.env.staging`) selects `deploy/host-profiles/<profile>.env`, which `scripts/compose-release.sh` and `scripts/ops/compose-staging.sh` load after `.env`. Every app service gets `mem_limit` = `memswap_limit` (it cannot swap); PostgreSQL and Redis get no limit but the lowest `oom_score_adj`.
+
+| Service | Measured (prod, steady) | 4gb limit | 8gb limit | `oom_score_adj` |
+| --- | --- | --- | --- | --- |
+| clamav | 0.85 GiB (reload peak ~1.3) | 1536m | 2048m | 0 |
+| celery_worker | 0.23 GiB | 384m | 768m | 600 |
+| backend | 0.19 GiB | 320m | 768m | 100 |
+| worker_pursuit_analysis | 0.18 GiB | 288m (concurrency 1) | 768m (concurrency 2) | 500 |
+| worker_private_documents | 0.17 GiB | 288m | 768m | 400 |
+| worker_heavy | 0.12 GiB | 192m | 512m | 800 |
+| celery_beat | 0.10 GiB | 160m | 256m | 300 |
+| frontend | 0.08 GiB | 128m | 384m | 200 |
+| **sum of limits** | **2.2 GiB** all services incl. db/redis | **3.22 GiB** | **6.13 GiB** | |
+| postgres | 0.25 GiB | none | none | -800 |
+| redis | 0.02 GiB | none | none | -500 |
+
+4gb limits are the measured steady state +~50 % (32 MiB steps), except ClamAV, which is sized for its reload peak. PostgreSQL settings per profile (`command` args; defaults without a profile are PostgreSQL's own): 4gb `shared_buffers=256MB`, `effective_cache_size=1GB`, `work_mem=4MB`, `maintenance_work_mem=64MB`; 8gb `512MB`, `3GB`, `8MB`, `128MB`; `max_connections=100` on both. Changing them recreates the `db` container (seconds of downtime), never the data.
+
+**Why the 4gb sum (3.22 GiB + unlimited PostgreSQL/Redis ≈ 3.5 GiB of ceilings) may exceed what the 3.7 GiB host can give safely.** A limit is a ceiling for one container, not a reservation: nothing is set aside, and the services peak at different times (ClamAV during a signature reload, a worker while parsing one large document). Steady state is ~2.2 GiB. The limits bound each service so one runaway process cannot take the host; if several peaks do coincide, the kernel's OOM killer picks the process with the highest score, and `oom_score_adj` makes that a Celery worker (heavy downloads first, +800) rather than PostgreSQL (-800) or Redis (-500). A killed worker is restarted by Docker and its task is retried (acks late). What must not happen is the host swapping: container swap is disabled (`memswap_limit` = `mem_limit`), and builds no longer run on the host.
+
+- [ ] `HOST_PROFILE` is set on production and staging; after a deploy `docker inspect -f '{{.Name}} {{.HostConfig.Memory}} {{.HostConfig.OomScoreAdj}}' $(docker ps -q)` shows the profile's values.
+- [ ] Watch for OOM kills after the first days on 4gb: `docker inspect -f '{{.Name}} {{.State.OOMKilled}} {{.RestartCount}}' $(docker ps -aq)`. A worker that is killed repeatedly while parsing large documents needs a higher limit (edit the profile, redeploy with `up <SHA>`), or the 8gb host.
+
+### Pre-deploy host checks (every production deploy)
+
+- [ ] `free -m`: at least ~700 MiB available and swap use not growing.
+- [ ] `scripts/ops/disk_report.sh --threshold 80` exits 0 (at most 80 % used) — run `scripts/ops/prune_safe.sh` (dry run, then `--apply`) first if needed. Leave room for the import (~5 GB for a release whose layers changed).
+- [ ] ClamAV healthy and not OOM-killed: `docker inspect -f '{{.State.Health.Status}} {{.State.OOMKilled}}' plasma_clamav` → `healthy false`.
+- [ ] No admin UI port publicly bound (section 1).
+
+### Disk
+
+- [ ] `scripts/ops/disk_report.sh` (read-only): file-system use, `docker system df`, per-volume sizes, the SHA-tagged release images (and which are in use), and the largest tender-document directories; exits 1 above `--threshold` (default 85).
+- [ ] `scripts/ops/prune_safe.sh` (dry run by default, `--apply` to act): removes dangling images, the build cache, and release tags other than the running release, the previous release (from `.release-history`), a newer imported candidate, and any `--keep SHA` / `PLASMA_KEEP_SHAS` — always at least two releases present on the host. It never removes volumes, containers or images in use, and never runs `system prune` or `volume prune`.
 - [ ] Volumes and their growth are known: `postgres_data`, `tender_documents_data`, `private_documents_data`, `redis_data`, the backup directory and Docker's image/layer store (the backend image is about 4 GB). `smoke.sh` warns at 80 % and fails at 90 % (`SMOKE_DISK_WARN_PERCENT`, `SMOKE_DISK_FAIL_PERCENT`, `SMOKE_DISK_PATH`).
 - [ ] Disk alert below 20 % free and a dashboard for database size.
 - [ ] Never run `docker volume prune` or `docker compose down -v` on production; they delete the database and documents.
@@ -139,8 +192,8 @@ All commands run from the repository checkout on the target host. Never skip a s
 
 8. Announce the window. Confirm the latest backup is recent and off-host, or take one now: `scripts/ops/backup.sh --target production`.
 9. Record the rollback point: `PREV_SHA=$(curl -fsS http://127.0.0.1:8000/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["build_sha"])')` and save it in the deploy ticket. Make sure every built service has a `plasma-<service>:$PREV_SHA` image: `scripts/compose-release.sh images`. If they are missing (the first release that uses this procedure), create them now from the running images: `scripts/compose-release.sh tag $PREV_SHA` (each image is tagged with the SHA recorded inside it; `$PREV_SHA` is used only for images that record none, such as `worker_pursuit_analysis` before this change, which was built without the SHA build arguments).
-10. `git checkout $SHA && scripts/compose-release.sh up -d --build`. After a successful build the script tags every built image `plasma-<service>:$SHA` (backend, frontend, the four workers and Beat), so this release is itself a rollback point for the next one.
-11. Apply migrations if the release has any (staging already rehearsed them): `docker compose exec backend alembic upgrade head`.
+10. **No build on production** (`PLASMA_NO_BUILD=1` enforces it). On the build host (staging): `git checkout $SHA && scripts/compose-release.sh build-only`, then `scripts/compose-release.sh export $SHA | ssh <prod> 'cd /opt/plasma-console/plasmaos && scripts/compose-release.sh import --expect $SHA'`. On production: `git checkout $SHA && scripts/compose-release.sh use $SHA` (retag only; nothing restarts).
+11. Apply migrations if the release has any (staging already rehearsed them): `scripts/compose-release.sh run --rm --no-deps backend alembic upgrade head`, then restart in order with `scripts/compose-release.sh up $SHA --no-deps <services>` (`ROLLOUT_WEEK1.md` step 8), or all at once with `scripts/compose-release.sh up $SHA`. Each `up <SHA>`/`rollback` is recorded in `.release-history`, which `prune_safe.sh` uses to keep the previous release.
 12. `scripts/ops/smoke.sh --target production --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN> --expect-sha $SHA` (run on the production host without `--http-only` to include container, queue, Beat and ClamAV checks; it addresses the stack by Compose label, so set `PROD_COMPOSE_PROJECT` if the project is not named after the checkout directory).
 13. Verify by hand: sign in as an approved user and as an admin; open a customer page; do not start source refresh or analysis just to test a passive page.
 
@@ -171,7 +224,7 @@ Decide within 15 minutes of a failed smoke test or a customer-visible error.
 ## 12. Known gaps at the time of writing
 
 - No error-tracking integration (section 5).
-- Release images are tagged `plasma-<service>:<SHA>` on the host that built them only (no registry). A rebuilt or replaced host has no rollback images; old tags also keep their layers on disk (about 4 GB per backend release, shared layers aside), so remove tags older than the last two or three releases with `docker image rm`.
+- Release images are tagged `plasma-<service>:<SHA>` on the build host and moved to production with `compose-release.sh export | import` (no registry). A replaced production host needs the current release exported again from the build host (keep the last two releases there too). Old tags are removed with `scripts/ops/prune_safe.sh`. A private registry (GHCR) is optional, see `ROLLOUT_WEEK1.md` step 5.
 - Redis is a single instance without backup or replication.
 - Backups are file-and-dump based on the host; point-in-time recovery (WAL archiving) is not set up.
 - `pgadmin/servers.json` is a template with the default `plasma` user; adjust before using the `tools` profile.

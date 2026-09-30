@@ -1,6 +1,13 @@
 # ============================================
 # Plasma AI — Docker Compose (Full Stack)
 # ============================================
+# Memory: every app service has a mem_limit (= memswap_limit, so it cannot swap) read
+# from PLASMA_MEM_*; the defaults below are the 4gb host profile. Select a profile with
+# HOST_PROFILE=4gb|8gb in .env: scripts/compose-release.sh and compose-staging.sh then
+# load deploy/host-profiles/<profile>.env, which also sets Postgres memory settings,
+# Celery per-child memory caps and PURSUIT_ANALYSIS_WORKER_CONCURRENCY.
+# PostgreSQL and Redis have no limit but the lowest oom_score_adj, so under host memory
+# pressure the kernel kills a worker (positive oom_score_adj) before them.
 
 services:
   # ---- Database ----
@@ -8,6 +15,23 @@ services:
     image: postgres:16
     container_name: plasma_db
     restart: always
+    # No mem_limit: the kernel should never pick PostgreSQL (see the header).
+    oom_score_adj: -800
+    # Memory settings come from the host profile. Without one these are PostgreSQL's
+    # own defaults, so the database behaves exactly as before. Changing them recreates
+    # the db container (a few seconds of database downtime); data is not touched.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-128MB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-4GB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-4MB}
+      - -c
+      - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-64MB}
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-100}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-plasma}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
@@ -42,6 +66,7 @@ services:
     image: redis:7-alpine
     container_name: plasma_redis
     restart: always
+    oom_score_adj: -500
     command: [ "redis-server", "--save", "", "--appendonly", "yes", "--appendfsync", "always", "--dir", "/data" ]
     volumes:
       - redis_data:/data
@@ -58,6 +83,10 @@ services:
     image: clamav/clamav:1.4
     container_name: plasma_clamav
     restart: always
+    # Resident ~0.85-0.95 GiB after loading signatures; a reload peaks at ~1.3 GiB even
+    # with ConcurrentDatabaseReload=no, so the limit must stay above that.
+    mem_limit: ${PLASMA_MEM_CLAMAV:-1536m}
+    memswap_limit: ${PLASMA_MEM_CLAMAV:-1536m}
     # The image keeps running after clamd dies (e.g. OOM-killed), which leaves uploads
     # unscanned; the wrapper exits instead so `restart: always` restarts it.
     entrypoint: ["/sbin/tini", "--", "/bin/sh", "/plasma/supervise.sh"]
@@ -78,6 +107,9 @@ services:
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_backend
     restart: always
+    mem_limit: ${PLASMA_MEM_BACKEND:-320m}
+    memswap_limit: ${PLASMA_MEM_BACKEND:-320m}
+    oom_score_adj: 100
     depends_on:
       - db
       - redis
@@ -118,6 +150,9 @@ services:
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_frontend
     restart: always
+    mem_limit: ${PLASMA_MEM_FRONTEND:-128m}
+    memswap_limit: ${PLASMA_MEM_FRONTEND:-128m}
+    oom_score_adj: 200
     depends_on:
       - backend
     environment:
@@ -142,6 +177,9 @@ services:
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_celery_worker
     restart: always
+    mem_limit: ${PLASMA_MEM_CELERY_WORKER:-384m}
+    memswap_limit: ${PLASMA_MEM_CELERY_WORKER:-384m}
+    oom_score_adj: 600
     depends_on:
       - db
       - redis
@@ -158,7 +196,7 @@ services:
       AUTH_BRIDGE_SECRET: ${AUTH_BRIDGE_SECRET:?Set AUTH_BRIDGE_SECRET}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:?Set explicit HTTPS origins}
       PLASMA_SERVICE_NAME: celery_worker
-    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "celery,ai_fast_queue" ]
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "celery,ai_fast_queue", "--max-memory-per-child=${PLASMA_CHILD_KB_CELERY_WORKER:-131072}" ]
 
   worker_heavy:
     build:
@@ -168,6 +206,9 @@ services:
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_worker_heavy
     restart: always
+    mem_limit: ${PLASMA_MEM_WORKER_HEAVY:-192m}
+    memswap_limit: ${PLASMA_MEM_WORKER_HEAVY:-192m}
+    oom_score_adj: 800
     depends_on:
       - db
       - redis
@@ -184,7 +225,7 @@ services:
       AUTH_BRIDGE_SECRET: ${AUTH_BRIDGE_SECRET:?Set AUTH_BRIDGE_SECRET}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:?Set explicit HTTPS origins}
       PLASMA_SERVICE_NAME: worker_heavy
-    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "heavy_dl_queue", "--concurrency=1", "--max-tasks-per-child=10" ]
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "heavy_dl_queue", "--concurrency=1", "--max-tasks-per-child=10", "--max-memory-per-child=${PLASMA_CHILD_KB_WORKER_HEAVY:-98304}" ]
     volumes:
       - tender_documents_data:/app/data
 
@@ -196,6 +237,9 @@ services:
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_worker_private_documents
     restart: always
+    mem_limit: ${PLASMA_MEM_WORKER_PRIVATE_DOCUMENTS:-288m}
+    memswap_limit: ${PLASMA_MEM_WORKER_PRIVATE_DOCUMENTS:-288m}
+    oom_score_adj: 400
     depends_on:
       - db
       - redis
@@ -214,7 +258,7 @@ services:
       AUTH_BRIDGE_SECRET: ${AUTH_BRIDGE_SECRET:?Set AUTH_BRIDGE_SECRET}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:?Set explicit HTTPS origins}
       PLASMA_SERVICE_NAME: worker_private_documents
-    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "private_documents", "--concurrency=1", "--max-tasks-per-child=10" ]
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "private_documents", "--concurrency=1", "--max-tasks-per-child=10", "--max-memory-per-child=${PLASMA_CHILD_KB_WORKER_PRIVATE_DOCUMENTS:-163840}" ]
     volumes:
       - private_documents_data:/app/private-data
 
@@ -226,6 +270,9 @@ services:
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_worker_pursuit_analysis
     restart: unless-stopped
+    mem_limit: ${PLASMA_MEM_WORKER_PURSUIT_ANALYSIS:-288m}
+    memswap_limit: ${PLASMA_MEM_WORKER_PURSUIT_ANALYSIS:-288m}
+    oom_score_adj: 500
     env_file: .env
     environment:
       POSTGRES_SERVER: db
@@ -236,7 +283,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       PLASMA_SERVICE_NAME: worker_pursuit_analysis
-    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "pursuit_analysis", "--concurrency=${PURSUIT_ANALYSIS_WORKER_CONCURRENCY:-2}", "--max-tasks-per-child=10" ]
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "pursuit_analysis", "--concurrency=${PURSUIT_ANALYSIS_WORKER_CONCURRENCY:-2}", "--max-tasks-per-child=10", "--max-memory-per-child=${PLASMA_CHILD_KB_WORKER_PURSUIT_ANALYSIS:-163840}" ]
     depends_on:
       - db
       - redis
@@ -250,6 +297,9 @@ services:
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_celery_beat
     restart: always
+    mem_limit: ${PLASMA_MEM_CELERY_BEAT:-160m}
+    memswap_limit: ${PLASMA_MEM_CELERY_BEAT:-160m}
+    oom_score_adj: 300
     depends_on:
       - db
       - redis

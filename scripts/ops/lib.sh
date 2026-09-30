@@ -107,9 +107,30 @@ ops_compose_setup() {
       ;;
     *) die "unknown target '$target' (use local, staging or production)" ;;
   esac
+  # The host memory profile is loaded after the stack's env file, so its values win.
+  local profile_file=""
+  case "$target" in
+    staging) profile_file="$(ops_host_profile_file .env.staging)" || exit 1 ;;
+    production) profile_file="$(ops_host_profile_file .env)" || exit 1 ;;
+  esac
+  if [ -n "$profile_file" ]; then
+    COMPOSE+=(--env-file "$profile_file")
+  fi
   if [ "${OPS_PROXY:-0}" = "1" ]; then
     COMPOSE+=(-f docker-compose.proxy.yml)
   fi
+}
+
+# ---- host memory profile ----------------------------------------------------------------------------
+# ops_host_profile_file ENV_FILE -> path of deploy/host-profiles/<HOST_PROFILE>.env, or nothing
+# when no profile is selected. HOST_PROFILE comes from the environment, else from ENV_FILE.
+ops_host_profile_file() {
+  local profile="${HOST_PROFILE:-}"
+  if [ -z "$profile" ]; then profile="$(env_file_value "$1" HOST_PROFILE || true)"; fi
+  [ -n "$profile" ] || return 0
+  local file="$OPS_ROOT/deploy/host-profiles/$profile.env"
+  [ -f "$file" ] || die "HOST_PROFILE=$profile has no deploy/host-profiles/$profile.env (use 4gb or 8gb)"
+  echo "$file"
 }
 
 # Short label used in backup file names.

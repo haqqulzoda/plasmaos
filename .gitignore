@@ -125,3 +125,7 @@ backups/
 *.dump
 *.pyo
 *.pyd
+
+# Release switch log written by scripts/compose-release.sh (read by scripts/ops/prune_safe.sh)
+.release-history
+.compose-release.*.env
