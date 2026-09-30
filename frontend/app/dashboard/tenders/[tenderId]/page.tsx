@@ -27,7 +27,7 @@ import type {
 } from "@/types/tender-details";
 import type { Tender } from "@/types/tender";
 import { isTenderActionable } from "@/types/tender";
-import { formatBudget, formatPublishedDeadline, isClosedByDeadline, TENDER_SOURCE_UNAVAILABLE_DETAIL } from "@/lib/tenderTruth";
+import { formatBudget, formatPublishedDeadline, isClosedByDeadline, TENDER_SOURCE_UNAVAILABLE_MESSAGE } from "@/lib/tenderTruth";
 import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 
 const activeAcquisitionState = (state?: TenderDocumentAcquisitionState) =>
@@ -151,7 +151,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ tenderI
       setTender(null);
       const status = (error as { response?: { status?: number } }).response?.status;
       const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
-      setTenderError(status === 404 && detail === TENDER_SOURCE_UNAVAILABLE_DETAIL ? "sourceUnavailable"
+      setTenderError(status === 404 && detail === TENDER_SOURCE_UNAVAILABLE_MESSAGE ? "sourceUnavailable"
         : status === 404 ? "notFound" : status === 401 || status === 403 ? "denied" : "loadFailed");
     } finally { setIsLoadingTender(false); }
   }, [tenderId]);

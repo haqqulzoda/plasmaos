@@ -39,7 +39,7 @@ export type TenderTruthLabels = {
 
 export const DEADLINE_PASSED = 'DEADLINE_PASSED';
 /** Backend 404 detail for a tender whose source is hidden from customers (D1-04b). */
-export const TENDER_SOURCE_UNAVAILABLE_DETAIL = 'Tender source temporarily unavailable';
+export const TENDER_SOURCE_UNAVAILABLE_MESSAGE = 'Tender source temporarily unavailable';
 
 export function isBudgetPublished(value: number | string | null | undefined): boolean {
     if (value === null || value === undefined || value === '') return false;

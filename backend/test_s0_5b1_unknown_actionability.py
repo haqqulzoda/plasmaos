@@ -136,7 +136,10 @@ class ExplorerAndDashboardTests(unittest.TestCase):
 
     def test_09_explorer_explicit_unknown_is_supported(self) -> None:
         condition = tender_endpoints._tender_lifecycle_condition("unknown")
-        self.assertEqual(condition.right.value, TenderStatus.UNKNOWN)
+        sql = str(condition.compile(compile_kwargs={"literal_binds": True}))
+        # Stored UNKNOWN, minus rows whose deadline has passed (those read CLOSED, D1-05c).
+        self.assertIn("tenders.status = 'UNKNOWN'", sql)
+        self.assertIn("tenders.deadline IS NULL", sql)
 
     def test_10_explorer_explicit_all_removes_lifecycle_predicate(self) -> None:
         self.assertIsNone(tender_endpoints._tender_lifecycle_condition("all"))
@@ -148,7 +151,8 @@ class ExplorerAndDashboardTests(unittest.TestCase):
     def test_12_dashboard_current_logic_uses_actionability_contract(self) -> None:
         dashboard = read_frontend("app/dashboard/page.tsx")
         block = dashboard.split("function isCurrentTender", 1)[1].split("\n}", 1)[0]
-        self.assertIn("isTenderActionable(tender.status)", block)
+        # D1-05c: derived status plus the conservative effective deadline.
+        self.assertIn("isTenderOpen(tender)", block)
 
 
 class HunterTests(unittest.TestCase):

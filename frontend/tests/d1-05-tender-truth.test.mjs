@@ -12,7 +12,7 @@ import {
   isClosedByDeadline,
   isDeadlinePassed,
   isTenderOpen,
-  TENDER_SOURCE_UNAVAILABLE_DETAIL,
+  TENDER_SOURCE_UNAVAILABLE_MESSAGE,
 } from "../lib/tenderTruth.ts";
 import { isTenderActionable } from "../types/tender.ts";
 
@@ -137,8 +137,8 @@ test("each customer surface derives open/closed from the shared helper", () => {
 
 test("a deep link to a hidden-source tender shows 'source temporarily unavailable'", () => {
   const details = read("app/dashboard/tenders/[tenderId]/page.tsx");
-  assert.equal(TENDER_SOURCE_UNAVAILABLE_DETAIL, "Tender source temporarily unavailable");
-  assert.match(details, /detail === TENDER_SOURCE_UNAVAILABLE_DETAIL \? "sourceUnavailable"/);
+  assert.equal(TENDER_SOURCE_UNAVAILABLE_MESSAGE, "Tender source temporarily unavailable");
+  assert.match(details, /detail === TENDER_SOURCE_UNAVAILABLE_MESSAGE \? "sourceUnavailable"/);
   assert.match(details, /tTruth\("sourceUnavailableTitle"\)/);
   for (const locale of ["en", "ru", "uz", "ar"]) {
     const common = JSON.parse(read(`messages/${locale}/common.json`));
