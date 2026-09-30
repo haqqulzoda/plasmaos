@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 EvidenceState = str
@@ -45,6 +45,27 @@ class FirmUpdateRequest(BaseModel):
     private_notes: str | None = Field(default=None, max_length=10000)
 
 
+class SelfFirmUpsertRequest(BaseModel):
+    """The organization's own firm. Every field is optional: an omitted field keeps
+    its stored value, and on first save takes the default (display_name: the
+    organization name). Scope and network fields do not apply to a self firm."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    canonical_name: str | None = Field(default=None, min_length=2, max_length=500)
+    display_name: str | None = Field(default=None, min_length=2, max_length=500)
+    legal_name: str | None = Field(default=None, max_length=500)
+    country: str | None = Field(default=None, max_length=150)
+    regions: list[str] | None = Field(default=None, max_length=50)
+    services: list[str] | None = Field(default=None, max_length=50)
+    capabilities: list[str] | None = Field(default=None, max_length=100)
+    sectors: list[str] | None = Field(default=None, max_length=50)
+    source_type: str | None = Field(default=None, pattern=r"^(MANUAL|EXPLICIT_IMPORT)$")
+    source_provenance: dict[str, Any] | None = None
+    evidence_state: str | None = Field(default=None, pattern=r"^(VERIFIED|REVIEWED|UNVERIFIED|EVIDENCE_MISSING)$")
+    private_notes: str | None = Field(default=None, max_length=10000)
+
+
 class ProjectReferenceCreateRequest(BaseModel):
     project_name: str = Field(min_length=2, max_length=700)
     client_name: str | None = Field(default=None, max_length=500)
@@ -74,6 +95,31 @@ class ProjectReferenceCreateRequest(BaseModel):
         return self
 
 
+class ProjectReferenceUpdateRequest(BaseModel):
+    """Changed fields only. The result must satisfy ProjectReferenceCreateRequest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_name: str | None = Field(default=None, min_length=2, max_length=700)
+    client_name: str | None = Field(default=None, max_length=500)
+    country: str | None = Field(default=None, max_length=150)
+    service: str | None = Field(default=None, max_length=300)
+    sector: str | None = Field(default=None, max_length=300)
+    role: str | None = Field(
+        default=None, pattern=r"^(LEAD|JV_MEMBER|CONSORTIUM_MEMBER|SUBCONSULTANT|SUBCONTRACTOR|OTHER|UNKNOWN)$"
+    )
+    contract_share_percent: Decimal | None = Field(default=None, ge=0, le=100)
+    contract_value: Decimal | None = Field(default=None, ge=0)
+    contract_currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    value_basis: str | None = Field(default=None, pattern=r"^(FIRM_SHARE|CONSORTIUM_TOTAL|CONTRACT_TOTAL|UNKNOWN)$")
+    start_date: date | None = None
+    completion_date: date | None = None
+    completion_state: str | None = Field(default=None, pattern=r"^(COMPLETED|ONGOING|NOT_COMPLETED|UNKNOWN)$")
+    relevant_scope: str | None = Field(default=None, max_length=10000)
+    evidence_provenance: dict[str, Any] | None = None
+    evidence_state: str | None = Field(default=None, pattern=r"^(VERIFIED|REVIEWED|UNVERIFIED|EVIDENCE_MISSING)$")
+
+
 class ProjectReferenceResponse(BaseModel):
     reference_id: UUID
     firm_id: UUID
@@ -93,11 +139,18 @@ class ProjectReferenceResponse(BaseModel):
     relevant_scope: str | None = None
     evidence_provenance: dict[str, Any]
     evidence_state: str
+    # METADATA_ONLY: a recorded claim. FILE_BACKED: the provenance names a document.
+    evidence_basis: str = "METADATA_ONLY"
+    # Set when this row replaced an edited reference; the replaced row is archived.
+    supersedes_reference_id: UUID | None = None
+    archived_at: datetime | None = None
     created_at: datetime
 
 
 class FirmResponse(BaseModel):
     firm_id: UUID
+    # True only for the organization's own firm (GET/PUT /candidates/self-firm).
+    is_self_firm: bool = False
     scope: str
     canonical_name: str
     display_name: str
@@ -181,6 +234,8 @@ class ExpertResponse(BaseModel):
 
 
 class CandidateLibraryResponse(BaseModel):
+    # The organization's own firm; never listed in ``firms``.
+    self_firm: FirmResponse | None = None
     firms: list[FirmResponse] = Field(default_factory=list)
     experts: list[ExpertResponse] = Field(default_factory=list)
 

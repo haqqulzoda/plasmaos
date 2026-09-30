@@ -21,6 +21,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -48,6 +49,11 @@ class Firm(Base):
     scope: Mapped[str] = mapped_column(String(30), nullable=False)
     owner_organization_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="RESTRICT")
+    )
+    # Set only on the organization's own firm (its "self firm"); NULL on every candidate.
+    organization_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("organizations.id", name="fk_candidate_firm_self_organization", ondelete="RESTRICT"),
     )
     canonical_name: Mapped[str] = mapped_column(String(500), nullable=False)
     display_name: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -84,12 +90,26 @@ class Firm(Base):
             "AND length(trim(network_permission_basis)) >= 3)",
             name="ck_candidate_firm_scope_owner",
         ),
+        CheckConstraint(
+            "organization_id IS NULL OR "
+            "(scope = 'ORGANIZATION_PRIVATE' AND owner_organization_id = organization_id)",
+            name="ck_candidate_firm_self_private",
+        ),
         Index("ix_candidate_firms_visibility", "scope", "owner_organization_id", "updated_at"),
+        Index(
+            "uq_candidate_firms_self_organization", "organization_id", unique=True,
+            postgresql_where=text("organization_id IS NOT NULL"),
+        ),
     )
 
 
 class ProjectReference(Base):
-    """Evidence-bearing project or contract fact for one Firm."""
+    """Evidence-bearing project or contract fact for one Firm.
+
+    The recorded facts are immutable (database trigger): an edit writes a new row
+    whose supersedes_reference_id names the old one and archives the old row, so
+    matches, scenarios and evidence packs that cite a reference id keep their facts.
+    """
 
     __tablename__ = "candidate_project_references"
 
@@ -121,9 +141,29 @@ class ProjectReference(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_by_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", name="fk_candidate_reference_archived_by", ondelete="RESTRICT"),
+    )
+    supersedes_reference_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "candidate_project_references.id", name="fk_candidate_reference_supersedes", ondelete="RESTRICT"
+        ),
+    )
+
     firm: Mapped[Firm] = relationship("Firm", back_populates="references")
 
     __table_args__ = (
+        CheckConstraint(
+            "supersedes_reference_id IS NULL OR supersedes_reference_id <> id",
+            name="ck_candidate_reference_supersedes_other",
+        ),
+        Index(
+            "uq_candidate_references_supersedes", "supersedes_reference_id", unique=True,
+            postgresql_where=text("supersedes_reference_id IS NOT NULL"),
+        ),
         CheckConstraint(
             "role IN ('LEAD','JV_MEMBER','CONSORTIUM_MEMBER','SUBCONSULTANT','SUBCONTRACTOR','OTHER','UNKNOWN')",
             name="ck_candidate_reference_role",

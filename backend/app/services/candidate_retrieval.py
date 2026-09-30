@@ -11,7 +11,9 @@ import re
 from typing import Any, Iterable
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.candidate_retrieval import (
@@ -48,7 +50,11 @@ from app.schemas.candidate_retrieval import (
     FirmUpdateRequest,
     ProjectReferenceCreateRequest,
     ProjectReferenceResponse,
+    ProjectReferenceUpdateRequest,
+    SelfFirmUpsertRequest,
 )
+from app.models.company import CompanyProfile
+from app.models.tenancy import Organization
 from app.services.private_documents import build_analysis_pack_candidate
 
 
@@ -72,6 +78,10 @@ class CandidateNotFoundError(CandidateError):
 
 class CandidateEligibilityError(CandidateError):
     pass
+
+
+class CandidateValidationError(CandidateError):
+    """The edited facts would not be a valid record (HTTP 422)."""
 
 
 def _clean_list(values: Iterable[str]) -> list[str]:
@@ -136,6 +146,19 @@ def _safe_shared_provenance(value: dict[str, Any]) -> dict[str, Any]:
     return {key: item for key, item in value.items() if key in allowed}
 
 
+# Provenance keys that name a document. Anything else is a recorded claim.
+FILE_EVIDENCE_KEYS = ("document_reference", "file_reference", "file_url", "document_version_id", "private_document_id")
+
+
+def reference_evidence_basis(provenance: dict[str, Any] | None) -> str:
+    """FILE_BACKED when the provenance names a document, else METADATA_ONLY.
+
+    File-backed is not verified: nothing here reads the document.
+    """
+    values = provenance or {}
+    return "FILE_BACKED" if any(str(values.get(key) or "").strip() for key in FILE_EVIDENCE_KEYS) else "METADATA_ONLY"
+
+
 def _reference_response(row: ProjectReference, *, shared: bool = False) -> ProjectReferenceResponse:
     return ProjectReferenceResponse(
         reference_id=row.id, firm_id=row.firm_id, project_name=row.project_name,
@@ -146,13 +169,17 @@ def _reference_response(row: ProjectReference, *, shared: bool = False) -> Proje
         completion_state=row.completion_state, relevant_scope=row.relevant_scope,
         evidence_provenance=_safe_shared_provenance(row.evidence_provenance) if shared else row.evidence_provenance,
         evidence_state=row.evidence_state,
+        evidence_basis=reference_evidence_basis(row.evidence_provenance),
+        supersedes_reference_id=row.supersedes_reference_id, archived_at=row.archived_at,
         created_at=row.created_at,
     )
 
 
 def _firm_response(row: Firm, references: list[ProjectReference]) -> FirmResponse:
+    """``references`` are the firm's current (non-archived) references."""
     return FirmResponse(
-        firm_id=row.id, scope=row.scope, canonical_name=row.canonical_name,
+        firm_id=row.id, is_self_firm=row.organization_id is not None,
+        scope=row.scope, canonical_name=row.canonical_name,
         display_name=row.display_name, legal_name=row.legal_name, country=row.country,
         regions=row.regions, services=row.services, capabilities=row.capabilities, sectors=row.sectors,
         source_type=row.source_type,
@@ -230,8 +257,162 @@ async def update_firm(
         setattr(row, key, value)
     await db.commit()
     await db.refresh(row)
-    references = list((await db.scalars(select(ProjectReference).where(ProjectReference.firm_id == row.id).order_by(ProjectReference.created_at, ProjectReference.id))).all())
-    return _firm_response(row, references)
+    return _firm_response(row, await _current_references(db, row.id))
+
+
+async def _current_references(db: AsyncSession, firm_id: UUID) -> list[ProjectReference]:
+    return list((await db.scalars(
+        select(ProjectReference)
+        .where(ProjectReference.firm_id == firm_id, ProjectReference.archived_at.is_(None))
+        .order_by(ProjectReference.created_at, ProjectReference.id)
+    )).all())
+
+
+async def get_self_firm(db: AsyncSession, *, organization_id: UUID) -> FirmResponse | None:
+    """The organization's own firm with its current references. Passive: never creates."""
+    row = await db.scalar(select(Firm).where(Firm.organization_id == organization_id))
+    if row is None:
+        return None
+    return _firm_response(row, await _current_references(db, row.id))
+
+
+async def _organization_name(db: AsyncSession, organization_id: UUID) -> str:
+    organization = await db.get(Organization, organization_id)
+    if organization is None:
+        raise CandidateNotFoundError("Organization not found")
+    name = " ".join((organization.display_name or "").split())
+    if len(name) < 2:
+        profile = await db.get(CompanyProfile, organization.legacy_company_profile_id)
+        name = " ".join((getattr(profile, "company_name", None) or "").split())
+    return name if len(name) >= 2 else "Our company"
+
+
+async def upsert_self_firm(
+    db: AsyncSession, *, organization_id: UUID, actor_user_id: UUID, payload: SelfFirmUpsertRequest,
+) -> FirmResponse:
+    """Create the organization's own firm, or apply the provided fields to it.
+
+    Always ORGANIZATION_PRIVATE and owned by the organization; the partial unique
+    index keeps it to one per organization under concurrent first saves.
+    """
+    values = payload.model_dump(exclude_unset=True)
+    for key in ("canonical_name", "display_name", "source_type", "evidence_state"):
+        if key in values and values[key] is None:
+            raise CandidateValidationError(f"{key} cannot be empty")
+    for key in ("regions", "services", "capabilities", "sectors"):
+        if key in values:
+            values[key] = _clean_list(values[key] or [])
+    for key in ("canonical_name", "display_name"):
+        if key in values:
+            values[key] = " ".join(values[key].split())
+    if "source_provenance" in values and values["source_provenance"] is None:
+        values["source_provenance"] = {}
+
+    row = await db.scalar(select(Firm).where(Firm.organization_id == organization_id).with_for_update())
+    if row is None:
+        display_name = values.get("display_name") or await _organization_name(db, organization_id)
+        created = {
+            "canonical_name": display_name, "regions": [], "services": [], "capabilities": [], "sectors": [],
+            "source_type": "MANUAL", "source_provenance": {}, "evidence_state": "UNVERIFIED",
+            **values, "display_name": display_name,
+        }
+        row = Firm(
+            scope="ORGANIZATION_PRIVATE", owner_organization_id=organization_id,
+            organization_id=organization_id, created_by_user_id=actor_user_id, **created,
+        )
+        db.add(row)
+        try:
+            await db.commit()
+        except IntegrityError:
+            # A concurrent first save won the unique index; apply this request to that row.
+            await db.rollback()
+            row = await db.scalar(select(Firm).where(Firm.organization_id == organization_id).with_for_update())
+            if row is None:
+                raise
+            for key, value in values.items():
+                setattr(row, key, value)
+            await db.commit()
+    else:
+        for key, value in values.items():
+            setattr(row, key, value)
+        await db.commit()
+    await db.refresh(row)
+    return _firm_response(row, await _current_references(db, row.id))
+
+
+async def _editable_reference(
+    db: AsyncSession, *, organization_id: UUID, firm_id: UUID, reference_id: UUID, operator: bool,
+) -> tuple[Firm, ProjectReference]:
+    firm = await db.scalar(select(Firm).where(Firm.id == firm_id, _visible(Firm.scope, Firm.owner_organization_id, organization_id)))
+    if firm is None:
+        raise CandidateNotFoundError("Firm not found")
+    if firm.scope == "NETWORK_SHARED" and not operator:
+        raise CandidateAccessError("Operator access is required to edit network-shared evidence")
+    row = await db.scalar(
+        select(ProjectReference)
+        .where(ProjectReference.id == reference_id, ProjectReference.firm_id == firm.id)
+        .with_for_update()
+    )
+    if row is None:
+        raise CandidateNotFoundError("Project reference not found")
+    return firm, row
+
+
+REFERENCE_FACT_FIELDS = tuple(ProjectReferenceCreateRequest.model_fields)
+
+
+async def update_project_reference(
+    db: AsyncSession, *, organization_id: UUID, firm_id: UUID, reference_id: UUID,
+    actor_user_id: UUID, payload: ProjectReferenceUpdateRequest, operator: bool,
+) -> ProjectReferenceResponse:
+    """Edit by supersede: the changed facts become a new reference; the old row is archived.
+
+    Candidate matches, scenario contributions and proposal evidence packs cite a
+    reference by id and are immutable, so the cited row's facts are never rewritten.
+    A request that changes nothing returns the reference as it is.
+    """
+    firm, row = await _editable_reference(
+        db, organization_id=organization_id, firm_id=firm_id, reference_id=reference_id, operator=operator,
+    )
+    if row.archived_at is not None:
+        raise CandidateEligibilityError("An archived project reference cannot be edited")
+    current = {key: getattr(row, key) for key in REFERENCE_FACT_FIELDS}
+    merged = {**current, **payload.model_dump(exclude_unset=True)}
+    try:
+        facts = ProjectReferenceCreateRequest(**merged).model_dump()
+    except ValidationError as exc:
+        problems = "; ".join(str(error.get("msg", "invalid value")) for error in exc.errors()[:5])
+        raise CandidateValidationError(f"The edited project reference is not valid: {problems}") from exc
+    if facts == ProjectReferenceCreateRequest(**current).model_dump():
+        return _reference_response(row, shared=firm.scope == "NETWORK_SHARED")
+    row.archived_at = datetime.now(timezone.utc)
+    row.archived_by_user_id = actor_user_id
+    successor = ProjectReference(
+        firm_id=firm.id, created_by_user_id=actor_user_id, supersedes_reference_id=row.id, **facts
+    )
+    db.add(successor)
+    await db.commit()
+    await db.refresh(successor)
+    return _reference_response(successor, shared=firm.scope == "NETWORK_SHARED")
+
+
+async def archive_project_reference(
+    db: AsyncSession, *, organization_id: UUID, firm_id: UUID, reference_id: UUID,
+    actor_user_id: UUID, operator: bool,
+) -> ProjectReferenceResponse:
+    """Retire a reference from the library, new searches and new analyses. Idempotent.
+
+    The row stays, so history that cites it still resolves.
+    """
+    firm, row = await _editable_reference(
+        db, organization_id=organization_id, firm_id=firm_id, reference_id=reference_id, operator=operator,
+    )
+    if row.archived_at is None:
+        row.archived_at = datetime.now(timezone.utc)
+        row.archived_by_user_id = actor_user_id
+        await db.commit()
+        await db.refresh(row)
+    return _reference_response(row, shared=firm.scope == "NETWORK_SHARED")
 
 
 async def create_project_reference(
@@ -325,18 +506,22 @@ async def create_cv_version(
 
 
 async def list_candidate_library(db: AsyncSession, *, organization_id: UUID) -> CandidateLibraryResponse:
-    firms = list((await db.scalars(
+    # The organization's own firm sorts first so the page limit can never drop it.
+    visible = list((await db.scalars(
         select(Firm).where(_visible(Firm.scope, Firm.owner_organization_id, organization_id))
-        .order_by(Firm.display_name, Firm.id).limit(100)
+        .order_by(Firm.organization_id.is_(None), Firm.display_name, Firm.id).limit(101)
     )).all())
+    self_firm = next((row for row in visible if row.organization_id is not None), None)
+    firms = [row for row in visible if row.organization_id is None][:100]
     experts = list((await db.scalars(
         select(Expert).where(_visible(Expert.scope, Expert.owner_organization_id, organization_id))
         .order_by(Expert.display_name, Expert.id).limit(100)
     )).all())
     references = list((await db.scalars(
-        select(ProjectReference).where(ProjectReference.firm_id.in_([row.id for row in firms]))
-        .order_by(ProjectReference.created_at, ProjectReference.id)
-    )).all()) if firms else []
+        select(ProjectReference).where(
+            ProjectReference.firm_id.in_([row.id for row in visible]), ProjectReference.archived_at.is_(None),
+        ).order_by(ProjectReference.created_at, ProjectReference.id)
+    )).all()) if visible else []
     versions = list((await db.scalars(
         select(CVVersion).where(CVVersion.expert_id.in_([row.id for row in experts]))
         .order_by(CVVersion.expert_id, CVVersion.version_number)
@@ -348,6 +533,7 @@ async def list_candidate_library(db: AsyncSession, *, organization_id: UUID) -> 
     for row in versions:
         versions_by_expert[row.expert_id].append(row)
     return CandidateLibraryResponse(
+        self_firm=_firm_response(self_firm, refs_by_firm[self_firm.id]) if self_firm else None,
         firms=[_firm_response(row, refs_by_firm[row.id]) for row in firms],
         experts=[_expert_response(row, versions_by_expert[row.id]) for row in experts],
     )
@@ -619,13 +805,19 @@ async def create_candidate_search(
         db, organization_id=organization_id, pursuit_id=pursuit_id, request=request
     )
     if resolution == "PARTNER_FIRM":
+        # A partner search never proposes the organization's own firm, and reads
+        # current references only.
         candidates = list((await db.scalars(
-            select(Firm).where(_visible(Firm.scope, Firm.owner_organization_id, organization_id))
-            .order_by(Firm.updated_at.desc(), Firm.id).limit(MAX_RETRIEVAL_POOL)
+            select(Firm).where(
+                _visible(Firm.scope, Firm.owner_organization_id, organization_id),
+                Firm.organization_id.is_(None),
+            ).order_by(Firm.updated_at.desc(), Firm.id).limit(MAX_RETRIEVAL_POOL)
         )).all())
         references = list((await db.scalars(
-            select(ProjectReference).where(ProjectReference.firm_id.in_([row.id for row in candidates]))
-            .order_by(ProjectReference.firm_id, ProjectReference.created_at.desc())
+            select(ProjectReference).where(
+                ProjectReference.firm_id.in_([row.id for row in candidates]),
+                ProjectReference.archived_at.is_(None),
+            ).order_by(ProjectReference.firm_id, ProjectReference.created_at.desc())
         )).all()) if candidates else []
         evaluated = _evaluate_firms(candidates, references, target, gap, contribution, request.result_limit)  # type: ignore[arg-type]
     else:

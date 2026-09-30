@@ -33,9 +33,9 @@ from app.core.analysis_languages import analysis_language_prompt_instruction
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "pursuit_analysis_d1_v3"
+PROMPT_VERSION = "pursuit_analysis_d2_v1"
 SCHEMA_VERSION = "pursuit_analysis_output_p0_v2"
-PIPELINE_VERSION = "pursuit_analysis_pipeline_d1_v3"
+PIPELINE_VERSION = "pursuit_analysis_pipeline_d2_v1"
 MODEL_PROVIDER = "google-gemini"
 DEFAULT_CHUNK_CHARACTERS = 100_000
 # Chunk size of the SHORT route (GEMINI_PURSUIT_CHUNK_CHARS) and of the LONG route.
@@ -151,6 +151,10 @@ Mark complex or ambiguous rules, including unclear individual-versus-firm role
 applicability, with complex_rule=true. source_context must be copied
 character-for-character from the document or left null. Treat each lettered or
 numbered item of a qualifications or required-materials list as a separate fact.
+Use requirement_type=SUBMISSION_INSTRUCTION for a fact that only states how, where,
+when, or in what form the submission is delivered, and distinction=INFORMATIONAL
+for a statement that asks nothing of the bidder; a document, qualification, or
+experience the bidder must provide is neither.
 Never invent a page number. Return strict JSON only."""
 PROMPT_SHA256 = hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()
 

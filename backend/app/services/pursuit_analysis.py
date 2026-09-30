@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.agents import pursuit_analyzer
 from app.core.analysis_languages import resolve_analysis_language
+from app.models.candidate_retrieval import Firm, ProjectReference
 from app.models.company import Certification, CompanyProfile, FinancialHistory, License, ReadinessDocument
 from app.models.private_documents import DocumentProcessingJob, DocumentProcessingResult, DocumentVersion, PrivateDocument
 from app.models.pursuit_analysis import (
@@ -41,7 +43,10 @@ from app.schemas.tenancy import (
     PursuitGapResponse,
     PursuitPositionResponse,
     PursuitRequirementResponse,
+    PursuitSubmissionNoteResponse,
 )
+from app.services.candidate_retrieval import reference_evidence_basis
+from app.services.own_experience import is_experience_requirement, match_own_references, note_kind
 from app.services.private_documents import build_analysis_pack_candidate
 
 
@@ -177,6 +182,12 @@ async def _company_snapshot(db: AsyncSession, organization_id: UUID) -> tuple[UU
     licenses = list((await db.scalars(select(License).where(License.company_id == profile.id))).all())
     financial = list((await db.scalars(select(FinancialHistory).where(FinancialHistory.company_id == profile.id))).all())
     readiness = list((await db.scalars(select(ReadinessDocument).where(ReadinessDocument.company_profile_id == profile.id))).all())
+    self_firm = await db.scalar(select(Firm).where(Firm.organization_id == organization_id))
+    own_references = list((await db.scalars(
+        select(ProjectReference)
+        .where(ProjectReference.firm_id == self_firm.id, ProjectReference.archived_at.is_(None))
+        .order_by(ProjectReference.created_at, ProjectReference.id)
+    )).all()) if self_firm else []
     profile_fields = {
         key: _json_value(getattr(profile, key))
         for key in (
@@ -211,10 +222,32 @@ async def _company_snapshot(db: AsyncSession, organization_id: UUID) -> tuple[UU
             }
             for row in readiness
         ],
+        # The organization's own firm and its current project references (D2-01).
+        "self_firm": {"id": str(self_firm.id), "display_name": self_firm.display_name} if self_firm else None,
+        "own_project_references": [_own_reference_snapshot(row) for row in own_references],
     }
-    file_backed = sum(1 for row in readiness if row.optional_file_url)
-    metadata_only = 1 + len(certifications) + len(licenses) + len(financial) + len(readiness) - file_backed
+    file_backed = sum(1 for row in readiness if row.optional_file_url) + sum(
+        1 for item in snapshot["own_project_references"] if item["evidence_basis"] == "FILE_BACKED"
+    )
+    metadata_only = (
+        1 + len(certifications) + len(licenses) + len(financial) + len(readiness)
+        + len(own_references) - file_backed
+    )
     return profile.id, snapshot, metadata_only, file_backed
+
+
+def _own_reference_snapshot(row: ProjectReference) -> dict[str, Any]:
+    return {
+        "id": str(row.id), "project_name": row.project_name, "client_name": row.client_name,
+        "country": row.country, "sector": row.sector, "service": row.service, "role": row.role,
+        "start_date": _json_value(row.start_date), "completion_date": _json_value(row.completion_date),
+        "completion_state": row.completion_state,
+        "contract_value": str(row.contract_value) if row.contract_value is not None else None,
+        "contract_currency": row.contract_currency, "value_basis": row.value_basis,
+        "contract_share_percent": str(row.contract_share_percent) if row.contract_share_percent is not None else None,
+        "relevant_scope": row.relevant_scope, "evidence_state": row.evidence_state,
+        "evidence_basis": reference_evidence_basis(row.evidence_provenance),
+    }
 
 
 async def create_analysis_run(
@@ -385,20 +418,88 @@ async def create_analysis_run(
     )
 
 
-def _coverage_for_requirement(fact: pursuit_analyzer.ExtractedFact, snapshot: dict[str, Any]) -> tuple[str, str]:
+NOTE_RATIONALES = {
+    "INFORMATIONAL": "An informational statement: it asks nothing of the bidder, so no company evidence is expected.",
+    "SUBMISSION_INSTRUCTION": "A submission instruction (how, where or when to submit): followed when submitting, not proven with company evidence.",
+}
+
+
+@dataclass(frozen=True)
+class RequirementAssessment:
+    coverage: str
+    rationale: str
+    matched_reference_ids: tuple[str, ...] = ()
+    note_kind: str | None = None
+
+
+@dataclass(frozen=True)
+class OwnExperienceMatchResult:
+    ids: tuple[str, ...]
+    rationale: str
+
+    @classmethod
+    def empty(cls) -> "OwnExperienceMatchResult":
+        return cls((), "")
+
+
+def _coverage_for_requirement(
+    fact: pursuit_analyzer.ExtractedFact, snapshot: dict[str, Any], *, as_of: date | None = None,
+) -> tuple[str, str]:
+    assessment = _assess_requirement(fact, snapshot, as_of=as_of)
+    return assessment.coverage, assessment.rationale
+
+
+def _assess_requirement(
+    fact: pursuit_analyzer.ExtractedFact, snapshot: dict[str, Any], *, as_of: date | None = None,
+) -> RequirementAssessment:
+    """Deterministic coverage of one corporate requirement; no AI.
+
+    Order: later-stage duty, informational/submission note (no evidence expected),
+    human interpretation, the organization's own project references (experience
+    requirements only; PARTIAL at most), readiness records, else EVIDENCE_MISSING.
+    """
     scope = fact.stage_scope.upper()
     if scope in {"CONTRACT_EXECUTION", "POST_AWARD_OBLIGATION", "LATER_STAGE"}:
-        return "LATER_STAGE_OBLIGATION", "The cited duty applies after the current bid decision."
+        return RequirementAssessment("LATER_STAGE_OBLIGATION", "The cited duty applies after the current bid decision.")
+    kind = note_kind(fact.distinction, fact.requirement_type)
+    if kind:
+        return RequirementAssessment("NOT_APPLICABLE", NOTE_RATIONALES[kind], note_kind=kind)
+    own = OwnExperienceMatchResult.empty()
+    references = snapshot.get("own_project_references") or []
+    text = " ".join(value for value in (fact.normalized_text, fact.original_quote, fact.source_context) if value)
+    if references and is_experience_requirement(fact.category, fact.requirement_type, text):
+        predicate = fact.predicate.model_dump(exclude_none=True) if fact.predicate else None
+        match = match_own_references(
+            text=text, predicate=predicate, references=references,
+            as_of=as_of or datetime.now(timezone.utc).date(),
+        )
+        if match.matched:
+            own = OwnExperienceMatchResult(tuple(match.reference_ids), match.rationale())
+    interpretation = _interpretation_needed(fact)
+    if interpretation:
+        rationale = interpretation + (f" {own.rationale}" if own.ids else "")
+        return RequirementAssessment("NEEDS_INTERPRETATION", rationale, own.ids)
+    if own.ids:
+        return RequirementAssessment("PARTIAL", own.rationale, own.ids)
+    coverage, rationale = _coverage_from_readiness(fact, snapshot)
+    return RequirementAssessment(coverage, rationale)
+
+
+def _interpretation_needed(fact: pursuit_analyzer.ExtractedFact) -> str | None:
     if fact.complex_rule:
-        return "NEEDS_INTERPRETATION", "The cited rule is conditional or complex and requires a human interpretation."
+        return "The cited rule is conditional or complex and requires a human interpretation."
     contribution = (fact.contribution_rule or "").casefold()
     if contribution and any(term in contribution for term in ("unclear", "ambiguous", "interpret")):
-        return "NEEDS_INTERPRETATION", "Contribution eligibility is not explicit enough for an automatic conclusion."
+        return "Contribution eligibility is not explicit enough for an automatic conclusion."
     if contribution and any(term in contribution for term in ("joint venture", "consortium", "member", "subconsultant")):
         clearly_lead_only = any(term in contribution for term in ("lead only", "lead firm", "must be met by the lead"))
         clearly_shared = any(term in contribution for term in ("any member", "combined", "collectively", "partner may"))
         if not clearly_lead_only and not clearly_shared:
-            return "NEEDS_INTERPRETATION", "The issued document mentions a contributor but does not resolve lead/member eligibility."
+            return "The issued document mentions a contributor but does not resolve lead/member eligibility."
+    return None
+
+
+def _coverage_from_readiness(fact: pursuit_analyzer.ExtractedFact, snapshot: dict[str, Any]) -> tuple[str, str]:
     needle = fact.normalized_text.casefold()
     readiness = snapshot.get("readiness_documents", [])
     generic_terms = {
@@ -527,6 +628,9 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
         requirements: list[PursuitRequirement] = []
         positions: list[PursuitPosition] = []
         persisted_gap_count = 0
+        note_count = 0
+        own_experience_partial_count = 0
+        as_of = snapshot_row.captured_at.date()
         for verified in facts:
             fact = verified.fact
             locator = {
@@ -540,7 +644,13 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
             }
             span = f"characters {verified.char_start}-{verified.char_end}"
             if fact.kind == "CORPORATE_REQUIREMENT":
-                coverage, rationale = _coverage_for_requirement(fact, snapshot_row.snapshot_json)
+                assessment = _assess_requirement(fact, snapshot_row.snapshot_json, as_of=as_of)
+                coverage, rationale = assessment.coverage, assessment.rationale
+                if assessment.matched_reference_ids:
+                    # The self-firm references this deterministic match named (D2-01).
+                    locator = {**locator, "matched_reference_ids": list(assessment.matched_reference_ids)}
+                    own_experience_partial_count += coverage == "PARTIAL"
+                note_count += assessment.note_kind is not None
                 requirement = PursuitRequirement(
                     analysis_run_id=run.id, pack_item_id=verified.pack_item_id,
                     source_span=span, source_locator=locator, original_quote=fact.original_quote,
@@ -624,6 +734,8 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
             "persisted_requirement_count": len(requirements),
             "persisted_position_count": len(positions),
             "persisted_gap_count": persisted_gap_count,
+            "submission_and_notes_count": note_count,
+            "own_experience_partial_count": own_experience_partial_count,
             "quality_state": quality_state,
             "quality_summary": quality_summary,
         }
@@ -774,6 +886,8 @@ async def get_analysis_run(
         return (assertion.new_coverage_state, assertion.new_review_state) if assertion else (coverage, review)
 
     requirement_responses = []
+    note_responses = []
+    matched_by_requirement: dict[UUID, list[UUID]] = {}
     for item in requirements:
         coverage, review = effective("REQUIREMENT", item.id, item.coverage_state, item.review_state)
         assertion = assertions.get(("REQUIREMENT", item.id))
@@ -782,7 +896,9 @@ async def get_analysis_run(
             if assertion and assertion.corrected_fields.get("normalized_text")
             else item.normalized_requirement
         )
-        requirement_responses.append(PursuitRequirementResponse(
+        matched = _matched_reference_ids(item.source_locator)
+        matched_by_requirement[item.id] = matched
+        fields = dict(
             requirement_id=item.id, pack_item_id=item.pack_item_id, original_quote=item.original_quote,
             source_context=item.source_context,
             normalized_requirement=item.normalized_requirement,
@@ -792,7 +908,15 @@ async def get_analysis_run(
             coverage_state=item.coverage_state, effective_coverage_state=coverage,
             review_state=item.review_state, effective_review_state=review,
             source_locator=item.source_locator, generated_interpretation=item.generated_interpretation,
-        ))
+            matched_reference_ids=matched,
+        )
+        # Machine NOT_APPLICABLE is written only for informational statements and
+        # submission instructions; a reviewer who re-states coverage takes it back.
+        kind = note_kind(item.distinction, item.requirement_type) if item.coverage_state == "NOT_APPLICABLE" else None
+        if kind and coverage == "NOT_APPLICABLE":
+            note_responses.append(PursuitSubmissionNoteResponse(**fields, note_kind=kind))
+        else:
+            requirement_responses.append(PursuitRequirementResponse(**fields))
     position_responses = []
     for item in positions:
         coverage, review = effective("POSITION", item.id, item.coverage_state, item.review_state)
@@ -834,6 +958,7 @@ async def get_analysis_run(
             effective_resolution_category=effective_resolution,
             review_state=item.review_state,
             effective_review_state=review, rationale=item.rationale,
+            matched_reference_ids=matched_by_requirement.get(item.requirement_id, []) if item.requirement_id else [],
         ))
     return PursuitAnalysisResponse(
         analysis_run_id=run.id, analysis_pack_id=pack.id, status=run.status,
@@ -852,7 +977,19 @@ async def get_analysis_run(
             content_sha256=item.content_sha256, source_url=item.source_url,
         ) for item in items],
         requirements=requirement_responses, positions=position_responses, gaps=gap_responses,
+        submission_and_notes=note_responses,
     )
+
+
+def _matched_reference_ids(locator: dict[str, Any] | None) -> list[UUID]:
+    values = (locator or {}).get("matched_reference_ids") or []
+    result: list[UUID] = []
+    for value in values:
+        try:
+            result.append(UUID(str(value)))
+        except ValueError:
+            continue
+    return result
 
 
 async def append_review_assertion(
