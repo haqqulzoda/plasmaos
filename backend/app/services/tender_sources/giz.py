@@ -888,11 +888,18 @@ class GizTenderSource:
 
     async def _request(self, client: Any, method: str, url: str, **kwargs: Any) -> Any:
         from app.services.tender_sources.diagnostics import (
+            connect_retry_backoff_seconds,
             connector_failure_details,
+            is_connect_error,
             retry_after_seconds,
         )
 
-        for attempt in range(self.config.max_retries + 1):
+        # A ConnectError (connection could not be opened) is retried exactly once, after
+        # a longer bounded backoff; other retryable failures keep max_retries.
+        connect_retried = False
+        attempt = -1
+        while attempt < self.config.max_retries:
+            attempt += 1
             try:
                 request_url = url
                 for redirect_count in range(MAX_GIZ_REDIRECTS + 1):
@@ -917,6 +924,15 @@ class GizTenderSource:
                 raise ValueError("GIZ redirect chain is too long")
             except Exception as exc:
                 details = connector_failure_details(exc)
+                if is_connect_error(exc):
+                    if connect_retried:
+                        raise
+                    connect_retried = True
+                    delay = connect_retry_backoff_seconds()
+                    logger.warning("giz_connect_retry delay_seconds=%.1f", delay)
+                    await asyncio.sleep(delay)
+                    attempt -= 1  # the connect retry does not use the ordinary budget
+                    continue
                 if attempt >= self.config.max_retries or not details.retryable:
                     raise
                 delay = retry_after_seconds(exc, attempt=attempt)

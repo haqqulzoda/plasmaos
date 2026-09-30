@@ -65,6 +65,26 @@ def retry_after_seconds(exc: BaseException, *, attempt: int) -> float:
     return min(0.5 * (2**attempt) + random.uniform(0.0, 0.25), 5.0)
 
 
+def is_connect_error(exc: BaseException) -> bool:
+    """True for a failure to open a connection (DNS, refused, reset during connect)."""
+    try:
+        import httpx
+    except ImportError:  # pragma: no cover - connectors require httpx at runtime
+        return False
+    return isinstance(exc, httpx.ConnectError)
+
+
+def connect_retry_backoff_seconds() -> float:
+    """Backoff before the single ConnectError retry (SOURCE_CONNECT_RETRY_BACKOFF_SECONDS, 0-30 s)."""
+    import os
+
+    try:
+        base = float(os.getenv("SOURCE_CONNECT_RETRY_BACKOFF_SECONDS", "5"))
+    except ValueError:
+        base = 5.0
+    return max(0.0, min(base, 30.0)) + random.uniform(0.0, 1.0)
+
+
 def safe_failure_message(source_label: str, stage: str, exc: BaseException) -> str:
     """Build an actionable message that contains no raw response or secret data."""
     details = connector_failure_details(exc)

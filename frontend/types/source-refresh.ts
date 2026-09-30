@@ -47,6 +47,8 @@ export interface SourceRefreshStatusItem {
     /** Scheduled refresh (D1-04); null/undefined when the source is not scheduled. */
     scheduled_cadence_seconds?: number | null;
     last_success_at?: string | null;
+    /** The last success was a partial refresh (saved tenders, then hit an error). */
+    last_success_partial?: boolean;
     stale?: boolean | null;
     activity_cursor: string;
 }

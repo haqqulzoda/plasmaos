@@ -74,6 +74,7 @@
     "closingVerifyOnSource": "Yopilmoqda — manbada tekshiring",
     "sourceUnavailableTitle": "Manba vaqtincha mavjud emas",
     "sourceUnavailableBody": "Ushbu manbadagi tenderlar Plasma'da vaqtincha mavjud emas. Saqlangan ishingiz saqlanib qoladi.",
-    "sourceStale": "Eskirgan"
+    "sourceStale": "Eskirgan",
+    "sourcePartial": "Qisman yangilangan"
   }
 }

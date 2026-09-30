@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from app.core.celery_app import celery_app
 from app.db.session import AsyncSessionLocal, engine
 from app.models.all_models import SourceRefreshJob
+from app.services.source_refresh_progress import SourceRefreshProgress, track_source_refresh
 from app.services.source_refresh_jobs import (
     SourceRefreshClaimStatus,
     claim_source_refresh_job,
@@ -98,6 +99,10 @@ async def _execute_source_refresh(source_system: str, job_id: UUID) -> dict[str,
                 lease_lost.set()
                 return
 
+    # Rows the connector committed before any failure (fix 3b): a connection error after
+    # a commit must not be recorded as "failed, nothing saved".
+    progress = SourceRefreshProgress()
+
     async def execute() -> Any:
         async with AsyncSessionLocal() as execution_db:
             job = await execution_db.get(SourceRefreshJob, job_id)
@@ -105,10 +110,11 @@ async def _execute_source_refresh(source_system: str, job_id: UUID) -> dict[str,
                 raise ValueError("Source refresh job disappeared")
             try:
                 job_options = dict(getattr(job, "options_json", {}) or {})
-                raw_result = await _run_source_refresh(
-                    source_system, execution_db,
-                    options=job_options,
-                )
+                with track_source_refresh(execution_db, progress):
+                    raw_result = await _run_source_refresh(
+                        source_system, execution_db,
+                        options=job_options,
+                    )
                 if not job_options.get("dry_run"):
                     try:
                         from app.api.endpoints.tenders import (
@@ -173,6 +179,16 @@ async def _execute_source_refresh(source_system: str, job_id: UUID) -> dict[str,
             "worker execution",
             exc,
         )
+        if progress.committed_rows:
+            # The connector saved rows before failing: a partial refresh with true counts.
+            final_status = "partial"
+            created, updated = progress.created, progress.updated
+            result_message = (
+                f"{get_source_definition(source_system).display_name} refresh partially completed: "
+                f"{progress.created} created, {progress.updated} updated, {progress.unchanged} unchanged "
+                f"were saved before a {details.failure_class} "
+                f"(retryable={str(details.retryable).lower()})."
+            )
         logger.error("operation_failed event=source_refresh_tasks:153 error_type=%s", type(exc).__name__)
     else:
         if not lease_lost.is_set():
@@ -206,6 +222,8 @@ async def _execute_source_refresh(source_system: str, job_id: UUID) -> dict[str,
     fetched = _result_count(result, "fetched_count", "fetched")
     skipped = _result_count(result, "skipped_count", "skipped")
     unchanged = _result_count(result, "unchanged_count", "unchanged")
+    if result is None and progress.committed_rows:
+        unchanged = progress.unchanged
     rejected = (
         _result_count(result, "rejected_count")
         if result is not None and hasattr(result, "rejected_count")

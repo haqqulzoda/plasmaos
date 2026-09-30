@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import and_, case, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.all_models import SourceRefreshJob
@@ -99,6 +99,11 @@ def counters_authoritative(job: SourceRefreshJob) -> bool:
     return job.trigger_kind is not None
 
 
+def _partial_has_data(job: SourceRefreshJob) -> bool:
+    """A partial refresh that saved or confirmed at least one tender."""
+    return int(job.created_count or 0) + int(job.updated_count or 0) + int(job.unchanged_count or 0) > 0
+
+
 def _terminal_reason(job: SourceRefreshJob) -> str:
     defaults = {
         "completed": "Refresh completed.",
@@ -146,13 +151,21 @@ def activity_event(job: SourceRefreshJob, definition: SourceDefinition) -> Sourc
 
 
 def _status_ranked_query(visible_keys: tuple[str, ...]):
+    # Partial jobs are ranked separately with and without saved data, so the newest
+    # partial refresh that saved tenders survives a newer empty one (fix 3b).
+    saved_rows = (
+        func.coalesce(SourceRefreshJob.created_count, 0)
+        + func.coalesce(SourceRefreshJob.updated_count, 0)
+        + func.coalesce(SourceRefreshJob.unchanged_count, 0)
+    )
+    has_data = case((and_(SourceRefreshJob.status == "partial", saved_rows > 0), 1), else_=0)
     ranked = select(
         SourceRefreshJob.id.label("job_id"),
         SourceRefreshJob.source_system,
         SourceRefreshJob.status,
         SourceRefreshJob.trigger_kind,
         func.row_number().over(
-            partition_by=(SourceRefreshJob.source_system, SourceRefreshJob.status),
+            partition_by=(SourceRefreshJob.source_system, SourceRefreshJob.status, has_data),
             order_by=(
                 func.coalesce(SourceRefreshJob.completed_at, SourceRefreshJob.created_at).desc(),
                 SourceRefreshJob.id.desc(),
@@ -177,6 +190,7 @@ async def source_refresh_status(
     terminal: dict[str, SourceRefreshJob] = {}
     clean: dict[str, SourceRefreshJob] = {}
     partial: dict[str, SourceRefreshJob] = {}
+    partial_with_data: dict[str, SourceRefreshJob] = {}
     failure: dict[str, SourceRefreshJob] = {}
     high_water: SourceRefreshJob | None = None
     for row in rows:
@@ -196,7 +210,11 @@ async def source_refresh_status(
         if job.status == "completed" and job.completed_at is not None:
             clean[job.source_system] = job
         if job.status == "partial" and job.completed_at is not None:
-            partial[job.source_system] = job
+            previous = partial.get(job.source_system)
+            if previous is None or (job.completed_at, job.id) > (previous.completed_at, previous.id):
+                partial[job.source_system] = job
+            if _partial_has_data(job):
+                partial_with_data[job.source_system] = job
         if job.status in {"failed", "source_unavailable"} and job.completed_at is not None:
             previous = failure.get(job.source_system)
             if previous is None or (job.completed_at, job.id) > (previous.completed_at, previous.id):
@@ -207,12 +225,15 @@ async def source_refresh_status(
     )
     schedule = configured_source_refresh_schedule()
     now = datetime.now(timezone.utc)
+    # A partial refresh is fresh data only when it saved or confirmed tenders (fix 3b).
     last_success: dict[str, datetime] = {}
-    for jobs in (clean, partial):
+    last_success_partial: dict[str, bool] = {}
+    for jobs, is_partial in ((clean, False), (partial_with_data, True)):
         for key, job in jobs.items():
             completed = _utc(job.completed_at)
             if key not in last_success or completed > last_success[key]:
                 last_success[key] = completed
+                last_success_partial[key] = is_partial
     return [
         SourceRefreshStatusItem(
             source_system=definition.key,
@@ -242,6 +263,7 @@ async def source_refresh_status(
                 int(schedule[definition.key].total_seconds()) if definition.key in schedule else None
             ),
             last_success_at=last_success.get(definition.key),
+            last_success_partial=last_success_partial.get(definition.key, False),
             stale=is_stale(
                 last_success_at=last_success.get(definition.key),
                 cadence=schedule.get(definition.key),

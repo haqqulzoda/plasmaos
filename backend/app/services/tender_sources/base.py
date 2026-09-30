@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.all_models import Tender, TenderDocument, TenderStatus
 from app.services.competitor_cache import COMPETITOR_CACHE_METADATA_KEY
 from app.services.official_notice import not_official_notice, sync_official_notices
+from app.services.source_refresh_progress import record_persisted
 from app.services.tender_sources.keys import (
     canonical_source_key,
     normalize_source_system,
@@ -636,10 +637,13 @@ async def persist_tender_batch(
         sum(item.outcome is TenderPersistenceOutcome.UNCHANGED for item in items),
         duplicate_count,
     )
-    return TenderBatchPersistenceResult(
+    result = TenderBatchPersistenceResult(
         items=tuple(items),
         duplicate_count=duplicate_count,
     )
+    # Staged for the running source refresh; counted once the caller commits (3b).
+    record_persisted(result.created_count, result.updated_count, result.unchanged_count)
+    return result
 
 
 class DocumentPersistenceOutcome(str, Enum):

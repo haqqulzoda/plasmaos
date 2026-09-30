@@ -447,17 +447,35 @@ class WorldBankTenderSource:
         return world_bank_utc_instant(self._clock())
 
     async def _get_json(self, client: Any, params: dict[str, Any]) -> dict[str, Any]:
-        for attempt in range(self.config.max_retries + 1):
+        """One page. Other failures: max_retries quick retries. A ConnectError (the
+        connection could not be opened) is retried exactly once, after a longer bounded
+        backoff, then raised."""
+        from app.services.tender_sources.diagnostics import (
+            connect_retry_backoff_seconds,
+            is_connect_error,
+        )
+
+        attempt = 0
+        connect_retried = False
+        while True:
             try:
                 response = await client.get(WORLD_BANK_PROC_NOTICES_URL, params=params)
                 response.raise_for_status()
                 payload = response.json()
                 return payload if isinstance(payload, dict) else {}
-            except Exception:
+            except Exception as exc:
+                if is_connect_error(exc):
+                    if connect_retried:
+                        raise
+                    connect_retried = True
+                    delay = connect_retry_backoff_seconds()
+                    logger.warning("world_bank_connect_retry delay_seconds=%.1f", delay)
+                    await asyncio.sleep(delay)
+                    continue
                 if attempt >= self.config.max_retries:
                     raise
-                await asyncio.sleep(0.5 * (attempt + 1))
-        return {}
+                attempt += 1
+                await asyncio.sleep(0.5 * attempt)
 
     async def list_opportunities(self) -> list[dict[str, Any]]:
         import httpx

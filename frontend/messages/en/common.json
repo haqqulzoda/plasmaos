@@ -74,6 +74,7 @@
     "closingVerifyOnSource": "Closing — verify on source",
     "sourceUnavailableTitle": "Source temporarily unavailable",
     "sourceUnavailableBody": "Tenders from this source are temporarily unavailable in Plasma. Your saved work is kept.",
-    "sourceStale": "Stale"
+    "sourceStale": "Stale",
+    "sourcePartial": "Partial refresh"
   }
 }

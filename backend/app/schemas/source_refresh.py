@@ -52,9 +52,13 @@ class SourceRefreshStatusItem(BaseModel):
     last_partial: SourceRefreshTerminalSummary | None = None
     last_failure: SourceRefreshTerminalSummary | None = None
     # Scheduled refresh (D1-04): cadence from SOURCE_REFRESH_SCHEDULE and whether the
-    # last successful (completed or partial) refresh is older than twice that cadence.
+    # last successful refresh is older than twice that cadence. A completed refresh is a
+    # success; a partial one only when it saved or confirmed tenders (fix 3b).
     scheduled_cadence_seconds: int | None = None
     last_success_at: datetime | None = None
+    last_success_partial: bool = Field(
+        default=False, description="The last success was a partial refresh (show a 'partial' note)."
+    )
     stale: bool | None = Field(default=None, description="None when the source is not scheduled.")
     activity_cursor: str
 

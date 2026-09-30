@@ -74,6 +74,7 @@
     "closingVerifyOnSource": "Закрывается — проверьте на источнике",
     "sourceUnavailableTitle": "Источник временно недоступен",
     "sourceUnavailableBody": "Тендеры из этого источника временно недоступны в Plasma. Ваши сохранённые данные сохранены.",
-    "sourceStale": "Устарело"
+    "sourceStale": "Устарело",
+    "sourcePartial": "Частичное обновление"
   }
 }

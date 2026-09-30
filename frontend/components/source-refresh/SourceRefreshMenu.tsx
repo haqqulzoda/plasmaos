@@ -64,6 +64,8 @@ export function SourceRefreshMenu({
               const pending = pendingSources.has(source.source_system);
               // Scheduled source whose last success is older than 2x its cadence (D1-04).
               const stale = statusBySource.get(source.source_system)?.stale === true;
+              // The last success saved tenders but did not finish (fix 3b).
+              const partial = !active && statusBySource.get(source.source_system)?.last_success_partial === true;
               const state = !source.can_refresh
                 ? t("unavailable")
                 : active?.status === "queued"
@@ -90,6 +92,11 @@ export function SourceRefreshMenu({
                   {stale && (
                     <span className="ds-muted" data-source-stale="true">
                       {tTruth("sourceStale")}
+                    </span>
+                  )}
+                  {partial && (
+                    <span className="ds-muted" data-source-partial="true">
+                      {tTruth("sourcePartial")}
                     </span>
                   )}
                 </Button>
@@ -148,6 +155,8 @@ export function SourceRefreshMenu({
           const pending = pendingSources.has(source.source_system);
               // Scheduled source whose last success is older than 2x its cadence (D1-04).
               const stale = statusBySource.get(source.source_system)?.stale === true;
+          // The last success saved tenders but did not finish (fix 3b).
+          const partial = !active && item?.last_success_partial === true;
           const state = !source.can_refresh
             ? t("unavailable")
             : active?.status === "queued"
@@ -179,6 +188,7 @@ export function SourceRefreshMenu({
                 ) : null}
                 {pending ? t("requesting") : state}
                 {stale && <span data-source-stale="true">· {tTruth("sourceStale")}</span>}
+                {partial && <span data-source-partial="true">· {tTruth("sourcePartial")}</span>}
               </span>
             </button>
           );

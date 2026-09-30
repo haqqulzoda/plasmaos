@@ -74,6 +74,7 @@
     "closingVerifyOnSource": "يُغلق قريبًا — تحقّق من المصدر",
     "sourceUnavailableTitle": "المصدر غير متاح مؤقتًا",
     "sourceUnavailableBody": "المناقصات من هذا المصدر غير متاحة مؤقتًا في Plasma. يتم الاحتفاظ بعملك المحفوظ.",
-    "sourceStale": "قديم"
+    "sourceStale": "قديم",
+    "sourcePartial": "تحديث جزئي"
   }
 }
