@@ -177,7 +177,7 @@ between). A second run creates nothing.
 
 With `pilot/d1-04-freshness` the notice header prints the deadline as published ("17:00 local
 time (as published)" instead of "17:00 UTC"), so the apply *updates* every existing notice
-once (locally: 578 updated, 0 created) and analysis runs sealed on the old text show the
+once (locally: 577 updated, 1 unchanged because that EBRD notice has no deadline line, 0 created) and analysis runs sealed on the old text show the
 "inputs changed" banner. That is expected.
 
 ## 10. Smoke

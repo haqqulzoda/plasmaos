@@ -76,4 +76,25 @@ Stored `status` is never mutated by this change.
 
 ## Counts (local database, `Codex Verification LLC` view)
 
-COUNTS_PLACEHOLDER
+Measured on the local stack (2026-09-30), same instant, customer-visible tenders:
+
+| Source | Stored status OPEN | Shown as open (deadline-derived) |
+| --- | --- | --- |
+| World Bank | 568 | 288 |
+| UzEx (enterprise) | 230 | 18 |
+| EBRD | 91 | 46 |
+| GIZ (visible) | 95 | 4 |
+| ADB | hidden (35 tenders, 0 open) | hidden |
+| **Explorer default (open)** | **984** | **356** |
+
+Explorer `status=all` went from 2019 to 1984: the 35 ADB tenders are no longer customer visible.
+The Explorer "before" (984) was read from the running pilot/week1 API on 2026-09-29 and matches
+the stored-OPEN count above.
+
+After one scheduled refresh per source (the dispatcher run), the derived open counts were
+World Bank 563, UzEx 50, EBRD 71, GIZ 4 (688 in total; 1058 stored OPEN): new World Bank and
+UzEx tenders arrived, and the derived rule still hides the ones already past their deadline.
+
+Notice backfill after the header change: 577 notices updated (World Bank 564, GIZ 13), 1 EBRD
+notice unchanged (no deadline line), 0 created; a re-run updates 0. The two Step 0 REOI runs
+sealed on the old notice text now report `inputs_changed: true`.
