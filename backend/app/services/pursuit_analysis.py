@@ -80,6 +80,11 @@ def classify_analysis_failure(exc: Exception) -> tuple[str, str | None]:
     return str(exc)[:1000], None
 
 
+def is_terminal_analysis_failure(exc: Exception) -> bool:
+    """Failures that no further run attempt can fix (provider account or billing rejection)."""
+    return isinstance(exc, pursuit_analyzer.ProviderAccountError)
+
+
 class AnalysisAdmissionError(ValueError):
     """Selection cannot be sealed into a safe FULL analysis pack."""
 
@@ -638,7 +643,10 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
         await db.rollback()
         run = await db.get(AnalysisRun, run_id, with_for_update=True)
         if run is not None and run.status not in {"COMPLETED", "FAILED"}:
-            if run.attempt_count >= run.max_attempts:
+            # A provider account/billing rejection (HTTP 401/402/403) cannot succeed on a
+            # later attempt: the run is terminal at once (fix 3c). Other failures retry
+            # until max_attempts as before.
+            if is_terminal_analysis_failure(exc) or run.attempt_count >= run.max_attempts:
                 run.status = "FAILED"
                 run.completed_at = datetime.now(timezone.utc)
             else:

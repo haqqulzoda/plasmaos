@@ -538,23 +538,42 @@ def test_w4_analysis_authority_for_upload_and_source_pursuits(tmp_path: Path, mo
                     assert failed_row.extraction_diagnostics["input_page_count"] == 1
                     assert "failure_code" not in failed_row.extraction_diagnostics  # existing failures are unchanged
 
-                    # D1-01: a provider account/billing rejection and a spent run budget use the same
-                    # failure path (QUEUED/FAILED quality, lease cleared, prior success intact) with a
-                    # customer-safe reason and an operator code.
+                    # D1-01: a provider account/billing rejection has a customer-safe reason and an
+                    # operator code; it is terminal at run level on its first attempt (fix 3c): no
+                    # further attempt is dispatched and a replay changes nothing.
+                    account_candidate = await build_analysis_pack_candidate(
+                        db, organization_id=organization_a, pursuit_id=pursuit.id
+                    )
+                    account_run = await create_analysis_run(
+                        db, organization_id=organization_a, pursuit_id=pursuit.id, membership_id=owner_a,
+                        request=PursuitAnalysisStartRequest(
+                            candidate_sha256=account_candidate.candidate_sha256, analysis_language="en",
+                            private_version_ids=[pdf_candidate.document_version_id],
+                        ),
+                    )
+                    calls = {"n": 0}
+
                     async def account_rejected(*_args, **_kwargs):
+                        calls["n"] += 1
                         raise pursuit_analyzer.ProviderAccountError(402)
 
                     monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", account_rejected)
                     with pytest.raises(pursuit_analyzer.ProviderAccountError):
-                        await process_analysis_run(db, failed.analysis_run_id, worker_id="w4-account-worker")
-                    failed_row = await db.get(AnalysisRun, failed.analysis_run_id)
-                    assert failed_row.status == "QUEUED" and failed_row.quality_state == "FAILED"
-                    assert failed_row.lease_owner is None and failed_row.lease_until is None
-                    assert failed_row.failure_stage == "EXTRACTION"
-                    assert failed_row.failure_reason == "The analysis provider is temporarily unavailable. Plasma has been notified."
-                    assert failed_row.extraction_diagnostics["failure_code"] == "PROVIDER_ACCOUNT"
-                    assert failed_row.extraction_diagnostics["error_type"] == "ProviderAccountError"
-                    assert "402" not in failed_row.failure_reason
+                        await process_analysis_run(db, account_run.analysis_run_id, worker_id="w4-account-worker")
+                    account_row = await db.get(AnalysisRun, account_run.analysis_run_id)
+                    assert account_row.status == "FAILED" and account_row.quality_state == "FAILED"
+                    assert account_row.attempt_count == 1 < account_row.max_attempts
+                    assert account_row.completed_at is not None
+                    assert account_row.lease_owner is None and account_row.lease_until is None
+                    assert account_row.failure_stage == "EXTRACTION"
+                    assert account_row.failure_reason == "The analysis provider is temporarily unavailable. Plasma has been notified."
+                    assert account_row.extraction_diagnostics["failure_code"] == "PROVIDER_ACCOUNT"
+                    assert account_row.extraction_diagnostics["error_type"] == "ProviderAccountError"
+                    assert "402" not in account_row.failure_reason
+                    assert account_run.analysis_run_id not in await due_analysis_run_ids(db)
+                    await process_analysis_run(db, account_run.analysis_run_id, worker_id="w4-account-replay")
+                    assert calls["n"] == 1
+                    assert (await db.get(AnalysisRun, account_run.analysis_run_id)).attempt_count == 1
 
                     async def budget_spent(*_args, **_kwargs):
                         raise pursuit_analyzer.RunBudgetExceeded("The analysis time budget was exhausted")
@@ -565,6 +584,7 @@ def test_w4_analysis_authority_for_upload_and_source_pursuits(tmp_path: Path, mo
                     failed_row = await db.get(AnalysisRun, failed.analysis_run_id)
                     assert failed_row.quality_state == "FAILED" and failed_row.lease_owner is None
                     assert failed_row.extraction_diagnostics["failure_code"] == "RUN_BUDGET_EXCEEDED"
+                    assert failed_row.status == "QUEUED"  # a spent budget is retried as before
                     prior = await db.get(AnalysisRun, started.analysis_run_id)
                     assert prior.status == "COMPLETED" and prior.quality_state == "READY_FOR_REVIEW"
                     assert await db.scalar(select(func.count(PursuitRequirement.id)).where(PursuitRequirement.analysis_run_id == started.analysis_run_id)) == 2
