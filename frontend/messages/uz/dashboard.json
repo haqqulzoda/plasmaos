@@ -126,8 +126,7 @@
     "failed": "Boshqaruv panelini yuklab bo‘lmadi",
     "setupHelp": "Kompaniya profilingizni to‘ldiring, hujjatlarni tayyorlang va imkoniyatlarni ko‘rib chiqing.",
     "complete": "Bajarildi",
-    "opportunitiesHelp": "Kompaniyangiz uchun saqlangan tavsiyalar.",
-    "match": "Moslik bali: {score}/100"
+    "opportunitiesHelp": "Kompaniyangiz uchun saqlangan tavsiyalar."
   },
   "matchesHelp": "Profilingizdagi mamlakat yoki xizmatlarga mos 3 tagacha ochiq tender; muddati yaqinlari birinchi."
 }

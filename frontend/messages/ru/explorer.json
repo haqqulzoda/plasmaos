@@ -97,7 +97,6 @@
   "startBid": "Начать подготовку заявки",
   "recommendation": {
     "label": "Сводка рекомендации",
-    "matchScore": "Оценка соответствия",
     "why": "Почему это может подойти",
     "dismissed": "Рекомендация отклонена",
     "recommendedOn": "Рекомендовано {date}",
@@ -127,7 +126,6 @@
     "resultsToolbar": "Управление результатами",
     "resultCount": "Найдено тендеров: {count}",
     "deadlineUnavailable": "Срок не указан",
-    "match": "Совпадение {score}%",
     "openSource": "Открыть источник",
     "openSourceFor": "Открыть источник для {title} в новой вкладке",
     "partialTitle": "Некоторые источники могут быть неполными",

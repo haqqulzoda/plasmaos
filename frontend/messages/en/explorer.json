@@ -97,7 +97,6 @@
   "startBid": "Start bid preparation",
   "recommendation": {
     "label": "Recommendation summary",
-    "matchScore": "Match score",
     "why": "Why this may match",
     "dismissed": "Recommendation dismissed",
     "recommendedOn": "Recommended on {date}",
@@ -127,7 +126,6 @@
     "resultsToolbar": "Manage tender results",
     "resultCount": "{count, plural, one {# tender found} other {# tenders found}}",
     "deadlineUnavailable": "Deadline unavailable",
-    "match": "{score}% match",
     "openSource": "Open source",
     "openSourceFor": "Open source for {title} in a new tab",
     "partialTitle": "Some sources may be incomplete",

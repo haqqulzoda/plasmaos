@@ -1116,7 +1116,7 @@ def main():
                 evidence = {}
                 for locale in ("en", "ru"):
                     load("tenders?view=all", locale, 1440)
-                    text = page.locator("main").inner_text()
+                    text = page.locator("#customer-main").inner_text()
                     assert "88" not in text and "/100" not in text and "Generated rationale" not in text, text[:400]
                     facts = messages(locale, "explorer")["facts"]
                     chips = page.locator(".explorer-card .fact-chip")

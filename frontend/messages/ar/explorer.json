@@ -97,7 +97,6 @@
   "startBid": "بدء إعداد العطاء",
   "recommendation": {
     "label": "ملخص التوصية",
-    "matchScore": "درجة المطابقة",
     "why": "سبب هذه المطابقة المحتملة",
     "dismissed": "تم تجاهل التوصية",
     "recommendedOn": "تمت التوصية في {date}",
@@ -127,7 +126,6 @@
     "resultsToolbar": "إدارة نتائج المناقصات",
     "resultCount": "تم العثور على {count} مناقصة",
     "deadlineUnavailable": "الموعد النهائي غير متاح",
-    "match": "تطابق {score}%",
     "openSource": "فتح المصدر",
     "openSourceFor": "فتح مصدر {title} في علامة تبويب جديدة",
     "partialTitle": "قد تكون بعض المصادر غير مكتملة",

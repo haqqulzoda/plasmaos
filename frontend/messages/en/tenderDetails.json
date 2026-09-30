@@ -174,7 +174,7 @@
   "readinessUnavailable": "Company readiness information is currently unavailable.",
   "openReadiness": "Open Readiness Vault",
   "bidCreated": "Created {date}. Pursuit state is shown separately above.",
-  "bidNotStartedHelp": "Use Prepare Bid in the Pursuit section to get started.",
+  "bidNotStartedHelp": "Open the workspace to review requirements, build the team and prepare the proposal.",
   "s143": {
     "projectName": "Name",
     "projectStatus": "Status",
@@ -196,7 +196,6 @@
   "redesign": {
     "glance": "Tender at a glance",
     "recommendation": "AI recommendation",
-    "match": "Match score",
     "dismissed": "Recommendation dismissed",
     "noRecommendation": "No stored recommendation is available for this tender.",
     "notFound": "Tender not found.",

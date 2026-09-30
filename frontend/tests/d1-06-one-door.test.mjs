@@ -244,6 +244,16 @@ test("no customer surface renders the numeric score or the generated rationale",
     }
   }
   assert.equal(messages("en", "explorer").matches.tab, "Matches your profile");
+  // The score copy is gone from the customer catalogs, not just unreferenced.
+  for (const locale of LOCALES) {
+    for (const name of ["dashboard", "explorer", "myTenders", "tenderDetails"]) {
+      const catalog = read(`messages/${locale}/${name}.json`);
+      assert.doesNotMatch(catalog, /\{score\}|"matchScore"|\/100/, `${locale}/${name}`);
+    }
+  }
+  for (const name of ["dashboard", "explorer", "myTenders", "tenderDetails"]) {
+    assert.doesNotMatch(read(`messages/en/${name}.json`), /match score|AI score/i, name);
+  }
 });
 
 test("fact chips are deterministic facts from existing data", () => {

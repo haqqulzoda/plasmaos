@@ -126,8 +126,7 @@
     "failed": "Dashboard could not be loaded",
     "setupHelp": "Build your company profile, prepare your documents, and explore opportunities.",
     "complete": "Complete",
-    "opportunitiesHelp": "Stored recommendations for your company.",
-    "match": "Match score: {score}/100"
+    "opportunitiesHelp": "Stored recommendations for your company."
   },
   "matchesHelp": "Up to 3 open tenders that match your profile's countries or services, soonest deadline first."
 }

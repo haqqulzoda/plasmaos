@@ -181,19 +181,20 @@ test("new badge and high-significance actions have localized accessible copy", (
 
 test("claim-safe terminology renders natively in all P0 locales", () => {
   const expected = {
-    en: ["Tender Explorer", "Match score", "Compliance"],
-    uz: ["Tenderlar katalogi", "Moslik bali", "Muvofiqlik tahlili"],
-    ru: ["Каталог тендеров", "Оценка соответствия", "Анализ соответствия"],
-    ar: ["مستكشف المناقصات", "درجة المطابقة", "الامتثال"],
+    // D1-08: the numeric match score is gone; the deterministic profile match replaces it.
+    en: ["Tender Explorer", "Matches your profile", "Compliance"],
+    uz: ["Tenderlar katalogi", "Profilingizga mos", "Muvofiqlik tahlili"],
+    ru: ["Каталог тендеров", "Соответствует вашему профилю", "Анализ соответствия"],
+    ar: ["مستكشف المناقصات", "يطابق ملفك", "الامتثال"],
   };
   for (const locale of CUSTOMER_SELECTABLE_LOCALES) {
     const t = createTranslator({ locale, messages: catalogs[locale] });
     assert.equal(t("explorer.title"), expected[locale][0]);
-    assert.equal(t("explorer.recommendation.matchScore"), expected[locale][1]);
+    assert.equal(t("explorer.matches.tab"), expected[locale][1]);
     assert.ok(t("tenderDetails.compliance").includes(expected[locale][2]));
     assert.doesNotMatch(
       [
-        t("explorer.recommendation.matchScore"),
+        t("explorer.matches.tab"),
         t("explorer.recommendation.why"),
         t("refresh.partial", { source: "World Bank", count: 2 }),
       ].join(" "),
