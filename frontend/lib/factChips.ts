@@ -6,10 +6,13 @@
  *   country   the tender's country is one of the profile's target countries
  *   service   a profile target service is found in the tender (server-computed match)
  *   notice    the notice type: expression of interest / invitation for bids / prequalification
- *   daysLeft  whole days until the deadline (only while it has not passed)
+ *   daysLeft  whole days until the deadline (only while it has not passed), counted to
+ *             the server's conservative effective instant (lib/tenderTruth), so the
+ *             remaining time is never overstated
  *
  * Pure functions so node tests can run them directly.
  */
+import {daysLeft, isDeadlinePassed, type TenderTruth} from './tenderTruth.ts';
 
 export type NoticeKind = 'eoi' | 'ifb' | 'prequalification';
 
@@ -21,10 +24,8 @@ export type FactChip =
 
 export type ProfileMatch = {country?: string | null; services?: string[] | null} | null | undefined;
 
-export type FactTender = {
-    deadline?: string | null;
+export type FactTender = TenderTruth & {
     notice_type?: string | null;
-    status?: string | null;
 };
 
 const NOTICE_PATTERNS: ReadonlyArray<readonly [NoticeKind, RegExp]> = [
@@ -37,18 +38,6 @@ export function noticeKind(noticeType: string | null | undefined): NoticeKind | 
     const text = (noticeType ?? '').trim();
     if (!text) return null;
     return NOTICE_PATTERNS.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
-}
-
-/**
- * Whole days until the deadline, or null when there is no readable deadline or it has
- * passed. Reads the stored deadline directly; session A's truthful helper
- * (lib/tenderTruth `daysLeft`, conservative effective instant) replaces this after the rebase.
- */
-export function deadlineDaysLeft(deadline: string | null | undefined, now: number = Date.now()): number | null {
-    if (!deadline) return null;
-    const time = new Date(deadline).getTime();
-    if (!Number.isFinite(time) || time < now) return null;
-    return Math.ceil((time - now) / (1000 * 60 * 60 * 24));
 }
 
 export function deriveFactChips(
@@ -64,7 +53,7 @@ export function deriveFactChips(
     }
     const notice = noticeKind(tender.notice_type);
     if (notice) chips.push({kind: 'noticeType', type: notice});
-    const days = deadlineDaysLeft(tender.deadline, now);
+    const days = isDeadlinePassed(tender, now) ? null : daysLeft(tender, now);
     if (days !== null) chips.push({kind: 'daysLeft', days});
     return chips;
 }

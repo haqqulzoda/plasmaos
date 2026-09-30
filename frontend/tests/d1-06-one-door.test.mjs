@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 
 import { CUSTOMER_NAVIGATION, activeNavigationKey } from "../lib/customerNavigation.ts";
 import {
-  deadlineDaysLeft,
   deriveFactChips,
   matchesProfile,
   noticeKind,
@@ -273,9 +272,15 @@ test("fact chips are deterministic facts from existing data", () => {
   assert.equal(noticeKind("Invitation for Prequalification"), "prequalification");
   assert.equal(noticeKind("REOI"), "eoi");
   assert.equal(noticeKind("Contract Award"), null);
-  assert.equal(deadlineDaysLeft("2026-10-01T00:00:00Z", now), 0);
-  assert.equal(deadlineDaysLeft("2026-10-01T00:00:01Z", now), 1);
-  assert.equal(deadlineDaysLeft("not-a-date", now), null);
+  // Days left come from lib/tenderTruth: counted to the server's conservative effective
+  // instant, not to the stored wall-clock deadline.
+  const days = (truth) => deriveFactChips(truth, null, now).find((chip) => chip.kind === "daysLeft")?.days ?? null;
+  assert.equal(days({ deadline: "2026-10-01T00:00:00Z" }), 0);
+  assert.equal(days({ deadline: "2026-10-01T00:00:01Z" }), 1);
+  assert.equal(days({ deadline: "not-a-date" }), null);
+  assert.equal(days({ deadline: "2026-10-04T12:00:00Z", deadline_effective_at: "2026-10-03T22:00:00Z" }), 3);
+  assert.equal(days({ deadline: "2026-10-01T06:00:00Z", deadline_effective_at: "2026-09-30T16:00:00Z" }), null);
+  assert.doesNotMatch(read("lib/factChips.ts"), /deadlineDaysLeft|new Date\(/);
   assert.equal(matchesProfile({ country: "Uzbekistan", services: [] }), true);
   assert.equal(matchesProfile({ country: null, services: ["IT"] }), true);
   assert.equal(matchesProfile({ country: " ", services: [] }), false);
