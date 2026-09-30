@@ -67,11 +67,17 @@ fi
 DUMP="$(ls -1 "$SRC"/plasma_"${LABEL}"_*.dump 2>/dev/null | sort | tail -n 1 || true)"
 [ -n "$DUMP" ] || die "no plasma_${LABEL}_*.dump found in $SRC"
 BASE="${DUMP%.dump}"
+# Set layouts: current backup.sh = .private.tar.gz + optional .tender.tar.gz;
+# older sets = one .files.tar.gz holding both directories.
 FILES="$BASE.files.tar.gz"
+PRIVATE="$BASE.private.tar.gz"
+TENDER="$BASE.tender.tar.gz"
 [ -f "$BASE.sha256" ] || die "missing checksum manifest $(basename "$BASE").sha256"
-(cd "$SRC" && sha256sum -c "$(basename "$BASE").sha256" >/dev/null) || die "checksum verification failed for $(basename "$BASE")"
-if [ "$WITH_FILES" = "1" ] && [ ! -f "$FILES" ]; then
-  die "no files archive for $(basename "$BASE"); use --no-files to restore the database only"
+grep -q " $(basename "$DUMP")\$" "$BASE.sha256" || die "$(basename "$BASE").sha256 does not list the dump"
+# --ignore-missing: tender archives may be skipped or pruned by retention; what is present must match.
+(cd "$SRC" && sha256sum -c --ignore-missing "$(basename "$BASE").sha256" >/dev/null) || die "checksum verification failed for $(basename "$BASE")"
+if [ "$WITH_FILES" = "1" ] && [ ! -f "$FILES" ] && [ ! -f "$PRIVATE" ]; then
+  die "no document archive for $(basename "$BASE"); use --no-files to restore the database only"
 fi
 log "latest $LABEL backup: $(basename "$BASE") (checksums OK)"
 
@@ -118,10 +124,24 @@ log "restoring $(basename "$DUMP") (pg_restore)"
 "${COMPOSE[@]}" exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-acl --exit-on-error' <"$DUMP"
 
 # ---- files -----------------------------------------------------------------------------------------
+restore_dir() {  # restore_dir DIR ARCHIVE : replace /app/DIR in staging with the archive's copy
+  log "replacing staging /app/$1 from $(basename "$2")"
+  "${COMPOSE[@]}" run --rm --no-deps -T -e RESTORE_DIR="$1" backend sh -c \
+    'find "/app/$RESTORE_DIR" -mindepth 1 -delete 2>/dev/null; tar -xzf - -C /app' <"$2"
+}
 if [ "$WITH_FILES" = "1" ]; then
-  log "replacing staging private-data and data volumes from $(basename "$FILES")"
-  "${COMPOSE[@]}" run --rm --no-deps -T backend sh -c \
-    'find /app/private-data /app/data -mindepth 1 -delete 2>/dev/null; tar -xzf - -C /app' <"$FILES"
+  if [ -f "$PRIVATE" ]; then
+    restore_dir private-data "$PRIVATE"
+    if [ -f "$TENDER" ]; then
+      restore_dir data "$TENDER"
+    else
+      log "no tender-document archive in this set (skipped or pruned): staging keeps its own /app/data"
+    fi
+  else
+    log "replacing staging private-data and data volumes from $(basename "$FILES")"
+    "${COMPOSE[@]}" run --rm --no-deps -T backend sh -c \
+      'find /app/private-data /app/data -mindepth 1 -delete 2>/dev/null; tar -xzf - -C /app' <"$FILES"
+  fi
 fi
 
 # ---- migrations and post-restore hook ------------------------------------------------------------------
