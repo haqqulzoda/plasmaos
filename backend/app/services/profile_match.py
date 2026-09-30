@@ -6,8 +6,8 @@ are expanded to their countries) or when one of the profile's target services is
 found in the tender's classification or notice text.
 
 Because each match is shown to the customer as a fact ("Service match: IT"), terms
-are matched on word boundaries, not as raw substrings (the broader Explorer service
-*filter* is unchanged):
+are matched on word boundaries, not as raw substrings. The Explorer service filter
+uses the same rule (integration fix 3d):
 
 * a country matches as a whole phrase ("Niger" does not match "Nigeria");
 * an acronym term (upper case, at most 4 letters: "IT", "ICT") matches only as a
@@ -108,14 +108,33 @@ def _python(text_value: str, rule: tuple[str, bool]) -> bool:
     return re.search(translated, text_value, 0 if case_sensitive else re.IGNORECASE) is not None
 
 
+def _service_predicates(services: Any) -> list[Any]:
+    from app.models.all_models import Tender
+
+    return [
+        _sql(getattr(Tender, column), rule)
+        for service in services
+        for rule in _service_rules(service)
+        for column in _SERVICE_COLUMNS
+    ]
+
+
+def service_match_condition(services: Any):
+    """SQL predicate: at least one service matches by the whole-word rule above.
+
+    The Explorer service *filter* uses this too (integration fix 3d), so a tender
+    listed under "Service: IT" is exactly one whose facts say "Service match: IT".
+    """
+    predicates = _service_predicates(services)
+    return or_(*predicates) if predicates else None
+
+
 def profile_match_condition(targets: ProfileTargets):
     """SQL predicate: at least one country or service match. None when there are no targets."""
     from app.models.all_models import Tender
 
     predicates = [_sql(Tender.country, _country_rule(country)) for country in targets.countries]
-    for service in targets.services:
-        for rule in _service_rules(service):
-            predicates.extend(_sql(getattr(Tender, column), rule) for column in _SERVICE_COLUMNS)
+    predicates.extend(_service_predicates(targets.services))
     return or_(*predicates) if predicates else None
 
 

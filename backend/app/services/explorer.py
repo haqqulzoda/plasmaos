@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer
+from sqlalchemy.orm import aliased, defer
 
 from app.api.endpoints.tenders import (
     _apply_tender_sort,
@@ -23,7 +23,7 @@ from app.core.tender_newness import tender_newness
 from app.models.all_models import Tender
 from app.models.audit import TenderRecommendation
 from app.models.company import CompanyProfile
-from app.models.base import MembershipState
+from app.models.base import MembershipState, TenderEngagementStatus
 from app.models.tenancy import Membership, Organization, OrganizationPursuit
 from app.schemas.explorer import (
     ExplorerCounts,
@@ -120,18 +120,45 @@ def _profile_match_order(statement, sort_value: str | None):
     return _apply_tender_sort(statement, normalized)
 
 
-def _profile_match_scope(targets: ProfileTargets, reference_time: datetime | None):
-    """Visible, open tenders with at least one profile match.
+def _dismissed_by_organization(profile_id: UUID | None):
+    """The viewer's organization has a DISMISSED pursuit for the tender (fix 3d).
+
+    Aliased and correlated to ``Tender`` only: the list query also outer-joins the
+    viewer's own ``OrganizationPursuit``, which must not leak into this subquery.
+    """
+    pursuit = aliased(OrganizationPursuit)
+    organization = aliased(Organization)
+    return (
+        select(1)
+        .select_from(pursuit)
+        .join(organization, organization.id == pursuit.organization_id)
+        .where(
+            organization.legacy_company_profile_id == profile_id,
+            pursuit.source_tender_id == Tender.id,
+            pursuit.stage == TenderEngagementStatus.DISMISSED,
+        )
+        .correlate(Tender)
+        .exists()
+    )
+
+
+def _profile_match_scope(
+    targets: ProfileTargets,
+    reference_time: datetime | None,
+    profile_id: UUID | None = None,
+):
+    """Visible, open tenders with at least one profile match, not dismissed by the viewer's organization.
 
     "Open" is the customer lifecycle (app.core.tender_actionability): stored OPEN and
-    the deadline, read conservatively for its source, not passed. The raw stored
-    deadline is a source wall time and must not decide this (D1-05c).
+    the deadline not passed everywhere. The raw stored deadline is a source wall time
+    and must not decide this (D1-05c).
     """
     now = reference_time or datetime.now(timezone.utc)
     return and_(
         customer_visible_tender_condition(Tender),
         profile_match_condition(targets),
         actionable_tender_condition(Tender, now=now),
+        ~_dismissed_by_organization(profile_id),
     )
 
 
@@ -234,7 +261,7 @@ async def _filtered_counts(
             literal(0)
             if targets.empty
             else _filtered(
-                select(func.count(Tender.id)).where(_profile_match_scope(targets, query.reference_time)),
+                select(func.count(Tender.id)).where(_profile_match_scope(targets, query.reference_time, profile_id)),
                 query,
             ).scalar_subquery()
         )
@@ -299,7 +326,7 @@ async def _page_rows(
         statement = (
             select(Tender, OrganizationPursuit).options(defer(Tender.compiled_master_text, raiseload=True))
             .outerjoin(OrganizationPursuit, _owned_engagement_join(user_id=user_id, profile_id=profile_id))
-            .where(_profile_match_scope(targets, query.reference_time))
+            .where(_profile_match_scope(targets, query.reference_time, profile_id))
         )
         statement = _profile_match_order(_filtered(statement, query), query.sort)
         rows = (await db.execute(statement.offset(query.offset).limit(query.limit))).all()

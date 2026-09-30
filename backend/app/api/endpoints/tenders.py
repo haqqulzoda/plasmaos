@@ -2372,22 +2372,14 @@ def _country_predicate(countries: list[str]):
 
 
 def _service_predicate(services: list[str]):
-    searchable_columns = (
-        Tender.sector,
-        Tender.category,
-        Tender.procurement_category,
-        Tender.procurement_method,
-        Tender.notice_type,
-        Tender.title,
-        Tender.description,
-    )
-    predicates = []
-    for service in services:
-        service_terms = SERVICE_SEARCH_TERMS.get(service, (service,))
-        for term in service_terms:
-            pattern = f"%{term}%"
-            predicates.extend(column.ilike(pattern) for column in searchable_columns)
-    return or_(*predicates)
+    """Explorer service filter: the same whole-word rule as "Matches your profile" (fix 3d).
+
+    Previously a raw substring match ("IT" matched "furniture", "road" matched "broadband"),
+    so the filter and the profile-match facts could disagree about the same tender.
+    """
+    from app.services.profile_match import service_match_condition
+
+    return service_match_condition(services)
 
 
 def _document_availability_condition():
