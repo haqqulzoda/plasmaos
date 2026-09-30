@@ -356,6 +356,7 @@ def test_every_customer_surface_derives_open_status_and_hides_adb_on_postgres(mo
                         source_url=f"https://example.test/{external_id}", title=f"D105TRUTH {external_id}",
                         description="d", budget=0, currency="USD", status=TenderStatus(status_value),
                         category="Other", deadline=deadline, source_metadata_json=metadata,
+                        country="Mongolia",
                     )
                     db.add(tender)
                     await db.flush()
@@ -390,10 +391,9 @@ def test_every_customer_surface_derives_open_status_and_hides_adb_on_postgres(mo
                 organization = await connection.fetchval("SELECT id FROM organizations WHERE legacy_company_profile_id=$1", profile)
                 membership = await connection.fetchval(
                     "SELECT id FROM memberships WHERE organization_id=$1 AND user_id=$2", organization, ids["user_a"])
-                for external_id in ("WB-PASSED", "WB-OPEN"):
-                    await connection.execute(
-                        "INSERT INTO tender_recommendations(id,tender_id,company_profile_id,match_score,strategic_rationale,is_dismissed) "
-                        "VALUES ($1,$2,$3,80,'fit',false)", uuid4(), tender_ids[external_id], profile)
+                # "Matches your profile" (D1-08) is computed from the profile's targets.
+                await connection.execute(
+                    "UPDATE company_profiles SET target_countries='[\"Mongolia\"]'::json WHERE id=$1", profile)
             finally:
                 await connection.close()
 
@@ -419,11 +419,12 @@ def test_every_customer_surface_derives_open_status_and_hides_adb_on_postgres(mo
                 everything = await list_explorer_tenders(db, user_id=ids["user_a"], query=ExplorerQuery(q="D105TRUTH", tender_status="all", limit=50))
                 assert "ADB-FUTURE" not in {item.tender.external_id for item in everything.items}  # D1-04b
                 assert everything.counts.all_tenders == 6
-                # Recommended / For-you: the passed recommendation is not offered.
+                # "Matches your profile": only open tenders by derived status. WB-PASSED's
+                # stored wall time is still ahead but its effective deadline has passed.
                 recommended = await list_explorer_tenders(db, user_id=ids["user_a"], query=ExplorerQuery(
                     view=ExplorerView.RECOMMENDED, q="D105TRUTH", limit=50))
-                assert [item.tender.external_id for item in recommended.items] == ["WB-OPEN"]
-                assert recommended.counts.active_recommendations == 1
+                assert {item.tender.external_id for item in recommended.items} == {"WB-OPEN", "GIZ-NO-DEADLINE"}
+                assert recommended.counts.active_recommendations == 2
 
                 # Tender reads (Tender Details header, notification destinations).
                 read = await tenders_endpoint.get_tender(tender_ids["WB-PASSED"], current_user=user, db=db)

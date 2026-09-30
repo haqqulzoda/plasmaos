@@ -18,6 +18,7 @@ from app.api.endpoints.tenders import (
     apply_explorer_tender_filters,
     resolve_filesystem_document_filter_tender_ids,
 )
+from app.core.tender_actionability import actionable_tender_condition
 from app.core.tender_newness import tender_newness
 from app.models.all_models import Tender
 from app.models.audit import TenderRecommendation
@@ -120,12 +121,17 @@ def _profile_match_order(statement, sort_value: str | None):
 
 
 def _profile_match_scope(targets: ProfileTargets, reference_time: datetime | None):
-    """Visible tenders with at least one profile match whose deadline has not passed."""
+    """Visible, open tenders with at least one profile match.
+
+    "Open" is the customer lifecycle (app.core.tender_actionability): stored OPEN and
+    the deadline, read conservatively for its source, not passed. The raw stored
+    deadline is a source wall time and must not decide this (D1-05c).
+    """
     now = reference_time or datetime.now(timezone.utc)
     return and_(
         customer_visible_tender_condition(Tender),
         profile_match_condition(targets),
-        or_(Tender.deadline.is_(None), Tender.deadline >= now),
+        actionable_tender_condition(Tender, now=now),
     )
 
 
