@@ -1,7 +1,13 @@
 # Rollout: pilot/week1 (D1-01 analyzer, D1-03 official notices, D1-04/05 freshness and deadline truth, D1-06 one door, D1-09 ops, OPS-1 host safety, integration fixes)
 
 Status: prepared, **not executed**. Run staging first; production only after staging passes every
-step. All commands run from the repository checkout on the target host, in order. `$` lines are
+step.
+
+**Deploy 1 (first production release from `a275357`) uses `DEPLOY_1_RUNBOOK.md`**: the
+`a275357` checkout has no `scripts/ops/` and no `compose-release.sh tag|import`, so there the
+checkout (files only) must come before the backup, the tag and the import; there is no staging
+VM (the owner's PC is the build host) and no Storage Box yet (the backup goes to the laptop).
+This document stays the reference for later releases, when production already runs this tooling. All commands run from the repository checkout on the target host, in order. `$` lines are
 commands; everything else is a check you must see before going on.
 
 Hosts: **production** is the Hetzner VM (checkout `/opt/plasma-console/plasmaos`, today `main` at
