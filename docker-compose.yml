@@ -196,7 +196,7 @@ services:
       AUTH_BRIDGE_SECRET: ${AUTH_BRIDGE_SECRET:?Set AUTH_BRIDGE_SECRET}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:?Set explicit HTTPS origins}
       PLASMA_SERVICE_NAME: celery_worker
-    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "celery,ai_fast_queue", "--max-memory-per-child=${PLASMA_CHILD_KB_CELERY_WORKER:-131072}" ]
+    command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "celery,ai_fast_queue", "--concurrency=${CELERY_WORKER_CONCURRENCY:-2}", "--max-memory-per-child=${PLASMA_CHILD_KB_CELERY_WORKER:-131072}" ]
 
   worker_heavy:
     build:

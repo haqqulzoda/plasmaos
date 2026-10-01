@@ -117,6 +117,7 @@ Private-document uploads are scanned by ClamAV; the backend reaches it over TCP 
 - [ ] Every queue has a live consumer: `celery`, `ai_fast_queue`, `heavy_dl_queue`, `private_documents`, `pursuit_analysis` (`smoke.sh` runs `celery inspect active_queues`).
 - [ ] Beat drives the pursuit-analysis and private-document dispatch sweeps (every 10 s), notifications and source refresh; an alert fires when Beat is silent for 5 minutes.
 - [ ] The pursuit-analysis worker's concurrency is set on purpose: the host profile sets `PURSUIT_ANALYSIS_WORKER_CONCURRENCY` (1 on 4gb, 2 on 8gb); it must also match the provider's rate limits.
+- [ ] No worker pool follows the CPU count: `celery_worker` runs `CELERY_WORKER_CONCURRENCY` (2 in both profiles), `worker_heavy` and `worker_private_documents` run 1. Celery's default (one child per CPU) overflows the memory limit on a many-core host.
 - [ ] Celery workers recycle pool processes: `--max-tasks-per-child=10` where it was set before, plus `--max-memory-per-child` from the host profile (a pool process above the cap is replaced after its current task, not killed mid-task).
 
 ## 8. Disk, memory and host
@@ -128,7 +129,7 @@ Private-document uploads are scanned by ClamAV; the backend reaches it over TCP 
 | Service | Measured (prod, steady) | 4gb limit | 8gb limit | `oom_score_adj` |
 | --- | --- | --- | --- | --- |
 | clamav | 0.85 GiB (reload peak ~1.3) | 1536m | 2048m | 0 |
-| celery_worker | 0.23 GiB | 384m | 768m | 600 |
+| celery_worker | 0.23 GiB | 384m (concurrency 2) | 768m (concurrency 2) | 600 |
 | backend | 0.19 GiB | 320m | 768m | 100 |
 | worker_pursuit_analysis | 0.18 GiB | 288m (concurrency 1) | 768m (concurrency 2) | 500 |
 | worker_private_documents | 0.17 GiB | 384m | 768m | 400 |

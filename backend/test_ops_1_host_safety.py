@@ -96,6 +96,21 @@ def test_pursuit_concurrency_default_is_unchanged_so_profiles_own_the_value() ->
     assert "--concurrency=${PURSUIT_ANALYSIS_WORKER_CONCURRENCY:-2}" in command
 
 
+def test_every_worker_pool_is_sized_explicitly_never_by_cpu_count() -> None:
+    # Celery's default concurrency is the CPU count: 12 children on a 12-core machine
+    # overflowed celery_worker's 384m limit and OOM-looped it. Every pool is fixed.
+    services = _compose()["services"]
+    for name in WORKERS:
+        assert any(arg.startswith("--concurrency=") for arg in services[name]["command"]), name
+    assert "--concurrency=${CELERY_WORKER_CONCURRENCY:-2}" in services["celery_worker"]["command"]
+    for profile in (_profile("4gb"), _profile("8gb")):
+        concurrency = int(profile["CELERY_WORKER_CONCURRENCY"])
+        assert concurrency == 2
+        # Children at their recycle cap plus a ~100 MiB parent fit inside the limit.
+        children = concurrency * int(profile["PLASMA_CHILD_KB_CELERY_WORKER"]) // 1024
+        assert children + 100 <= _mib(profile["PLASMA_MEM_CELERY_WORKER"])
+
+
 def test_release_script_refuses_builds_on_no_build_hosts_and_moves_images_as_streams() -> None:
     script = (ROOT / "scripts" / "compose-release.sh").read_text(encoding="utf-8")
     for needle in (

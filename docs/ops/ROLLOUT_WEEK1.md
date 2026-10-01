@@ -109,7 +109,7 @@ staging never share one). Nothing else in `.env` changes.
 PLASMA_NO_BUILD=1
 # Memory profile: 4gb today, 8gb after the Hetzner resize (section "Resize" below).
 # It sets the per-service memory limits, Celery per-child caps, Postgres memory settings
-# and PURSUIT_ANALYSIS_WORKER_CONCURRENCY (1 on 4gb, 2 on 8gb).
+# PURSUIT_ANALYSIS_WORKER_CONCURRENCY (1 on 4gb, 2 on 8gb) and CELERY_WORKER_CONCURRENCY (2).
 HOST_PROFILE=4gb
 
 # Pursuit analysis (D1 build)
