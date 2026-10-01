@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
 from app.api.endpoints.communications import notifications_router, broadcasts_router
-from app.api.endpoints import candidates, participation, proposal_evidence, team_scenarios, operations, admin, auth, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
+from app.api.endpoints import candidates, eoi, participation, proposal_evidence, team_scenarios, operations, admin, auth, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
 from app.core.release import VERSION, public_release_metadata, release_metadata_with_database
@@ -96,6 +96,7 @@ app.include_router(my_tenders.router, prefix="/api/v1", tags=["My Tenders"])
 app.include_router(organizations.router, prefix="/api/v1/organizations", tags=["Organizations"])
 app.include_router(pursuits.router, prefix="/api/v1/pursuits", tags=["Pursuits"])
 app.include_router(candidates.pursuit_router, prefix="/api/v1/pursuits", tags=["Candidate Retrieval"])
+app.include_router(eoi.router, prefix="/api/v1/pursuits", tags=["Expression of Interest"])
 app.include_router(candidates.router, prefix="/api/v1/candidates", tags=["Candidate Library"])
 app.include_router(participation.router, prefix="/api/v1/pursuits", tags=["Candidate Participation"])
 app.include_router(team_scenarios.router, prefix="/api/v1/pursuits", tags=["Team Scenarios"])

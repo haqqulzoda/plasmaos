@@ -38,7 +38,7 @@ from app.services.source_registry import SOURCE_REGISTRY
 from scripts import bootstrap_database as bootstrap
 
 
-HEAD = "20261004_0001_d2_01_own_experience"
+HEAD = "20261005_0001_d2_05_eoi_drafts"
 PREFIX = "plasma_sr24_"
 
 

@@ -60,6 +60,10 @@ from app.models.proposal_evidence import (  # noqa: F401,E402
     ProposalEvidencePackItem,
     PursuitProposalWorkspace,
 )
+from app.models.eoi import (  # noqa: F401,E402
+    EoiDraft,
+    EoiDraftArtifact,
+)
 
 
 # ============================================================================
@@ -891,4 +895,6 @@ __all__ = [
     "ProposalEvidencePack",
     "ProposalEvidencePackItem",
     "ProposalEvidenceArtifact",
+    "EoiDraft",
+    "EoiDraftArtifact",
 ]
