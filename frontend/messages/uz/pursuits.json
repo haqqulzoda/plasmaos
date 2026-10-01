@@ -108,7 +108,8 @@
     "untitled": "Nomsiz tender",
     "referenceUnknown": "Raqam noma’lum",
     "unassigned": "Tayinlanmagan",
-    "processed": "{total} tadan {processed} tasi qayta ishlandi"
+    "processed": "{total} tadan {processed} tasi qayta ishlandi",
+    "uploadedOn": "Yuklangan tender · {date}"
   },
   "workspace": {
     "eyebrow": "Tender ish maydoni",
@@ -129,7 +130,8 @@
       "requirements": "Talablar",
       "team": "Jamoa",
       "documents": "Hujjatlar va dalillar",
-      "proposal": "Taklif"
+      "proposal": "Taklif",
+      "eoi": "EOI paketi"
     },
     "identity": "Tender manbasi",
     "uploadedTender": "Tashkilotingiz yuklagan",
@@ -175,7 +177,10 @@
     "noSubmissionIdentified": "Topshirish bandlari aniqlanmadi.",
     "noLaterStageIdentified": "Keyingi bosqich majburiyatlari aniqlanmadi.",
     "analyzeForOverview": "Bu bo‘limni tender hujjatlaridan to‘ldirish uchun tahlilni ishga tushiring.",
-    "documentsEyebrow": "Manba va tashkilot dalillari"
+    "documentsEyebrow": "Manba va tashkilot dalillari",
+    "eoi": "EOI paketi",
+    "eoiEyebrow": "Qiziqish bildirish",
+    "eoiHelp": "Qiziqish bildirish paketini tahlil va oʻz yozuvlaringiz asosida tuzing."
   },
   "context": {
     "title": "Tender kontekstini tasdiqlash",
@@ -231,7 +236,7 @@
     "loadFailed": "Talablarni yuklab bo‘lmadi.",
     "startFailed": "Tahlilni boshlab bo‘lmadi. Hujjatlaringiz xavfsiz — qayta urinib ko‘ring.",
     "packTitle": "Tahlil qilinadigan hujjatlarni tanlang",
-    "packHelp": "Plasma tahlil qilishi kerak bo‘lgan rasmiy/manba va o‘zingizning hujjatlaringizni tanlang.",
+    "packHelp": "Tahlil uchun hujjatlarni tanlang.",
     "sourceDocument": "Rasmiy/manba hujjati",
     "privateDocument": "Sizning hujjatingiz",
     "documentRoles": {
@@ -263,7 +268,7 @@
     "qualityStatus": "Ajratib olish sifati",
     "technicalDetails": "Texnik va audit tafsilotlari",
     "needsAttentionTitle": "Tahlil e’tibor talab qiladi",
-    "needsAttentionHelp": "Plasma hujjatni qayta ishladi, ammo ishonchli bo‘shliq tahlili uchun yetarli xarid talablarini aniqlamadi.",
+    "needsAttentionHelp": "Ishonchli natija uchun talablar juda kam topildi.",
     "reviewAnalysis": "Tahlilni ko‘rib chiqish",
     "rerunAnalysis": "Tahlilni qayta ishga tushirish",
     "qualificationCriteria": "Malaka mezonlari",
@@ -273,9 +278,9 @@
       "FAILED": "Muvaffaqiyatsiz"
     },
     "qualityHelp": {
-      "READY_FOR_REVIEW": "Ajratib olish mazmunli to‘ldirilgan va inson ko‘rib chiqishiga tayyor.",
-      "NEEDS_ATTENTION": "Ajratib olish bo‘shliqlar bo‘yicha xulosa uchun yetarlicha ishonchli emas. Tahlilni ko‘rib chiqing yoki qayta ishga tushiring.",
-      "FAILED": "Tahlil ko‘rib chiqishga tayyor natija bermadi."
+      "READY_FOR_REVIEW": "Tekshiruvingizga tayyor.",
+      "NEEDS_ATTENTION": "Talablar juda kam topildi. Qayta ishga tushiring yoki tekshiring.",
+      "FAILED": "Tekshirish uchun natija yoʻq."
     },
     "qualificationDistinctions": {
       "MANDATORY": "Majburiy",
@@ -356,7 +361,44 @@
       "CLARIFICATION": "Tushuntirish",
       "HUMAN_INTERPRETATION": "Inson talqini"
     },
-    "sourceContext": "Manba konteksti"
+    "sourceContext": "Manba konteksti",
+    "review": {
+      "noteKinds": {
+        "INFORMATIONAL": "Maʼlumot",
+        "SUBMISSION_INSTRUCTION": "Topshirish koʻrsatmasi"
+      },
+      "generatedLabel": "Yaratilgan talqin:",
+      "matchedExperience": "Mos tajriba:",
+      "matchedUnresolved": "(+{count} oldingi versiya)",
+      "reviewStates": {
+        "CONFIRMED": "Tasdiqlangan",
+        "CORRECTED": "Tuzatilgan"
+      },
+      "reviewItem": "Bu bandni koʻrib chiqish",
+      "confirmGroup": "Butun guruhni tasdiqlash ({count})",
+      "bulkReason": "Sabab (ixtiyoriy)",
+      "bulkReasonHelp": "Oʻz sababi berilmagan har bir band uchun ishlatiladi.",
+      "bulkDefaultReason": "Ommaviy koʻrib chiqdi: {name}",
+      "itemReason": "Bu band uchun oʻz sababi (ixtiyoriy)",
+      "confirmSelected": "Tasdiqlash: {count}",
+      "cancel": "Bekor qilish",
+      "bulkProgress": "{total} tadan {done} tasi tasdiqlanmoqda…",
+      "bulkReport": "Tasdiqlandi: {done}. Xato: {failed}.",
+      "groups": {
+        "attention": "Eʼtiboringizni talab qiladi",
+        "partial": "Tajribangiz qisman qamraydi",
+        "notes": "Topshirish koʻrsatmalari va izohlar",
+        "later": "Keyingi bosqich majburiyatlari",
+        "settled": "Koʻrib chiqish bilan yopilgan"
+      },
+      "groupHelp": {
+        "attention": "Hali tasdiq yoʻq yoki qoida talqiningizni talab qiladi.",
+        "partial": "Kiritilgan tajribangizning bir qismi bularga tegishli. Tasdiqlang yoki tuzating.",
+        "notes": "Topshirishda ularga amal qiling. Tasdiq talab qilinmaydi.",
+        "later": "Gʻolib aniqlangandan keyin qoʻllanadi; bu topshirish uchun kerak emas.",
+        "settled": "Koʻrib chiquvchi tomonidan tasdiqlangan yoki qoʻllanmaydi deb belgilangan."
+      }
+    }
   },
   "team": {
     "loading": "Loading candidate records…",
@@ -936,5 +978,91 @@
     "label": "Ishdagi tenderlar ro‘yxati",
     "fromSources": "Manbalardan",
     "uploaded": "Yuklanganlar"
+  },
+  "eoi": {
+    "noAnalysisTitle": "Avval tenderni tahlil qiling",
+    "noAnalysisHelp": "EOI paketi yakunlangan tahlil asosida tuziladi: tanlov mezonlari, eʼlondan iqtiboslar va topshirish koʻrsatmalari.",
+    "openRequirements": "«Talablar»ni ochish",
+    "loading": "Takliflar tayyorlanmoqda…",
+    "unavailableTitle": "EOI paketlari bu serverda hali mavjud emas",
+    "unavailableHelp": "EOI xizmati yoqilgach, tanlov qilishingiz mumkin.",
+    "loadFailed": "Takliflarni yuklab boʻlmadi.",
+    "runNotCurrentTitle": "Avvalgi tahlil asosida",
+    "runNotCurrentHelp": "Yangiroq tahlil bor yoki hujjatlar oʻzgargan. Shu tahlil asosida ham tuzish mumkin; paketda bu koʻrsatiladi.",
+    "stepsLabel": "EOI tuzish bosqichlari",
+    "steps": {
+      "experience": "Tajriba",
+      "partners": "Hamkorlar",
+      "letter": "Xat"
+    },
+    "experienceHelp": "Taqdim etiladigan topshiriqlarni tanlang. Taklif qilinganlari kamida bitta tanlov mezoniga mos.",
+    "addExperience": "Tajriba qoʻshish",
+    "criteriaTitle": "Tanlov mezonlari ({count})",
+    "locatorPage": "Eʼlon, {page}-sahifa",
+    "locatorParagraph": "Eʼlon, {paragraph}-xatboshi",
+    "locatorNotice": "Eʼlon",
+    "addressedBy": "Tegishli: {rows}",
+    "notAddressed": "Tanlovingiz qamramagan",
+    "noCriteria": "Tahlil tanlov mezonlarini aniqlamadi.",
+    "ownTitle": "Sizning tajribangiz",
+    "matchesCriteria": "Mos mezonlar: {count}",
+    "suggested": "Taklif qilingan",
+    "noOwnTitle": "Oʻz tajribangiz kiritilmagan",
+    "noOwnHelp": "Firmaning yakunlangan topshiriqlarini «Hamkorlar va ekspertlar»ga qoʻshib, qayting.",
+    "next": "Keyingi",
+    "back": "Orqaga",
+    "partnersHelp": "Ixtiyoriy. Tajribasi siz qamramagan mezonlarni qamraydigan hamkor firmalarni qoʻshing.",
+    "coversUncovered": "Tajribangiz qamramagan mezonlar: {count}",
+    "coversNone": "Ochiq qolgan mezonlarni qamramaydi.",
+    "partnerRole": "Rol",
+    "roles": {
+      "JV_MEMBER": "Qoʻshma korxona ishtirokchisi",
+      "SUBCONSULTANT": "Subkonsultant"
+    },
+    "partnerNoReferences": "Bu firmaning loyiha referensiyalari kiritilmagan.",
+    "noPartnersTitle": "Hamkor firmalar yoʻq",
+    "noPartnersHelp": "Hamkorlar ixtiyoriy. Birlashmoqchi boʻlsangiz, «Hamkorlar va ekspertlar»da qoʻshing.",
+    "addPartner": "Hamkor firma qoʻshish",
+    "letterHelp": "«{title}» topshirigʻi, raqami {reference} uchun ilova xat. Eʼlon va kompaniya profili asosida toʻldirilgan.",
+    "fields": {
+      "addressee_organization": "Qabul qiluvchi tashkilot",
+      "addressee_name": "Qabul qiluvchi ismi (ixtiyoriy)",
+      "signatory_name": "Imzolovchi",
+      "signatory_title": "Imzolovchi lavozimi",
+      "contact_email": "Aloqa e-mail",
+      "contact_phone": "Telefon (ixtiyoriy)",
+      "contact_address": "Manzil (ixtiyoriy)",
+      "language": "Hujjat tili"
+    },
+    "includeNotes": "Qoralama tegishlilik izohlarini qoʻshish",
+    "includeNotesHelp": "Plasma har bir topshiriq uchun uning mezonga aloqasi haqida qisqa izoh yozadi, faqat kiritilgan faktlaringizdan foydalanib. Yozuvlarda yoʻq narsa qoʻshilgan izohlar tashlab yuboriladi. Qoldirilgan har bir izoh «Qoralama izoh — tekshiring» deb belgilanadi.",
+    "selectionIncomplete": "Tanlov tugallanmagan",
+    "errors": {
+      "ownRequired": "Kamida bitta oʻz topshirigʻingizni tanlang.",
+      "ownTooMany": "Koʻpi bilan 30 ta oʻz topshirigʻingizni tanlang.",
+      "partnersTooMany": "Koʻpi bilan 5 ta hamkor firma tanlang.",
+      "partnerReferencesTooMany": "Har bir hamkor uchun koʻpi bilan 15 ta topshiriq.",
+      "required": "Majburiy maydon.",
+      "email": "Toʻgʻri e-mail kiriting."
+    },
+    "generateSummary": "Tanlangan topshiriqlar: {rows}; qamralgan mezonlar: {total} tadan {criteria}.",
+    "generate": "EOI paketini yaratish",
+    "generating": "Yaratilmoqda… {seconds} s (taxminan {budget} s gacha davom etishi mumkin)",
+    "generateFailed": "Paketni yaratib boʻlmadi",
+    "generated": "{version}-versiya tayyor",
+    "versionsTitle": "Versiyalar",
+    "refresh": "Yangilash",
+    "version": "{version}-versiya",
+    "current": "Dolzarb",
+    "stale": "Eskirgan",
+    "staleReasons": {
+      "NEWER_ANALYSIS_RUN": "Yangiroq tahlil mavjud.",
+      "ANALYSIS_INPUTS_CHANGED": "Tahlildan keyin tender hujjatlari oʻzgargan.",
+      "REFERENCE_SUPERSEDED": "Tanlangan referensiya keyin tahrirlangan.",
+      "REFERENCE_ARCHIVED": "Tanlangan referensiya keyin arxivlangan.",
+      "OTHER": "Paket eskirgan boʻlishi mumkin."
+    },
+    "versionSummary": "Oʻz topshiriqlari: {references} · hamkorlar: {partners} · qamralgan mezonlar: {total} tadan {addressed} · izohlar qoldirildi {notes}, tashlandi {dropped}",
+    "noVersions": "Hozircha versiyalar yoʻq."
   }
 }

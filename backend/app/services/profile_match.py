@@ -34,10 +34,20 @@ from sqlalchemy import and_, case, literal, or_
 class ProfileTargets:
     countries: tuple[str, ...] = ()
     services: tuple[str, ...] = ()
+    # D2-05: a consulting firm matches consulting-services notices only (see consulting_scope).
+    consulting_only: bool = False
 
     @property
     def empty(self) -> bool:
         return not self.countries and not self.services
+
+
+# A profile offering any of these services is a consulting firm for matching purposes.
+CONSULTING_SERVICE_MARKERS = ("consult", "advis", "design", "supervis")
+
+
+def is_consulting_profile(services: tuple[str, ...] | list[str]) -> bool:
+    return any(marker in service.casefold() for service in services for marker in CONSULTING_SERVICE_MARKERS)
 
 
 def profile_targets(
@@ -67,7 +77,7 @@ def profile_targets(
         if key not in seen_services:
             services.append(service)
             seen_services.add(key)
-    return ProfileTargets(tuple(countries), tuple(services))
+    return ProfileTargets(tuple(countries), tuple(services), is_consulting_profile(services))
 
 
 # ---- one rule, two evaluators ---------------------------------------------------------------
@@ -127,10 +137,51 @@ def _service_condition(targets: ProfileTargets):
     return or_(*predicates) if predicates else None
 
 
+# Consulting-services scope (D2-05). Sources that record a procurement category (World
+# Bank procurement group, EBRD, GIZ) say whether a notice is for consultants; an
+# expression-of-interest notice is a consulting call by definition. A notice recorded as
+# goods, works or non-consulting services is outside a consulting firm's scope; a notice
+# whose source records no category is kept.
+_CONSULTING = r"consult"
+_NON_CONSULTING_CATEGORY = r"goods|works|non-consult"
+_NON_CONSULTING_MARKER = r"non-consult"
+_EXPRESSION_OF_INTEREST = r"expression of interest|\mREOI\M|\mEOI\M"
+
+
+def consulting_scope_condition():
+    """SQL: the tender is not recorded as a goods, works or non-consulting notice."""
+    from sqlalchemy import func, not_
+    from app.models.all_models import Tender
+
+    category = func.coalesce(Tender.procurement_category, "")
+    notice = func.coalesce(Tender.notice_type, "")
+    consulting = and_(category.op("~*")(_CONSULTING), category.op("!~*")(rf"^\s*({_NON_CONSULTING_MARKER})[^,]*$"))
+    non_consulting = category.op("~*")(_NON_CONSULTING_CATEGORY)
+    return not_(and_(non_consulting, not_(consulting), not_(notice.op("~*")(_EXPRESSION_OF_INTEREST))))
+
+
+def is_consulting_scope(tender: Any) -> bool:
+    """Python twin of consulting_scope_condition."""
+    category = str(getattr(tender, "procurement_category", None) or "")
+    notice = str(getattr(tender, "notice_type", None) or "")
+    consulting = bool(re.search(_CONSULTING, category, re.IGNORECASE)) and not re.search(
+        rf"^\s*({_NON_CONSULTING_MARKER})[^,]*$", category, re.IGNORECASE,
+    )
+    non_consulting = bool(re.search(_NON_CONSULTING_CATEGORY, category, re.IGNORECASE))
+    eoi = _python(notice, (_EXPRESSION_OF_INTEREST, False))
+    return not (non_consulting and not consulting and not eoi)
+
+
 def profile_match_condition(targets: ProfileTargets):
-    """SQL predicate: at least one country or service match. None when there are no targets."""
+    """SQL predicate: at least one country or service match. None when there are no targets.
+
+    For a consulting profile the match is limited to the consulting-services scope.
+    """
     conditions = [value for value in (_country_condition(targets), _service_condition(targets)) if value is not None]
-    return or_(*conditions) if conditions else None
+    if not conditions:
+        return None
+    match = or_(*conditions)
+    return and_(match, consulting_scope_condition()) if targets.consulting_only else match
 
 
 # Ranking tiers (D2-02): 1 country and service, 2 country only, 3 service only.
@@ -167,6 +218,8 @@ def profile_match_tier(country: str | None, services: list[str] | tuple[str, ...
 
 def tender_profile_match(tender: Any, targets: ProfileTargets) -> tuple[str | None, list[str]]:
     """``(matched_country, matched_services)`` for one tender, by the same rules as the SQL."""
+    if targets.consulting_only and not is_consulting_scope(tender):
+        return None, []
     country_text = str(getattr(tender, "country", None) or "")
     matched_country = next(
         (country for country in targets.countries if _python(country_text, _country_rule(country))), None

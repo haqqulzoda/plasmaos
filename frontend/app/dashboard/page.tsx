@@ -40,6 +40,7 @@ import { OpenWorkspaceButton } from "@/components/pursuits/OpenWorkspaceButton";
 import { FactChips } from "@/components/tenders/FactChips";
 import { expiryState, documentTypeMessageKey } from "@/lib/readiness";
 import { activeOrganizations, pursuitWorkspaceHref } from "@/lib/openWorkspace";
+import { pursuitDisplayTitle } from "@/lib/requirementsReview";
 import {
   formatDate as formatLocaleDate,
   formatDateTime,
@@ -621,7 +622,7 @@ export default function DashboardPage() {
                         </span>
                         <div className="dashboard-pursuit-main">
                           <BidiText>
-                            {pursuit.title || pursuit.tender_title || t("pursuitUntitled")}
+                            {pursuitDisplayTitle(pursuit, (date) => tPursuits("values.uploadedOn", { date: formatLocaleDate(date, locale) }))}
                           </BidiText>
                           <span className="ds-muted">
                             {tPursuits(`stages.${pursuit.stage}`)}

@@ -2532,21 +2532,6 @@
   gap: var(--ds-space-2);
 }
 
-.analysis-requirement-row {
-  border: 1px solid var(--ds-border-subtle);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-raised);
-}
-
-.analysis-requirement-row > summary {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-4);
-  cursor: pointer;
-}
-
 .analysis-evidence,
 .analysis-review-controls {
   margin: 0 var(--ds-space-4) var(--ds-space-4);
@@ -3303,7 +3288,7 @@
 }
 .pursuit-workspace-nav [role="tablist"] {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--ds-space-2);
 }
 .pursuit-workspace-nav [role="tab"] {
@@ -3784,4 +3769,161 @@
   .dashboard-pursuit-list .dashboard-document-icon {
     display: none;
   }
+}
+
+/* D2-05 Requirements cards (quote and locator always visible) and the EOI builder. */
+.analysis-group-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-5);
+}
+.analysis-group-header h3 { margin: 0; }
+.analysis-requirement-card {
+  display: grid;
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-6);
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+}
+.analysis-requirement-card > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-4);
+}
+.analysis-quote {
+  margin: 0;
+  padding-inline-start: var(--ds-space-5);
+  border-inline-start: 3px solid var(--ds-border-subtle);
+  overflow-wrap: anywhere;
+}
+.analysis-locator,
+.analysis-interpretation,
+.analysis-matched { margin: 0; }
+.analysis-interpretation > span,
+.analysis-matched > span { font-weight: 600; }
+.analysis-bulk-panel {
+  padding: var(--ds-space-5);
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-background-subtle);
+}
+.analysis-bulk-items {
+  display: grid;
+  gap: var(--ds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.analysis-bulk-items li {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+.eoi-steps ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.eoi-steps button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  min-block-size: 40px;
+  padding-inline: var(--ds-space-5);
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface);
+  font: inherit;
+  cursor: pointer;
+}
+.eoi-steps button[aria-current="step"] {
+  border-color: var(--ds-accent);
+  background: var(--ds-accent-subtle);
+  font-weight: 600;
+}
+.eoi-step-number {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-background-subtle);
+  font-size: var(--ds-label);
+}
+.eoi-panel,
+.eoi-versions { display: grid; gap: var(--ds-space-6); }
+.eoi-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-4);
+}
+.eoi-panel-header h3 { margin: 0; }
+.eoi-experience-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--ds-space-7);
+}
+.eoi-criteria ul,
+.eoi-references ul,
+.eoi-partners,
+.eoi-partner-references,
+.eoi-versions ul {
+  display: grid;
+  gap: var(--ds-space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.eoi-criteria li,
+.eoi-references > ul > li,
+.eoi-partner-references > li {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-5);
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--ds-radius-md);
+}
+.eoi-criteria blockquote {
+  margin: 0;
+  padding-inline-start: var(--ds-space-4);
+  border-inline-start: 3px solid var(--ds-border-subtle);
+  font-size: var(--ds-label);
+  overflow-wrap: anywhere;
+}
+.eoi-references li[data-selected="true"] { border-color: var(--ds-accent); }
+.eoi-reference-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+}
+.eoi-row-number { font-weight: 700; color: var(--ds-accent); }
+.eoi-badges,
+.eoi-actions,
+.eoi-nav,
+.eoi-version-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-4);
+}
+.eoi-nav { justify-content: flex-end; }
+.eoi-partner-card,
+.eoi-version-card { display: grid; gap: var(--ds-space-4); padding: var(--ds-space-6); }
+.eoi-covers,
+.eoi-stale-reasons { margin: 0; padding-inline-start: var(--ds-space-7); }
+.eoi-letter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--ds-space-5);
+}
+@media (max-width: 720px) {
+  .eoi-experience-grid { grid-template-columns: minmax(0, 1fr); }
 }

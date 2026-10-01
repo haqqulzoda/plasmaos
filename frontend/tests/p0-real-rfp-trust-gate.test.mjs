@@ -19,11 +19,12 @@ test('analysis summary separates processing from extraction quality', () => {
 
 test('empty or anomalous extraction cannot claim there are no gaps', () => {
   const source = read('components/pursuits/PursuitRequirements.tsx');
-  assert.match(source, /qualityReady && <section[^>]+analysis-current-gaps/);
+  // D2-03: groups come only from a ready-for-review result; an anomalous run shows the warning instead.
+  assert.match(source, /const resultAnalysis = currentQualityReady \? analysis : lastReadyAnalysis/);
+  assert.match(source, /groupRequirements\(resultAnalysis\)/);
   assert.match(source, /needsAttentionHelp/);
-  assert.match(source, /reviewAnalysis/);
   assert.match(source, /rerunAnalysis/);
-  assert.ok(source.indexOf('qualityReady && <section') < source.indexOf("t('noCurrentGaps')"));
+  assert.doesNotMatch(source, /noCurrentGaps/);
 });
 
 test('next action derives from the authoritative workflow projections', () => {

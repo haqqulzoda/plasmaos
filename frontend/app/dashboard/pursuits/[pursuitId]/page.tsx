@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Download,
   FileCheck2,
+  FileSignature,
   FileText,
   FolderOpen,
   LayoutDashboard,
@@ -22,6 +23,7 @@ import { OrganizationContextPicker } from '@/components/pursuits/OrganizationCon
 import { PursuitRequirements } from '@/components/pursuits/PursuitRequirements';
 import { PursuitTeam } from '@/components/pursuits/PursuitTeam';
 import { PursuitProposal } from '@/components/pursuits/PursuitProposal';
+import { PursuitEoi } from '@/components/pursuits/PursuitEoi';
 import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Forms';
@@ -29,6 +31,8 @@ import { EmptyState, PageHeader, PageSkeleton, StatusBadge, Surface } from '@/co
 import { formatDateTime, formatFileSize } from '@/i18n/formatters';
 import type { CustomerSelectableLocale } from '@/i18n/locales';
 import { api } from '@/lib/api';
+import { eoiRunId } from '@/lib/eoiBuilder';
+import { pursuitDisplayTitle } from '@/lib/requirementsReview';
 import type { TenderDetailsResponse } from '@/types/tender-details';
 import type {
   AnalysisPackCandidate,
@@ -44,7 +48,8 @@ import { customerProcessingState } from '@/types/pursuit';
 
 const ACTIVE_STATES = new Set(['UPLOADING', 'QUEUED', 'CHECKING', 'EXTRACTING']);
 const DOCUMENT_ROLES: PrivateDocumentRole[] = ['RFP', 'TOR', 'NOTICE', 'ADDENDUM', 'CLARIFICATION', 'FORM', 'ANNEX', 'OTHER'];
-const WORKSPACE_TABS = ['overview', 'requirements', 'team', 'documents', 'proposal'] as const;
+// D2-05: the EOI package sits between Requirements and Team.
+const WORKSPACE_TABS = ['overview', 'requirements', 'eoi', 'team', 'documents', 'proposal'] as const;
 type WorkspaceTab = typeof WORKSPACE_TABS[number];
 
 const isWorkspaceTab = (value: string | null): value is WorkspaceTab =>
@@ -302,7 +307,7 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
   /></main>;
 
   const processing = customerProcessingState(pursuit.processing_state) || 'CHECKING';
-  const title = pursuit.title || pursuit.tender_title || t('values.untitled');
+  const title = pursuitDisplayTitle(pursuit, (date) => t('values.uploadedOn', { date: formatDateTime(date, locale) }));
   const sourceDeadline = context?.field_provenance.find((item) => item.field_name === 'external_deadline')?.source_value || null;
   const deadline = sourceDeadline || pursuit.external_deadline || pursuit.source_deadline;
   const historicalDeadline = Boolean(deadline && new Date(deadline).getTime() < Date.now());
@@ -372,7 +377,7 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
     <nav className="pursuit-workspace-nav" aria-label={t('workspace.navigationLabel')}>
       <div role="tablist" aria-orientation="horizontal" onKeyDown={onTabKeyDown}>
         {WORKSPACE_TABS.map((tab) => {
-          const Icon = tab === 'overview' ? LayoutDashboard : tab === 'requirements' ? ClipboardList : tab === 'team' ? UsersRound : tab === 'documents' ? FolderOpen : PackageCheck;
+          const Icon = tab === 'overview' ? LayoutDashboard : tab === 'requirements' ? ClipboardList : tab === 'eoi' ? FileSignature : tab === 'team' ? UsersRound : tab === 'documents' ? FolderOpen : PackageCheck;
           return <button
             key={tab} id={`pursuit-tab-${tab}`} type="button" role="tab"
             aria-selected={activeTab === tab} aria-controls={`pursuit-panel-${tab}`}
@@ -447,6 +452,11 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
     {activeTab === 'requirements' && <section id="pursuit-panel-requirements" role="tabpanel" aria-labelledby="pursuit-tab-requirements" className="pursuit-workspace-panel">
       <div className="pursuit-panel-heading"><div><span className="ds-eyebrow">{t('workspace.analysisEyebrow')}</span><h2 id="pursuit-requirements-title">{t('workspace.requirements')}</h2><p>{t('workspace.requirementsHelp')}</p></div></div>
       <PursuitRequirements pursuitId={pursuitId} headers={headers} initialReviewableAnalysis={lastReviewableAnalysis} onAnalysisChange={handleAnalysisChange} />
+    </section>}
+
+    {activeTab === 'eoi' && <section id="pursuit-panel-eoi" role="tabpanel" aria-labelledby="pursuit-tab-eoi" className="pursuit-workspace-panel">
+      <div className="pursuit-panel-heading"><div><span className="ds-eyebrow">{t('workspace.eoiEyebrow')}</span><h2 id="pursuit-eoi-title">{t('workspace.eoi')}</h2><p>{t('workspace.eoiHelp')}</p></div></div>
+      <PursuitEoi pursuitId={pursuitId} headers={headers} runId={eoiRunId(analysis, lastReviewableAnalysis)} onOpenRequirements={() => selectTab('requirements')} />
     </section>}
 
     {activeTab === 'team' && <section id="pursuit-panel-team" role="tabpanel" aria-labelledby="pursuit-tab-team" className="pursuit-workspace-panel">

@@ -63,6 +63,8 @@ def main():
         "source_pursuit_created": False,
         # D2-02 library fixture: the own firm starts "not set up yet" (GET 404).
         "d202": False, "d202_self_firm": None, "d202_analysis": False,
+        # D2-05: a full SOURCE analysis, EOI suggestions and drafts.
+        "d205": False, "d205_drafts": [], "d205_posts": [], "d205_reviews": [],
     }
     rows = []
     # D1-06 one door: the SOURCE pursuit the Explorer/Tender Details CTA creates or resolves.
@@ -389,6 +391,111 @@ def main():
             }],
         }
 
+    D205_RUN_ID = "73000000-0000-4000-8000-000000000150"
+    D205_OWN_REF = "73000000-0000-4000-8000-000000000300"
+    D205_OWN_REF_2 = "73000000-0000-4000-8000-000000000301"
+    D205_PARTNER_REF = "73000000-0000-4000-8000-000000000204"
+    D205_REQ_EXPERIENCE = "73000000-0000-4000-8000-000000000151"
+    D205_REQ_LICENSE = "73000000-0000-4000-8000-000000000152"
+    D205_REQ_LATER = "73000000-0000-4000-8000-000000000153"
+    D205_NOTE = "73000000-0000-4000-8000-000000000154"
+    D205_NOTE_INFO = "73000000-0000-4000-8000-000000000155"
+
+    def d205_requirement(requirement_id, statement, quote, state, **values):
+        return {
+            "requirement_id": requirement_id, "pack_item_id": "73000000-0000-4000-8000-000000000156",
+            "original_quote": quote, "source_context": None, "normalized_requirement": statement,
+            "effective_normalized_requirement": statement, "category": "EXPERIENCE", "requirement_type": "QUALIFICATION",
+            "stage_scope": "EXPRESSION_OF_INTEREST", "distinction": "MANDATORY", "predicate": None, "contribution_rule": None,
+            "coverage_state": state, "effective_coverage_state": state, "review_state": "PROVISIONAL",
+            "effective_review_state": "PROVISIONAL", "source_locator": {"page_number": None, "paragraph_number": 4},
+            "generated_interpretation": None, "matched_reference_ids": [], **values,
+        }
+
+    def d205_analysis():
+        experience = d205_requirement(D205_REQ_EXPERIENCE, "At least two completed substation design contracts in the last 10 years",
+            "Successful completion of at least two contracts within the last 10 years involving detailed engineering designs for substations.",
+            "PARTIAL", matched_reference_ids=[D205_OWN_REF], generated_interpretation="Two comparable completed contracts are expected.")
+        license_row = d205_requirement(D205_REQ_LICENSE, "Valid licenses for high-complexity facility design",
+            "The firm must hold valid licenses specified in Articles 8.1.3.1 and 8.1.14.7 of the Law of Mongolia on Permits.",
+            "EVIDENCE_MISSING", category="LEGAL", requirement_type="CERTIFICATION")
+        later = d205_requirement(D205_REQ_LATER, "Prepare detailed designs for 12 sub-projects",
+            "The Consultant shall prepare comprehensive detailed engineering designs for 12 identified sub-projects.",
+            "LATER_STAGE_OBLIGATION", stage_scope="CONTRACT_EXECUTION")
+        notes = [
+            {**d205_requirement(D205_NOTE, "Deliver the expression of interest by e-mail by 16 October 2026",
+                "Expressions of interest must be delivered in written form via e-mail no later than 16 October 2026.",
+                "NOT_APPLICABLE", requirement_type="SUBMISSION_INSTRUCTION"), "note_kind": "SUBMISSION_INSTRUCTION"},
+            {**d205_requirement(D205_NOTE_INFO, "Key Experts will not be evaluated during the shortlisting stage",
+                "Key Experts will not be evaluated during the shortlisting stage.", "NOT_APPLICABLE",
+                distinction="INFORMATIONAL"), "note_kind": "INFORMATIONAL"},
+        ]
+        gap = lambda gap_id, requirement_id, state, statement: {
+            "gap_id": gap_id, "requirement_id": requirement_id, "position_id": None,
+            "source_pack_item_id": "73000000-0000-4000-8000-000000000156", "missing_contribution": statement,
+            "coverage_state": state, "effective_coverage_state": state, "resolution_category": "COMPANY_EVIDENCE",
+            "effective_resolution_category": "COMPANY_EVIDENCE", "review_state": "PROVISIONAL",
+            "effective_review_state": "PROVISIONAL", "rationale": "Synthetic.",
+        }
+        return {
+            "analysis_run_id": D205_RUN_ID, "analysis_pack_id": "73000000-0000-4000-8000-000000000157", "status": "COMPLETED",
+            "result_completeness": "FULL", "analysis_language": "en", "model_provider": "google-gemini",
+            "quality_state": "READY_FOR_REVIEW", "quality_summary": "Extraction is materially populated and ready for human review.",
+            "model_name": "gemini-3.8-flash", "prompt_version": "pursuit_analysis_d2_v1", "schema_version": "pursuit_analysis_output_p0_v2",
+            "pipeline_version": "pursuit_analysis_pipeline_d2_v1", "created_at": "2026-09-30T08:00:00Z",
+            "completed_at": "2026-09-30T08:01:00Z", "failure_stage": None, "failure_reason": None, "inputs_changed": False,
+            "stale_reason": None, "page_count_known": False,
+            "limit_disclosure": "Rendered page count could not be measured; admitted under the character limit.",
+            "pack_items": [{"pack_item_id": "73000000-0000-4000-8000-000000000156", "item_kind": "SOURCE",
+                            "provenance": "SHARED_SOURCE", "display_name": "Official notice text", "role": "OFFICIAL_NOTICE",
+                            "version_number": None, "page_count": None, "page_count_known": False, "content_sha256": "a" * 64,
+                            "source_url": "https://example.invalid/notice"}],
+            "requirements": [experience, license_row, later], "positions": [],
+            "gaps": [gap("73000000-0000-4000-8000-000000000158", D205_REQ_EXPERIENCE, "PARTIAL", experience["effective_normalized_requirement"]),
+                     gap("73000000-0000-4000-8000-000000000159", D205_REQ_LICENSE, "EVIDENCE_MISSING", license_row["effective_normalized_requirement"])],
+            "submission_and_notes": notes,
+        }
+
+    def d205_reference(reference_id, name, matched, rank, **values):
+        return {**{key: value for key, value in d202_reference(reference_id, D202_SELF_FIRM_ID, name).items()
+                   if key not in {"firm_id", "evidence_provenance", "supersedes_reference_id", "archived_at", "created_at"}},
+                "matched_requirement_ids": matched, "suggested": bool(matched), "rank": rank, **values}
+
+    def d205_suggestions():
+        return {
+            "analysis_run_id": D205_RUN_ID, "run_current": True,
+            "defaults": {"assignment_title": "LOT-4 Detailed design SHINE project", "reference_no": "OP00468882",
+                         "addressee_organization": "Ministry of Energy, Mongolia", "addressee_name": "Munkhbadral Purevsuren",
+                         "addressee_email": "procurement@example.invalid", "firm_name": "Synthetic Organization", "firm_country": "Uzbekistan"},
+            "criteria": [{"requirement_id": item["requirement_id"], "statement": item["effective_normalized_requirement"],
+                          "original_quote": item["original_quote"], "locator": {"page_number": None, "paragraph_number": 4},
+                          "effective_coverage_state": item["effective_coverage_state"],
+                          "matched_reference_ids": [D205_OWN_REF] if item["requirement_id"] == D205_REQ_EXPERIENCE else []}
+                         for item in d205_analysis()["requirements"]],
+            "notes": [{"requirement_id": item["requirement_id"], "note_kind": item["note_kind"],
+                       "statement": item["effective_normalized_requirement"], "original_quote": item["original_quote"]}
+                      for item in d205_analysis()["submission_and_notes"]],
+            "own_references": [
+                d205_reference(D205_OWN_REF, "Navoi substation design", [D205_REQ_EXPERIENCE], 1),
+                d205_reference(D205_OWN_REF_2, "Rural water supply design", [], 2, sector="Water"),
+            ],
+            "partner_firms": [{"firm_id": D202_PARTNER_ID, "display_name": "Grid Partner LLP", "country": "Kazakhstan",
+                               "covers_requirement_ids": [D205_REQ_EXPERIENCE, D205_REQ_LICENSE],
+                               "references": [d205_reference(D205_PARTNER_REF, "Almaty substation design",
+                                                             [D205_REQ_EXPERIENCE, D205_REQ_LICENSE], 1, country="Kazakhstan")]}],
+        }
+
+    def d205_draft(version, language, current, reasons=()):
+        return {
+            "draft_id": f"73000000-0000-4000-8000-{400 + version:012d}", "version": version,
+            "created_at": f"2026-09-30T0{version}:00:00Z", "created_by_membership_id": "73000000-0000-4000-8000-000000000003",
+            "analysis_run_id": D205_RUN_ID, "language": language, "current": current, "stale_reasons": list(reasons),
+            "artifacts": [{"artifact_id": f"73000000-0000-4000-8000-{500 + version * 2:012d}", "format": "DOCX", "sha256": "d" * 64, "byte_size": 4096},
+                          {"artifact_id": f"73000000-0000-4000-8000-{501 + version * 2:012d}", "format": "PDF", "sha256": "e" * 64, "byte_size": 8192}],
+            "summary": {"criteria_total": 3, "criteria_with_references": 2, "criteria_without_references": 1,
+                        "own_reference_count": 1, "partner_count": 1, "relevance_notes_generated": 1, "relevance_notes_dropped": 1},
+        }
+
     def d202_read_json(handler):
         length = int(handler.headers.get("content-length", "0"))
         return json.loads(handler.rfile.read(length) or b"{}") if length else {}
@@ -438,6 +545,21 @@ def main():
                     })
                 if parsed_path == base + "/documents":
                     return self.send_json(200, {"items": []})
+                if controls["d205"] and parsed_path == base + "/analysis-runs/latest":
+                    return self.send_json(200, d205_analysis())
+                if controls["d205"] and parsed_path == base + "/eoi/suggestions":
+                    return self.send_json(200, d205_suggestions())
+                if controls["d205"] and parsed_path == base + "/eoi-drafts":
+                    return self.send_json(200, sorted(controls["d205_drafts"], key=lambda item: -item["version"]))
+                if controls["d205"] and parsed_path.startswith(base + "/eoi-artifacts/"):
+                    body = b"PK synthetic eoi"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/octet-stream")
+                    self.send_header("Cache-Control", "private, no-store")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return None
                 if parsed_path == base + "/analysis-runs/latest":
                     if not controls["d202_analysis"]:
                         return self.send_json(200, None)
@@ -639,6 +761,17 @@ def main():
         def do_POST(self):
             requests.append(("POST", self.path))
             parsed_path = urlparse(self.path).path
+            if controls["d205"] and parsed_path == f"/api/v1/pursuits/{SOURCE_PURSUIT_ID}/eoi-drafts":
+                body = d202_read_json(self)
+                controls["d205_posts"].append(body)
+                time.sleep(1.5)  # generation takes a while; the UI shows progress
+                draft = d205_draft(len(controls["d205_drafts"]) + 1, body.get("language", "en"), True)
+                controls["d205_drafts"].append(draft)
+                return self.send_json(201, draft)
+            if controls["d205"] and parsed_path == f"/api/v1/pursuits/{SOURCE_PURSUIT_ID}/analysis-runs/{D205_RUN_ID}/reviews":
+                body = d202_read_json(self)
+                controls["d205_reviews"].append(body)
+                return self.send_json(201, {"assertion_id": str(len(controls["d205_reviews"])), **body})
             if parsed_path == f"/api/v1/candidates/firms/{D202_SELF_FIRM_ID}/project-references":
                 body = d202_read_json(self)
                 firm = controls["d202_self_firm"]
@@ -884,12 +1017,13 @@ def main():
                 load("pursuits/73000000-0000-4000-8000-000000000010?organization_id=73000000-0000-4000-8000-000000000001", "en", 390)
                 page.get_by_role("tab", name="Requirements", exact=True).click()
                 expect(page.get_by_text("Documents changed — analysis may be out of date", exact=True)).to_be_visible()
-                expect(page.get_by_text("What needs attention", exact=True)).to_be_visible()
+                expect(page.locator("[data-requirement-group='attention'] .analysis-group-header").get_by_text("Needs your attention")).to_be_visible()
                 expect(page.get_by_text("Required positions", exact=True)).to_be_visible()
-                requirement = page.locator(".analysis-requirement-row").first
-                requirement.locator("summary").click()
+                requirement = page.locator("[data-requirement-group='attention'] .analysis-requirement-card").first
+                # The original quote and locator are shown directly, not behind a click.
                 expect(requirement.get_by_text("at least three similar contracts", exact=True)).to_be_visible()
-                expect(requirement.get_by_text("Plasma assessment", exact=True)).to_be_visible()
+                expect(requirement.locator("[data-locator]")).to_be_visible()
+                expect(requirement.locator("[data-generated-interpretation]")).to_contain_text("Generated interpretation")
                 assert page.get_by_text("Find Partner", exact=True).count() == 0
                 assert page.get_by_text("Find Expert", exact=True).count() == 0
                 pack_review = page.locator(".analysis-pack-review")
@@ -911,7 +1045,7 @@ def main():
                 try:
                     load("pursuits/73000000-0000-4000-8000-000000000010?organization_id=73000000-0000-4000-8000-000000000001", "en", 390)
                     page.get_by_role("tab", name="Requirements", exact=True).click()
-                    requirement_row = page.locator(".analysis-requirement-row").filter(has_text="At least three similar contracts").first
+                    requirement_row = page.locator(".analysis-requirement-card").filter(has_text="At least three similar contracts").first
                     expect(requirement_row).to_be_visible()
                     controls["p1_running"] = True
                     page.get_by_role("button", name="Refresh analysis", exact=True).click()
@@ -928,7 +1062,7 @@ def main():
                     expect(page.get_by_text("Analysis failed.", exact=True)).to_be_visible()
                     expect(page.get_by_role("button", name="Retry analysis", exact=True)).to_be_visible()
                     expect(page.get_by_text("Showing the last successful analysis while the latest attempt is not reviewable.", exact=True)).to_be_visible()
-                    expect(page.locator(".analysis-requirement-row").filter(has_text="At least three similar contracts").first).to_be_visible()
+                    expect(page.locator(".analysis-requirement-card").filter(has_text="At least three similar contracts").first).to_be_visible()
                     assert page.get_by_text("Synthetic fixture failure", exact=True).count() == 0
                     return {"running_nonblocking":True,"failure_retry":True,"previous_success_retained":True,"failure_details_hidden":True}
                 finally:
@@ -1349,6 +1483,105 @@ def main():
                 return {"states": list(card_states)}
             case("d2-02/tender-details/analysis-card", d202_tender_details)
             controls.update(d202=False, d202_analysis=False)
+            def d205_setup():
+                controls.update(d202=True, d205=True, d205_posts=[], d205_reviews=[],
+                                d205_drafts=[d205_draft(1, "en", False, ["REFERENCE_SUPERSEDED", "NEWER_ANALYSIS_RUN"])])
+                controls["d202_self_firm"] = d202_firm(D202_SELF_FIRM_ID, "Synthetic Organization", [
+                    d202_reference(D205_OWN_REF, D202_SELF_FIRM_ID, "Navoi substation design")], is_self_firm=True)
+            workspace = f"pursuits/{SOURCE_PURSUIT_ID}?organization_id={ORGANIZATION_ID}"
+            for locale in ("en", "ru"):
+                for width in (1440, 390):
+                    def d205_builder(locale=locale, width=width):
+                        d205_setup()
+                        eoi = messages(locale, "pursuits")["eoi"]
+                        load(f"{workspace}&tab=eoi", locale, width)
+                        before = len(requests)
+                        expect(page.locator("[data-eoi-panel='experience']")).to_be_visible(timeout=30000)
+                        experience = page.locator(f"[data-criterion-id='{D205_REQ_EXPERIENCE}']")
+                        expect(experience).to_have_attribute("data-addressed", "true")
+                        assert page.locator(f"[data-reference-id='{D205_OWN_REF}'] input").is_checked()  # suggested: pre-checked
+                        assert not page.locator(f"[data-reference-id='{D205_OWN_REF_2}'] input").is_checked()
+                        page.screenshot(path=str(OUT / f"{locale}-d205-eoi-experience-{width}.png"), full_page=True)
+                        page.locator(f"[data-reference-id='{D205_OWN_REF}'] input").uncheck()
+                        expect(experience).to_have_attribute("data-addressed", "false")  # live, client-side
+                        page.locator(f"[data-reference-id='{D205_OWN_REF}'] input").check()
+                        page.locator("[data-eoi-step='partners']").click()
+                        page.locator(f"[data-partner-id='{D202_PARTNER_ID}'] input[type=checkbox]").first.check()
+                        page.locator(f"[data-partner-id='{D202_PARTNER_ID}'] select").select_option("SUBCONSULTANT")
+                        page.locator(f"[data-partner-id='{D202_PARTNER_ID}'] .eoi-partner-references input").check()
+                        page.screenshot(path=str(OUT / f"{locale}-d205-eoi-partners-{width}.png"), full_page=True)
+                        page.locator("[data-eoi-step='letter']").click()
+                        assert page.locator("[name='addressee_organization']").input_value() == "Ministry of Energy, Mongolia"
+                        page.locator("[name='signatory_name']").fill("Aziza Karimova")
+                        page.locator("[name='signatory_title']").fill("Director")
+                        page.locator("[name='contact_email']").fill("eoi@example.invalid")
+                        page.screenshot(path=str(OUT / f"{locale}-d205-eoi-letter-{width}.png"), full_page=True)
+                        assert d202_writes(before) == []  # building writes nothing
+                        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+                        return {"steps": 3, "language": page.locator("[name='language']").input_value()}
+                    case(f"d2-05/eoi/builder/{locale}/{width}", d205_builder)
+            def d205_generate():
+                d205_setup()
+                load(f"{workspace}&tab=eoi", "en", 1440)
+                before = len(requests)
+                page.locator("[data-eoi-step='letter']").click()
+                page.locator("[name='signatory_name']").fill("Aziza Karimova")
+                page.locator("[name='signatory_title']").fill("Director")
+                page.locator("[name='contact_email']").fill("eoi@example.invalid")
+                page.locator("[data-eoi-generate]").click()
+                expect(page.locator("[data-eoi-progress]")).to_be_visible()
+                expect(page.locator("[data-eoi-version='2']")).to_be_visible(timeout=20000)
+                body = controls["d205_posts"][-1]
+                assert body["analysis_run_id"] == D205_RUN_ID and body["own_reference_ids"] == [D205_OWN_REF], body
+                assert body["include_relevance_notes"] is True and body["language"] == "en" and body["partners"] == []
+                assert set(body["letter"]) == {"addressee_organization", "addressee_name", "signatory_name", "signatory_title",
+                                               "contact_email", "contact_phone", "contact_address"}
+                writes = d202_writes(before)
+                assert writes == [("POST", f"/api/v1/pursuits/{SOURCE_PURSUIT_ID}/eoi-drafts")], writes
+                assert page.locator("[data-eoi-version='2']").get_attribute("data-current") == "true"
+                stale = page.locator("[data-eoi-version='1']")
+                assert stale.get_attribute("data-current") == "false"
+                expect(stale.locator(".eoi-stale-reasons li")).to_have_count(2)
+                with page.expect_download() as download:
+                    page.locator("[data-eoi-version='1'] button", has_text="DOCX").click()
+                assert download.value.suggested_filename == "expression-of-interest-v1-en.docx"
+                page.locator("[data-eoi-versions]").screenshot(path=str(OUT / "en-d205-eoi-versions-1440.png"))
+                return {"versions": 2, "post": 1}
+            case("d2-05/eoi/generate-progress-versions", d205_generate)
+            for locale in ("en", "ru"):
+                for width in (1440, 390):
+                    def d205_requirements(locale=locale, width=width):
+                        d205_setup()
+                        review = messages(locale, "pursuits")["requirements"]["review"]
+                        load(f"{workspace}&tab=requirements", locale, width)
+                        groups = page.locator("[data-requirement-group]").evaluate_all("els => els.map(e => e.dataset.requirementGroup)")
+                        assert groups == ["attention", "partial", "notes", "later"], groups
+                        ids = page.locator("[data-requirement-id]").evaluate_all("els => els.map(e => e.dataset.requirementId)")
+                        assert len(ids) == len(set(ids)) == 5, ids  # one list, no duplicates
+                        card = page.locator(f"[data-requirement-id='{D205_REQ_LICENSE}']")
+                        expect(card.locator(".analysis-quote")).to_be_visible()  # quote not behind a click
+                        expect(card.locator("[data-locator]")).to_be_visible()
+                        partial = page.locator(f"[data-requirement-id='{D205_REQ_EXPERIENCE}']")
+                        expect(partial.locator("[data-matched-references]")).to_contain_text("Navoi substation design")
+                        expect(partial.locator("[data-generated-interpretation]")).to_contain_text(review["generatedLabel"])
+                        page.screenshot(path=str(OUT / f"{locale}-d205-requirements-{width}.png"), full_page=True)
+                        if locale == "en" and width == 1440:
+                            before = len(requests)
+                            group = page.locator("[data-requirement-group='attention']")
+                            group.locator("[data-bulk-confirm] button").first.click()
+                            group.locator("[data-bulk-run]").click()
+                            for _ in range(50):
+                                if len(controls["d205_reviews"]) >= 2:
+                                    break
+                                page.wait_for_timeout(100)
+                            expect(group.locator("[data-bulk-confirm]")).to_contain_text(review["bulkReport"].split("{")[0].strip()[:8])
+                            reviews = controls["d205_reviews"]
+                            assert [item["target_kind"] for item in reviews] == ["REQUIREMENT", "GAP"], reviews
+                            assert reviews[0]["new_review_state"] == "CONFIRMED" and reviews[0]["reason"].startswith("Reviewed in bulk by")
+                            assert len(d202_writes(before)) == 2
+                        return {"groups": groups}
+                    case(f"d2-05/requirements/grouped/{locale}/{width}", d205_requirements)
+            controls.update(d202=False, d205=False)
             for name,path in [("proposals","bid-preparation"),("readiness","readiness-vault")]:
                 def pagination(path=path):
                     controls["pagination"] = True

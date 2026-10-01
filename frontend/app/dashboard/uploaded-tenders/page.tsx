@@ -12,6 +12,7 @@ import { BidiText } from '@/components/i18n/BidiText';
 import { formatDate, formatDateTime } from '@/i18n/formatters';
 import type { CustomerSelectableLocale } from '@/i18n/locales';
 import { api } from '@/lib/api';
+import { pursuitDisplayTitle } from '@/lib/requirementsReview';
 import type { PursuitListResponse } from '@/types/pursuit';
 import { customerProcessingState } from '@/types/pursuit';
 
@@ -67,7 +68,7 @@ export default function UploadedTendersPage() {
           <div className="pursuit-card-heading">
             <div>
               <span className="ds-eyebrow">{pursuit.reference || t('values.referenceUnknown')}</span>
-              <h2><BidiText>{pursuit.title || t('values.untitled')}</BidiText></h2>
+              <h2><BidiText>{pursuitDisplayTitle(pursuit, (date) => t('values.uploadedOn', { date: formatDate(date, locale) }))}</BidiText></h2>
             </div>
             <StatusBadge tone={processing === 'FAILED' ? 'danger' : processing === 'PARTIAL' ? 'warning' : processing === 'READY' ? 'success' : 'info'}>
               {processing ? t(`processing.${processing}`) : t('processing.CHECKING')}

@@ -108,7 +108,8 @@
     "untitled": "مناقصة بلا عنوان",
     "referenceUnknown": "المرجع غير معروف",
     "unassigned": "غير معين",
-    "processed": "تمت معالجة {processed} من {total}"
+    "processed": "تمت معالجة {processed} من {total}",
+    "uploadedOn": "مناقصة مرفوعة · {date}"
   },
   "workspace": {
     "eyebrow": "مساحة عمل المناقصة",
@@ -129,7 +130,8 @@
       "requirements": "المتطلبات",
       "team": "الفريق",
       "documents": "الوثائق والأدلة",
-      "proposal": "العرض"
+      "proposal": "العرض",
+      "eoi": "حزمة إبداء الاهتمام"
     },
     "identity": "مصدر المناقصة",
     "uploadedTender": "رفعته مؤسستك",
@@ -175,7 +177,10 @@
     "noSubmissionIdentified": "لم تُحدد بنود للتقديم.",
     "noLaterStageIdentified": "لم تُحدد التزامات لمراحل لاحقة.",
     "analyzeForOverview": "شغّل التحليل لملء هذا القسم من وثائق المناقصة.",
-    "documentsEyebrow": "أدلة المصدر والمؤسسة"
+    "documentsEyebrow": "أدلة المصدر والمؤسسة",
+    "eoi": "حزمة إبداء الاهتمام",
+    "eoiEyebrow": "إبداء الاهتمام",
+    "eoiHelp": "أنشئوا حزمة إبداء الاهتمام من التحليل ومن سجلاتكم الخاصة."
   },
   "context": {
     "title": "تأكيد سياق المناقصة",
@@ -231,7 +236,7 @@
     "loadFailed": "تعذر تحميل المتطلبات.",
     "startFailed": "تعذر بدء التحليل. مستنداتك آمنة؛ حاول مرة أخرى.",
     "packTitle": "اختر المستندات المطلوب تحليلها",
-    "packHelp": "اختر المستندات الرسمية أو مستندات المصدر ومستنداتك التي ينبغي لـ Plasma تحليلها.",
+    "packHelp": "اختاروا المستندات المراد تحليلها.",
     "sourceDocument": "وثيقة رسمية/مصدر",
     "privateDocument": "مستندك",
     "documentRoles": {
@@ -263,7 +268,7 @@
     "qualityStatus": "جودة الاستخراج",
     "technicalDetails": "التفاصيل التقنية وسجل التدقيق",
     "needsAttentionTitle": "التحليل يحتاج إلى اهتمام",
-    "needsAttentionHelp": "عالجت Plasma المستند لكنها لم تحدد متطلبات شراء كافية لإنتاج تقييم موثوق للفجوات.",
+    "needsAttentionHelp": "عُثر على متطلبات قليلة جدًا لنتيجة موثوقة.",
     "reviewAnalysis": "مراجعة التحليل",
     "rerunAnalysis": "إعادة تشغيل التحليل",
     "qualificationCriteria": "معايير التأهيل",
@@ -273,9 +278,9 @@
       "FAILED": "فشل"
     },
     "qualityHelp": {
-      "READY_FOR_REVIEW": "الاستخراج ممتلئ بصورة جوهرية وجاهز للمراجعة البشرية.",
-      "NEEDS_ATTENTION": "الاستخراج غير موثوق بما يكفي لاستنتاج الفجوات. راجع التحليل أو أعد تشغيله.",
-      "FAILED": "لم ينتج التحليل نتيجة جاهزة للمراجعة."
+      "READY_FOR_REVIEW": "جاهز لمراجعتكم.",
+      "NEEDS_ATTENTION": "عُثر على متطلبات قليلة جدًا. أعيدوا التشغيل أو راجعوا.",
+      "FAILED": "لا توجد نتيجة قابلة للمراجعة."
     },
     "qualificationDistinctions": {
       "MANDATORY": "إلزامي",
@@ -356,7 +361,44 @@
       "CLARIFICATION": "توضيح",
       "HUMAN_INTERPRETATION": "تفسير بشري"
     },
-    "sourceContext": "سياق المصدر"
+    "sourceContext": "سياق المصدر",
+    "review": {
+      "noteKinds": {
+        "INFORMATIONAL": "معلومة",
+        "SUBMISSION_INSTRUCTION": "تعليمات التقديم"
+      },
+      "generatedLabel": "تفسير مولَّد:",
+      "matchedExperience": "الخبرة المطابقة:",
+      "matchedUnresolved": "(+{count} إصدار سابق)",
+      "reviewStates": {
+        "CONFIRMED": "مؤكد",
+        "CORRECTED": "مصحَّح"
+      },
+      "reviewItem": "مراجعة هذا البند",
+      "confirmGroup": "تأكيد كل المجموعة ({count})",
+      "bulkReason": "السبب (اختياري)",
+      "bulkReasonHelp": "يُستخدم لكل بند أدناه ما لم يكن للبند سببه الخاص.",
+      "bulkDefaultReason": "رُوجع بشكل جماعي بواسطة {name}",
+      "itemReason": "سبب خاص لهذا البند (اختياري)",
+      "confirmSelected": "تأكيد: {count}",
+      "cancel": "إلغاء",
+      "bulkProgress": "جارٍ تأكيد {done} من {total}…",
+      "bulkReport": "أُكّد: {done}. فشل: {failed}.",
+      "groups": {
+        "attention": "يحتاج إلى انتباهكم",
+        "partial": "تغطيه خبرتكم جزئيًا",
+        "notes": "تعليمات التقديم والملاحظات",
+        "later": "التزامات المراحل اللاحقة",
+        "settled": "محسومة بالمراجعة"
+      },
+      "groupHelp": {
+        "attention": "لا إثبات مسجل بعد، أو تحتاج القاعدة إلى تفسيركم.",
+        "partial": "جزء من خبرتكم المسجلة يتعلق بهذه البنود. أكّدوا أو صحّحوا.",
+        "notes": "اتبعوها عند التقديم. لا يُطلب إثبات.",
+        "later": "تنطبق بعد الترسية؛ غير مطلوبة لهذا التقديم.",
+        "settled": "وسمها مراجع بأنها مدعومة أو غير منطبقة."
+      }
+    }
   },
   "team": {
     "loading": "Loading candidate records…",
@@ -936,5 +978,91 @@
     "label": "قائمة المناقصات الجارية",
     "fromSources": "من المصادر",
     "uploaded": "المرفوعة"
+  },
+  "eoi": {
+    "noAnalysisTitle": "حلّلوا المناقصة أولًا",
+    "noAnalysisHelp": "تُبنى حزمة إبداء الاهتمام من تحليل مكتمل: معايير القائمة المختصرة واقتباسات الإعلان وملاحظات التقديم.",
+    "openRequirements": "فتح «المتطلبات»",
+    "loading": "جارٍ إعداد الاقتراحات…",
+    "unavailableTitle": "حزم إبداء الاهتمام غير متاحة على هذا الخادم بعد",
+    "unavailableHelp": "يمكنكم الاختيار بعد تفعيل خدمة إبداء الاهتمام.",
+    "loadFailed": "تعذّر تحميل الاقتراحات.",
+    "runNotCurrentTitle": "مبنية على تحليل أقدم",
+    "runNotCurrentHelp": "يوجد تحليل أحدث أو تغيّرت المستندات. يمكنكم البناء على هذا التحليل وسيظهر ذلك في الحزمة.",
+    "stepsLabel": "خطوات بناء الحزمة",
+    "steps": {
+      "experience": "الخبرة",
+      "partners": "الشركاء",
+      "letter": "الخطاب"
+    },
+    "experienceHelp": "اختاروا المهام التي ستُعرض. المقترَحة تطابق معيارًا واحدًا على الأقل.",
+    "addExperience": "إضافة خبرة",
+    "criteriaTitle": "معايير القائمة المختصرة ({count})",
+    "locatorPage": "الإعلان، الصفحة {page}",
+    "locatorParagraph": "الإعلان، الفقرة {paragraph}",
+    "locatorNotice": "الإعلان",
+    "addressedBy": "تغطيه {rows}",
+    "notAddressed": "لا يغطيه اختياركم",
+    "noCriteria": "لم يسجّل التحليل معايير للقائمة المختصرة.",
+    "ownTitle": "خبرتكم",
+    "matchesCriteria": "المعايير المطابقة: {count}",
+    "suggested": "مقترَح",
+    "noOwnTitle": "لم تُسجَّل خبرة خاصة",
+    "noOwnHelp": "أضيفوا مهام شركتكم المنجزة في «الشركاء والخبراء» ثم عودوا.",
+    "next": "التالي",
+    "back": "رجوع",
+    "partnersHelp": "اختياري. أضيفوا شركات شريكة تغطي خبرتها معايير لا يغطيها اختياركم.",
+    "coversUncovered": "معايير لا تغطيها خبرتكم ويغطيها الشريك: {count}",
+    "coversNone": "لا يغطي أي معيار متروك.",
+    "partnerRole": "الدور",
+    "roles": {
+      "JV_MEMBER": "عضو في مشروع مشترك",
+      "SUBCONSULTANT": "استشاري من الباطن"
+    },
+    "partnerNoReferences": "لا توجد مراجع مسجلة لهذه الشركة.",
+    "noPartnersTitle": "لا توجد شركات شريكة",
+    "noPartnersHelp": "الشركاء اختياريون. أضيفوا شركة في «الشركاء والخبراء» إذا كنتم تنوون التحالف.",
+    "addPartner": "إضافة شركة شريكة",
+    "letterHelp": "خطاب تغطية للمهمة «{title}»، المرجع {reference}. معبأ من الإعلان وملف الشركة.",
+    "fields": {
+      "addressee_organization": "الجهة المرسل إليها",
+      "addressee_name": "اسم المرسل إليه (اختياري)",
+      "signatory_name": "اسم الموقّع",
+      "signatory_title": "منصب الموقّع",
+      "contact_email": "البريد الإلكتروني للتواصل",
+      "contact_phone": "الهاتف (اختياري)",
+      "contact_address": "العنوان (اختياري)",
+      "language": "لغة المستند"
+    },
+    "includeNotes": "تضمين ملاحظات صلة مبدئية",
+    "includeNotesHelp": "تكتب Plasma ملاحظة قصيرة لكل مهمة عن صلتها بمعيار، من حقائقكم المسجلة فقط. تُستبعد الملاحظات التي تضيف ما ليس في سجلاتكم. كل ملاحظة مُبقاة موسومة «ملاحظة مبدئية — تحقّقوا».",
+    "selectionIncomplete": "الاختيار غير مكتمل",
+    "errors": {
+      "ownRequired": "اختاروا مهمة واحدة على الأقل من مهامكم.",
+      "ownTooMany": "اختاروا 30 مهمة كحد أقصى.",
+      "partnersTooMany": "اختاروا 5 شركات شريكة كحد أقصى.",
+      "partnerReferencesTooMany": "15 مهمة كحد أقصى لكل شريك.",
+      "required": "حقل مطلوب.",
+      "email": "أدخلوا بريدًا إلكترونيًا صحيحًا."
+    },
+    "generateSummary": "المهام المختارة: {rows}؛ المعايير المغطاة: {criteria} من {total}.",
+    "generate": "إنشاء حزمة إبداء الاهتمام",
+    "generating": "جارٍ الإنشاء… {seconds} ث (قد يستغرق حتى {budget} ث تقريبًا)",
+    "generateFailed": "تعذّر إنشاء الحزمة",
+    "generated": "الإصدار {version} جاهز",
+    "versionsTitle": "الإصدارات",
+    "refresh": "تحديث",
+    "version": "الإصدار {version}",
+    "current": "حالي",
+    "stale": "قديم",
+    "staleReasons": {
+      "NEWER_ANALYSIS_RUN": "يوجد تحليل أحدث.",
+      "ANALYSIS_INPUTS_CHANGED": "تغيّرت مستندات المناقصة بعد التحليل.",
+      "REFERENCE_SUPERSEDED": "عُدّل مرجع مختار منذ ذلك الحين.",
+      "REFERENCE_ARCHIVED": "أُرشف مرجع مختار منذ ذلك الحين.",
+      "OTHER": "قد تكون الحزمة قديمة."
+    },
+    "versionSummary": "مهامكم: {references} · الشركاء: {partners} · المعايير المغطاة: {addressed} من {total} · الملاحظات المُبقاة {notes}، المستبعدة {dropped}",
+    "noVersions": "لا توجد إصدارات بعد."
   }
 }

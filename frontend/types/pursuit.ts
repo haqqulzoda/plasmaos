@@ -60,6 +60,8 @@ export type Pursuit = {
   processed_count: number;
   failed_count: number;
   owner_name: string | null;
+  /** D2-05: display name of the first uploaded document (title fallback). */
+  first_document_name?: string | null;
 };
 
 export type PursuitListResponse = {
@@ -231,6 +233,13 @@ export type PursuitRequirement = {
   effective_review_state: string;
   source_locator: Record<string, unknown>;
   generated_interpretation: string | null;
+  /** D2-01: own-firm references the deterministic own-experience match named. */
+  matched_reference_ids?: string[];
+};
+
+/** D2-01: an informational statement or submission instruction (no Gap, no evidence expected). */
+export type PursuitSubmissionNote = PursuitRequirement & {
+  note_kind: 'INFORMATIONAL' | 'SUBMISSION_INSTRUCTION';
 };
 
 export type PursuitPosition = {
@@ -276,6 +285,7 @@ export type PursuitGap = {
   review_state: string;
   effective_review_state: string;
   rationale: string;
+  matched_reference_ids?: string[];
 };
 
 export type PursuitAnalysis = {
@@ -303,6 +313,8 @@ export type PursuitAnalysis = {
   requirements: PursuitRequirement[];
   positions: PursuitPosition[];
   gaps: PursuitGap[];
+  /** D2-01: kept out of requirements and every evidence count. Absent before D2-01. */
+  submission_and_notes?: PursuitSubmissionNote[];
 };
 
 export type CandidateQualificationState =
