@@ -10,6 +10,7 @@ import hashlib
 import io
 from pathlib import Path
 import re
+from types import SimpleNamespace
 from uuid import uuid4
 
 import fitz
@@ -55,6 +56,7 @@ from app.services.eoi import (
     create_eoi_draft,
     eoi_suggestions,
     get_eoi_draft,
+    is_eoi_criterion,
     list_eoi_drafts,
     resolve_eoi_artifact,
 )
@@ -71,6 +73,42 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 D2_01_HEAD = "20261004_0001_d2_01_own_experience"
 HEAD = "20261005_0001_d2_05_eoi_drafts"
 PRICE_WORDS = re.compile(r"\bprice|\bpricing|\bfee\b|\bfees\b|remuneration|financial proposal|цен[аыу]|стоимость услуг|вознагражд", re.I)
+
+
+# ---- criteria selection -----------------------------------------------------------------------------
+
+DUTY = "The Consultant shall prepare comprehensive detailed engineering designs for 12 identified sub-projects."
+
+
+def _requirement(quote, *, coverage="EVIDENCE_MISSING", scope="SHORTLISTING", requirement_type="TECHNICAL", category="TECHNICAL"):
+    return SimpleNamespace(original_quote=quote, effective_normalized_requirement=quote, effective_coverage_state=coverage,
+                           stage_scope=scope, requirement_type=requirement_type, category=category)
+
+
+def test_eoi_criteria_exclude_later_stage_obligations_and_assignment_duties() -> None:
+    excluded = [
+        _requirement(DUTY),  # seen live: a task of the assignment listed as a shortlisting criterion
+        _requirement("Design review of 12 substations.", coverage="LATER_STAGE_OBLIGATION"),
+        _requirement("Prepare quarterly progress reports.", scope="CONTRACT_EXECUTION"),
+        _requirement("Hand over as-built drawings.", scope="post_award_obligation"),
+        _requirement("Detailed engineering design of distribution lines.", requirement_type="SCOPE_OF_SERVICES"),
+        _requirement("Inception report within 4 weeks.", requirement_type="DELIVERABLES"),
+        _requirement("The selected firm will carry out topographic surveys at all sites."),
+        _requirement("The Consultant is expected to provide technical assistance to the PIU."),
+        _requirement("Консультант должен подготовить проекты.", requirement_type="TASKS", category="SCOPE"),
+    ]
+    kept = [
+        _requirement("Successful completion of at least two contracts within the last 10 years involving substation design.",
+                     requirement_type="CORPORATE_EXPERIENCE", category="EXPERIENCE"),
+        _requirement("The firm must hold valid licenses for high-complexity facility design.", requirement_type="CERTIFICATION"),
+        _requirement("The Consultant shall have experience in detailed design of substations."),
+        _requirement("The Consultant shall provide evidence of three similar assignments.", requirement_type="QUALIFICATION"),
+        _requirement("Similar scope delivered in Central Asia.", requirement_type="SIMILAR_SCOPE_EXPERIENCE"),
+        _requirement("Average annual turnover of USD 1 million.", requirement_type="FINANCIAL_CAPACITY"),
+        _requirement("Firms shall have appropriate skills among staff.", requirement_type="ELIGIBILITY"),
+    ]
+    assert [is_eoi_criterion(item) for item in excluded] == [False] * len(excluded)
+    assert [is_eoi_criterion(item) for item in kept] == [True] * len(kept)
 
 
 # ---- contract ---------------------------------------------------------------------------------------
@@ -373,7 +411,9 @@ async def _eoi_flow(sessions, database, ids, org_a, org_b, owner_a, owner_b, mon
         f"{SUBSTATION}\n"
         "Key Experts will not be evaluated during the shortlisting stage.\n"
         "Expressions of interest must be delivered in written form via e-mail no later than 16 October 2026.\n"
-        "The firm must hold valid licenses for high-complexity facility construction."
+        "The firm must hold valid licenses for high-complexity facility construction.\n"
+        f"{DUTY}\n"
+        "The Consultant shall supervise construction of the substations."
     )
     lines = issued.split("\n")
     async with sessions() as db:
@@ -436,6 +476,11 @@ async def _eoi_flow(sessions, database, ids, org_a, org_b, owner_a, owner_b, mon
                            category="SUBMISSION", requirement_type="SUBMISSION_INSTRUCTION", stage_scope="SUBMISSION", predicate=None)),
             verified(_fact(original_quote=lines[3], normalized_text=lines[3], category="LEGAL", requirement_type="CERTIFICATION",
                            predicate=None)),
+            # Duties of the assignment, not shortlisting criteria: one tagged as later-stage, one not.
+            verified(_fact(original_quote=lines[4], normalized_text=lines[4], category="TECHNICAL", requirement_type="TECHNICAL",
+                           predicate=None)),
+            verified(_fact(original_quote=lines[5], normalized_text=lines[5], category="TECHNICAL", requirement_type="TECHNICAL",
+                           stage_scope="CONTRACT_EXECUTION", predicate=None)),
         ]
 
     monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", extracted)
@@ -456,7 +501,8 @@ async def _eoi_flow(sessions, database, ids, org_a, org_b, owner_a, owner_b, mon
     assert suggestions.defaults.reference_no == "WB-W2-1"
     assert suggestions.defaults.firm_name == "Codex Energy" and suggestions.defaults.firm_country == "Uzbekistan"
     assert suggestions.defaults.addressee_name == "Procurement Contact"
-    assert len(suggestions.criteria) == 2 and len(suggestions.notes) == 2  # notes excluded from criteria
+    assert len(suggestions.criteria) == 2 and len(suggestions.notes) == 2  # notes and assignment duties excluded
+    assert not {lines[4], lines[5]} & {item.original_quote for item in suggestions.criteria}
     experience = next(item for item in suggestions.criteria if item.original_quote == lines[0])
     assert experience.locator.paragraph_number == 1
     assert set(experience.matched_reference_ids) == {navoi.reference_id, bukhara.reference_id}
@@ -529,6 +575,8 @@ async def _eoi_flow(sessions, database, ids, org_a, org_b, owner_a, owner_b, mon
         assert "in association with Grid Partner LLP as joint-venture member" in text
         assert "Asian Development Bank" not in text
         assert "Addressed by references #1, #2, #3" in text
+        assert "12 identified sub-projects" not in text and "supervise construction" not in text  # not in the cross-reference table
+        assert len(manifest["criteria"]) == 2
         assert hashlib.sha256(path.read_bytes()).hexdigest() == docx.sha256
         with pytest.raises(EoiNotFoundError):
             await resolve_eoi_artifact(db, organization_id=org_b, pursuit_id=pursuit_id, artifact_id=docx.artifact_id,

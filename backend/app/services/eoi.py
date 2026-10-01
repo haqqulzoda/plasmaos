@@ -16,6 +16,7 @@ from decimal import Decimal
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 from typing import Any
@@ -145,6 +146,57 @@ async def _successors(db: AsyncSession, ids: set[UUID]) -> dict[UUID, UUID]:
     return mapping
 
 
+LATER_STAGE_SCOPES = frozenset({"CONTRACT_EXECUTION", "POST_AWARD_OBLIGATION", "LATER_STAGE"})
+# Requirement-type words that describe the consultant's tasks, not its qualifications.
+_ASSIGNMENT_TYPE_TOKENS = frozenset({
+    "SCOPE", "TASK", "TASKS", "DUTY", "DUTIES", "DELIVERABLE", "DELIVERABLES", "OBLIGATION", "OBLIGATIONS",
+    "ACTIVITY", "ACTIVITIES", "OUTPUT", "OUTPUTS", "WORKPLAN", "TOR",
+})
+# ...unless the type also names a qualification ("SIMILAR_SCOPE_EXPERIENCE").
+_QUALIFICATION_TYPE_TOKENS = frozenset({
+    "EXPERIENCE", "QUALIFICATION", "QUALIFICATIONS", "ELIGIBILITY", "CAPACITY", "CAPABILITY", "CAPABILITIES",
+    "LICENSE", "LICENCE", "LICENSING", "CERTIFICATION", "CERTIFICATE", "REGISTRATION", "FINANCIAL", "TURNOVER",
+    "PERSONNEL", "STAFF", "REFERENCE", "REFERENCES", "TRACK", "RECORD", "EVALUATION", "SHORTLISTING",
+})
+# "The Consultant shall prepare …": a duty of the assignment, phrased as an obligation on the consultant.
+_DUTY_WORDING = re.compile(
+    r"^\W*(?:the\s+)?(?:selected\s+|successful\s+)?(?:consultants?|consulting\s+firm|firm|contractor)\s+"
+    r"(?:shall|will|would|must|is\s+(?:expected|required)\s+to|are\s+(?:expected|required)\s+to)\s+"
+    r"(?:also\s+)?(?:be\s+responsible\s+for\s+)?"
+    r"(?:prepar|carry\s+out|carrie|conduct|undertak|perform|develop|design|review|supervis|assist|support|deliver|"
+    r"implement|monitor|coordinat|ensur|produc|updat|draft|survey|establish|train|facilitat|manag|"
+    r"provide\s+(?:services|support|assistance|technical\s+assistance|advice|training|inputs))",
+    re.IGNORECASE,
+)
+
+
+def is_eoi_criterion(requirement: Any) -> bool:
+    """Whether a requirement belongs in the EOI as a shortlisting criterion.
+
+    Excluded: later-stage obligations (by coverage or stage scope) and duties of the
+    assignment itself — requirement types naming tasks/scope/deliverables, or a quote
+    worded as an obligation on the consultant to perform work. Deterministic; no AI.
+    """
+    if requirement.effective_coverage_state == "LATER_STAGE_OBLIGATION":
+        return False
+    if (requirement.stage_scope or "").upper() in LATER_STAGE_SCOPES:
+        return False
+    tokens = {token for token in re.split(r"[^A-Z0-9]+", (requirement.requirement_type or "").upper()) if token}
+    if tokens & _QUALIFICATION_TYPE_TOKENS:
+        return True
+    if tokens & _ASSIGNMENT_TYPE_TOKENS:
+        return False
+    text = " ".join(part for part in (requirement.original_quote, requirement.effective_normalized_requirement) if part)
+    if is_experience_requirement(requirement.category, requirement.requirement_type, text):
+        return True
+    quotes = (requirement.original_quote or "", requirement.effective_normalized_requirement or "")
+    return not any(_DUTY_WORDING.search(value) for value in quotes)
+
+
+def eoi_criteria(requirements: list[Any]) -> list[Any]:
+    return [item for item in requirements if is_eoi_criterion(item)]
+
+
 def _criterion_text(requirement: Any) -> str:
     parts = (requirement.effective_normalized_requirement, requirement.original_quote, requirement.source_context)
     return " ".join(part for part in parts if part)
@@ -269,10 +321,11 @@ async def _suggestion_data(db: AsyncSession, organization_id: UUID, pursuit_id: 
     as_of = datetime.now(timezone.utc).date()
     own = [_reference_facts(row) for row in own_rows]
     partner_refs = [_reference_facts(row) for row in partner_rows]
-    own_matches = _matches(analysis.requirements, own, recorded, as_of)
-    partner_matches = _matches(analysis.requirements, partner_refs, {}, as_of)
+    criteria = eoi_criteria(analysis.requirements)
+    own_matches = _matches(criteria, own, recorded, as_of)
+    partner_matches = _matches(criteria, partner_refs, {}, as_of)
     return {
-        "analysis": analysis, "self_firm": self_firm, "partners": partners, "own": own,
+        "analysis": analysis, "criteria": criteria, "self_firm": self_firm, "partners": partners, "own": own,
         "partner_refs": partner_refs, "own_matches": own_matches, "partner_matches": partner_matches,
         "recorded": recorded,
     }
@@ -303,7 +356,7 @@ async def eoi_suggestions(
         ),
         effective_coverage_state=item.effective_coverage_state,
         matched_reference_ids=sorted(own_ids_by_requirement.get(str(item.requirement_id), [])),
-    ) for item in analysis.requirements]
+    ) for item in data["criteria"]]
     notes = [EoiNote(
         requirement_id=item.requirement_id, note_kind=item.note_kind,
         statement=item.effective_normalized_requirement, original_quote=item.original_quote,
@@ -409,7 +462,7 @@ async def create_eoi_draft(
     for number, row in enumerate(rows, start=1):
         row["no"] = number
 
-    criteria = data["analysis"].requirements
+    criteria = data["criteria"]
     statements = {str(item.requirement_id): item.effective_normalized_requirement for item in criteria}
     note_outcome = None
     if request.include_relevance_notes:
