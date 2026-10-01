@@ -122,6 +122,50 @@ def test_release_script_refuses_builds_on_no_build_hosts_and_moves_images_as_str
         assert needle in script, needle
 
 
+_FAKE_DOCKER = """#!/usr/bin/env bash
+# Fake docker: one built service (frontend) whose image bakes $FAKE_API_URL.
+case "$1" in
+  compose) if printf '%s\\n' "$@" | grep -qx -- --images; then echo plasmaos-frontend; else echo "name: plasmaos"; fi ;;
+  image) if [ "$3" = "-f" ]; then printf 'NEXT_PUBLIC_API_URL=%s\\n' "$FAKE_API_URL"; fi ;;
+  save) echo saved ;;
+esac
+exit 0
+"""
+
+
+def test_export_refuses_a_frontend_that_bakes_a_rewritten_api_url(tmp_path) -> None:
+    # A Windows (Git Bash) build host once baked "C:/Program Files/Git/api/v1" into the
+    # browser bundle; the script now disables MSYS env conversion and refuses such an image.
+    import gzip
+    import os
+    import subprocess
+
+    script = (ROOT / "scripts" / "compose-release.sh").read_text(encoding="utf-8")
+    assert "export MSYS_NO_PATHCONV=1 MSYS2_ENV_CONV_EXCL='*'" in script
+    docker = tmp_path / "docker"
+    docker.write_text(_FAKE_DOCKER, encoding="utf-8")
+    docker.chmod(0o755)
+    sha = "0" * 40
+
+    def export(baked: str) -> subprocess.CompletedProcess:
+        env = {**os.environ, "DOCKER_BIN": str(docker), "FAKE_API_URL": baked, "PLASMA_BUILD_SHA": sha}
+        env.pop("FRONTEND_NEXT_PUBLIC_API_URL", None)
+        env.pop("HOST_PROFILE", None)
+        return subprocess.run(
+            ["bash", "scripts/compose-release.sh", "export", sha, "frontend"],
+            cwd=ROOT, env=env, capture_output=True, timeout=60,
+        )
+
+    refused = export("C:/Program Files/Git/api/v1")
+    assert refused.returncode != 0
+    assert b"refusing to export plasma-frontend:" + sha.encode() in refused.stderr
+    assert b"expected /api/v1" in refused.stderr and refused.stdout == b""
+
+    exported = export("/api/v1")
+    assert exported.returncode == 0, exported.stderr
+    assert gzip.decompress(exported.stdout) == b"saved\n"
+
+
 def test_backup_streams_documents_off_host_and_refuses_without_a_remote() -> None:
     script = (ROOT / "scripts" / "ops" / "backup.sh").read_text(encoding="utf-8")
     assert "BACKUP_REMOTE is not set: backups must go off-host" in script

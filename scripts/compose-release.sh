@@ -45,6 +45,10 @@ export PLASMA_BUILD_SHA="${PLASMA_BUILD_SHA:-$(git rev-parse HEAD)}"
 export PLASMA_BUILD_TIME="${PLASMA_BUILD_TIME:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
 export FRONTEND_NEXT_PUBLIC_API_URL="${FRONTEND_NEXT_PUBLIC_API_URL:-/api/v1}"
 export BACKEND_INTERNAL_URL="${BACKEND_INTERNAL_URL:-http://backend:8000/api/v1}"
+# Git Bash (MSYS) rewrites environment values that start with "/" into Windows paths when it
+# starts docker.exe: a Windows build host once baked NEXT_PUBLIC_API_URL="C:/Program Files/Git/api/v1"
+# into the frontend bundle. No effect on Linux. build-only and export also check the baked value.
+export MSYS_NO_PATHCONV=1 MSYS2_ENV_CONV_EXCL='*'
 RELEASE_IMAGE_PREFIX="${RELEASE_IMAGE_PREFIX:-plasma-}"
 RELEASE_HISTORY="${RELEASE_HISTORY:-$repo_root/.release-history}"
 DOCKER_BIN="${DOCKER_BIN:-docker}"
@@ -191,6 +195,14 @@ require_release_images() {
   [ "$missing" = "0" ]
 }
 
+# Fails unless the frontend image bakes exactly FRONTEND_NEXT_PUBLIC_API_URL (browser bundle).
+frontend_api_url_ok() {  # frontend_api_url_ok IMAGE
+  local baked
+  baked="$(image_env "$1" NEXT_PUBLIC_API_URL)"
+  [ "$baked" = "$FRONTEND_NEXT_PUBLIC_API_URL" ] \
+    || { echo "$1 bakes NEXT_PUBLIC_API_URL=$baked, expected $FRONTEND_NEXT_PUBLIC_API_URL" >&2; return 1; }
+}
+
 record_release() {  # record_release SHA ACTION
   printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >>"$RELEASE_HISTORY" \
     || echo "WARN: could not append to $RELEASE_HISTORY" >&2
@@ -231,6 +243,9 @@ case "$mode" in
     for service in "${services[@]}"; do
       ref="$RELEASE_IMAGE_PREFIX$service:$RELEASE_SHA"
       "$DOCKER_BIN" image inspect "$ref" >/dev/null 2>&1 || die "missing $ref (run build-only on this host first)"
+      if [ "$service" = frontend ]; then
+        frontend_api_url_ok "$ref" || die "refusing to export $ref: rebuild it (build-only) with the intended FRONTEND_NEXT_PUBLIC_API_URL"
+      fi
       refs+=("$ref")
     done
     compressor=(gzip -c -3)
@@ -326,6 +341,9 @@ if [ "$builds" = "1" ]; then
   tag_release_images
   if [ "$mode" = "build-only" ]; then
     require_release_images "$PLASMA_BUILD_SHA" || die "build finished but not every service is tagged $PLASMA_BUILD_SHA"
+    if "$DOCKER_BIN" image inspect "${RELEASE_IMAGE_PREFIX}frontend:$PLASMA_BUILD_SHA" >/dev/null 2>&1; then
+      frontend_api_url_ok "${RELEASE_IMAGE_PREFIX}frontend:$PLASMA_BUILD_SHA" || die "the frontend image bakes the wrong API URL (see above); do not export it"
+    fi
     echo "built and tagged $RELEASE_IMAGE_PREFIX<service>:$PLASMA_BUILD_SHA; next: export $PLASMA_BUILD_SHA"
   fi
 fi
