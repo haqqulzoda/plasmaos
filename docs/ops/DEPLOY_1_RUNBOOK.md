@@ -138,13 +138,24 @@ Expect: `CHECKOUT_OK`, the three paths, and containers still showing their old u
 
 ## 3. Rollback tags for the running build
 
+Tag the image each running app container uses with the full previous SHA (tags only; nothing
+is restarted or removed). Do not rely on `compose-release.sh tag` here: production's a275357
+images record their build SHA in the 12-character form (`a2753573191f`), so `tag` names six of
+them `:a2753573191f` and only `worker_pursuit_analysis` (no recorded SHA) gets the full SHA —
+seen in Deploy 1. Rollback A/A2 need all seven under the full `$PREV_SHA`.
+
 ```
-prod$ scripts/compose-release.sh tag "$PREV_SHA"
+prod$ for s in backend celery_beat celery_worker frontend worker_heavy worker_private_documents worker_pursuit_analysis; do
+        docker tag "$(docker inspect -f '{{.Image}}' plasma_$s)" "plasma-$s:$PREV_SHA" && echo "tagged plasma-$s:$PREV_SHA"
+      done
 prod$ docker images --format '{{.Repository}}:{{.Tag}}' | grep -c ":$PREV_SHA"
+prod$ for s in backend celery_beat celery_worker frontend worker_heavy worker_private_documents worker_pursuit_analysis; do
+        [ "$(docker inspect -f '{{.Image}}' plasma_$s)" = "$(docker image inspect -f '{{.Id}}' plasma-$s:$PREV_SHA)" ] && echo "$s OK" || echo "$s MISMATCH"
+      done
 ```
-Expect: `tagged plasma-<service>:a2753573…` lines, then `7`. `tag` reads the SHA recorded in
-each running image; `$PREV_SHA` is used only for an image that records none.
-**STOP** if the count is below 7: there would be no complete rollback point.
+Expect: seven `tagged …` lines, then `7`, then seven `… OK`.
+**STOP** if the count is below 7 or any line says `MISMATCH`: there would be no complete rollback point.
+(If `compose-release.sh tag` was already run, its extra `:a2753573191f` tags are harmless.)
 
 ## 4. Off-host backup: database + private documents → laptop
 
