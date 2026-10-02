@@ -88,6 +88,8 @@ class PursuitResponse(BaseModel):
     processed_count: int = 0
     failed_count: int = 0
     owner_name: str | None = None
+    # D2-05: display name of the first uploaded document, used when there is no title.
+    first_document_name: str | None = None
 
 
 class PursuitListResponse(BaseModel):

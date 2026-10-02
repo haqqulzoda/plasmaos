@@ -22,7 +22,8 @@ test('requirements UI exposes canonical states and evidence before interpretatio
   for (const state of ['SUPPORTED','PARTIAL','GAP','EVIDENCE_MISSING','NEEDS_INTERPRETATION','NOT_APPLICABLE','LATER_STAGE_OBLIGATION']) {
     assert.match(types, new RegExp(state));
   }
-  assert.ok(source.indexOf("sourceEvidence") < source.indexOf("generatedInterpretation"));
+  const card = source.slice(source.indexOf('function RequirementCard'));
+  assert.ok(card.indexOf('analysis-quote') < card.indexOf('data-generated-interpretation'));
   assert.match(source, /original_quote/);
   assert.match(source, /effective_normalized_requirement/);
   assert.match(source, /effective_title/);

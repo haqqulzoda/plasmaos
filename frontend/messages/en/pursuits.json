@@ -108,7 +108,8 @@
     "untitled": "Untitled tender",
     "referenceUnknown": "Reference unknown",
     "unassigned": "Unassigned",
-    "processed": "{processed} of {total} processed"
+    "processed": "{processed} of {total} processed",
+    "uploadedOn": "Uploaded tender · {date}"
   },
   "workspace": {
     "eyebrow": "Pursuit workspace",
@@ -129,7 +130,8 @@
       "requirements": "Requirements",
       "team": "Team",
       "documents": "Documents & Evidence",
-      "proposal": "Proposal"
+      "proposal": "Proposal",
+      "eoi": "EOI package"
     },
     "identity": "Tender source",
     "uploadedTender": "Uploaded by your organization",
@@ -175,7 +177,10 @@
     "noSubmissionIdentified": "No submission items were identified.",
     "noLaterStageIdentified": "No later-stage obligations were identified.",
     "analyzeForOverview": "Run analysis to populate this section from the tender documents.",
-    "documentsEyebrow": "Source and organization evidence"
+    "documentsEyebrow": "Source and organization evidence",
+    "eoi": "EOI package",
+    "eoiEyebrow": "Expression of interest",
+    "eoiHelp": "Build the expression-of-interest package from the analysis and your own records."
   },
   "context": {
     "title": "Confirm tender context",
@@ -231,7 +236,7 @@
     "loadFailed": "Requirements could not be loaded.",
     "startFailed": "Analysis could not be started. Your documents are safe; try again.",
     "packTitle": "Choose documents to analyze",
-    "packHelp": "Choose the official/source and your documents that Plasma should analyze.",
+    "packHelp": "Choose the documents to analyze.",
     "sourceDocument": "Official/source document",
     "privateDocument": "Your document",
     "documentRoles": {
@@ -263,7 +268,7 @@
     "qualityStatus": "Extraction quality",
     "technicalDetails": "Technical and audit details",
     "needsAttentionTitle": "Analysis needs attention",
-    "needsAttentionHelp": "Plasma processed the document but did not identify enough procurement requirements to produce a reliable gap assessment.",
+    "needsAttentionHelp": "Too few requirements were found for a reliable result.",
     "reviewAnalysis": "Review analysis",
     "rerunAnalysis": "Rerun analysis",
     "qualificationCriteria": "Qualification criteria",
@@ -273,9 +278,9 @@
       "FAILED": "Failed"
     },
     "qualityHelp": {
-      "READY_FOR_REVIEW": "Extraction is materially populated and ready for human review.",
-      "NEEDS_ATTENTION": "The extraction is not reliable enough for a gap conclusion. Review the analysis or rerun it.",
-      "FAILED": "The analysis did not produce a result that is ready for review."
+      "READY_FOR_REVIEW": "Ready for your review.",
+      "NEEDS_ATTENTION": "Too few requirements were found to rely on. Rerun or review.",
+      "FAILED": "No reviewable result."
     },
     "qualificationDistinctions": {
       "MANDATORY": "Required",
@@ -356,7 +361,44 @@
       "CLARIFICATION": "Clarification",
       "HUMAN_INTERPRETATION": "Human interpretation"
     },
-    "sourceContext": "Source context"
+    "sourceContext": "Source context",
+    "review": {
+      "noteKinds": {
+        "INFORMATIONAL": "Information",
+        "SUBMISSION_INSTRUCTION": "Submission instruction"
+      },
+      "generatedLabel": "Generated interpretation:",
+      "matchedExperience": "Matched experience:",
+      "matchedUnresolved": "(+{count} earlier version)",
+      "reviewStates": {
+        "CONFIRMED": "Confirmed",
+        "CORRECTED": "Corrected"
+      },
+      "reviewItem": "Review this item",
+      "confirmGroup": "Confirm all in this group ({count})",
+      "bulkReason": "Reason (optional)",
+      "bulkReasonHelp": "Used for every item below unless you give an item its own reason.",
+      "bulkDefaultReason": "Reviewed in bulk by {name}",
+      "itemReason": "Own reason for this item (optional)",
+      "confirmSelected": "Confirm {count}",
+      "cancel": "Cancel",
+      "bulkProgress": "Confirming {done} of {total}…",
+      "bulkReport": "Confirmed: {done}. Failed: {failed}.",
+      "groups": {
+        "attention": "Needs your attention",
+        "partial": "Partly addressed by your experience",
+        "notes": "Submission instructions & notes",
+        "later": "Later-stage obligations",
+        "settled": "Settled by review"
+      },
+      "groupHelp": {
+        "attention": "No evidence on record yet, or the rule needs your interpretation.",
+        "partial": "Some of your recorded experience relates to these. Confirm or correct.",
+        "notes": "Follow these when you submit. No evidence is expected.",
+        "later": "Apply after award; not needed for this submission.",
+        "settled": "Marked supported or not applicable by a reviewer."
+      }
+    }
   },
   "team": {
     "loading": "Loading candidate records…",
@@ -936,5 +978,91 @@
     "label": "Pursuit list",
     "fromSources": "From sources",
     "uploaded": "Uploaded"
+  },
+  "eoi": {
+    "noAnalysisTitle": "Analyze the tender first",
+    "noAnalysisHelp": "The EOI package is built from a completed analysis: its shortlisting criteria, notice quotes and submission notes.",
+    "openRequirements": "Open Requirements",
+    "loading": "Preparing suggestions…",
+    "unavailableTitle": "EOI packages are not available on this server yet",
+    "unavailableHelp": "Your selections are safe to make once the EOI service is enabled.",
+    "loadFailed": "Suggestions could not be loaded.",
+    "runNotCurrentTitle": "Built from an older analysis",
+    "runNotCurrentHelp": "A newer analysis exists or the documents changed. You can still build from this one; the package will show it.",
+    "stepsLabel": "EOI builder steps",
+    "steps": {
+      "experience": "Experience",
+      "partners": "Partners",
+      "letter": "Letter"
+    },
+    "experienceHelp": "Choose the assignments to present. Suggested ones match at least one shortlisting criterion.",
+    "addExperience": "Add experience",
+    "criteriaTitle": "Shortlisting criteria ({count})",
+    "locatorPage": "Notice, page {page}",
+    "locatorParagraph": "Notice, paragraph {paragraph}",
+    "locatorNotice": "Notice",
+    "addressedBy": "Addressed by {rows}",
+    "notAddressed": "Not addressed by your selection",
+    "noCriteria": "The analysis recorded no shortlisting criteria.",
+    "ownTitle": "Your experience",
+    "matchesCriteria": "{count, plural, =0 {No criteria matched} one {Matches # criterion} other {Matches # criteria}}",
+    "suggested": "Suggested",
+    "noOwnTitle": "No own experience recorded",
+    "noOwnHelp": "Add your firm's completed assignments in Partners & Experts, then come back.",
+    "next": "Next",
+    "back": "Back",
+    "partnersHelp": "Optional. Add partner firms whose experience covers criteria your own selection does not.",
+    "coversUncovered": "{count, plural, one {Covers # criterion your experience does not} other {Covers # criteria your experience does not}}",
+    "coversNone": "Covers no criterion that your experience leaves open.",
+    "partnerRole": "Role",
+    "roles": {
+      "JV_MEMBER": "Joint-venture member",
+      "SUBCONSULTANT": "Sub-consultant"
+    },
+    "partnerNoReferences": "This firm has no project references recorded.",
+    "noPartnersTitle": "No partner firms recorded",
+    "noPartnersHelp": "Partner firms are optional. Add one in Partners & Experts if you plan to associate.",
+    "addPartner": "Add partner firm",
+    "letterHelp": "Cover letter for “{title}”, reference {reference}. Prefilled from the notice and your company profile.",
+    "fields": {
+      "addressee_organization": "Addressee organization",
+      "addressee_name": "Addressee name (optional)",
+      "signatory_name": "Signatory name",
+      "signatory_title": "Signatory title",
+      "contact_email": "Contact e-mail",
+      "contact_phone": "Contact phone (optional)",
+      "contact_address": "Contact address (optional)",
+      "language": "Document language"
+    },
+    "includeNotes": "Include draft relevance notes",
+    "includeNotesHelp": "Plasma writes one short note per assignment on how it relates to a criterion, using only your recorded facts. Notes that add anything not in your records are discarded. Each kept note is marked “Draft note — verify”.",
+    "selectionIncomplete": "Selection incomplete",
+    "errors": {
+      "ownRequired": "Select at least one of your own assignments.",
+      "ownTooMany": "Select at most 30 of your own assignments.",
+      "partnersTooMany": "Select at most 5 partner firms.",
+      "partnerReferencesTooMany": "Select at most 15 assignments per partner.",
+      "required": "Required.",
+      "email": "Enter a valid e-mail address."
+    },
+    "generateSummary": "{rows} assignments selected; {criteria} of {total} criteria addressed.",
+    "generate": "Generate EOI package",
+    "generating": "Generating… {seconds} s (can take up to about {budget} s)",
+    "generateFailed": "The package could not be generated",
+    "generated": "Version {version} is ready",
+    "versionsTitle": "Versions",
+    "refresh": "Refresh",
+    "version": "Version {version}",
+    "current": "Current",
+    "stale": "Out of date",
+    "staleReasons": {
+      "NEWER_ANALYSIS_RUN": "A newer analysis exists.",
+      "ANALYSIS_INPUTS_CHANGED": "The tender documents changed after the analysis.",
+      "REFERENCE_SUPERSEDED": "A selected reference was edited since.",
+      "REFERENCE_ARCHIVED": "A selected reference was archived since.",
+      "OTHER": "The package may be out of date."
+    },
+    "versionSummary": "{references} own assignments · {partners} partners · {addressed} of {total} criteria addressed · notes kept {notes}, dropped {dropped}",
+    "noVersions": "No versions yet."
   }
 }

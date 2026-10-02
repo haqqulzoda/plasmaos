@@ -4,9 +4,10 @@ import test from 'node:test';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('P1 uses five customer-facing tabs with one mounted decision surface', () => {
+test('P1 uses customer-facing tabs with one mounted decision surface (D2-05 adds the EOI package)', () => {
   const page = read('app/dashboard/pursuits/[pursuitId]/page.tsx');
-  assert.match(page, /WORKSPACE_TABS = \['overview', 'requirements', 'team', 'documents', 'proposal'\]/);
+  assert.match(page, /WORKSPACE_TABS = \['overview', 'requirements', 'eoi', 'team', 'documents', 'proposal'\]/);
+  assert.match(page, /activeTab === 'eoi'.*PursuitEoi/s);
   assert.match(page, /role="tablist"/);
   assert.match(page, /role="tabpanel"/);
   assert.match(page, /activeTab === 'requirements'.*PursuitRequirements/s);
@@ -30,9 +31,11 @@ test('P1 async analysis is nonblocking and retains a previous successful result'
     assert.match(requirements, new RegExp(value));
   }
   assert.doesNotMatch(requirements, /failure_reason/);
-  assert.ok(requirements.indexOf('sourceEvidence') < requirements.indexOf('generatedInterpretation'));
-  assert.ok(requirements.indexOf('sourceRequirement') < requirements.indexOf('plasmaAssessment'));
-  assert.ok(requirements.indexOf('plasmaAssessment') < requirements.indexOf('organizationEvidence'));
+  // D2-03: each card shows the quote and locator first, then the labelled generated interpretation, then review.
+  const card = requirements.slice(requirements.indexOf('function RequirementCard'));
+  assert.ok(card.indexOf('item.original_quote') < card.indexOf("review.generatedLabel"));
+  assert.ok(card.indexOf('<Locator') < card.indexOf("review.generatedLabel"));
+  assert.ok(card.indexOf("review.generatedLabel") < card.indexOf("review.reviewItem"));
 });
 
 test('P1 team and proposal progressively disclose actions in customer language', () => {

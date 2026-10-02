@@ -105,6 +105,7 @@ def _response(
     batch: PrivateDocumentBatch | _ProcessingRollup | None = None,
     file_count: int = 0,
     owner_name: str | None = None,
+    first_document_name: str | None = None,
 ) -> PursuitResponse:
     truth = truth_fields(tender.source_system, tender.status, tender.deadline, country=tender.country) if tender else {}
     return PursuitResponse(
@@ -138,7 +139,21 @@ def _response(
         processed_count=batch.processed_count if batch else 0,
         failed_count=batch.failed_count if batch else 0,
         owner_name=owner_name,
+        first_document_name=first_document_name,
     )
+
+
+async def _first_document_names(db: AsyncSession, pursuit_ids: list[UUID]) -> dict[UUID, str]:
+    """The display name of each pursuit's first uploaded active document (a title fallback)."""
+    if not pursuit_ids:
+        return {}
+    rows = (await db.execute(
+        select(PrivateDocument.pursuit_id, PrivateDocument.display_name)
+        .where(PrivateDocument.pursuit_id.in_(pursuit_ids), PrivateDocument.state == "ACTIVE")
+        .order_by(PrivateDocument.pursuit_id, PrivateDocument.created_at, PrivateDocument.id)
+        .distinct(PrivateDocument.pursuit_id)
+    )).all()
+    return {pursuit_id: name for pursuit_id, name in rows}
 
 
 async def _enrichment_maps(db: AsyncSession, pursuit_ids: list[UUID]):
@@ -305,6 +320,7 @@ async def list_pursuits(
     rows = (await db.execute(statement)).all()
     pursuit_ids = [row[0].id for row in rows]
     counts, batches = await _enrichment_maps(db, pursuit_ids)
+    first_names = await _first_document_names(db, pursuit_ids)
     total_statement = select(func.count(OrganizationPursuit.id)).where(
         OrganizationPursuit.organization_id == context.organization.id
     )
@@ -322,6 +338,7 @@ async def list_pursuits(
                 batches.get(pursuit.id),
                 int(counts.get(pursuit.id, 0)),
                 owner_name,
+                first_names.get(pursuit.id),
             )
             for pursuit, tender, private_context, owner_name in rows
         ],
@@ -480,6 +497,7 @@ async def get_pursuit(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pursuit not found")
     pursuit, tender, private_context, owner_name = row
     counts, batches = await _enrichment_maps(db, [pursuit.id])
+    first_names = await _first_document_names(db, [pursuit.id])
     return _response(
         pursuit,
         tender,
@@ -487,6 +505,7 @@ async def get_pursuit(
         batches.get(pursuit.id),
         int(counts.get(pursuit.id, 0)),
         owner_name,
+        first_names.get(pursuit.id),
     )
 
 
