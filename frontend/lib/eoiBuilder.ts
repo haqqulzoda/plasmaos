@@ -215,3 +215,44 @@ export const STALE_REASONS = [
 export function staleReasonKey(reason: string): string {
   return (STALE_REASONS as readonly string[]).includes(reason) ? reason : 'OTHER';
 }
+
+/**
+ * Shortlisting criteria only. Later-stage obligations are not EOI criteria; the
+ * backend leaves them out, and this drops any that still arrive, together with
+ * the reference and partner matches that point at them.
+ */
+export function withoutLaterStage(suggestions: EoiSuggestions): EoiSuggestions {
+  const criteria = suggestions.criteria.filter((item) => item.effective_coverage_state !== 'LATER_STAGE_OBLIGATION');
+  if (criteria.length === suggestions.criteria.length) return suggestions;
+  const kept = new Set(criteria.map((item) => item.requirement_id));
+  const prune = <T extends { matched_requirement_ids: string[] }>(reference: T): T =>
+    ({ ...reference, matched_requirement_ids: reference.matched_requirement_ids.filter((id) => kept.has(id)) });
+  return {
+    ...suggestions,
+    criteria,
+    own_references: suggestions.own_references.map(prune),
+    partner_firms: suggestions.partner_firms.map((firm) => ({
+      ...firm,
+      references: firm.references.map(prune),
+      covers_requirement_ids: firm.covers_requirement_ids.filter((id) => kept.has(id)),
+    })),
+  };
+}
+
+/** The server's Content-Disposition filename (RFC 5987 form first), else the fallback. */
+export function downloadFilename(contentDisposition: string | null | undefined, fallback: string): string {
+  const value = contentDisposition || '';
+  let name: string | null = null;
+  const extended = value.match(/filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/);
+  if (extended?.[1]) {
+    try {
+      name = decodeURIComponent(extended[1].trim().replace(/^"|"$/g, ''));
+    } catch {
+      name = null;
+    }
+  }
+  if (!name) name = value.match(/filename\s*=\s*"([^"]+)"/i)?.[1] ?? value.match(/filename\s*=\s*([^;\s]+)/i)?.[1] ?? null;
+  // A name, never a path.
+  const clean = name?.split(/[\/]/).pop()?.trim();
+  return clean || fallback;
+}

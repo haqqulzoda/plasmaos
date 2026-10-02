@@ -27,7 +27,7 @@ import { PursuitEoi } from '@/components/pursuits/PursuitEoi';
 import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Forms';
-import { EmptyState, PageHeader, PageSkeleton, StatusBadge, Surface } from '@/components/ui/Display';
+import { EmptyState, PageHeader, PageSkeleton, StatusBadge, Surface, type Tone } from '@/components/ui/Display';
 import { formatDateTime, formatFileSize } from '@/i18n/formatters';
 import type { CustomerSelectableLocale } from '@/i18n/locales';
 import { api } from '@/lib/api';
@@ -42,11 +42,16 @@ import type {
   PursuitAnalysis,
   PursuitContext,
   PursuitRequirement,
+  PursuitStage,
   TeamScenario,
 } from '@/types/pursuit';
 import { customerProcessingState } from '@/types/pursuit';
 
 const ACTIVE_STATES = new Set(['UPLOADING', 'QUEUED', 'CHECKING', 'EXTRACTING']);
+// The header shows where the pursuit stands; document processing states live in Documents & Evidence.
+const STAGE_TONES: Record<PursuitStage, Tone> = {
+  SAVED: 'neutral', EVALUATING: 'info', PREPARING: 'info', SUBMITTED: 'info', WON: 'success', LOST: 'neutral', DISMISSED: 'neutral',
+};
 const DOCUMENT_ROLES: PrivateDocumentRole[] = ['RFP', 'TOR', 'NOTICE', 'ADDENDUM', 'CLARIFICATION', 'FORM', 'ANNEX', 'OTHER'];
 // D2-05: the EOI package sits between Requirements and Team.
 const WORKSPACE_TABS = ['overview', 'requirements', 'eoi', 'team', 'documents', 'proposal'] as const;
@@ -306,7 +311,6 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
     action={<Button variant="secondary" onClick={() => void load()} leadingIcon={<RefreshCw aria-hidden />}>{t('actions.retry')}</Button>}
   /></main>;
 
-  const processing = customerProcessingState(pursuit.processing_state) || 'CHECKING';
   const title = pursuitDisplayTitle(pursuit, (date) => t('values.uploadedOn', { date: formatDateTime(date, locale) }));
   const sourceDeadline = context?.field_provenance.find((item) => item.field_name === 'external_deadline')?.source_value || null;
   const deadline = sourceDeadline || pursuit.external_deadline || pursuit.source_deadline;
@@ -361,9 +365,8 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
       eyebrow={pursuit.origin === 'UPLOAD' ? t('workspace.uploadOrigin') : t('workspace.sourceOrigin')}
       title={title}
       description={t('workspace.description')}
-      status={<StatusBadge tone={processing === 'FAILED' ? 'danger' : processing === 'PARTIAL' ? 'warning' : processing === 'READY' ? 'success' : 'info'}>{t(`processing.${processing}`)}</StatusBadge>}
+      status={<span data-pursuit-stage={pursuit.stage}><StatusBadge tone={STAGE_TONES[pursuit.stage]}>{t(`stages.${pursuit.stage}`)}</StatusBadge></span>}
       metadata={<>
-        <span>{t(`stages.${pursuit.stage}`)}</span>
         {pursuit.reference && <span><BidiText>{pursuit.reference}</BidiText></span>}
         {deadline && <span>{formatDateTime(deadline, locale)}</span>}
         {historicalDeadline && <StatusBadge tone="warning">{t('context.historicalRfp')} · {t('context.deadlinePassed')}</StatusBadge>}

@@ -18,6 +18,7 @@ import {
   GENERATION_BUDGET_SECONDS,
   addressedBy,
   builderErrors,
+  downloadFilename,
   draftRequest,
   experienceRows,
   initialBuilderState,
@@ -27,6 +28,7 @@ import {
   toggleOwn,
   togglePartner,
   togglePartnerReference,
+  withoutLaterStage,
   type BuilderState,
   type EoiStep,
 } from '@/lib/eoiBuilder';
@@ -83,8 +85,9 @@ export function PursuitEoi({ pursuitId, headers, runId, onOpenRequirements }: Pr
       api.get<EoiDraft[]>(`${base}/eoi-drafts`, { headers }).catch(() => ({ data: [] as EoiDraft[] })),
     ]).then(([suggested, profile, versions]) => {
       if (cancelled) return;
-      setSuggestions(suggested.data);
-      setState(initialBuilderState(suggested.data, { profile: profile.data, email: session?.user?.email, uiLocale: locale }));
+      const criteria = withoutLaterStage(suggested.data);
+      setSuggestions(criteria);
+      setState(initialBuilderState(criteria, { profile: profile.data, email: session?.user?.email, uiLocale: locale }));
       setDrafts(versions.data);
     }).catch((error) => {
       if (cancelled) return;
@@ -132,7 +135,8 @@ export function PursuitEoi({ pursuitId, headers, runId, onOpenRequirements }: Pr
     const url = URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `expression-of-interest-v${draft.version}-${draft.language}.${format.toLowerCase()}`;
+    link.download = downloadFilename(response.headers['content-disposition'] as string | undefined,
+      `expression-of-interest-v${draft.version}-${draft.language}.${format.toLowerCase()}`);
     document.body.appendChild(link);
     link.click();
     link.remove();

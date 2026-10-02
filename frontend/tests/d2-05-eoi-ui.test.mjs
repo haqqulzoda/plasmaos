@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   addressedBy,
   builderErrors,
+  downloadFilename,
   draftRequest,
   eoiRunId,
   experienceRows,
@@ -18,6 +19,7 @@ import {
   togglePartner,
   togglePartnerReference,
   uncoveredByOwn,
+  withoutLaterStage,
 } from "../lib/eoiBuilder.ts";
 import {
   bulkConfirmPlan,
@@ -220,6 +222,53 @@ test("confirm all in a group: requirement and Gap, group reason with per-item ov
   assert.deepEqual(order, ["a", "b"]);
   assert.deepEqual(progress, ["0/2", "1/2", "2/2"]);
   assert.deepEqual(report, { done: 2, failed: [{ id: "b", message: "HTTP 404" }] });
+});
+
+test("later-stage obligations never appear as EOI criteria, even if the backend returns them", () => {
+  assert.equal(withoutLaterStage(SUGGESTIONS), SUGGESTIONS); // nothing to drop: unchanged
+  const duty = { requirement_id: "c4", statement: "Prepare designs for 12 sub-projects", original_quote: "The Consultant shall prepare...",
+    locator: { page_number: null, paragraph_number: 9 }, effective_coverage_state: "LATER_STAGE_OBLIGATION", matched_reference_ids: ["r3"] };
+  const leaked = {
+    ...SUGGESTIONS, criteria: [...SUGGESTIONS.criteria, duty],
+    own_references: SUGGESTIONS.own_references.map((item) => item.reference_id === "r3" ? { ...item, matched_requirement_ids: ["c4"] } : item),
+    partner_firms: SUGGESTIONS.partner_firms.map((firm) => firm.firm_id === "p1" ? { ...firm, covers_requirement_ids: ["c1", "c2", "c4"] } : firm),
+  };
+  const clean = withoutLaterStage(leaked);
+  assert.deepEqual(clean.criteria.map((item) => item.requirement_id), ["c1", "c2", "c3"]);
+  assert.deepEqual(clean.own_references.find((item) => item.reference_id === "r3").matched_requirement_ids, []);
+  assert.deepEqual(clean.partner_firms[0].covers_requirement_ids, ["c1", "c2"]);
+  const state = initialBuilderState(clean, { uiLocale: "en" });
+  assert.equal(addressedBy(clean, state).has("c4"), false);
+  const source = read("components/pursuits/PursuitEoi.tsx");
+  assert.match(source, /withoutLaterStage\(suggested\.data\)/);
+});
+
+test("EOI downloads use the server's Content-Disposition filename, else the version pattern", () => {
+  const fallback = "expression-of-interest-v2-ru.docx";
+  assert.equal(downloadFilename('attachment; filename="eoi-OP00468882-v2-ru.docx"', fallback), "eoi-OP00468882-v2-ru.docx");
+  assert.equal(downloadFilename("attachment; filename=eoi.pdf", fallback), "eoi.pdf");
+  assert.equal(downloadFilename(`attachment; filename="eoi.docx"; filename*=utf-8''%D0%97%D0%B0%D1%8F%D0%B2%D0%BA%D0%B0.docx`, fallback), "Заявка.docx");
+  assert.equal(downloadFilename(`attachment; filename*=UTF-8''%E0%A4%A`, fallback), fallback); // undecodable, no plain name
+  assert.equal(downloadFilename('attachment; filename="../../etc/eoi.docx"', fallback), "eoi.docx"); // a name, never a path
+  assert.equal(downloadFilename(undefined, fallback), fallback);
+  assert.equal(downloadFilename("attachment", fallback), fallback);
+  const source = read("components/pursuits/PursuitEoi.tsx");
+  assert.match(source, /downloadFilename\(response\.headers\['content-disposition'\]/);
+});
+
+test("the workspace header shows the pursuit stage, never a processing state", () => {
+  const page = read("app/dashboard/pursuits/[pursuitId]/page.tsx");
+  const header = page.slice(page.indexOf("<PageHeader", page.indexOf("return <main className=\"customer-page pursuit-workspace")));
+  const status = header.slice(header.indexOf("status={"), header.indexOf("metadata={"));
+  assert.match(status, /stages\.\$\{pursuit\.stage\}/);
+  assert.doesNotMatch(status, /processing/);
+  assert.doesNotMatch(page, /customerProcessingState\(pursuit\.processing_state\)/);
+  // Document processing states remain in Documents & Evidence.
+  assert.match(page, /customerProcessingState\(document\.processing_state\)/);
+  for (const locale of LOCALES) {
+    const stages = JSON.parse(read(`messages/${locale}/pursuits.json`)).stages;
+    for (const stage of ["SAVED", "EVALUATING", "PREPARING", "SUBMITTED", "WON", "LOST", "DISMISSED"]) assert.ok(stages[stage], `${locale} ${stage}`);
+  }
 });
 
 test("pursuit titles are never 'Untitled'", () => {

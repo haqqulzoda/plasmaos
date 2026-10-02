@@ -471,7 +471,7 @@ def main():
                           "original_quote": item["original_quote"], "locator": {"page_number": None, "paragraph_number": 4},
                           "effective_coverage_state": item["effective_coverage_state"],
                           "matched_reference_ids": [D205_OWN_REF] if item["requirement_id"] == D205_REQ_EXPERIENCE else []}
-                         for item in d205_analysis()["requirements"]],
+                         for item in d205_analysis()["requirements"]],  # includes a LATER_STAGE_OBLIGATION the UI must hide
             "notes": [{"requirement_id": item["requirement_id"], "note_kind": item["note_kind"],
                        "statement": item["effective_normalized_requirement"], "original_quote": item["original_quote"]}
                       for item in d205_analysis()["submission_and_notes"]],
@@ -555,6 +555,7 @@ def main():
                     body = b"PK synthetic eoi"
                     self.send_response(200)
                     self.send_header("Content-Type", "application/octet-stream")
+                    self.send_header("Content-Disposition", 'attachment; filename="eoi-OP00468882-server.docx"')
                     self.send_header("Cache-Control", "private, no-store")
                     self.send_header("Content-Length", str(len(body)))
                     self.end_headers()
@@ -1497,6 +1498,14 @@ def main():
                         load(f"{workspace}&tab=eoi", locale, width)
                         before = len(requests)
                         expect(page.locator("[data-eoi-panel='experience']")).to_be_visible(timeout=30000)
+                        expect(page.locator(f"[data-criterion-id='{D205_REQ_LATER}']")).to_have_count(0)  # later-stage: never a criterion
+                        expect(page.locator("[data-criterion-id]")).to_have_count(2)
+                        pursuits_messages = messages(locale, "pursuits")
+                        stage = page.locator("[data-pursuit-stage]")
+                        expect(stage).to_have_attribute("data-pursuit-stage", "SAVED")
+                        expect(stage).to_have_text(pursuits_messages["stages"]["SAVED"])
+                        header = page.locator(".ds-page-header").first.inner_text()
+                        assert pursuits_messages["processing"]["CHECKING"] not in header, header
                         experience = page.locator(f"[data-criterion-id='{D205_REQ_EXPERIENCE}']")
                         expect(experience).to_have_attribute("data-addressed", "true")
                         assert page.locator(f"[data-reference-id='{D205_OWN_REF}'] input").is_checked()  # suggested: pre-checked
@@ -1544,7 +1553,7 @@ def main():
                 expect(stale.locator(".eoi-stale-reasons li")).to_have_count(2)
                 with page.expect_download() as download:
                     page.locator("[data-eoi-version='1'] button", has_text="DOCX").click()
-                assert download.value.suggested_filename == "expression-of-interest-v1-en.docx"
+                assert download.value.suggested_filename == "eoi-OP00468882-server.docx"  # the server's name
                 page.locator("[data-eoi-versions]").screenshot(path=str(OUT / "en-d205-eoi-versions-1440.png"))
                 return {"versions": 2, "post": 1}
             case("d2-05/eoi/generate-progress-versions", d205_generate)
