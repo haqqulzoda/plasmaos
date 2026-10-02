@@ -44,7 +44,9 @@ test('candidate retrieval does not introduce outreach authority', () => {
 
 test('library exposes safe structured records only when records exist', () => {
   const team = read('components/pursuits/PursuitTeam.tsx');
-  const library = read('app/dashboard/partners-experts/page.tsx');
+  // D2-02: the library page composes the three tab components.
+  const library = read('app/dashboard/partners-experts/page.tsx') + read('components/library/LibraryTabs.tsx')
+    + read('components/library/LibraryParts.tsx');
   assert.match(team, /hasLibrary &&/);
   assert.match(library, /project_references/);
   assert.match(library, /cv_versions/);

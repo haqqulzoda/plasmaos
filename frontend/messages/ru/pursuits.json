@@ -145,7 +145,7 @@
     "chooseDocuments": "Выберите документы, которые Plasma должна проанализировать.",
     "analysisInProgress": "Анализ выполняется.",
     "analysisNeedsAttention": "Анализ требует внимания — проверьте или запустите повторно.",
-    "reviewRequirementsGaps": "Проверьте извлечённые требования и пробелы.",
+    "reviewRequirementsGaps": "Проверить требования",
     "reviewPartnerExpertOptions": "Проверьте варианты партнёров и экспертов.",
     "prepareEvidencePack": "Подготовьте пакет доказательств предложения.",
     "privateEvidence": "Ваши документы",
@@ -607,34 +607,264 @@
     }
   },
   "library": {
-    "eyebrow": "Reusable candidate records",
+    "eyebrow": "Переиспользуемые записи",
     "title": "Партнёры и эксперты",
-    "description": "Organization-private and explicitly permitted network records. This view is a working library, not a marketplace.",
-    "loading": "Loading candidate library",
-    "failed": "Candidate library could not be loaded",
-    "failedHelp": "Check the organization context and try again.",
-    "retry": "Retry",
+    "description": "Собственный опыт проектов, фирмы-партнёры и эксперты — только для вашей организации. Записи остаются утверждениями организации, пока не проверены.",
+    "loading": "Загрузка библиотеки",
+    "failed": "Не удалось загрузить библиотеку",
+    "failedHelp": "Проверьте выбранную организацию и повторите попытку.",
+    "retry": "Повторить",
     "empty": "Добавьте первого партнёра или эксперта",
-    "emptyHelp": "Появится вместе с импортом библиотеки.",
+    "emptyHelp": "Внесите их здесь или импортируйте CSV-файл.",
     "firms": "Фирмы",
-    "firmsHelp": "Reusable firm facts and project-reference history.",
+    "firmsHelp": "Данные фирм и история референций проектов.",
     "experts": "Эксперты",
-    "expertsHelp": "Reusable expert facts and immutable structured CV versions.",
-    "referenceHistory": "Project reference history",
-    "noReferences": "No project references recorded.",
-    "cvVersions": "CV versions",
-    "cvVersion": "CV version {version}",
-    "noCvVersions": "No structured CV versions recorded.",
-    "notRecorded": "Not recorded",
+    "expertsHelp": "Данные экспертов и неизменяемые версии структурированного CV.",
+    "referenceHistory": "Референции проектов",
+    "noReferences": "Референции проектов не внесены.",
+    "cvVersions": "Версии CV",
+    "cvVersion": "Версия CV {version}",
+    "noCvVersions": "Версии структурированного CV не внесены.",
+    "notRecorded": "Не указано",
     "evidence": {
-      "VERIFIED": "Verified",
-      "REVIEWED": "Reviewed",
-      "UNVERIFIED": "Unverified",
-      "EVIDENCE_MISSING": "Evidence missing"
+      "VERIFIED": "Подтверждено",
+      "REVIEWED": "Проверено организацией",
+      "UNVERIFIED": "Не проверено",
+      "EVIDENCE_MISSING": "Нет подтверждения"
     },
     "scopes": {
-      "ORGANIZATION_PRIVATE": "Organization private",
-      "NETWORK_SHARED": "Network shared"
+      "ORGANIZATION_PRIVATE": "Только для организации",
+      "NETWORK_SHARED": "Общий доступ в сети"
+    },
+    "close": "Закрыть",
+    "cancel": "Отмена",
+    "saveFailed": "Не удалось сохранить",
+    "fixErrors": "Исправьте отмеченные поля ({count}).",
+    "saveChanges": "Сохранить изменения",
+    "edit": "Изменить",
+    "sharePercent": "Доля {value}%",
+    "tabs": {
+      "label": "Разделы библиотеки",
+      "own": "Наш опыт",
+      "partners": "Фирмы-партнёры",
+      "experts": "Эксперты"
+    },
+    "fields": {
+      "project_name": "Название проекта",
+      "client_name": "Заказчик",
+      "country": "Страна",
+      "sector": "Отрасль",
+      "service": "Услуга",
+      "role": "Роль",
+      "contract_share_percent": "Доля в контракте, %",
+      "contract_value": "Стоимость контракта",
+      "contract_currency": "Валюта",
+      "value_basis": "Основа стоимости",
+      "start_date": "Дата начала",
+      "completion_date": "Дата завершения",
+      "completion_state": "Завершение",
+      "relevant_scope": "Релевантный объём работ",
+      "evidence_state": "Подтверждение",
+      "display_name": "Название фирмы",
+      "legal_name": "Юридическое название",
+      "services": "Услуги",
+      "sectors": "Отрасли",
+      "capabilities": "Компетенции",
+      "regions": "Регионы",
+      "expert_name": "Имя эксперта",
+      "specializations": "Специализации",
+      "qualifications": "Квалификации",
+      "languages": "Языки",
+      "file": "Файл",
+      "row": "Строка"
+    },
+    "help": {
+      "share": "Ваша часть контракта, 0–100. Оставьте пустым, если неизвестно.",
+      "value": "Стоимость и валюта указываются вместе, и для стоимости нужна основа (ваша доля, сумма консорциума или сумма контракта).",
+      "evidence": "Новая запись — утверждение вашей организации. Используйте «Отметить как проверенное», когда сотрудник проверит её.",
+      "list": "Разделяйте элементы точкой с запятой."
+    },
+    "roles": {
+      "LEAD": "Лидер",
+      "JV_MEMBER": "Участник СП",
+      "CONSORTIUM_MEMBER": "Участник консорциума",
+      "SUBCONSULTANT": "Субконсультант",
+      "SUBCONTRACTOR": "Субподрядчик",
+      "OTHER": "Другое",
+      "UNKNOWN": "Не указано"
+    },
+    "valueBases": {
+      "FIRM_SHARE": "Наша доля",
+      "CONSORTIUM_TOTAL": "Сумма консорциума",
+      "CONTRACT_TOTAL": "Сумма контракта",
+      "UNKNOWN": "Не указано"
+    },
+    "completion": {
+      "COMPLETED": "Завершён",
+      "ONGOING": "Выполняется",
+      "NOT_COMPLETED": "Не завершён",
+      "UNKNOWN": "Не указано"
+    },
+    "basis": {
+      "METADATA_ONLY": "Утверждение",
+      "FILE_BACKED": "Указан документ"
+    },
+    "errors": {
+      "required": "Обязательное поле.",
+      "tooShort": "Не менее 2 символов.",
+      "tooLong": "Слишком длинно.",
+      "invalid": "Недопустимое значение.",
+      "share": "Число от 0 до 100.",
+      "number": "Число без пробелов и букв.",
+      "currencyFormat": "Трёхбуквенный код, например USD.",
+      "valueNeedsCurrency": "Для стоимости нужна валюта.",
+      "currencyNeedsValue": "Для валюты нужна стоимость.",
+      "valueNeedsBasis": "Укажите, что покрывает стоимость.",
+      "date": "Дата в формате ГГГГ-ММ-ДД.",
+      "datesOrder": "Не может быть раньше начала.",
+      "tooMany": "Слишком много элементов.",
+      "year": "Год в формате ГГГГ.",
+      "month": "Месяц в формате ГГГГ-ММ.",
+      "emptyCv": "Добавьте хотя бы одну строку перед сохранением версии.",
+      "emptyFile": "Файл пуст.",
+      "unknownColumn": "Неизвестный столбец.",
+      "missingColumn": "Нет обязательного столбца.",
+      "noRows": "В файле есть заголовок, но нет строк.",
+      "tooManyRows": "Больше 200 строк; разделите файл.",
+      "extraCells": "Ячеек больше, чем столбцов.",
+      "reviewNotImportable": "Проверку нельзя импортировать; отметьте запись после импорта."
+    },
+    "reference": {
+      "addTitle": "Добавить референцию проекта",
+      "editTitle": "Изменить референцию проекта",
+      "addHelp": "Одно завершённое или текущее задание. Анализ сопоставляет требования с этими фактами.",
+      "editHelp": "Прежняя версия сохранится в истории: анализы и команды, которые на неё ссылались, не переписываются.",
+      "save": "Сохранить референцию",
+      "saveChanges": "Сохранить как новую версию",
+      "valueLegend": "Стоимость контракта",
+      "add": "Добавить референцию"
+    },
+    "expert": {
+      "add": "Добавить эксперта",
+      "addTitle": "Добавить эксперта",
+      "editTitle": "Изменить эксперта",
+      "save": "Сохранить эксперта",
+      "saveChanges": "Сохранить изменения",
+      "privacyHelp": "Видно только вашей организации; для частной записи согласие не требуется."
+    },
+    "cv": {
+      "addTitle": "Добавить версию CV {version}",
+      "immutableHelp": "Сохранённую версию CV ({name}) нельзя изменить; исправление — это новая версия.",
+      "save": "Сохранить версию CV",
+      "removeRow": "Удалить строку",
+      "counts": "задания: {assignments} · образование: {education} · языки: {languages} · сертификаты: {certifications}",
+      "sections": {
+        "education": "Образование",
+        "assignments": "Задания",
+        "languages": "Языки",
+        "certifications": "Сертификаты"
+      },
+      "fields": {
+        "education": {
+          "degree": "Степень",
+          "institution": "Учебное заведение",
+          "year": "Год"
+        },
+        "assignments": {
+          "role": "Роль",
+          "client": "Заказчик",
+          "country": "Страна",
+          "sector": "Отрасль",
+          "start": "Начало (ГГГГ-ММ)",
+          "end": "Окончание (ГГГГ-ММ)",
+          "description": "Описание"
+        },
+        "languages": {
+          "language": "Язык",
+          "level": "Уровень"
+        },
+        "certifications": {
+          "name": "Сертификат",
+          "issuer": "Кем выдан",
+          "year": "Год"
+        }
+      },
+      "add": {
+        "education": "Добавить образование",
+        "assignments": "Добавить задание",
+        "languages": "Добавить язык",
+        "certifications": "Добавить сертификат",
+        "version": "Добавить версию CV"
+      }
+    },
+    "review": {
+      "action": "Отметить как проверенное",
+      "title": "Отметить как проверенное",
+      "subject": "Запись: {subject}",
+      "explanation": "Это фиксирует, что сотрудник вашей организации сверил запись с документами.",
+      "notVerification": "Это утверждение вашей организации. Plasma его не проверяла; запись отображается как проверенная вами, а не подтверждённая.",
+      "confirm": "Отметить как проверенное"
+    },
+    "archive": {
+      "action": "В архив",
+      "title": "Архивировать референцию",
+      "subject": "Референция: {subject}",
+      "explanation": "Референция уйдёт из библиотеки, новых поисков и новых анализов. В истории анализов и команд, которые уже на неё ссылались, она останется.",
+      "confirm": "В архив"
+    },
+    "import": {
+      "open": "Импорт CSV",
+      "title": {
+        "references": "Импорт референций проектов",
+        "experts": "Импорт экспертов"
+      },
+      "target": "Куда: {target}. До {limit} строк в файле.",
+      "help": {
+        "references": "Скачайте шаблон, заполните по одной референции в строке и выберите файл. Ничего не сохраняется до запуска импорта.",
+        "experts": "Скачайте шаблон, заполните по одному эксперту в строке (списки через точку с запятой) и выберите файл. Ничего не сохраняется до запуска импорта."
+      },
+      "template": "Скачать шаблон",
+      "choose": "Выбрать CSV-файл",
+      "fileRejected": "Этот файл нельзя импортировать",
+      "summary": "Готово к импорту: {valid}. Строк с ошибками: {invalid}.",
+      "invalidRows": "Строк с ошибками: {count}",
+      "invalidHelp": "Эти строки не будут импортированы. Исправьте их в файле и импортируйте снова или импортируйте готовые строки сейчас.",
+      "preview": "Предпросмотр импорта",
+      "line": "Строка",
+      "record": "Запись",
+      "status": "Статус",
+      "ready": "Готово",
+      "cellError": "{field}: {message}",
+      "progress": "Сохранено {done} из {total}…",
+      "report": "Создано: {created}. Ошибок: {failed}. Не импортировано из-за ошибок: {skipped}.",
+      "failedRow": "Строка {line} ({label}): {message}",
+      "start": "Импортировать строк: {count}",
+      "done": "Готово"
+    },
+    "own": {
+      "title": "Наш опыт",
+      "help": "Завершённые и текущие задания вашей фирмы. Анализ по ним показывает, каким требованиям к опыту вы, возможно, уже соответствуете.",
+      "emptyTitle": "Внесите собственный опыт фирмы",
+      "emptyHelp": "Добавьте первый проект или импортируйте CSV. Пока опыта нет, каждое требование к опыту показывается как «нет подтверждения».",
+      "addFirst": "Добавить первый проект",
+      "editFirm": "Изменить данные фирмы",
+      "firmHelp": "Так ваша фирма выглядит в анализе. Она никогда не предлагается как партнёр."
+    },
+    "partners": {
+      "title": "Фирмы-партнёры",
+      "help": "Фирмы, с которыми вы можете объединиться, и их референции.",
+      "add": "Добавить фирму-партнёра",
+      "emptyTitle": "Фирм-партнёров пока нет",
+      "emptyHelp": "Добавьте фирму, с которой работаете, затем импортируйте её референции.",
+      "addTitle": "Добавить фирму-партнёра",
+      "editTitle": "Изменить фирму-партнёра",
+      "save": "Сохранить фирму",
+      "privacyHelp": "Видно только вашей организации."
+    },
+    "expertsTab": {
+      "help": "Эксперты, которых вы можете предложить, с неизменяемыми версиями структурированного CV.",
+      "emptyTitle": "Экспертов пока нет",
+      "emptyHelp": "Добавьте эксперта или импортируйте CSV, затем добавьте версию CV."
     }
   },
   "proposal": {

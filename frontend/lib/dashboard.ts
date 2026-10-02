@@ -4,6 +4,24 @@ import { isTenderOpen } from "./tenderTruth.ts";
 import type { SourceRefreshStatusItem } from "@/types/source-refresh";
 
 export const DASHBOARD_OPPORTUNITY_LIMIT = 3;
+/** The dashboard top list leaves out tenders closing sooner than this (Explorer still shows them). */
+export const DASHBOARD_MIN_DAYS_LEFT = 3;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type ProfileMatch = { country?: string | null; services?: (string | null)[] | null } | null | undefined;
+
+/**
+ * "Matches your profile" tier (D2-02), the same rule as the backend ranking:
+ * 1 country and service, 2 country only, 3 service only, 4 no match.
+ */
+export function profileMatchTier(profileMatch: ProfileMatch): 1 | 2 | 3 | 4 {
+  const country = Boolean(profileMatch?.country?.trim());
+  const service = (profileMatch?.services ?? []).some((value) => value?.trim());
+  if (country && service) return 1;
+  if (country) return 2;
+  if (service) return 3;
+  return 4;
+}
 
 export type ProfilePromptVariant = "all" | "targeting" | "details";
 
@@ -40,8 +58,10 @@ function stableTenderIdentity(tender: ExplorerTenderSummary): string {
   return canonical || `${tender.source_system}:${tender.external_id}`;
 }
 
-// D1-08: no score. Soonest deadline first, then a stable identity order.
-function compareOpportunities(a: ExplorerItem, b: ExplorerItem): number {
+// No score: profile-match tier, then the soonest deadline, then a stable identity order.
+export function compareOpportunities(a: ExplorerItem, b: ExplorerItem): number {
+  const tierDifference = profileMatchTier(a.profile_match) - profileMatchTier(b.profile_match);
+  if (tierDifference) return tierDifference;
   const aDeadline = timestamp(a.tender.deadline);
   const bDeadline = timestamp(b.tender.deadline);
   if (aDeadline !== null && bDeadline === null) return -1;
@@ -59,8 +79,9 @@ function compareOpportunities(a: ExplorerItem, b: ExplorerItem): number {
 
 /**
  * Select the passive Dashboard shortlist: current tenders that match the company
- * profile on at least one country or service fact (D1-08), soonest deadline first.
- * No generation or domain write is performed here.
+ * profile on at least one country or service fact (D1-08), ranked by tier and then
+ * deadline (D2-02), leaving out tenders with fewer than DASHBOARD_MIN_DAYS_LEFT days
+ * left. No generation or domain write is performed here.
  */
 export function activeOpportunityShortlist(
   items: readonly ExplorerItem[],
@@ -69,6 +90,8 @@ export function activeOpportunityShortlist(
   const byIdentity = new Map<string, ExplorerItem>();
   for (const item of items) {
     if (!matchesProfile(item.profile_match) || !isCurrentTender(item.tender, now)) continue;
+    const deadline = timestamp(item.tender.deadline);
+    if (deadline !== null && deadline - now < DASHBOARD_MIN_DAYS_LEFT * DAY_MS) continue;
     const identity = stableTenderIdentity(item.tender);
     const current = byIdentity.get(identity);
     if (!current || compareOpportunities(item, current) < 0) {

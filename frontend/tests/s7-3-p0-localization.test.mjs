@@ -182,10 +182,11 @@ test("new badge and high-significance actions have localized accessible copy", (
 test("claim-safe terminology renders natively in all P0 locales", () => {
   const expected = {
     // D1-08: the numeric match score is gone; the deterministic profile match replaces it.
-    en: ["Tender Explorer", "Matches your profile", "Compliance"],
-    uz: ["Tenderlar katalogi", "Profilingizga mos", "Muvofiqlik tahlili"],
-    ru: ["Каталог тендеров", "Соответствует вашему профилю", "Анализ соответствия"],
-    ar: ["مستكشف المناقصات", "يطابق ملفك", "الامتثال"],
+    // D2-02: the Explorer page is "Opportunities", as in the menu.
+    en: ["Opportunities", "Matches your profile", "Compliance"],
+    uz: ["Imkoniyatlar", "Profilingizga mos", "Muvofiqlik tahlili"],
+    ru: ["Возможности", "Соответствует вашему профилю", "Анализ соответствия"],
+    ar: ["الفرص", "يطابق ملفك", "الامتثال"],
   };
   for (const locale of CUSTOMER_SELECTABLE_LOCALES) {
     const t = createTranslator({ locale, messages: catalogs[locale] });

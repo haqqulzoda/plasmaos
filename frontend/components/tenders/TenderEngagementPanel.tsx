@@ -26,6 +26,8 @@ interface TenderEngagementPanelProps {
   proposalContext?: boolean;
   /** D1-06 one door: offer "Open workspace" and no legacy Prepare-bid CTA (Tender Details). */
   workspaceEntry?: boolean;
+  /** D2-02: stage actions render secondary (the page header owns the primary action). */
+  secondaryStageActions?: boolean;
   engagementData?: TenderEngagementActionContext | null;
   proposalIdData?: string | null;
   loadingData?: boolean;
@@ -39,6 +41,7 @@ export function TenderEngagementPanel({
   tenderId,
   proposalContext = false,
   workspaceEntry = false,
+  secondaryStageActions = false,
   engagementData,
   proposalIdData,
   loadingData = false,
@@ -138,6 +141,7 @@ export function TenderEngagementPanel({
           {!loading && engagement ? (
             <EngagementWorkflowActions
               foundation
+              secondaryOnly={secondaryStageActions}
               engagement={engagement}
               tenderId={tenderId}
               onChanged={setEngagement}

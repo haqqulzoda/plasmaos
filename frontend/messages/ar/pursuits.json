@@ -145,7 +145,7 @@
     "chooseDocuments": "اختر المستندات التي ينبغي أن تحللها Plasma.",
     "analysisInProgress": "التحليل قيد التنفيذ.",
     "analysisNeedsAttention": "التحليل يحتاج إلى اهتمام — راجعه أو أعد تشغيله.",
-    "reviewRequirementsGaps": "راجع المتطلبات والفجوات المستخرجة.",
+    "reviewRequirementsGaps": "مراجعة المتطلبات",
     "reviewPartnerExpertOptions": "راجع خيارات الشركاء والخبراء.",
     "prepareEvidencePack": "جهّز حزمة أدلة العرض.",
     "privateEvidence": "مستنداتك",
@@ -607,34 +607,264 @@
     }
   },
   "library": {
-    "eyebrow": "Reusable candidate records",
+    "eyebrow": "سجلات قابلة لإعادة الاستخدام",
     "title": "الشركاء والخبراء",
-    "description": "Organization-private and explicitly permitted network records. This view is a working library, not a marketplace.",
-    "loading": "Loading candidate library",
-    "failed": "Candidate library could not be loaded",
-    "failedHelp": "Check the organization context and try again.",
-    "retry": "Retry",
-    "empty": "أضف أول شريك أو خبير",
-    "emptyHelp": "سيتوفر مع استيراد المكتبة.",
+    "description": "خبرة مشاريعكم الخاصة والشركات الشريكة والخبراء، خاصة بمؤسستكم فقط. تبقى السجلات إفادات من مؤسستكم حتى تتم مراجعتها.",
+    "loading": "جارٍ تحميل المكتبة",
+    "failed": "تعذّر تحميل المكتبة",
+    "failedHelp": "تحققوا من المؤسسة المختارة وأعيدوا المحاولة.",
+    "retry": "إعادة المحاولة",
+    "empty": "أضيفوا أول شريك أو خبير",
+    "emptyHelp": "سجّلوهم هنا أو استوردوا ملف CSV.",
     "firms": "الشركات",
-    "firmsHelp": "Reusable firm facts and project-reference history.",
+    "firmsHelp": "بيانات الشركات وسجل مراجع المشاريع.",
     "experts": "الخبراء",
-    "expertsHelp": "Reusable expert facts and immutable structured CV versions.",
-    "referenceHistory": "Project reference history",
-    "noReferences": "No project references recorded.",
-    "cvVersions": "CV versions",
-    "cvVersion": "CV version {version}",
-    "noCvVersions": "No structured CV versions recorded.",
-    "notRecorded": "Not recorded",
+    "expertsHelp": "بيانات الخبراء وإصدارات سيرة ذاتية منظمة غير قابلة للتغيير.",
+    "referenceHistory": "مراجع المشاريع",
+    "noReferences": "لم تُسجَّل مراجع مشاريع.",
+    "cvVersions": "إصدارات السيرة الذاتية",
+    "cvVersion": "إصدار السيرة الذاتية {version}",
+    "noCvVersions": "لم تُسجَّل إصدارات سيرة ذاتية منظمة.",
+    "notRecorded": "غير مسجل",
     "evidence": {
-      "VERIFIED": "Verified",
-      "REVIEWED": "Reviewed",
-      "UNVERIFIED": "Unverified",
-      "EVIDENCE_MISSING": "Evidence missing"
+      "VERIFIED": "مُتحقَّق منه",
+      "REVIEWED": "راجعته المؤسسة",
+      "UNVERIFIED": "غير مُراجَع",
+      "EVIDENCE_MISSING": "بلا إثبات"
     },
     "scopes": {
-      "ORGANIZATION_PRIVATE": "Organization private",
-      "NETWORK_SHARED": "Network shared"
+      "ORGANIZATION_PRIVATE": "خاص بالمؤسسة",
+      "NETWORK_SHARED": "مشترك في الشبكة"
+    },
+    "close": "إغلاق",
+    "cancel": "إلغاء",
+    "saveFailed": "تعذّر الحفظ",
+    "fixErrors": "صحّحوا الحقول المحددة ({count}).",
+    "saveChanges": "حفظ التغييرات",
+    "edit": "تعديل",
+    "sharePercent": "الحصة {value}%",
+    "tabs": {
+      "label": "أقسام المكتبة",
+      "own": "خبرتنا",
+      "partners": "الشركات الشريكة",
+      "experts": "الخبراء"
+    },
+    "fields": {
+      "project_name": "اسم المشروع",
+      "client_name": "العميل",
+      "country": "الدولة",
+      "sector": "القطاع",
+      "service": "الخدمة",
+      "role": "الدور",
+      "contract_share_percent": "الحصة من العقد، %",
+      "contract_value": "قيمة العقد",
+      "contract_currency": "العملة",
+      "value_basis": "أساس القيمة",
+      "start_date": "تاريخ البدء",
+      "completion_date": "تاريخ الإنجاز",
+      "completion_state": "حالة الإنجاز",
+      "relevant_scope": "النطاق ذو الصلة",
+      "evidence_state": "الإثبات",
+      "display_name": "اسم الشركة",
+      "legal_name": "الاسم القانوني",
+      "services": "الخدمات",
+      "sectors": "القطاعات",
+      "capabilities": "القدرات",
+      "regions": "المناطق",
+      "expert_name": "اسم الخبير",
+      "specializations": "التخصصات",
+      "qualifications": "المؤهلات",
+      "languages": "اللغات",
+      "file": "الملف",
+      "row": "الصف"
+    },
+    "help": {
+      "share": "حصتكم من العقد، من 0 إلى 100. اتركوه فارغًا إذا لم تكن معروفة.",
+      "value": "تُدخل القيمة والعملة معًا، وتحتاج القيمة إلى أساس (حصتكم أو إجمالي التحالف أو إجمالي العقد).",
+      "evidence": "السجل الجديد إفادة من مؤسستكم. استخدموا «وضع علامة كمراجَع» بعد أن يتحقق منه أحد موظفيكم.",
+      "list": "افصلوا العناصر بفاصلة منقوطة."
+    },
+    "roles": {
+      "LEAD": "رئيسي",
+      "JV_MEMBER": "عضو في مشروع مشترك",
+      "CONSORTIUM_MEMBER": "عضو في تحالف",
+      "SUBCONSULTANT": "استشاري من الباطن",
+      "SUBCONTRACTOR": "مقاول من الباطن",
+      "OTHER": "أخرى",
+      "UNKNOWN": "غير مسجل"
+    },
+    "valueBases": {
+      "FIRM_SHARE": "حصتنا",
+      "CONSORTIUM_TOTAL": "إجمالي التحالف",
+      "CONTRACT_TOTAL": "إجمالي العقد",
+      "UNKNOWN": "غير مسجل"
+    },
+    "completion": {
+      "COMPLETED": "منجز",
+      "ONGOING": "جارٍ",
+      "NOT_COMPLETED": "غير منجز",
+      "UNKNOWN": "غير مسجل"
+    },
+    "basis": {
+      "METADATA_ONLY": "إفادة مسجلة",
+      "FILE_BACKED": "مستند مذكور"
+    },
+    "errors": {
+      "required": "حقل مطلوب.",
+      "tooShort": "حرفان على الأقل.",
+      "tooLong": "طويل جدًا.",
+      "invalid": "قيمة غير مسموح بها.",
+      "share": "رقم من 0 إلى 100.",
+      "number": "رقم بلا مسافات أو أحرف.",
+      "currencyFormat": "رمز من ثلاثة أحرف، مثل USD.",
+      "valueNeedsCurrency": "تحتاج القيمة إلى عملة.",
+      "currencyNeedsValue": "تحتاج العملة إلى قيمة.",
+      "valueNeedsBasis": "اختاروا ما تغطيه القيمة.",
+      "date": "تاريخ بصيغة YYYY-MM-DD.",
+      "datesOrder": "لا يمكن أن يسبق تاريخ البدء.",
+      "tooMany": "عناصر كثيرة جدًا.",
+      "year": "سنة بصيغة YYYY.",
+      "month": "شهر بصيغة YYYY-MM.",
+      "emptyCv": "أضيفوا صفًا واحدًا على الأقل قبل حفظ الإصدار.",
+      "emptyFile": "الملف فارغ.",
+      "unknownColumn": "عمود غير معروف.",
+      "missingColumn": "عمود مطلوب مفقود.",
+      "noRows": "يحتوي الملف على عناوين دون صفوف.",
+      "tooManyRows": "أكثر من 200 صف؛ قسّموا الملف.",
+      "extraCells": "خلايا أكثر من الأعمدة.",
+      "reviewNotImportable": "لا يمكن استيراد المراجعة؛ ضعوا العلامة بعد الاستيراد."
+    },
+    "reference": {
+      "addTitle": "إضافة مرجع مشروع",
+      "editTitle": "تعديل مرجع مشروع",
+      "addHelp": "مهمة واحدة منجزة أو جارية. يطابق التحليل المتطلبات مع هذه الحقائق.",
+      "editHelp": "يبقى الإصدار السابق في السجل: لا تُعاد كتابة التحليلات والفرق التي استندت إليه.",
+      "save": "حفظ المرجع",
+      "saveChanges": "حفظ كإصدار جديد",
+      "valueLegend": "قيمة العقد",
+      "add": "إضافة مرجع"
+    },
+    "expert": {
+      "add": "إضافة خبير",
+      "addTitle": "إضافة خبير",
+      "editTitle": "تعديل خبير",
+      "save": "حفظ الخبير",
+      "saveChanges": "حفظ التغييرات",
+      "privacyHelp": "خاص بمؤسستكم؛ لا يلزم سجل موافقة لخبير خاص."
+    },
+    "cv": {
+      "addTitle": "إضافة الإصدار {version} من السيرة الذاتية",
+      "immutableHelp": "لا يمكن تغيير إصدار محفوظ من السيرة الذاتية ({name})؛ التصحيح يكون بإصدار جديد.",
+      "save": "حفظ إصدار السيرة الذاتية",
+      "removeRow": "حذف الصف",
+      "counts": "المهام: {assignments} · التعليم: {education} · اللغات: {languages} · الشهادات: {certifications}",
+      "sections": {
+        "education": "التعليم",
+        "assignments": "المهام",
+        "languages": "اللغات",
+        "certifications": "الشهادات"
+      },
+      "fields": {
+        "education": {
+          "degree": "الدرجة",
+          "institution": "المؤسسة التعليمية",
+          "year": "السنة"
+        },
+        "assignments": {
+          "role": "الدور",
+          "client": "العميل",
+          "country": "الدولة",
+          "sector": "القطاع",
+          "start": "البداية (YYYY-MM)",
+          "end": "النهاية (YYYY-MM)",
+          "description": "الوصف"
+        },
+        "languages": {
+          "language": "اللغة",
+          "level": "المستوى"
+        },
+        "certifications": {
+          "name": "الشهادة",
+          "issuer": "الجهة المانحة",
+          "year": "السنة"
+        }
+      },
+      "add": {
+        "education": "إضافة تعليم",
+        "assignments": "إضافة مهمة",
+        "languages": "إضافة لغة",
+        "certifications": "إضافة شهادة",
+        "version": "إضافة إصدار سيرة ذاتية"
+      }
+    },
+    "review": {
+      "action": "وضع علامة كمراجَع",
+      "title": "وضع علامة كمراجَع",
+      "subject": "السجل: {subject}",
+      "explanation": "يسجّل هذا أن أحد موظفي مؤسستكم قد طابق هذا السجل مع مستنداته.",
+      "notVerification": "هذه إفادة مؤسستكم الخاصة. لم تتحقق منها Plasma، ويُعرض السجل كمراجَع وليس كمُتحقَّق منه.",
+      "confirm": "وضع علامة كمراجَع"
+    },
+    "archive": {
+      "action": "أرشفة",
+      "title": "أرشفة المرجع",
+      "subject": "المرجع: {subject}",
+      "explanation": "يخرج المرجع من مكتبتكم ومن عمليات البحث والتحليلات الجديدة، ويبقى في سجل التحليلات والفرق التي استندت إليه.",
+      "confirm": "أرشفة"
+    },
+    "import": {
+      "open": "استيراد CSV",
+      "title": {
+        "references": "استيراد مراجع المشاريع",
+        "experts": "استيراد الخبراء"
+      },
+      "target": "إلى: {target}. حتى {limit} صف في الملف.",
+      "help": {
+        "references": "نزّلوا القالب، واملؤوا مرجعًا واحدًا في كل صف، ثم اختاروا الملف. لا يُحفظ شيء قبل بدء الاستيراد.",
+        "experts": "نزّلوا القالب، واملؤوا خبيرًا واحدًا في كل صف (القوائم مفصولة بفاصلة منقوطة)، ثم اختاروا الملف. لا يُحفظ شيء قبل بدء الاستيراد."
+      },
+      "template": "تنزيل القالب",
+      "choose": "اختيار ملف CSV",
+      "fileRejected": "لا يمكن استيراد هذا الملف",
+      "summary": "جاهز للاستيراد: {valid}. صفوف بها أخطاء: {invalid}.",
+      "invalidRows": "صفوف بها أخطاء: {count}",
+      "invalidHelp": "لن تُستورد هذه الصفوف. صحّحوها في الملف وأعيدوا الاستيراد، أو استوردوا الصفوف الجاهزة الآن.",
+      "preview": "معاينة الاستيراد",
+      "line": "السطر",
+      "record": "السجل",
+      "status": "الحالة",
+      "ready": "جاهز",
+      "cellError": "{field}: {message}",
+      "progress": "تم حفظ {done} من {total}…",
+      "report": "أُنشئ: {created}. فشل: {failed}. لم يُستورد بسبب الأخطاء: {skipped}.",
+      "failedRow": "السطر {line} ({label}): {message}",
+      "start": "استيراد الصفوف: {count}",
+      "done": "تم"
+    },
+    "own": {
+      "title": "خبرتنا",
+      "help": "مهام شركتكم المنجزة والجارية. يستخدمها التحليل ليُظهر متطلبات الخبرة التي قد تستوفونها بالفعل.",
+      "emptyTitle": "سجّلوا خبرة شركتكم الخاصة",
+      "emptyHelp": "أضيفوا أول مشروع أو استوردوا ملف CSV. حتى ذلك الحين يظهر كل متطلب خبرة على أنه بلا إثبات.",
+      "addFirst": "إضافة أول مشروع",
+      "editFirm": "تعديل بيانات الشركة",
+      "firmHelp": "هكذا تظهر شركتكم في التحليل. ولا تُقترح أبدًا كشريك."
+    },
+    "partners": {
+      "title": "الشركات الشريكة",
+      "help": "الشركات التي قد تتعاونون معها ومراجع مشاريعها.",
+      "add": "إضافة شركة شريكة",
+      "emptyTitle": "لا توجد شركات شريكة بعد",
+      "emptyHelp": "أضيفوا شركة تعملون معها، ثم استوردوا مراجعها.",
+      "addTitle": "إضافة شركة شريكة",
+      "editTitle": "تعديل شركة شريكة",
+      "save": "حفظ الشركة",
+      "privacyHelp": "خاص بمؤسستكم."
+    },
+    "expertsTab": {
+      "help": "الخبراء الذين قد تقترحونهم، مع إصدارات سيرة ذاتية منظمة غير قابلة للتغيير.",
+      "emptyTitle": "لا يوجد خبراء بعد",
+      "emptyHelp": "أضيفوا خبيرًا أو استوردوا ملف CSV، ثم أضيفوا إصدار سيرة ذاتية."
     }
   },
   "proposal": {

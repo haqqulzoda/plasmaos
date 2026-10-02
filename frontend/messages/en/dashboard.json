@@ -1,8 +1,8 @@
 {
   "eyebrow": "Overview",
   "title": "Dashboard",
-  "subtitle": "Review active tenders, blockers, and company readiness.",
-  "openExplorer": "Open Tender Explorer",
+  "subtitle": "Matching opportunities, your pursuits and company readiness.",
+  "openExplorer": "Browse opportunities",
   "lastUpdated": "Last updated",
   "refresh": "Refresh",
   "refreshStatusUnavailable": "Refresh status unavailable",
@@ -65,9 +65,9 @@
     "one": "1 day left",
     "many": "{count} days left"
   },
-  "readinessTitle": "Company readiness",
-  "readinessHelp": "Key records for bid-readiness and lower risk.",
-  "readinessVault": "Open Readiness Vault",
+  "readinessTitle": "Company & Experience",
+  "readinessHelp": "Company records and your own project experience.",
+  "readinessVault": "Open Company & Experience",
   "recordsMissing": "{count, plural, one {# record missing} other {# records missing}}",
   "recordsExpired": "{count, plural, one {# record expired} other {# records expired}}",
   "recordsExpiring": "{count, plural, one {# record expiring soon} other {# records expiring soon}}",
@@ -129,5 +129,15 @@
     "complete": "Complete",
     "opportunitiesHelp": "Stored recommendations for your company."
   },
-  "matchesHelp": "Up to 3 open tenders that match your profile's countries or services, soonest deadline first."
+  "matchesHelp": "Up to 3 open tenders that match your profile: country and service first, then country, then service, soonest deadline first within each. Tenders closing in under 3 days are shown in Opportunities only.",
+  "pursuitsTitle": "Your pursuits",
+  "pursuitsHelp": "Tenders you are working on, most recently updated first.",
+  "viewAllPursuits": "View all pursuits",
+  "pursuitsChoose": "Choose an organization",
+  "pursuitsChooseHelp": "You belong to several organizations. Open Pursuits to choose one.",
+  "pursuitUntitled": "Untitled pursuit",
+  "pursuitNoDeadline": "No deadline recorded",
+  "openWorkspace": "Open workspace",
+  "pursuitsEmpty": "No pursuits yet",
+  "pursuitsEmptyHelp": "Open a tender's workspace to start working on it."
 }

@@ -1,8 +1,8 @@
 {
   "eyebrow": "Umumiy ko‘rinish",
   "title": "Boshqaruv paneli",
-  "subtitle": "Faol tenderlar, to‘siqlar va kompaniya tayyorgarligini ko‘rib chiqing.",
-  "openExplorer": "Tenderlar katalogini ochish",
+  "subtitle": "Mos imkoniyatlar, ishdagi tenderlaringiz va kompaniya tayyorgarligi.",
+  "openExplorer": "Imkoniyatlarni koʻrish",
   "lastUpdated": "So‘nggi yangilanish",
   "refresh": "Yangilash",
   "refreshStatusUnavailable": "Yangilash holati mavjud emas",
@@ -65,9 +65,9 @@
     "one": "1 kun qoldi",
     "many": "{count} kun qoldi"
   },
-  "readinessTitle": "Kompaniya tayyorgarligi",
-  "readinessHelp": "Taklifga tayyorgarlik va xavfni kamaytirish uchun asosiy yozuvlar.",
-  "readinessVault": "Tayyorgarlik hujjatlarini ochish",
+  "readinessTitle": "Kompaniya va tajriba",
+  "readinessHelp": "Kompaniya hujjatlari va oʻz loyiha tajribangiz.",
+  "readinessVault": "«Kompaniya va tajriba»ni ochish",
   "recordsMissing": "{count} ta hujjat yetishmaydi",
   "recordsExpired": "{count} ta hujjatning muddati tugagan",
   "recordsExpiring": "{count} ta hujjatning muddati yaqin",
@@ -129,5 +129,15 @@
     "complete": "Bajarildi",
     "opportunitiesHelp": "Kompaniyangiz uchun saqlangan tavsiyalar."
   },
-  "matchesHelp": "Profilingizdagi mamlakat yoki xizmatlarga mos 3 tagacha ochiq tender; muddati yaqinlari birinchi."
+  "matchesHelp": "Profilingizga mos 3 tagacha ochiq tender: avval mamlakat va xizmat mosligi, keyin mamlakat, keyin xizmat; har guruhda eng yaqin muddat birinchi. Tugashiga 3 kundan kam qolgan tenderlar faqat «Imkoniyatlar» boʻlimida koʻrsatiladi.",
+  "pursuitsTitle": "Ishdagi tenderlaringiz",
+  "pursuitsHelp": "Ustida ishlayotgan tenderlaringiz; yaqinda yangilanganlari birinchi.",
+  "viewAllPursuits": "Barcha ishdagi tenderlar",
+  "pursuitsChoose": "Tashkilotni tanlang",
+  "pursuitsChooseHelp": "Siz bir nechta tashkilotga aʼzosiz. Birini tanlash uchun «Ishdagi tenderlar»ni oching.",
+  "pursuitUntitled": "Nomsiz",
+  "pursuitNoDeadline": "Muddat koʻrsatilmagan",
+  "openWorkspace": "Ish maydonini ochish",
+  "pursuitsEmpty": "Hozircha ishdagi tenderlar yoʻq",
+  "pursuitsEmptyHelp": "Ishni boshlash uchun tenderning ish maydonini oching."
 }

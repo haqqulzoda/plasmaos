@@ -39,6 +39,7 @@ from app.schemas.explorer import (
 from app.services.profile_match import (
     ProfileTargets,
     profile_match_condition,
+    profile_match_tier_expression,
     profile_targets,
     tender_profile_match,
 )
@@ -109,14 +110,18 @@ def _recommendation_order(statement, sort_value: str | None):
     return _apply_tender_sort(statement, normalized)
 
 
-def _profile_match_order(statement, sort_value: str | None):
-    """"Matches your profile" is ordered by deadline, soonest first (D1-08).
+def _profile_match_order(statement, sort_value: str | None, targets: ProfileTargets):
+    """"Matches your profile" ranking (D2-02), deterministic and without a score.
 
-    ``best_match`` is accepted for older clients and means the same; there is no score.
+    Tier 1: country and service match; tier 2: country only; tier 3: service only;
+    within a tier the soonest deadline first. ``best_match`` is accepted for older
+    clients and means the same. Any other explicit sort is applied as asked.
     """
     normalized = (sort_value or "deadline_soonest").strip().casefold().replace("-", "_")
     if normalized in {"", "default", "best_match"}:
         normalized = "deadline_soonest"
+    if normalized == "deadline_soonest":
+        statement = statement.order_by(profile_match_tier_expression(targets).asc())
     return _apply_tender_sort(statement, normalized)
 
 
@@ -328,7 +333,7 @@ async def _page_rows(
             .outerjoin(OrganizationPursuit, _owned_engagement_join(user_id=user_id, profile_id=profile_id))
             .where(_profile_match_scope(targets, query.reference_time, profile_id))
         )
-        statement = _profile_match_order(_filtered(statement, query), query.sort)
+        statement = _profile_match_order(_filtered(statement, query), query.sort, targets)
         rows = (await db.execute(statement.offset(query.offset).limit(query.limit))).all()
         return [(tender, None, engagement) for tender, engagement in rows]
 

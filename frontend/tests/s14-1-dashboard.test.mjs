@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  DASHBOARD_MIN_DAYS_LEFT,
   DASHBOARD_OPPORTUNITY_LIMIT,
   activeOpportunityShortlist,
+  profileMatchTier,
   isCurrentTender,
   lastAuthoritativeRefresh,
   profilePromptVariant,
@@ -20,6 +22,8 @@ function item({
   status = "OPEN",
   deadline = "2026-10-20T10:00:00Z",
   matches = true,
+  services = [],
+  country = "Uzbekistan",
 }) {
   return {
     tender: {
@@ -47,7 +51,7 @@ function item({
     },
     // D1-08: the stored recommendation is not surfaced; a profile-match fact is.
     recommendation: null,
-    profile_match: matches ? { country: "Uzbekistan", services: [] } : null,
+    profile_match: matches ? { country, services } : null,
     pursuit: null,
   };
 }
@@ -89,20 +93,39 @@ test("closed, cancelled, unknown, expired, invalid and non-matching rows cannot 
   );
 });
 
-test("ranking uses deadline urgency, then stable identity; there is no score", () => {
+test("ranking: profile-match tier, then deadline, then stable identity; there is no score", () => {
+  // D2-02 tiers: 1 country and service, 2 country, 3 service.
+  assert.equal(profileMatchTier({ country: "Uzbekistan", services: ["consulting"] }), 1);
+  assert.equal(profileMatchTier({ country: "Uzbekistan", services: [] }), 2);
+  assert.equal(profileMatchTier({ country: null, services: ["consulting"] }), 3);
+  assert.equal(profileMatchTier(null), 4);
   const selected = activeOpportunityShortlist(
     [
-      item({ id: "later", canonical: "z", deadline: "2026-11-01T00:00:00Z" }),
-      item({ id: "soonest", canonical: "a", deadline: "2026-09-18T00:00:00Z" }),
-      item({ id: "same-z", canonical: "c", deadline: "2026-09-20T00:00:00Z" }),
-      item({ id: "same-a", canonical: "b", deadline: "2026-09-20T00:00:00Z" }),
+      item({ id: "service-soonest", canonical: "s", deadline: "2026-09-21T00:00:00Z", country: null, services: ["consulting"] }),
+      item({ id: "country-later", canonical: "z", deadline: "2026-11-01T00:00:00Z" }),
+      item({ id: "same-z", canonical: "c", deadline: "2026-09-25T00:00:00Z" }),
+      item({ id: "same-a", canonical: "b", deadline: "2026-09-25T00:00:00Z" }),
+      item({ id: "both-latest", canonical: "x", deadline: "2026-12-01T00:00:00Z", services: ["consulting"] }),
     ],
     NOW,
   );
   assert.deepEqual(
     selected.map(({ tender }) => tender.id),
-    ["soonest", "same-a", "same-z"],
+    ["both-latest", "same-a", "same-z"],
   );
+});
+
+test("the dashboard leaves out tenders with fewer than 3 days left (Explorer still shows them)", () => {
+  assert.equal(DASHBOARD_MIN_DAYS_LEFT, 3);
+  const selected = activeOpportunityShortlist(
+    [
+      item({ id: "two-days", deadline: "2026-09-19T09:00:00Z", services: ["consulting"] }),
+      item({ id: "three-days", deadline: "2026-09-20T10:00:00Z" }),
+      item({ id: "no-deadline", deadline: null }),
+    ],
+    NOW,
+  );
+  assert.deepEqual(selected.map(({ tender }) => tender.id), ["three-days", "no-deadline"]);
 });
 
 test("canonical source identity is deduplicated before the cap", () => {
@@ -181,7 +204,8 @@ test("Dashboard source preserves the accepted IA, passivity and controlled fallb
   const css = read("components/customer/pages.css");
   const shell = read("components/shell/CustomerShell.tsx");
   const shellCss = read("components/shell/shell.css");
-  const primaryOrder = ["dashboard-active", "dashboard-attention", "dashboard-analyses"]
+  // D2-02: "Your pursuits" replaced the legacy "Needs attention" and "Recent compliance analyses".
+  const primaryOrder = ["dashboard-active", "dashboard-pursuits"]
     .map((marker) => page.lastIndexOf(marker));
   const supportOrder = ["dashboard-readiness", "dashboard-profile"]
     .map((marker) => page.lastIndexOf(marker));
@@ -196,8 +220,11 @@ test("Dashboard source preserves the accepted IA, passivity and controlled fallb
   assert.match(page, /limit: 100/);
   assert.match(page, /data-source-logo="official"/);
   assert.match(page, /data-source-logo="fallback"/);
-  assert.match(page, /state\.analyses\.slice\(0, 2\)/);
-  assert.match(page, /viewAllAnalyses/);
+  assert.doesNotMatch(page, /dashboard-attention|dashboard-analyses|actionTitle|analysesTitle|latest-analysis|fetchLatestAnalyses/);
+  assert.match(page, /api\.get<PursuitListResponse>\("\/pursuits"/);
+  assert.match(page, /pursuitWorkspaceHref\(pursuit\.pursuit_id, organizationId\)/);
+  assert.match(page, /href="\/dashboard\/settings"\s+data-company-link/);
+  assert.doesNotMatch(page, /readiness-vault/);
   assert.match(page, /deadline\.unavailable/);
   assert.match(page, /profilePrompt\.all/);
   assert.match(page, /lastAuthoritativeRefresh\(statusItems\)/);

@@ -145,7 +145,7 @@
     "chooseDocuments": "Choose the documents Plasma should analyze.",
     "analysisInProgress": "Analysis is in progress.",
     "analysisNeedsAttention": "Analysis needs attention — review or rerun.",
-    "reviewRequirementsGaps": "Review the extracted requirements and gaps.",
+    "reviewRequirementsGaps": "Review requirements",
     "reviewPartnerExpertOptions": "Review partner and expert options.",
     "prepareEvidencePack": "Prepare proposal evidence pack.",
     "privateEvidence": "Your documents",
@@ -609,13 +609,13 @@
   "library": {
     "eyebrow": "Reusable candidate records",
     "title": "Partners & Experts",
-    "description": "Organization-private and explicitly permitted network records. This view is a working library, not a marketplace.",
+    "description": "Your own project experience, partner firms and experts, kept private to your organization. Records are your organization's claims until reviewed.",
     "loading": "Loading candidate library",
     "failed": "Candidate library could not be loaded",
     "failedHelp": "Check the organization context and try again.",
     "retry": "Retry",
     "empty": "Add your first partner or expert",
-    "emptyHelp": "Coming with library import.",
+    "emptyHelp": "Record them here or import a CSV file.",
     "firms": "Firms",
     "firmsHelp": "Reusable firm facts and project-reference history.",
     "experts": "Experts",
@@ -635,6 +635,236 @@
     "scopes": {
       "ORGANIZATION_PRIVATE": "Organization private",
       "NETWORK_SHARED": "Network shared"
+    },
+    "close": "Close",
+    "cancel": "Cancel",
+    "saveFailed": "Could not save",
+    "fixErrors": "Fix the highlighted fields ({count}).",
+    "saveChanges": "Save changes",
+    "edit": "Edit",
+    "sharePercent": "Share {value}%",
+    "tabs": {
+      "label": "Library sections",
+      "own": "Our experience",
+      "partners": "Partner firms",
+      "experts": "Experts"
+    },
+    "fields": {
+      "project_name": "Project name",
+      "client_name": "Client",
+      "country": "Country",
+      "sector": "Sector",
+      "service": "Service",
+      "role": "Role",
+      "contract_share_percent": "Share of contract, %",
+      "contract_value": "Contract value",
+      "contract_currency": "Currency",
+      "value_basis": "Value basis",
+      "start_date": "Start date",
+      "completion_date": "Completion date",
+      "completion_state": "Completion",
+      "relevant_scope": "Relevant scope",
+      "evidence_state": "Evidence",
+      "display_name": "Firm name",
+      "legal_name": "Legal name",
+      "services": "Services",
+      "sectors": "Sectors",
+      "capabilities": "Capabilities",
+      "regions": "Regions",
+      "expert_name": "Expert name",
+      "specializations": "Specializations",
+      "qualifications": "Qualifications",
+      "languages": "Languages",
+      "file": "File",
+      "row": "Row"
+    },
+    "help": {
+      "share": "Your part of the contract, 0–100. Leave empty if not known.",
+      "value": "Value and currency go together, and a value needs its basis (your share, consortium total or contract total).",
+      "evidence": "A new record is your claim. Use “Mark as reviewed” once someone in your organization has checked it.",
+      "list": "Separate items with a semicolon."
+    },
+    "roles": {
+      "LEAD": "Lead",
+      "JV_MEMBER": "JV member",
+      "CONSORTIUM_MEMBER": "Consortium member",
+      "SUBCONSULTANT": "Subconsultant",
+      "SUBCONTRACTOR": "Subcontractor",
+      "OTHER": "Other",
+      "UNKNOWN": "Not recorded"
+    },
+    "valueBases": {
+      "FIRM_SHARE": "Our share",
+      "CONSORTIUM_TOTAL": "Consortium total",
+      "CONTRACT_TOTAL": "Contract total",
+      "UNKNOWN": "Not recorded"
+    },
+    "completion": {
+      "COMPLETED": "Completed",
+      "ONGOING": "Ongoing",
+      "NOT_COMPLETED": "Not completed",
+      "UNKNOWN": "Not recorded"
+    },
+    "basis": {
+      "METADATA_ONLY": "Recorded claim",
+      "FILE_BACKED": "Document named"
+    },
+    "errors": {
+      "required": "Required.",
+      "tooShort": "At least 2 characters.",
+      "tooLong": "Too long.",
+      "invalid": "Not an allowed value.",
+      "share": "A number from 0 to 100.",
+      "number": "A number, without spaces or letters.",
+      "currencyFormat": "A three-letter code, for example USD.",
+      "valueNeedsCurrency": "A value needs its currency.",
+      "currencyNeedsValue": "A currency needs a value.",
+      "valueNeedsBasis": "Choose what the value covers.",
+      "date": "A date as YYYY-MM-DD.",
+      "datesOrder": "Cannot be before the start.",
+      "tooMany": "Too many items.",
+      "year": "A year as YYYY.",
+      "month": "A month as YYYY-MM.",
+      "emptyCv": "Add at least one row before saving the version.",
+      "emptyFile": "The file is empty.",
+      "unknownColumn": "Unknown column.",
+      "missingColumn": "Required column is missing.",
+      "noRows": "The file has a header but no rows.",
+      "tooManyRows": "More than 200 rows; split the file.",
+      "extraCells": "More cells than columns.",
+      "reviewNotImportable": "Review cannot be imported; use “Mark as reviewed” after import."
+    },
+    "reference": {
+      "addTitle": "Add project reference",
+      "editTitle": "Edit project reference",
+      "addHelp": "One completed or ongoing assignment. Analysis matches requirements against these facts.",
+      "editHelp": "Saving keeps the earlier version in history: analyses and teams that cited it are not rewritten.",
+      "save": "Save reference",
+      "saveChanges": "Save as new version",
+      "valueLegend": "Contract value",
+      "add": "Add reference"
+    },
+    "expert": {
+      "add": "Add expert",
+      "addTitle": "Add expert",
+      "editTitle": "Edit expert",
+      "save": "Save expert",
+      "saveChanges": "Save changes",
+      "privacyHelp": "Private to your organization; no consent record is needed for a private expert."
+    },
+    "cv": {
+      "addTitle": "Add CV version {version}",
+      "immutableHelp": "A saved version of {name}'s CV cannot be changed; a correction is a new version.",
+      "save": "Save CV version",
+      "removeRow": "Remove row",
+      "counts": "{assignments} assignments · {education} education · {languages} languages · {certifications} certifications",
+      "sections": {
+        "education": "Education",
+        "assignments": "Assignments",
+        "languages": "Languages",
+        "certifications": "Certifications"
+      },
+      "fields": {
+        "education": {
+          "degree": "Degree",
+          "institution": "Institution",
+          "year": "Year"
+        },
+        "assignments": {
+          "role": "Role",
+          "client": "Client",
+          "country": "Country",
+          "sector": "Sector",
+          "start": "Start (YYYY-MM)",
+          "end": "End (YYYY-MM)",
+          "description": "Description"
+        },
+        "languages": {
+          "language": "Language",
+          "level": "Level"
+        },
+        "certifications": {
+          "name": "Certification",
+          "issuer": "Issuer",
+          "year": "Year"
+        }
+      },
+      "add": {
+        "education": "Add education",
+        "assignments": "Add assignment",
+        "languages": "Add language",
+        "certifications": "Add certification",
+        "version": "Add CV version"
+      }
+    },
+    "review": {
+      "action": "Mark as reviewed",
+      "title": "Mark as reviewed",
+      "subject": "Record: {subject}",
+      "explanation": "This records that someone in your organization has checked this record against its documents.",
+      "notVerification": "It is your organization's own assertion. Plasma has not verified it, and it is shown as reviewed, not verified.",
+      "confirm": "Mark as reviewed"
+    },
+    "archive": {
+      "action": "Archive",
+      "title": "Archive reference",
+      "subject": "Reference: {subject}",
+      "explanation": "The reference leaves your library, new searches and new analyses. It stays in the history of analyses and teams that already cited it.",
+      "confirm": "Archive"
+    },
+    "import": {
+      "open": "Import CSV",
+      "title": {
+        "references": "Import project references",
+        "experts": "Import experts"
+      },
+      "target": "Into: {target}. Up to {limit} rows per file.",
+      "help": {
+        "references": "Download the template, fill one reference per row and choose the file. Nothing is saved until you start the import.",
+        "experts": "Download the template, fill one expert per row (lists separated by semicolons) and choose the file. Nothing is saved until you start the import."
+      },
+      "template": "Download template",
+      "choose": "Choose CSV file",
+      "fileRejected": "This file cannot be imported",
+      "summary": "Ready to import: {valid}. Rows with errors: {invalid}.",
+      "invalidRows": "Rows with errors: {count}",
+      "invalidHelp": "These rows will not be imported. Fix them in the file and import it again, or import the ready rows now.",
+      "preview": "Import preview",
+      "line": "Line",
+      "record": "Record",
+      "status": "Status",
+      "ready": "Ready",
+      "cellError": "{field}: {message}",
+      "progress": "Saving {done} of {total}…",
+      "report": "Created: {created}. Failed: {failed}. Not imported because of errors: {skipped}.",
+      "failedRow": "Line {line} ({label}): {message}",
+      "start": "{count, plural, one {Import # row} other {Import # rows}}",
+      "done": "Done"
+    },
+    "own": {
+      "title": "Our experience",
+      "help": "Your firm's own completed and ongoing assignments. Analysis uses them to show which experience requirements you may already meet.",
+      "emptyTitle": "Record your firm's own experience",
+      "emptyHelp": "Add your first project or import a CSV. Until then, every experience requirement shows as evidence missing.",
+      "addFirst": "Add your first project",
+      "editFirm": "Edit firm details",
+      "firmHelp": "How your firm appears in analysis. It is never offered as a partner."
+    },
+    "partners": {
+      "title": "Partner firms",
+      "help": "Firms you may team with, and their project references.",
+      "add": "Add partner firm",
+      "emptyTitle": "No partner firms yet",
+      "emptyHelp": "Add a firm you work with, or import its references after adding it.",
+      "addTitle": "Add partner firm",
+      "editTitle": "Edit partner firm",
+      "save": "Save firm",
+      "privacyHelp": "Private to your organization."
+    },
+    "expertsTab": {
+      "help": "Experts you may propose, with immutable structured CV versions.",
+      "emptyTitle": "No experts yet",
+      "emptyHelp": "Add an expert or import a CSV, then add a structured CV version."
     }
   },
   "proposal": {

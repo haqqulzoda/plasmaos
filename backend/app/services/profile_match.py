@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import and_, case, literal, or_
 
 
 @dataclass(frozen=True)
@@ -129,13 +129,53 @@ def service_match_condition(services: Any):
     return or_(*predicates) if predicates else None
 
 
-def profile_match_condition(targets: ProfileTargets):
-    """SQL predicate: at least one country or service match. None when there are no targets."""
+def _country_condition(targets: ProfileTargets):
     from app.models.all_models import Tender
 
     predicates = [_sql(Tender.country, _country_rule(country)) for country in targets.countries]
-    predicates.extend(_service_predicates(targets.services))
     return or_(*predicates) if predicates else None
+
+
+def _service_condition(targets: ProfileTargets):
+    return service_match_condition(targets.services)
+
+
+def profile_match_condition(targets: ProfileTargets):
+    """SQL predicate: at least one country or service match. None when there are no targets."""
+    conditions = [value for value in (_country_condition(targets), _service_condition(targets)) if value is not None]
+    return or_(*conditions) if conditions else None
+
+
+# Ranking tiers (D2-02): 1 country and service, 2 country only, 3 service only.
+TIER_COUNTRY_AND_SERVICE = 1
+TIER_COUNTRY = 2
+TIER_SERVICE = 3
+TIER_NONE = 4
+
+
+def profile_match_tier_expression(targets: ProfileTargets):
+    """SQL tier of a tender under the same rules as ``profile_match_tier``."""
+    country = _country_condition(targets)
+    service = _service_condition(targets)
+    whens = []
+    if country is not None and service is not None:
+        whens.append((and_(country, service), TIER_COUNTRY_AND_SERVICE))
+    if country is not None:
+        whens.append((country, TIER_COUNTRY))
+    if service is not None:
+        whens.append((service, TIER_SERVICE))
+    return case(*whens, else_=TIER_NONE) if whens else literal(TIER_NONE)
+
+
+def profile_match_tier(country: str | None, services: list[str] | tuple[str, ...]) -> int:
+    """Tier of one ``tender_profile_match`` result."""
+    if country and services:
+        return TIER_COUNTRY_AND_SERVICE
+    if country:
+        return TIER_COUNTRY
+    if services:
+        return TIER_SERVICE
+    return TIER_NONE
 
 
 def tender_profile_match(tender: Any, targets: ProfileTargets) -> tuple[str | None, list[str]]:

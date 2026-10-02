@@ -99,8 +99,11 @@ test("the button requests nothing on render: the POST lives in the click path on
 
 test("Open workspace is the CTA on every surface and the legacy CTAs are gone", () => {
   const details = read("app/dashboard/tenders/[tenderId]/page.tsx");
-  assert.equal((details.match(/<OpenWorkspaceButton /g) || []).length, 2); // header + workspace strip
-  assert.match(details, /<TenderEngagementPanel[\s\S]*?workspaceEntry/);
+  // D2-02: one primary "Open workspace" in the header; the Analysis card offers a secondary one.
+  assert.equal((details.match(/<OpenWorkspaceButton /g) || []).length, 1);
+  assert.match(details, /<PursuitAnalysisCard tenderId=\{tender\.id\}/);
+  assert.match(read("components/tenders/PursuitAnalysisCard.tsx"), /<OpenWorkspaceButton tenderId=\{tenderId\} variant="secondary"/);
+  assert.match(details, /<TenderEngagementPanel[\s\S]*?secondaryStageActions/);
   assert.doesNotMatch(details, /openCompliance|PrepareBidButton|\/compliance`/);
   const panel = read("components/tenders/TenderEngagementPanel.tsx");
   assert.equal((panel.match(/workspaceEntry && <OpenWorkspaceButton/g) || []).length, 3);
@@ -210,7 +213,7 @@ test("Pursuits has the From sources | Uploaded control; Company links to Readine
   const company = read("app/dashboard/settings/page.tsx");
   assert.match(company, /href="\/dashboard\/readiness-vault"[\s\S]*?t\("readinessLink"\)/);
   assert.equal(messages("en", "pursuits").library.empty, "Add your first partner or expert");
-  assert.equal(messages("en", "pursuits").library.emptyHelp, "Coming with library import.");
+  assert.equal(messages("en", "pursuits").library.emptyHelp, "Record them here or import a CSV file.");
   for (const locale of LOCALES) {
     assert.ok(messages(locale, "settings").readinessLink, locale);
     assert.ok(messages(locale, "pursuits").library.empty && messages(locale, "pursuits").library.emptyHelp, locale);

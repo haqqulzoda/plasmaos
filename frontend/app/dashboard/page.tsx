@@ -4,10 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  AlertTriangle,
   ArrowRight,
-  CheckCircle2,
-  Clock3,
+  Briefcase,
   Database,
   FileSearch,
   FileText,
@@ -50,13 +48,14 @@ import {
 } from "@/lib/tenderTruth";
 import { useTenderTruthLabels } from "@/lib/useTenderTruthLabels";
 import { expiryState, documentTypeMessageKey } from "@/lib/readiness";
+import { activeOrganizations, pursuitWorkspaceHref } from "@/lib/openWorkspace";
 import {
   formatDate as formatLocaleDate,
   formatDateTime,
 } from "@/i18n/formatters";
 import type { CustomerSelectableLocale } from "@/i18n/locales";
 import type { ExplorerItem, ExplorerTenderSummary } from "@/types/explorer";
-import type { Tender } from "@/types/tender";
+import type { OrganizationSummary, Pursuit, PursuitListResponse } from "@/types/pursuit";
 
 type CompanyProfile = {
   company_profile_id?: string | null;
@@ -79,43 +78,43 @@ type ReadinessDocument = {
   status: string;
 };
 
-type LatestAnalysis = {
-  analysis_id: string | null;
-  requirement_count?: number;
-  manual_review_count?: number;
-  coverage_metadata?: {
-    coverage_status?: unknown;
-    source_document_coverage?: { coverage_status?: unknown };
-  } | null;
-  analysis_status: string;
-  created_at?: string | null;
-};
+type SectionKey = "profile" | "readiness" | "opportunities" | "pursuits";
 
-type AnalysisSummary = {
-  tender: Tender;
-  analysis: LatestAnalysis;
-};
-
-type SectionKey = "profile" | "readiness" | "opportunities" | "analyses";
+/** "Your pursuits" needs one organization; several must be chosen on the Pursuits page. */
+type PursuitsState =
+  | { kind: "list"; organizationId: string; items: Pursuit[]; total: number }
+  | { kind: "choose" }
+  | { kind: "none" };
 
 type LoadState = {
   profile: CompanyProfile | null;
   readiness: ReadinessDocument[];
   recommendations: ExplorerItem[];
-  analyses: AnalysisSummary[];
+  pursuits: PursuitsState;
   failures: SectionKey[];
   loaded: SectionKey[];
 };
 
-type ActionItem = {
-  key: string;
-  issue: string;
-  subject: string;
-  date?: string | null;
-  href: string;
-  tone: "danger" | "warning";
-  priority: number;
-};
+const DASHBOARD_PURSUIT_LIMIT = 5;
+
+async function fetchPursuits(): Promise<PursuitsState> {
+  const organizations = activeOrganizations(
+    (await api.get<OrganizationSummary[]>("/organizations")).data ?? [],
+  );
+  if (!organizations.length) return { kind: "none" };
+  if (organizations.length > 1) return { kind: "choose" };
+  const organizationId = organizations[0].organization_id;
+  const response = await api.get<PursuitListResponse>("/pursuits", {
+    params: { limit: DASHBOARD_PURSUIT_LIMIT, offset: 0 },
+    headers: { "X-Organization-ID": organizationId },
+  });
+  return {
+    kind: "list",
+    organizationId,
+    items: response.data.items ?? [],
+    total: response.data.total ?? 0,
+  };
+}
 
 type DashboardTranslator = (
   key: string,
@@ -150,14 +149,6 @@ function isCurrentTender(tender: ExplorerTenderSummary) {
   return isTenderOpen(tender);
 }
 
-function customerDate(
-  value: string | null | undefined,
-  locale: CustomerSelectableLocale,
-  t: DashboardTranslator,
-) {
-  return value ? formatLocaleDate(value, locale) : t("updatedUnavailable");
-}
-
 function deadlineState(
   truth: TenderTruth,
   now: number,
@@ -172,113 +163,6 @@ function deadlineState(
   if (days === 0) return t("deadline.today");
   if (days === 1) return t("deadline.one");
   return t("deadline.many", { count: days });
-}
-
-function cleanAnalysisStatus(analysis: LatestAnalysis) {
-  const coverage = analysis.coverage_metadata;
-  const coverageStatus = String(coverage?.coverage_status ?? "");
-  const sourceCoverage = String(
-    coverage?.source_document_coverage?.coverage_status ?? "",
-  );
-  if (analysis.analysis_status === "failed" || coverageStatus === "failed") {
-    return "failed" as const;
-  }
-  if (
-    analysis.analysis_status === "needs_review" ||
-    (analysis.manual_review_count ?? 0) > 0
-  ) {
-    return "review" as const;
-  }
-  if (coverageStatus === "partial" || sourceCoverage === "partial") {
-    return "partial" as const;
-  }
-  return "complete" as const;
-}
-
-function buildActionItems(
-  analyses: AnalysisSummary[],
-  t: DashboardTranslator,
-): ActionItem[] {
-  return analyses
-    .flatMap(({ tender, analysis }): ActionItem[] => {
-      const status = cleanAnalysisStatus(analysis);
-      if (status === "failed") {
-        return [
-          {
-            key: `analysis-failed-${analysis.analysis_id}`,
-            issue: t("issues.analysisFailed"),
-            subject: tender.title,
-            date: analysis.created_at,
-            href: `/dashboard/tenders/${tender.id}`,
-            tone: "danger",
-            priority: 1,
-          },
-        ];
-      }
-      if (status === "review" || status === "partial") {
-        return [
-          {
-            key: `analysis-review-${analysis.analysis_id}`,
-            issue:
-              status === "review"
-                ? t("issues.manualReview")
-                : t("issues.partialReview"),
-            subject: tender.title,
-            date: analysis.created_at,
-            href: `/dashboard/tenders/${tender.id}`,
-            tone: "warning",
-            priority: status === "review" ? 2 : 3,
-          },
-        ];
-      }
-      return [];
-    })
-    .sort((a, b) => {
-      if (a.priority !== b.priority) return a.priority - b.priority;
-      return (
-        new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime()
-      );
-    })
-    .slice(0, 3);
-}
-
-async function fetchLatestAnalyses(tenders: Tender[]) {
-  const settled = await Promise.allSettled(
-    tenders.slice(0, 12).map(async (tender) => {
-      const response = await api.get<LatestAnalysis>(
-        `/tenders/${tender.id}/latest-analysis`,
-        { params: { summary_only: true } },
-      );
-      return { tender, analysis: response.data };
-    }),
-  );
-  const analyses = settled
-    .filter(
-      (result): result is PromiseFulfilledResult<AnalysisSummary> =>
-        result.status === "fulfilled",
-    )
-    .map((result) => result.value)
-    .filter((item) => Boolean(item.analysis.analysis_id))
-    .sort(
-      (a, b) =>
-        new Date(b.analysis.created_at ?? 0).getTime() -
-        new Date(a.analysis.created_at ?? 0).getTime(),
-    );
-  return {
-    analyses,
-    successCount: settled.filter((result) => result.status === "fulfilled")
-      .length,
-    partial: settled.some((result) => result.status === "rejected"),
-  };
-}
-
-function isTestOnlyTender(tender: Pick<Tender, "title" | "external_id">) {
-  const marker = `${tender.title} ${tender.external_id}`.toLowerCase();
-  return (
-    marker.includes("[test]") ||
-    marker.includes("test-only") ||
-    marker.startsWith("test ")
-  );
 }
 
 function DashboardSkeleton({ label }: { label: string }) {
@@ -304,11 +188,7 @@ function DashboardSkeleton({ label }: { label: string }) {
             <Skeleton />
             <Skeleton />
           </Surface>
-          <Surface className="dashboard-attention dashboard-skeleton-panel">
-            <Skeleton />
-            <Skeleton />
-          </Surface>
-          <Surface className="dashboard-analyses dashboard-skeleton-panel">
+          <Surface className="dashboard-pursuits dashboard-skeleton-panel">
             <Skeleton />
             <Skeleton />
           </Surface>
@@ -363,8 +243,10 @@ export default function DashboardPage() {
   const truthLabels = useTenderTruthLabels();
   const translate = useTranslations("dashboard");
   const translateReadiness = useTranslations("readiness");
+  const translatePursuits = useTranslations("pursuits");
   const t = translate as DashboardTranslator;
   const tReadiness = translateReadiness as DashboardTranslator;
+  const tPursuits = translatePursuits as DashboardTranslator;
   const {
     displayNameForSource,
     statusItems,
@@ -375,7 +257,7 @@ export default function DashboardPage() {
     profile: null,
     readiness: [],
     recommendations: [],
-    analyses: [],
+    pursuits: { kind: "none" },
     failures: [],
     loaded: [],
   });
@@ -397,7 +279,7 @@ export default function DashboardPage() {
       if (!hasLoadedRef.current) setInitialLoading(true);
       const failures = new Set<SectionKey>();
       const loaded = new Set<SectionKey>();
-      const [profileResult, readinessResult, opportunityResult, tendersResult] =
+      const [profileResult, readinessResult, opportunityResult, pursuitsResult] =
         await Promise.allSettled([
           api.get<CompanyProfile>("/users/me/company"),
           api.get<ReadinessDocument[]>("/vault/readiness"),
@@ -408,9 +290,7 @@ export default function DashboardPage() {
             status: "OPEN",
             sort: "deadline_soonest",
           }),
-          api.get<Tender[]>("/tenders", {
-            params: { limit: 24, sort: "newest" },
-          }),
+          fetchPursuits(),
         ]);
 
       if (profileResult.status === "fulfilled") loaded.add("profile");
@@ -421,20 +301,8 @@ export default function DashboardPage() {
         loaded.add("opportunities");
       else failures.add("opportunities");
 
-      let analyses: AnalysisSummary[] | null = null;
-      if (tendersResult.status === "fulfilled") {
-        const candidates = (tendersResult.value.data ?? []).filter(
-          (tender) => !isTestOnlyTender(tender),
-        );
-        const result = await fetchLatestAnalyses(candidates);
-        if (result.successCount > 0 || candidates.length === 0) {
-          analyses = result.analyses;
-          loaded.add("analyses");
-        }
-        if (result.partial) failures.add("analyses");
-      } else {
-        failures.add("analyses");
-      }
+      if (pursuitsResult.status === "fulfilled") loaded.add("pursuits");
+      else failures.add("pursuits");
 
       if (!mounted) return;
       setState((current) => {
@@ -454,7 +322,10 @@ export default function DashboardPage() {
                   isCurrentTender(item.tender),
                 )
               : current.recommendations,
-          analyses: analyses ?? current.analyses,
+          pursuits:
+            pursuitsResult.status === "fulfilled"
+              ? pursuitsResult.value
+              : current.pursuits,
           failures: [...failures],
           loaded: [...nextLoaded],
         };
@@ -514,10 +385,6 @@ export default function DashboardPage() {
     () => activeOpportunityShortlist(state.recommendations, now),
     [now, state.recommendations],
   );
-  const actionItems = useMemo(
-    () => buildActionItems(state.analyses, t),
-    [state.analyses, t],
-  );
   const profilePrompt = profilePromptVariant(state.profile);
   const lastUpdated = useMemo(
     () => lastAuthoritativeRefresh(statusItems),
@@ -526,7 +393,7 @@ export default function DashboardPage() {
   const unavailable = (key: SectionKey) => state.failures.includes(key);
   const hasLoaded = (key: SectionKey) => state.loaded.includes(key);
   const failedAll = (
-    ["profile", "readiness", "opportunities", "analyses"] as SectionKey[]
+    ["profile", "readiness", "opportunities", "pursuits"] as SectionKey[]
   ).every(unavailable);
   const retry = (
     <Button variant="secondary" onClick={() => setRetryVersion((v) => v + 1)}>
@@ -724,96 +591,76 @@ export default function DashboardPage() {
             )}
             </Surface>
 
-            <Surface className="dashboard-panel dashboard-attention">
+            <Surface className="dashboard-panel dashboard-pursuits" data-dashboard-pursuits>
               <SectionHeader
-                icon={<AlertTriangle aria-hidden />}
-                title={t("actionTitle")}
-                description={t("actionHelp")}
-              />
-              {staleNotice("analyses")}
-              {unavailable("analyses") && !hasLoaded("analyses") ? (
-                missing
-              ) : actionItems.length ? (
-                <ul className="dashboard-action-list">
-                  {actionItems.map((item) => (
-                    <li className="dashboard-action" key={item.key}>
-                      <span
-                        className={`dashboard-action-icon dashboard-action-${item.tone}`}
-                      >
-                        <FileText aria-hidden />
-                      </span>
-                      <div>
-                        <strong>{item.issue}</strong>
-                        <BidiText className="ds-muted">{item.subject}</BidiText>
-                      </div>
-                      <time dateTime={item.date ?? undefined}>
-                        {customerDate(item.date, locale, t)}
-                      </time>
-                      <ButtonLink variant="secondary" size="sm" href={item.href}>
-                        {t("review")}
-                        <ArrowRight className="rtl-mirror" aria-hidden />
-                      </ButtonLink>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <EmptyState
-                  icon={<CheckCircle2 aria-hidden />}
-                  title={t("noUrgent")}
-                  description={t("noUrgentHelp")}
-                />
-              )}
-            </Surface>
-
-            <Surface className="dashboard-panel dashboard-analyses">
-              <SectionHeader
-                icon={<Clock3 aria-hidden />}
-                title={t("analysesTitle")}
-                description={t("analysesHelp")}
+                icon={<Briefcase aria-hidden />}
+                title={t("pursuitsTitle")}
+                description={t("pursuitsHelp")}
                 action={
-                  <ButtonLink
-                    variant="ghost"
-                    size="sm"
-                    href="/dashboard/my-tenders"
-                  >
-                    {t("viewAllAnalyses")}
+                  <ButtonLink variant="ghost" size="sm" href="/dashboard/my-tenders">
+                    {t("viewAllPursuits")}
                     <ArrowRight className="rtl-mirror" aria-hidden />
                   </ButtonLink>
                 }
               />
-              {staleNotice("analyses")}
-              {unavailable("analyses") && !hasLoaded("analyses") ? (
+              {staleNotice("pursuits")}
+              {unavailable("pursuits") && !hasLoaded("pursuits") ? (
                 missing
-              ) : state.analyses.length ? (
-                <ul className="dashboard-analysis-list">
-                  {state.analyses.slice(0, 2).map(({ tender, analysis }) => (
-                    <li key={analysis.analysis_id}>
-                      <span className="dashboard-document-icon">
-                        <FileText aria-hidden />
-                      </span>
-                      <BidiText>{tender.title}</BidiText>
-                      <time dateTime={analysis.created_at ?? undefined}>
-                        {customerDate(analysis.created_at, locale, t)}
-                      </time>
-                      <ButtonLink
-                        variant="secondary"
-                        size="sm"
-                        href={`/dashboard/tenders/${tender.id}`}
-                      >
-                        {t("open")}
-                        <ArrowRight className="rtl-mirror" aria-hidden />
-                      </ButtonLink>
-                    </li>
-                  ))}
+              ) : state.pursuits.kind === "choose" ? (
+                <EmptyState
+                  icon={<Briefcase aria-hidden />}
+                  title={t("pursuitsChoose")}
+                  description={t("pursuitsChooseHelp")}
+                  action={
+                    <ButtonLink variant="secondary" href="/dashboard/my-tenders">
+                      {t("viewAllPursuits")}
+                    </ButtonLink>
+                  }
+                />
+              ) : state.pursuits.kind === "list" && state.pursuits.items.length ? (
+                <ul className="dashboard-pursuit-list">
+                  {state.pursuits.items.map((pursuit) => {
+                    const deadline = pursuit.external_deadline ?? pursuit.source_deadline;
+                    const organizationId = (state.pursuits as { organizationId: string }).organizationId;
+                    return (
+                      <li key={pursuit.pursuit_id} data-pursuit-id={pursuit.pursuit_id}>
+                        <span className="dashboard-document-icon">
+                          <FileText aria-hidden />
+                        </span>
+                        <div className="dashboard-pursuit-main">
+                          <BidiText>
+                            {pursuit.title || pursuit.tender_title || t("pursuitUntitled")}
+                          </BidiText>
+                          <span className="ds-muted">
+                            {tPursuits(`stages.${pursuit.stage}`)}
+                            <span aria-hidden> · </span>
+                            {deadline ? (
+                              <time dateTime={deadline}>{formatLocaleDate(deadline, locale)}</time>
+                            ) : (
+                              t("pursuitNoDeadline")
+                            )}
+                          </span>
+                        </div>
+                        <ButtonLink
+                          variant="secondary"
+                          size="sm"
+                          href={pursuitWorkspaceHref(pursuit.pursuit_id, organizationId)}
+                        >
+                          {t("openWorkspace")}
+                          <ArrowRight className="rtl-mirror" aria-hidden />
+                        </ButtonLink>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <EmptyState
-                  icon={<FileText aria-hidden />}
-                  title={t("noAnalyses")}
-                  description={t("noAnalysesHelp")}
+                  icon={<Briefcase aria-hidden />}
+                  title={t("pursuitsEmpty")}
+                  description={t("pursuitsEmptyHelp")}
                   action={
                     <ButtonLink variant="secondary" href="/dashboard/tenders">
-                      {t("reviewTenders")}
+                      {t("openExplorer")}
                     </ButtonLink>
                   }
                 />
@@ -895,7 +742,8 @@ export default function DashboardPage() {
                 )}
                 <ButtonLink
                   variant="secondary"
-                  href="/dashboard/readiness-vault"
+                  href="/dashboard/settings"
+                  data-company-link
                 >
                   {t("readinessVault")}
                   <ArrowRight className="rtl-mirror" aria-hidden />

@@ -1,63 +1,75 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Building2, RefreshCw, UserRound } from 'lucide-react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
+import { ExpertsTab, OwnExperienceTab, PartnerFirmsTab } from '@/components/library/LibraryTabs';
 import { OrganizationContextPicker } from '@/components/pursuits/OrganizationContextPicker';
 import { Button } from '@/components/ui/Button';
-import { EmptyState, PageHeader, PageSkeleton, StatusBadge, Surface } from '@/components/ui/Display';
-import { api } from '@/lib/api';
-import type { CandidateLibrary } from '@/types/pursuit';
+import { EmptyState, PageHeader, PageSkeleton, Surface } from '@/components/ui/Display';
+import { Tabs } from '@/components/ui/Navigation';
+import { libraryTab, type LibraryTab } from '@/lib/library';
+import { getLibrary, getSelfFirm } from '@/lib/libraryApi';
+import type { CandidateFirm, CandidateLibrary, OrganizationSummary } from '@/types/pursuit';
 
-export default function PartnersExpertsPage() {
+type Loaded = { library: CandidateLibrary; selfFirm: CandidateFirm | null };
+
+function LibraryPage() {
   const t = useTranslations('pursuits.library');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tab = libraryTab(searchParams.get('tab'));
   const [organizationId, setOrganizationId] = useState('');
-  const [data, setData] = useState<CandidateLibrary | null>(null);
+  const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
+  const [data, setData] = useState<Loaded | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
   const chooseOrganization = useCallback((value: string) => {
     setOrganizationId(value); setData(null); setFailed(false); setLoading(Boolean(value));
   }, []);
+  const reload = useCallback(() => setVersion((current) => current + 1), []);
   useEffect(() => {
     if (!organizationId) return;
     let cancelled = false;
-    api.get<CandidateLibrary>('/candidates', { headers: { 'X-Organization-ID': organizationId } })
-      .then((response) => { if (!cancelled) setData(response.data); })
+    // Two passive reads. Before D2-01 the self-firm read answers 404: "not set up yet".
+    Promise.all([getLibrary(organizationId), getSelfFirm(organizationId)])
+      .then(([library, selfFirm]) => { if (!cancelled) setData({ library, selfFirm: library.self_firm ?? selfFirm }); })
       .catch(() => { if (!cancelled) setFailed(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [organizationId, version]);
-  return <main className="customer-page candidate-library-page ds-container-content">
+  const selectTab = (value: string) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set('tab', libraryTab(value));
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+  const organizationName = organizations.find((item) => item.organization_id === organizationId)?.display_name ?? '';
+  const common = { organizationId, reload };
+  const firms = (data?.library.firms ?? []).filter((firm) => !firm.is_self_firm);
+  const content = (value: LibraryTab) => !data ? null : value === 'own'
+    ? <OwnExperienceTab {...common} selfFirm={data.selfFirm} organizationName={organizationName} />
+    : value === 'partners' ? <PartnerFirmsTab {...common} firms={firms} />
+      : <ExpertsTab {...common} experts={data.library.experts} />;
+  return <main className="customer-page candidate-library-page ds-container-content" data-library-page>
     <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('description')} />
-    <Surface className="pursuit-org-context"><OrganizationContextPicker value={organizationId} onChange={chooseOrganization} /></Surface>
+    <Surface className="pursuit-org-context">
+      <OrganizationContextPicker value={organizationId} onChange={chooseOrganization} onOrganizations={setOrganizations} />
+    </Surface>
     {loading && !data ? <PageSkeleton label={t('loading')} /> : failed ? <EmptyState
       icon={<RefreshCw aria-hidden />} title={t('failed')} description={t('failedHelp')}
-      action={<Button variant="secondary" onClick={() => { setFailed(false); setLoading(true); setVersion((current) => current + 1); }}>{t('retry')}</Button>}
-    /> : data && !data.firms.length && !data.experts.length ? <EmptyState
-      icon={<Building2 aria-hidden />} title={t('empty')} description={t('emptyHelp')}
-    /> : data && <>
-      <section className="candidate-library-group" aria-labelledby="candidate-library-firms"><header><Building2 aria-hidden /><div><h2 id="candidate-library-firms">{t('firms')}</h2><p>{t('firmsHelp')}</p></div></header>
-        <div className="candidate-library-grid">{data.firms.map((firm) => <Surface className="candidate-library-card" key={firm.firm_id} variant="raised">
-          <header><div><h3><BidiText>{firm.display_name}</BidiText></h3>{firm.legal_name && <p className="ds-muted"><BidiText>{firm.legal_name}</BidiText></p>}</div><StatusBadge tone={firm.evidence_state === 'VERIFIED' || firm.evidence_state === 'REVIEWED' ? 'success' : 'warning'}>{t(`evidence.${firm.evidence_state}`)}</StatusBadge></header>
-          <p>{[firm.country, ...firm.services.map(String), ...firm.sectors.map(String)].filter(Boolean).join(' · ') || t('notRecorded')}</p>
-          <h4>{t('referenceHistory')}</h4>
-          {firm.project_references.length ? <ul>{firm.project_references.map((reference) => <li key={reference.reference_id}><BidiText>{reference.project_name}</BidiText> · {reference.role} · {reference.completion_state}</li>)}</ul> : <p className="ds-muted">{t('noReferences')}</p>}
-          <small>{t(`scopes.${firm.scope}`)}</small>
-        </Surface>)}</div>
-      </section>
-      <section className="candidate-library-group" aria-labelledby="candidate-library-experts"><header><UserRound aria-hidden /><div><h2 id="candidate-library-experts">{t('experts')}</h2><p>{t('expertsHelp')}</p></div></header>
-        <div className="candidate-library-grid">{data.experts.map((expert) => <Surface className="candidate-library-card" key={expert.expert_id} variant="raised">
-          <header><div><h3><BidiText>{expert.display_name}</BidiText></h3><p className="ds-muted">{expert.specializations.map(String).join(' · ') || t('notRecorded')}</p></div><StatusBadge tone={expert.evidence_state === 'VERIFIED' || expert.evidence_state === 'REVIEWED' ? 'success' : 'warning'}>{t(`evidence.${expert.evidence_state}`)}</StatusBadge></header>
-          <p>{expert.languages.map(String).join(' · ') || t('notRecorded')}</p>
-          <h4>{t('cvVersions')}</h4>
-          {expert.cv_versions.length ? <ul>{expert.cv_versions.map((cv) => <li key={cv.cv_version_id}>{t('cvVersion', { version: cv.version_number })} · {t(`evidence.${cv.evidence_state}`)} · <TechnicalText>{cv.structured_sha256.slice(0, 12)}</TechnicalText></li>)}</ul> : <p className="ds-muted">{t('noCvVersions')}</p>}
-          <small>{t(`scopes.${expert.scope}`)}</small>
-        </Surface>)}</div>
-      </section>
-    </>}
+      action={<Button variant="secondary" onClick={() => { setFailed(false); setLoading(true); reload(); }}>{t('retry')}</Button>}
+    /> : data && <Tabs label={t('tabs.label')} value={tab} onChange={selectTab} items={[
+      { value: 'own', label: t('tabs.own'), content: tab === 'own' ? content('own') : null },
+      { value: 'partners', label: t('tabs.partners'), content: tab === 'partners' ? content('partners') : null },
+      { value: 'experts', label: t('tabs.experts'), content: tab === 'experts' ? content('experts') : null },
+    ]} />}
   </main>;
 }
 
+export default function PartnersExpertsPage() {
+  return <Suspense fallback={<PageSkeleton label="" />}><LibraryPage /></Suspense>;
+}
