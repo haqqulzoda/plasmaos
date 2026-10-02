@@ -985,8 +985,9 @@ def test_a_bad_quote_is_still_rejected_and_counts_as_the_only_provenance_rejecti
 
 
 def test_pipeline_and_prompt_versions_are_bumped_and_the_schema_is_not() -> None:
-    assert analyzer.PIPELINE_VERSION == "pursuit_analysis_pipeline_d1_v3"
-    assert analyzer.PROMPT_VERSION == "pursuit_analysis_d1_v3"
+    # D2-01 bumps both again for the submission-instruction/informational instruction.
+    assert analyzer.PIPELINE_VERSION == "pursuit_analysis_pipeline_d2_v1"
+    assert analyzer.PROMPT_VERSION == "pursuit_analysis_d2_v1"
     assert analyzer.SCHEMA_VERSION == "pursuit_analysis_output_p0_v2"
     prompt = " ".join(analyzer.SYSTEM_PROMPT.split())
     # D1 arm B adds exactly these two instructions; the trust rules around them are unchanged.

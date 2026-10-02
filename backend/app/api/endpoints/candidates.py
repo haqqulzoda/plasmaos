@@ -27,22 +27,30 @@ from app.schemas.candidate_retrieval import (
     FirmUpdateRequest,
     ProjectReferenceCreateRequest,
     ProjectReferenceResponse,
+    ProjectReferenceUpdateRequest,
+    SelfFirmUpsertRequest,
 )
 from app.services.candidate_retrieval import (
     CandidateAccessError,
     CandidateEligibilityError,
+    CandidateError,
     CandidateNotFoundError,
+    CandidateValidationError,
     append_candidate_review,
+    archive_project_reference,
     create_candidate_search,
     create_cv_version,
     create_expert,
     create_firm,
     create_project_reference,
     get_candidate_search,
+    get_self_firm,
     list_candidate_library,
     list_candidate_searches,
     update_expert,
     update_firm,
+    update_project_reference,
+    upsert_self_firm,
 )
 from app.services.organization_context import (
     OrganizationAccessDeniedError,
@@ -71,6 +79,8 @@ def _raise_domain(exc: Exception) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     if isinstance(exc, CandidateEligibilityError):
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if isinstance(exc, CandidateValidationError):
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     raise exc
 
 
@@ -81,6 +91,34 @@ async def candidate_library(
 ) -> CandidateLibraryResponse:
     context = await _context(db, current_user, x_organization_id)
     return await list_candidate_library(db, organization_id=context.organization.id)
+
+
+@router.get("/self-firm", response_model=FirmResponse)
+async def read_self_firm(
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> FirmResponse:
+    """The organization's own firm and its project references. Passive: never creates."""
+    context = await _context(db, current_user, x_organization_id)
+    firm = await get_self_firm(db, organization_id=context.organization.id)
+    if firm is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Self firm not found")
+    return firm
+
+
+@router.put("/self-firm", response_model=FirmResponse)
+async def save_self_firm(
+    payload: SelfFirmUpsertRequest,
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> FirmResponse:
+    context = await _context(db, current_user, x_organization_id)
+    try:
+        return await upsert_self_firm(
+            db, organization_id=context.organization.id, actor_user_id=current_user.id, payload=payload,
+        )
+    except CandidateError as exc:
+        _raise_domain(exc)
 
 
 @router.post("/firms", response_model=FirmResponse, status_code=status.HTTP_201_CREATED)
@@ -128,6 +166,39 @@ async def add_project_reference(
             actor_user_id=current_user.id, payload=payload, operator=is_operator_user(current_user),
         )
     except (CandidateAccessError, CandidateEligibilityError, CandidateNotFoundError) as exc:
+        _raise_domain(exc)
+
+
+@router.patch("/firms/{firm_id}/project-references/{reference_id}", response_model=ProjectReferenceResponse)
+async def edit_project_reference(
+    firm_id: UUID, reference_id: UUID, payload: ProjectReferenceUpdateRequest,
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> ProjectReferenceResponse:
+    """Returns the reference that now carries the edited facts (a new reference_id when anything changed)."""
+    context = await _context(db, current_user, x_organization_id)
+    try:
+        return await update_project_reference(
+            db, organization_id=context.organization.id, firm_id=firm_id, reference_id=reference_id,
+            actor_user_id=current_user.id, payload=payload, operator=is_operator_user(current_user),
+        )
+    except CandidateError as exc:
+        _raise_domain(exc)
+
+
+@router.post("/firms/{firm_id}/project-references/{reference_id}/archive", response_model=ProjectReferenceResponse)
+async def retire_project_reference(
+    firm_id: UUID, reference_id: UUID,
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> ProjectReferenceResponse:
+    context = await _context(db, current_user, x_organization_id)
+    try:
+        return await archive_project_reference(
+            db, organization_id=context.organization.id, firm_id=firm_id, reference_id=reference_id,
+            actor_user_id=current_user.id, operator=is_operator_user(current_user),
+        )
+    except CandidateError as exc:
         _raise_domain(exc)
 
 

@@ -21,7 +21,7 @@ async def main():
             result = await asyncio.to_thread(support.alembic, database, command)
             assert result.returncode == 0
             if command in {"heads", "current"}:
-                assert result.stdout.count("20261003_0001_d1_03_official_notice_unique") == 1
+                assert result.stdout.count("20261004_0001_d2_01_own_experience") == 1
             print(command, "PASS", flush=True)
         result = await asyncio.to_thread(subprocess.run,
             [sys.executable,"scripts/run_s0_3_schema_data_preflight.py","--compact"],

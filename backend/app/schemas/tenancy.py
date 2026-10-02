@@ -317,6 +317,15 @@ class PursuitRequirementResponse(BaseModel):
     effective_review_state: str
     source_locator: dict[str, Any]
     generated_interpretation: str | None = None
+    # Self-firm project references the deterministic own-experience match named
+    # (D2-01); empty when none matched. Recorded claims, not verified evidence.
+    matched_reference_ids: list[UUID] = Field(default_factory=list)
+
+
+class PursuitSubmissionNoteResponse(PursuitRequirementResponse):
+    """An informational statement or submission instruction: no Gap, no evidence expected."""
+
+    note_kind: str  # INFORMATIONAL | SUBMISSION_INSTRUCTION
 
 
 class PursuitPositionResponse(BaseModel):
@@ -359,6 +368,8 @@ class PursuitGapResponse(BaseModel):
     review_state: str
     effective_review_state: str
     rationale: str
+    # The same ids as the Gap's requirement (D2-01).
+    matched_reference_ids: list[UUID] = Field(default_factory=list)
 
 
 class PursuitAnalysisResponse(BaseModel):
@@ -386,6 +397,9 @@ class PursuitAnalysisResponse(BaseModel):
     requirements: list[PursuitRequirementResponse] = Field(default_factory=list)
     positions: list[PursuitPositionResponse] = Field(default_factory=list)
     gaps: list[PursuitGapResponse] = Field(default_factory=list)
+    # Informational statements and submission instructions, kept out of
+    # ``requirements`` and out of every evidence count (D2-01).
+    submission_and_notes: list[PursuitSubmissionNoteResponse] = Field(default_factory=list)
 
 
 class AnalysisReviewAssertionRequest(BaseModel):

@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base import MembershipState
-from app.models.candidate_retrieval import CandidateMatch, CandidateSearchRun
+from app.models.candidate_retrieval import CandidateMatch, CandidateSearchRun, Firm
 from app.models.pursuit_analysis import AnalysisReviewAssertion, AnalysisRun
 from app.models.team_scenarios import (
     ScenarioGapAssessment,
@@ -206,6 +206,14 @@ async def _build_revision(
     searches = {item.id: item for item in search_rows}
     if len(matches) != len(selected):
         raise TeamScenarioEligibilityError("CandidateMatch lineage is incomplete")
+    firm_ids = {item.firm_id for item in match_rows if item.firm_id}
+    if firm_ids and await db.scalar(
+        select(func.count(Firm.id)).where(Firm.id.in_(firm_ids), Firm.organization_id.is_not(None))
+    ):
+        # The lead organization is the scenario's owner, never one of its participants.
+        raise TeamScenarioEligibilityError(
+            "The organization's own firm is the lead organization and cannot be a scenario participant"
+        )
 
     prior_version = await db.scalar(select(func.max(TeamScenarioRevision.version_number)).where(
         TeamScenarioRevision.scenario_id == scenario.id

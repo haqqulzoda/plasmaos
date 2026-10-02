@@ -26,7 +26,7 @@ from scripts import bootstrap_database as bootstrap
 
 PREFIX = "plasma_s05b4b_"
 BASELINE = "20260824_0002_s0_4c"
-HEAD = "20261003_0001_d1_03_official_notice_unique"
+HEAD = "20261004_0001_d2_01_own_experience"
 OLDER = "a8f3d1c2e5b4"
 BUSINESS_TABLES = (
     "users",
