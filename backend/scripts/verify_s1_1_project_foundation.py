@@ -27,7 +27,7 @@ from scripts import test_s0_5b4_baseline as support
 
 BASELINE = "20260824_0002_s0_4c"
 SPRINT_ZERO_HEAD = "20260825_0001_s0_5b3"
-HEAD = "20261004_0001_d2_01_own_experience"
+HEAD = "20261005_0001_d2_05_eoi_drafts"
 MIGRATION_PATH = BACKEND_DIR / "alembic/versions/20260826_0001_s1_1_project_foundation.py"
 
 

@@ -73,7 +73,7 @@ from test_w3_private_document_foundation import _pdf_bytes, _stage
 
 W7_HEAD = "20260930_0001_w7_team_scenarios"
 W8_HEAD = "20261001_0001_w8_proposal_evidence_pack"
-CURRENT_HEAD = "20261004_0001_d2_01_own_experience"
+CURRENT_HEAD = "20261005_0001_d2_05_eoi_drafts"
 
 
 def test_w8_model_contracts_are_price_free_and_immutable_shaped() -> None:

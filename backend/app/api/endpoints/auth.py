@@ -94,6 +94,17 @@ def _apply_email_bootstrap(user: User, *, email: str) -> None:
         user.approval_status = USER_APPROVAL_PENDING
 
 
+# A user record created by a server command for an e-mail before its owner first signs in
+# (scripts/demo/seed_demo.py). It holds no Google subject yet, so the first verified Google
+# sign-in for that e-mail binds it, exactly as an e-mail match does.
+PREPROVISIONED_GOOGLE_ID_PREFIX = "plasma-preprovisioned:"
+
+
+def _bound_google_id(user: User) -> str | None:
+    value = user.google_id or None
+    return None if value and value.startswith(PREPROVISIONED_GOOGLE_ID_PREFIX) else value
+
+
 def _role_state_changed(before: dict, user: User) -> bool:
     after = user_role_snapshot(user)
     return any(before.get(key) != after.get(key) for key in ("platform_role", "approval_status", "is_admin"))
@@ -164,7 +175,7 @@ async def google_auth_bridge(
     if len(matches) > 1:
         raise HTTPException(409, detail="Account identity conflict")
     user = matches[0] if matches else None
-    if user is not None and user.google_id and user.google_id != google_id:
+    if user is not None and _bound_google_id(user) and user.google_id != google_id:
         raise HTTPException(409, detail="Account identity conflict")
 
     if user is None:
