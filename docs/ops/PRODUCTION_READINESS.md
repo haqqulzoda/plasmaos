@@ -24,6 +24,22 @@ Status legend: **[ ]** open, **[x]** done. Items marked **GAP** are things the r
 - [ ] pgAdmin is behind the `tools` profile and is not running: `docker ps -a --format '{{.Names}}' | grep pgadmin` prints nothing (a container left over from before the profile must be removed: `docker rm -f plasma_pgadmin`); `smoke.sh` warns if it runs.
 - [ ] **No admin UI or internal port is publicly bound.** `docker ps --format '{{.Names}} {{.Ports}}'` shows every published port as `127.0.0.1:...` (Caddy's 80/443 are the only `0.0.0.0` ports), and on the host `sudo ss -tlnp | grep -vE '127\.0\.0\.1|\[::1\]'` lists only sshd and Caddy. pgAdmin (5050), PostgreSQL (6543), Redis (6379), backend (8000) and frontend (3000) must never appear there.
 
+### Local development stack (worktrees)
+
+The shared local stack is the Compose project `plasmaos`. Compose and `scripts/ops/` otherwise derive the project from the checkout's directory name, so from any other worktree (for example `plasmaos-int`) a build or `up` would create a second `plasmaos-int` project that collides with the running `plasma_*` containers, and `smoke.sh` would report every container missing. In such a worktree:
+
+- `export COMPOSE_PROJECT_NAME=plasmaos` before `scripts/compose-release.sh` (build, build-only, use, run, up, stop).
+- `OPS_LOCAL_PROJECT=plasmaos scripts/ops/smoke.sh --target local [--expect-sha <SHA>]`.
+
+The frontend build also needs these values, which the backend-only `.env` of a fresh worktree does not have. Put them in the worktree's `.env` or export them for the build (names only here; take the values from the developer's existing local frontend environment, never from production):
+
+- `AUTH_SECRET`
+- `NEXTAUTH_URL`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+
+Without them `compose-release.sh` stops at interpolation (`required variable AUTH_SECRET is missing a value`). On a Docker Desktop VM of about 4 GB, build one service at a time (`build-only <service>`) and stop the old workers before the frontend build; a parallel build of every image can exhaust memory and end with `error reading from server: EOF`.
+
 ## 2. Environment variables
 
 `.env.staging.example` lists every variable the stack reads, grouped by purpose; production's `.env` uses the same names. Required in production mode (`ENVIRONMENT=production`, enforced by `backend/app/core/config.py` and the compose `:?` guards):
