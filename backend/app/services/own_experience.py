@@ -90,15 +90,124 @@ def note_kind(distinction: str | None, requirement_type: str | None) -> str | No
     return None
 
 
-def is_experience_requirement(category: str | None, requirement_type: str | None, text: str) -> bool:
+# ---- experience scope ---------------------------------------------------------------------------------
+#
+# Own project references may only address a requirement that asks for similar
+# assignments, project experience or a track record. Everything else the firm must
+# show (licences, finances, organisation, staff, years in business, certificates,
+# documents) is never supported by a project reference, even when its wording or
+# the surrounding notice mentions "experience". The decision reads the requirement's
+# own statement (normalized text and quote), never the surrounding source context.
+
+EXPERIENCE_SCOPE = "SIMILAR_ASSIGNMENTS"
+SCOPE_LICENCE_LEGAL = "LICENCE_OR_LEGAL_STATUS"
+SCOPE_FINANCIAL = "FINANCIAL_CAPACITY"
+SCOPE_ORGANISATION = "ORGANISATIONAL_CAPACITY"
+SCOPE_STAFFING = "STAFFING_OR_KEY_EXPERTS"
+SCOPE_CORE_BUSINESS = "CORE_BUSINESS_OR_YEARS"
+SCOPE_CERTIFICATION = "CERTIFICATION"
+SCOPE_DOCUMENT = "DOCUMENT_OR_SUBMISSION"
+SCOPE_OTHER = "OTHER"
+
+_ASSIGNMENT_WORDS = r"(?:assignments?|projects?|contracts?|engagements?|jobs?|works?\s+of\s+a\s+similar)"
+# Label tokens (category/requirement_type as the analyzer writes them, split on
+# non-alphanumerics) that name the experience scope.
+_INCLUDED_LABELS: tuple[frozenset[str], ...] = (
+    frozenset({"SIMILAR", "ASSIGNMENT"}), frozenset({"SIMILAR", "ASSIGNMENTS"}), frozenset({"SIMILAR", "PROJECT"}),
+    frozenset({"SIMILAR", "PROJECTS"}), frozenset({"SIMILAR", "CONTRACT"}), frozenset({"SIMILAR", "CONTRACTS"}),
+    frozenset({"TRACK", "RECORD"}), frozenset({"PAST", "PERFORMANCE"}), frozenset({"PROJECT", "EXPERIENCE"}),
+    frozenset({"CORPORATE", "EXPERIENCE"}), frozenset({"SPECIFIC", "EXPERIENCE"}), frozenset({"FIRM", "EXPERIENCE"}),
+)
+# Label tokens of each excluded class.
+_EXCLUDED_LABELS: tuple[tuple[str, frozenset[str]], ...] = (
+    (SCOPE_LICENCE_LEGAL, frozenset({"LICENSE", "LICENCE", "LICENSES", "LICENCES", "LICENSING", "LICENCING", "PERMIT",
+                                     "PERMITS", "REGISTRATION", "LEGAL", "INCORPORATION", "ELIGIBILITY"})),
+    (SCOPE_FINANCIAL, frozenset({"FINANCIAL", "FINANCE", "TURNOVER", "AUDIT", "AUDITED", "REVENUE", "LIQUIDITY"})),
+    (SCOPE_ORGANISATION, frozenset({"ORGANIZATIONAL", "ORGANISATIONAL", "ORGANIZATION", "ORGANISATION", "MANAGEMENT",
+                                    "MANAGERIAL", "QUALITY", "CAPACITY", "CAPABILITY", "CAPABILITIES", "RESOURCES"})),
+    (SCOPE_STAFFING, frozenset({"PERSONNEL", "STAFF", "STAFFING", "EXPERT", "EXPERTS", "TEAM", "CV", "CVS"})),
+    (SCOPE_CERTIFICATION, frozenset({"CERTIFICATION", "CERTIFICATE", "CERTIFICATES", "ISO", "ACCREDITATION"})),
+    (SCOPE_DOCUMENT, frozenset({"DOCUMENTATION", "DOCUMENT", "DOCUMENTS", "SUBMISSION", "FORM", "FORMS",
+                                "DECLARATION", "AFFIDAVIT"})),
+)
+# Statement wording of each excluded class, in precedence order (core business and
+# certification before organisation: "core business, years in operation, and managerial
+# capabilities"; "certified to ISO 9001 for its quality management").
+_EXCLUDED_TEXT: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (SCOPE_LICENCE_LEGAL, re.compile(
+        r"\blicen[cs](?:e|es|ed|ing)\b|\bpermits?\b|\bregist(?:ration|ered)\b|\blegal\s+(?:status|entity|capacity)\b|"
+        r"\bincorporat|\bconflict\s+of\s+interest\b",
+        re.IGNORECASE)),
+    (SCOPE_FINANCIAL, re.compile(
+        r"\bturnover\b|\bfinancial\s+(?:capacity|standing|statements?|situation|position|resources|soundness)\b|"
+        r"\baudited\b|\bannual\s+revenue\b|\bnet\s+worth\b|\bliquidity\b|\bbank\s+(?:guarantee|statement)",
+        re.IGNORECASE)),
+    (SCOPE_CORE_BUSINESS, re.compile(
+        r"\bcore\s+business\b|\byears?\s+(?:in|of)\s+(?:operation|business|existence)\b|\bgeneral\s+experience\b|"
+        r"\b(?:\d{1,2}|" + "|".join(_NUMBER_WORDS) + r")\s*(?:\(\s*\d{1,2}\s*\)\s*)?years?\s+of\s+"
+        r"(?:continuous\s+|general\s+|overall\s+|professional\s+)?experience\b",
+        re.IGNORECASE)),
+    (SCOPE_CERTIFICATION, re.compile(r"\bcertif(?:ied|icates?|ication)\b|\bISO\s*\d|\baccredit", re.IGNORECASE)),
+    (SCOPE_ORGANISATION, re.compile(
+        r"\borgani[sz]ation(?:al)?\s+(?:structure|capacity|capabilit\w*|chart)\b|\bmanagerial\b|"
+        r"\bmanagement\s+(?:system|capacit\w*|structure)\b|\bquality\s+(?:management|assurance|control)\b|"
+        r"\btechnical\s+(?:resources|capabilit\w*|capacity)\b|\bresources\s+available\b",
+        re.IGNORECASE)),
+    (SCOPE_STAFFING, re.compile(
+        r"\bkey\s+(?:experts?|staff|personnel)\b|\bpersonnel\b|\bstaff(?:ing)?\b|\bteam\s+(?:leader|members?|composition)\b|"
+        r"\bcurricul(?:um|a)\s+vitae\b|\bCVs?\b",
+        re.IGNORECASE)),
+    (SCOPE_DOCUMENT, re.compile(
+        r"\bsupporting\s+documents?\b|\bdocumentation\b|\bsubmit(?:ted)?\b|\bbrochures?\b|\baffidavits?\b|"
+        r"\b(?:standard|application|submission|prescribed|attached)\s+forms?\b|"
+        r"\bdeclarations?\b|\blist\s+of\s+(?:at\s+least\s+)?\S+\s+(?:professional\s+)?references\b",
+        re.IGNORECASE)),
+)
+# Strong statement cues: similar assignments, a count of completed contracts, a track record.
+_SIMILAR_ASSIGNMENTS = re.compile(
+    r"\b(?:similar|comparable)\b[^.;]{0,60}?\b" + _ASSIGNMENT_WORDS + r"\b|"
+    r"\b" + _ASSIGNMENT_WORDS + r"\s+of\s+(?:a\s+)?(?:similar|comparable)\b|"
+    r"\b(?:successful(?:ly)?|complet(?:ed|ion))\b[^.;]{0,50}?\b" + _ASSIGNMENT_WORDS + r"\b|"
+    r"\b(?:at\s+least|minimum(?:\s+of)?|no\s+fewer\s+than)\s+\S+\s*(?:\(\s*\d{1,2}\s*\)\s*)?" + _ASSIGNMENT_WORDS + r"\b|"
+    r"\btrack\s+record\b|\bpast\s+performance\b",
+    re.IGNORECASE,
+)
+# Weaker cue: experience stated in assignments/projects/contracts. Never overrides an excluded class.
+_PROJECT_EXPERIENCE = re.compile(
+    r"\b(?:experience|опыт\w*|tajriba\w*)\s+(?:in|with|on|of)\s+(?:[^\W\d_]+\s+){0,6}?" + _ASSIGNMENT_WORDS + r"\b",
+    re.IGNORECASE,
+)
+
+
+def experience_scope(category: str | None, requirement_type: str | None, statement: str) -> str:
+    """EXPERIENCE_SCOPE when own project references may address the requirement, else the class
+    that rules them out (or OTHER). ``statement`` is the requirement's own normalized text and
+    quote; the surrounding source context must not be passed."""
     tokens = _label_tokens(category, requirement_type)
-    if "EXPERIENCE" in tokens or {"TRACK", "RECORD"} <= tokens or {"PAST", "PERFORMANCE"} <= tokens:
-        return True
-    if tokens & {"REFERENCE", "REFERENCES"} and "TERMS" not in tokens:
-        return True
-    if "SIMILAR" in tokens and tokens & {"ASSIGNMENT", "ASSIGNMENTS", "CONTRACT", "CONTRACTS", "PROJECT", "PROJECTS"}:
-        return True
-    return bool(re.search(r"\b(?:experience|опыт\w*|tajriba\w*)\b", text, re.IGNORECASE))
+    text = statement or ""
+    # Precedence: a strong statement cue; then excluded wording; then an included label;
+    # then an excluded label; then experience stated in assignments/projects/contracts.
+    if _SIMILAR_ASSIGNMENTS.search(text):
+        return EXPERIENCE_SCOPE
+    for scope, pattern in _EXCLUDED_TEXT:
+        if pattern.search(text):
+            return scope
+    if any(labels <= tokens for labels in _INCLUDED_LABELS):
+        return EXPERIENCE_SCOPE
+    for scope, labels in _EXCLUDED_LABELS:
+        if tokens & labels:
+            return scope
+    return EXPERIENCE_SCOPE if _PROJECT_EXPERIENCE.search(text) else SCOPE_OTHER
+
+
+def is_experience_requirement(category: str | None, requirement_type: str | None, statement: str) -> bool:
+    """Whether own project references may address the requirement (see ``experience_scope``)."""
+    return experience_scope(category, requirement_type, statement) == EXPERIENCE_SCOPE
+
+
+def requirement_statement(normalized: str | None, quote: str | None) -> str:
+    """The text ``experience_scope`` reads: the requirement itself, without its source context."""
+    return " ".join(part for part in (normalized, quote) if part)
 
 
 def _stem(word: str) -> str:

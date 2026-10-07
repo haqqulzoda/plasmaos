@@ -46,7 +46,9 @@ from app.schemas.tenancy import (
     PursuitSubmissionNoteResponse,
 )
 from app.services.candidate_retrieval import reference_evidence_basis
-from app.services.own_experience import is_experience_requirement, match_own_references, note_kind
+from app.services.own_experience import (
+    is_experience_requirement, match_own_references, note_kind, requirement_statement,
+)
 from app.services.private_documents import build_analysis_pack_candidate
 
 
@@ -472,7 +474,8 @@ def _assess_requirement(
     own = OwnExperienceMatchResult.empty()
     references = snapshot.get("own_project_references") or []
     text = " ".join(value for value in (fact.normalized_text, fact.original_quote, fact.source_context) if value)
-    if references and is_experience_requirement(fact.category, fact.requirement_type, text):
+    statement = requirement_statement(fact.normalized_text, fact.original_quote)
+    if references and is_experience_requirement(fact.category, fact.requirement_type, statement):
         predicate = fact.predicate.model_dump(exclude_none=True) if fact.predicate else None
         match = match_own_references(
             text=text, predicate=predicate, references=references,

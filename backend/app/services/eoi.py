@@ -49,7 +49,7 @@ from app.schemas.eoi import (
 from app.services.candidate_retrieval import reference_evidence_basis
 from app.services.eoi_document import docx_bytes, pdf_bytes
 from app.services.eoi_notes import NoteRequest, ProviderCall, generate_relevance_notes
-from app.services.own_experience import is_experience_requirement, match_own_references
+from app.services.own_experience import is_experience_requirement, match_own_references, requirement_statement
 from app.services.private_documents import build_analysis_pack_candidate
 from app.services.pursuit_analysis import get_analysis_run
 
@@ -214,11 +214,14 @@ def _matches(
     known = {item["id"] for item in references}
     for criterion in criteria:
         requirement_id = str(criterion.requirement_id)
+        statement = requirement_statement(criterion.effective_normalized_requirement, criterion.original_quote)
+        if not is_experience_requirement(criterion.category, criterion.requirement_type, statement):
+            continue  # matches an older run recorded outside the experience scope are not offered either
         for reference_id in recorded.get(criterion.requirement_id, set()):
             if reference_id in known:
                 by_reference[reference_id].add(requirement_id)
         text = _criterion_text(criterion)
-        if references and is_experience_requirement(criterion.category, criterion.requirement_type, text):
+        if references:
             match = match_own_references(text=text, predicate=criterion.predicate, references=references, as_of=as_of)
             for reference_id in match.reference_ids:
                 by_reference[reference_id].add(requirement_id)
