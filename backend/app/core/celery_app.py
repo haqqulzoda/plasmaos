@@ -10,7 +10,7 @@ from datetime import timedelta
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import beat_init, worker_ready
+from celery.signals import beat_init, task_prerun, worker_ready
 from kombu import Queue
 
 from app.core.release import public_release_metadata
@@ -170,3 +170,34 @@ def log_worker_release_identity(**_: object) -> None:
 @beat_init.connect
 def log_beat_release_identity(**_: object) -> None:
     _log_release_identity("celery_beat")
+
+
+# ---- Beat liveness (smoke.sh) ----------------------------------------------------------------------
+# Beat dispatches publish_notifications every 10 s. When a worker starts it, the time is written to
+# Redis, so "Beat dispatched and a worker received it" is directly observable without reading
+# container logs. scripts/ops/smoke.sh fails when the timestamp is missing or 60 s old or more.
+BEAT_HEARTBEAT_KEY = "plasma:beat:heartbeat"
+BEAT_HEARTBEAT_TASK = "app.workers.communications_tasks.publish_notifications"
+BEAT_HEARTBEAT_TTL_SECONDS = 3600
+
+
+def record_beat_heartbeat(client=None, now: float | None = None) -> bool:
+    """Write the receipt time of a Beat-dispatched task; never raises (liveness is best-effort)."""
+    import time
+
+    try:
+        if client is None:
+            from redis import Redis
+
+            client = Redis.from_url(broker_url, socket_connect_timeout=2, socket_timeout=2)
+        client.set(BEAT_HEARTBEAT_KEY, int(now if now is not None else time.time()), ex=BEAT_HEARTBEAT_TTL_SECONDS)
+        return True
+    except Exception:  # noqa: BLE001 - a liveness write must never fail the task
+        logger.warning("beat_heartbeat_write_failed", exc_info=True)
+        return False
+
+
+@task_prerun.connect
+def beat_heartbeat_on_receipt(sender=None, **_: object) -> None:
+    if getattr(sender, "name", None) == BEAT_HEARTBEAT_TASK:
+        record_beat_heartbeat()

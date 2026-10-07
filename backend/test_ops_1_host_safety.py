@@ -192,3 +192,57 @@ def test_disk_report_is_read_only() -> None:
     script = (ROOT / "scripts" / "ops" / "disk_report.sh").read_text(encoding="utf-8")
     for forbidden in ("image rm", "image prune", "builder prune", "system prune", "volume rm", "volume prune", '" tag ', "rm -"):
         assert forbidden not in script, forbidden
+
+
+# ---- Beat liveness (INT-4d) -------------------------------------------------------------------------
+
+def test_smoke_checks_beat_by_heartbeat_not_by_container_logs() -> None:
+    smoke = (ROOT / "scripts" / "ops" / "smoke.sh").read_text(encoding="utf-8")
+    assert "logs --since" not in smoke and "Sending due task" not in smoke
+    assert "$BEAT_HEARTBEAT_KEY" in smoke and 'beat_heartbeat_verdict "$beat_age"' in smoke
+    lib = (ROOT / "scripts" / "ops" / "lib.sh").read_text(encoding="utf-8")
+    from app.core import celery_app as module
+
+    assert f'BEAT_HEARTBEAT_KEY="{module.BEAT_HEARTBEAT_KEY}"' in lib  # one key, shell and Python
+    entry = next(item for item in module.celery_app.conf.beat_schedule.values() if item["task"] == module.BEAT_HEARTBEAT_TASK)
+    assert entry["schedule"].total_seconds() == 10  # the heartbeat refreshes every 10 s while Beat runs
+
+
+def test_beat_heartbeat_verdict_healthy_stale_and_missing() -> None:
+    import subprocess
+
+    def verdict(age: str) -> str:
+        return subprocess.run(["bash", "-c", 'source scripts/ops/lib.sh >/dev/null 2>&1; beat_heartbeat_verdict "$0"', age],
+                              cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+
+    assert [verdict(age) for age in ("0", "12", "59")] == ["ok"] * 3          # healthy
+    assert [verdict(age) for age in ("60", "601")] == ["stale"] * 2           # Beat or the worker stopped
+    assert [verdict(age) for age in ("-1", "", "None")] == ["missing"] * 3    # never written / expired
+
+
+def test_beat_heartbeat_is_written_on_receipt_of_the_beat_task_only() -> None:
+    from app.core import celery_app as module
+
+    class FakeRedis:
+        def __init__(self, fail: bool = False):
+            self.calls, self.fail = [], fail
+
+        def set(self, key, value, ex=None):
+            if self.fail:
+                raise ConnectionError("redis down")
+            self.calls.append((key, value, ex))
+
+    client = FakeRedis()
+    assert module.record_beat_heartbeat(client, now=1_700_000_000.7) is True
+    assert client.calls == [("plasma:beat:heartbeat", 1_700_000_000, module.BEAT_HEARTBEAT_TTL_SECONDS)]
+    assert module.record_beat_heartbeat(FakeRedis(fail=True)) is False  # never raises into the task
+
+    seen = []
+    original = module.record_beat_heartbeat
+    try:
+        module.record_beat_heartbeat = lambda *args, **kwargs: seen.append(True)
+        module.beat_heartbeat_on_receipt(sender=type("T", (), {"name": module.BEAT_HEARTBEAT_TASK})())
+        module.beat_heartbeat_on_receipt(sender=type("T", (), {"name": "app.workers.tender_tasks.other"})())
+    finally:
+        module.record_beat_heartbeat = original
+    assert seen == [True]

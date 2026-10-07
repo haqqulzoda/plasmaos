@@ -147,10 +147,19 @@ else
     done
   fi
 
-  beat_cid="$(ops_cid "$PROJECT" celery_beat)"
-  ticks=0
-  if [ -n "$beat_cid" ]; then ticks="$("${_DOCKER[@]}" logs --since 2m "$beat_cid" 2>&1 | grep -c 'Sending due task' || true)"; fi
-  [ "${ticks:-0}" -gt 0 ] && ok "beat is ticking ($ticks due-task dispatches in the last 2 minutes)" || fail "beat logged no due tasks in the last 2 minutes"
+  # Beat liveness from direct evidence, not container logs (Docker Desktop can stop capturing them):
+  # a worker writes the receipt time of Beat's 10-second publish_notifications task to Redis
+  # (app.core.celery_app.BEAT_HEARTBEAT_KEY); its age is read with the same broker URL.
+  beat_age="$(ops_exec "$PROJECT" backend python -c "
+import os, time
+from redis import Redis
+value = Redis.from_url(os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0'), socket_timeout=3).get('$BEAT_HEARTBEAT_KEY')
+print(int(time.time()) - int(value) if value else -1)" 2>/dev/null | tr -d '\r' | tail -n 1 || true)"
+  case "$(beat_heartbeat_verdict "$beat_age")" in
+    ok) ok "beat is dispatching (a worker received its 10-second task ${beat_age}s ago)" ;;
+    stale) fail "beat heartbeat is ${beat_age}s old (limit ${BEAT_HEARTBEAT_MAX_AGE}s): Beat or the celery queue's worker is stuck" ;;
+    *) fail "no beat heartbeat in Redis ($BEAT_HEARTBEAT_KEY): Beat has not dispatched to a worker" ;;
+  esac
 
   # The backend reaches clamd over TCP; test that exact path (PING -> PONG) from the backend container.
   clam_ping="$(ops_exec "$PROJECT" backend python -c "

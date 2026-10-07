@@ -73,6 +73,18 @@ ops_state() {
 }
 
 # ops_exec PROJECT SERVICE COMMAND...  -> docker exec -i (stdin/stdout pass through).
+# Beat liveness (smoke.sh): the Redis key a worker refreshes whenever it starts Beat's
+# 10-second publish_notifications task, and the largest acceptable age.
+BEAT_HEARTBEAT_KEY="plasma:beat:heartbeat"
+BEAT_HEARTBEAT_MAX_AGE="${BEAT_HEARTBEAT_MAX_AGE:-60}"
+
+# beat_heartbeat_verdict AGE_SECONDS -> ok | stale | missing  (AGE -1 or empty: no heartbeat)
+beat_heartbeat_verdict() {
+  local age="${1:-}"
+  case "$age" in ''|-*|*[!0-9-]*) echo missing; return ;; esac
+  if [ "$age" -lt "$BEAT_HEARTBEAT_MAX_AGE" ]; then echo ok; else echo stale; fi
+}
+
 ops_exec() {
   local project="$1" service="$2" cid
   shift 2
