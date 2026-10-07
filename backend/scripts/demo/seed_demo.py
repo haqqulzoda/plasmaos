@@ -17,7 +17,8 @@ Safety
   demo user's membership and hands their demo company profile to that
   organization's steward.
 - Records with a provenance field carry ``{"demo": true, ...}``; the company
-  profile notes carry the same marker. No notifications or broadcasts are emitted.
+  profile notes carry the same marker. No broadcasts are emitted; the only notification
+  is the demo user's own account approval, when this run creates or approves the account.
 
 Reset model (the analysis, review and EOI tables are append-only): every run creates
 a new organization. A per-run steward user (reserved ``.invalid`` e-mail, non-Google
@@ -619,7 +620,10 @@ async def seed(sessions, options: Options, *, today: date | None = None, process
         "eoi_generation_seconds": eoi["generation_seconds"], "eoi_summary": draft.summary.model_dump(),
         "eoi_artifacts": [{"artifact_id": str(item.artifact_id), "format": item.format, "byte_size": item.byte_size}
                           for item in draft.artifacts],
-        "notifications_emitted": 0,
+        # The only notification is the demo user's own ACCOUNT_APPROVED, staged by the audit trigger when
+        # this run created or approved the account. No broadcasts are ever sent.
+        "notifications_emitted": 1 if summary["demo_user_action"] in {"create_preprovisioned", "approve"} else 0,
+        "broadcasts_emitted": 0,
     }
 
 
