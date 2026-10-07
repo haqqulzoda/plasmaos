@@ -271,6 +271,27 @@ test("the workspace header shows the pursuit stage, never a processing state", (
   }
 });
 
+test("live-run fixes: notice name localized, matches shown in every group, bulk panel closes, plural summary", async () => {
+  const source = read("components/pursuits/PursuitRequirements.tsx");
+  // The official notice is cited by its localized name, as in the EOI ("Notice, paragraph 17").
+  assert.match(source, /item\.role === 'OFFICIAL_NOTICE' \? t\('documentRoles\.OFFICIAL_NOTICE'\) : item\.display_name/);
+  // Matched experience is shown wherever the analysis recorded matches (also NEEDS_INTERPRETATION).
+  assert.doesNotMatch(source, /group === 'partial' && \(matchedNames/);
+  // After a run the group shows its report, not an empty "Confirm 0" panel.
+  assert.match(source, /setOpen\(false\);\s*await onDone\(\);/);
+  assert.match(source, /!open \? pending\.length > 0 && <Button/);
+  const { default: IntlMessageFormat } = await import("intl-messageformat");
+  const summary = JSON.parse(read("messages/en/pursuits.json")).eoi.versionSummary;
+  const format = (references, partners) => new IntlMessageFormat(summary, "en").format({
+    references, partners, addressed: 1, total: 5, notes: 2, dropped: 0 });
+  assert.equal(format(1, 1), "1 own assignment · 1 partner · 1 of 5 criteria addressed · notes kept 2, dropped 0");
+  assert.equal(format(3, 0), "3 own assignments · 0 partners · 1 of 5 criteria addressed · notes kept 2, dropped 0");
+  for (const locale of LOCALES) {
+    const messages = JSON.parse(read(`messages/${locale}/pursuits.json`)).requirements;
+    assert.notEqual(messages.packHelp.replace(/\.$/, ""), messages.packTitle, locale); // help adds information
+  }
+});
+
 test("pursuit titles are never 'Untitled'", () => {
   const fallback = (date) => `Uploaded tender · ${date.slice(0, 10)}`;
   assert.equal(pursuitDisplayTitle({ title: "LOT-4", tender_title: "x", created_at: "2026-09-01T00:00:00Z" }, fallback), "LOT-4");
