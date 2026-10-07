@@ -34,7 +34,7 @@ from app.core.analysis_languages import analysis_language_prompt_instruction
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "pursuit_analysis_d2_v1"
+PROMPT_VERSION = "pursuit_analysis_d2_v2"
 SCHEMA_VERSION = "pursuit_analysis_output_p0_v2"
 PIPELINE_VERSION = "pursuit_analysis_pipeline_d2_v2"
 MODEL_PROVIDER = "google-gemini"
@@ -163,6 +163,9 @@ Use requirement_type=SUBMISSION_INSTRUCTION for a fact that only states how, whe
 when, or in what form the submission is delivered, and distinction=INFORMATIONAL
 for a statement that asks nothing of the bidder; a document, qualification, or
 experience the bidder must provide is neither.
+When the notice restates a criterion already stated elsewhere (for example a summary
+or bulleted list repeating numbered criteria), extract it once, quoting the most
+complete statement; do not extract the restatement as a separate requirement.
 Never invent a page number. Return strict JSON only."""
 PROMPT_SHA256 = hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()
 

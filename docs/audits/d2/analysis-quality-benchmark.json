@@ -1,0 +1,662 @@
+{
+ "note": "Count-only. Mongolia REOI OP00468882 official notice and the B4a Communications Consultant RFP, submitted sequentially through the local shared stack's API.",
+ "rounds": [
+  {
+   "round": "d2_v1",
+   "configuration": "pipeline d2_v1, prompt d2_v1 (baseline, shared stack 1e813cd)",
+   "runs": [
+    {
+     "kind": "b4a",
+     "run_id": "df038d63-0436-4e72-8901-9231b8e1f04f",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v1",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 49.0,
+     "requirements": 13,
+     "notes": 4,
+     "current_stage_requirements_excl_later_coverage": 10,
+     "golden": "19/19",
+     "golden_missing": []
+    },
+    {
+     "kind": "b4a",
+     "run_id": "7b217a4a-4374-49fb-8b47-c803c01daf0b",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v1",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 36.8,
+     "requirements": 12,
+     "notes": 2,
+     "current_stage_requirements_excl_later_coverage": 9,
+     "golden": "18/19",
+     "golden_missing": [
+      "Printed and electronic submission"
+     ]
+    },
+    {
+     "kind": "b4a",
+     "run_id": "161c642f-87df-4d5f-bcc4-def21e9d9f75",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v1",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 61.3,
+     "requirements": 13,
+     "notes": 4,
+     "current_stage_requirements_excl_later_coverage": 10,
+     "golden": "19/19",
+     "golden_missing": []
+    },
+    {
+     "kind": "b4a",
+     "run_id": "fb2e751a-c2fe-4830-8df9-ad6ee6d70e40",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v1",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 59.1,
+     "requirements": 13,
+     "notes": 3,
+     "current_stage_requirements_excl_later_coverage": 10,
+     "golden": "18/19",
+     "golden_missing": [
+      "Printed and electronic submission"
+     ]
+    },
+    {
+     "kind": "b4a",
+     "run_id": "d62ef882-cfe9-472d-8956-3177f775d809",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v1",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 47.1,
+     "requirements": 12,
+     "notes": 4,
+     "current_stage_requirements_excl_later_coverage": 9,
+     "golden": "18/19",
+     "golden_missing": [
+      "Printed and electronic submission"
+     ]
+    },
+    {
+     "kind": "reoi",
+     "run_id": "23bbfda6-1163-4994-bcda-6988ea33cabc",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v1",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 26.7,
+     "requirements": 6,
+     "notes": 2,
+     "current_stage_requirements_excl_later_coverage": 5
+    },
+    {
+     "kind": "reoi",
+     "run_id": "6c624e52-0fd8-442d-b44d-a29930679efd",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v1",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 41.0,
+     "requirements": 6,
+     "notes": 2,
+     "current_stage_requirements_excl_later_coverage": 5
+    },
+    {
+     "kind": "reoi",
+     "run_id": "ae5874b1-4e42-4cfd-92a2-0d604d9ce63f",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v1",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 50.3,
+     "requirements": 5,
+     "notes": 2,
+     "current_stage_requirements_excl_later_coverage": 5
+    },
+    {
+     "kind": "reoi",
+     "run_id": "fe0801a1-628f-4d29-8ea4-b9039e8e03b8",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v1",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 49.7,
+     "requirements": 10,
+     "notes": 3,
+     "current_stage_requirements_excl_later_coverage": 8
+    },
+    {
+     "kind": "reoi",
+     "run_id": "104ee02d-db94-4d40-bedd-7e9ae66f279b",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v1",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 24.4,
+     "requirements": 5,
+     "notes": 3,
+     "current_stage_requirements_excl_later_coverage": 5
+    }
+   ]
+  },
+  {
+   "round": "d2_v2_pipeline",
+   "configuration": "pipeline d2_v2 (two SHORT passes), prompt d2_v1 (dc6f63d)",
+   "runs": [
+    {
+     "kind": "b4a",
+     "run_id": "2ccaf1cd-9899-4899-9463-8691c60221b0",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 79.3,
+     "requirements": 15,
+     "notes": 7,
+     "current_stage_requirements_excl_later_coverage": 12,
+     "golden": "19/19",
+     "golden_missing": [],
+     "queue_wait_s": null,
+     "processing_s": null,
+     "total_s": null,
+     "pass_provider_s": [
+      65.8,
+      77.1
+     ],
+     "union_gain": 4,
+     "union_replaced": 1,
+     "union_duplicates_removed": 22
+    },
+    {
+     "kind": "b4a",
+     "run_id": "f08ac1f4-fb8e-4d7c-84c0-2d92ace767e1",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 73.3,
+     "requirements": 13,
+     "notes": 5,
+     "current_stage_requirements_excl_later_coverage": 10,
+     "golden": "19/19",
+     "golden_missing": [],
+     "queue_wait_s": null,
+     "processing_s": null,
+     "total_s": null,
+     "pass_provider_s": [
+      71.6,
+      53.7
+     ],
+     "union_gain": 0,
+     "union_replaced": 1,
+     "union_duplicates_removed": 18
+    },
+    {
+     "kind": "b4a",
+     "run_id": "028c3be9-e247-48fb-96a6-bb79ee92f811",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 85.3,
+     "requirements": 14,
+     "notes": 2,
+     "current_stage_requirements_excl_later_coverage": 11,
+     "golden": "19/19",
+     "golden_missing": [],
+     "queue_wait_s": null,
+     "processing_s": null,
+     "total_s": null,
+     "pass_provider_s": [
+      70.1,
+      83.2
+     ],
+     "union_gain": 1,
+     "union_replaced": 1,
+     "union_duplicates_removed": 15
+    },
+    {
+     "kind": "b4a",
+     "run_id": "19aa212e-59c6-4ae7-81e9-4c8a60f464b7",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 54.9,
+     "requirements": 14,
+     "notes": 3,
+     "current_stage_requirements_excl_later_coverage": 12,
+     "golden": "19/19",
+     "golden_missing": [],
+     "queue_wait_s": null,
+     "processing_s": null,
+     "total_s": null,
+     "pass_provider_s": [
+      52.9,
+      43.7
+     ],
+     "union_gain": 0,
+     "union_replaced": 0,
+     "union_duplicates_removed": 18
+    },
+    {
+     "kind": "b4a",
+     "run_id": "3fa62834-fc5f-4c47-921c-8a16601faae5",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 81.2,
+     "requirements": 14,
+     "notes": 7,
+     "current_stage_requirements_excl_later_coverage": 12,
+     "golden": "19/19",
+     "golden_missing": [],
+     "queue_wait_s": null,
+     "processing_s": null,
+     "total_s": null,
+     "pass_provider_s": [
+      53.3,
+      79.5
+     ],
+     "union_gain": 1,
+     "union_replaced": 1,
+     "union_duplicates_removed": 20
+    },
+    {
+     "kind": "reoi",
+     "run_id": "a7e9b85d-b0dd-4dc4-be0a-72a40c3a4095",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 44.6,
+     "requirements": 10,
+     "notes": 3,
+     "current_stage_requirements_excl_later_coverage": 9,
+     "queue_wait_s": null,
+     "processing_s": null,
+     "total_s": null,
+     "pass_provider_s": [
+      42.7,
+      36.0
+     ],
+     "union_gain": 0,
+     "union_replaced": 4,
+     "union_duplicates_removed": 12
+    },
+    {
+     "kind": "reoi",
+     "run_id": "ba4d9e3c-c34e-4687-b4e3-108f767211a0",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 44.6,
+     "requirements": 6,
+     "notes": 3,
+     "current_stage_requirements_excl_later_coverage": 5,
+     "queue_wait_s": null,
+     "processing_s": null,
+     "total_s": null,
+     "pass_provider_s": [
+      42.3,
+      21.7
+     ],
+     "union_gain": 0,
+     "union_replaced": 6,
+     "union_duplicates_removed": 10
+    },
+    {
+     "kind": "reoi",
+     "run_id": "23d1e4dd-e445-41e2-a7ae-69392e2c022b",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 32.4,
+     "requirements": 9,
+     "notes": 4,
+     "current_stage_requirements_excl_later_coverage": 8,
+     "queue_wait_s": null,
+     "processing_s": null,
+     "total_s": null,
+     "pass_provider_s": [
+      31.6,
+      30.3
+     ],
+     "union_gain": 4,
+     "union_replaced": 1,
+     "union_duplicates_removed": 7
+    },
+    {
+     "kind": "reoi",
+     "run_id": "9dc93920-829e-4074-80cf-7afa8dff1a53",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 42.6,
+     "requirements": 9,
+     "notes": 3,
+     "current_stage_requirements_excl_later_coverage": 8,
+     "queue_wait_s": null,
+     "processing_s": null,
+     "total_s": null,
+     "pass_provider_s": [
+      30.3,
+      41.2
+     ],
+     "union_gain": 4,
+     "union_replaced": 2,
+     "union_duplicates_removed": 8
+    },
+    {
+     "kind": "reoi",
+     "run_id": "464bdef3-b179-4ebe-9216-1acd15dcc1dc",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v1",
+     "client_latency_s": 58.8,
+     "requirements": 11,
+     "notes": 2,
+     "current_stage_requirements_excl_later_coverage": 9,
+     "queue_wait_s": null,
+     "processing_s": null,
+     "total_s": null,
+     "pass_provider_s": [
+      58.0,
+      37.3
+     ],
+     "union_gain": 0,
+     "union_replaced": 0,
+     "union_duplicates_removed": 8
+    }
+   ]
+  },
+  {
+   "round": "d2_v2_prompt",
+   "configuration": "pipeline d2_v2, prompt d2_v2 (restatement instruction)",
+   "runs": [
+    {
+     "kind": "b4a",
+     "run_id": "65f1d774-7515-435b-9ba3-8764f86a57bc",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v2",
+     "client_latency_s": 67.6,
+     "requirements": 14,
+     "notes": 5,
+     "current_stage_requirements": 11,
+     "golden": "19/19",
+     "golden_missing": [],
+     "queue_wait_s": 0.5,
+     "processing_s": 70.8,
+     "total_s": 71.3,
+     "pass_provider_s": [
+      44.3,
+      65.4
+     ],
+     "union_gain": 1,
+     "union_replaced": 0,
+     "union_duplicates_removed": 18
+    },
+    {
+     "kind": "b4a",
+     "run_id": "77e2f2d0-d373-441b-9cfc-f7ac4109eb52",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v2",
+     "client_latency_s": 44.7,
+     "requirements": 13,
+     "notes": 5,
+     "current_stage_requirements": 10,
+     "golden": "19/19",
+     "golden_missing": [],
+     "queue_wait_s": 1.3,
+     "processing_s": 47.0,
+     "total_s": 48.3,
+     "pass_provider_s": [
+      41.2,
+      41.8
+     ],
+     "union_gain": 1,
+     "union_replaced": 0,
+     "union_duplicates_removed": 17
+    },
+    {
+     "kind": "b4a",
+     "run_id": "63e7e98d-ba84-4531-b351-20d73c42908a",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v2",
+     "client_latency_s": 50.8,
+     "requirements": 15,
+     "notes": 4,
+     "current_stage_requirements": 12,
+     "golden": "19/19",
+     "golden_missing": [],
+     "queue_wait_s": 0.0,
+     "processing_s": 53.0,
+     "total_s": 53.0,
+     "pass_provider_s": [
+      49.8,
+      36.0
+     ],
+     "union_gain": 1,
+     "union_replaced": 0,
+     "union_duplicates_removed": 15
+    },
+    {
+     "kind": "b4a",
+     "run_id": "92b57cda-0ecf-4b49-a5ff-84bf4484d852",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v2",
+     "client_latency_s": 71.1,
+     "requirements": 13,
+     "notes": 6,
+     "current_stage_requirements": 10,
+     "golden": "19/19",
+     "golden_missing": [],
+     "queue_wait_s": 0.0,
+     "processing_s": 77.3,
+     "total_s": 77.3,
+     "pass_provider_s": [
+      69.5,
+      63.9
+     ],
+     "union_gain": 0,
+     "union_replaced": 0,
+     "union_duplicates_removed": 22
+    },
+    {
+     "kind": "b4a",
+     "run_id": "f2fb7f56-202a-4387-950e-59e4588d757b",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v2",
+     "client_latency_s": 59.0,
+     "requirements": 14,
+     "notes": 5,
+     "current_stage_requirements": 11,
+     "golden": "19/19",
+     "golden_missing": [],
+     "queue_wait_s": 0.1,
+     "processing_s": 62.6,
+     "total_s": 62.6,
+     "pass_provider_s": [
+      43.5,
+      57.0
+     ],
+     "union_gain": 1,
+     "union_replaced": 3,
+     "union_duplicates_removed": 22
+    },
+    {
+     "kind": "reoi",
+     "run_id": "f9c7f33b-553c-4365-8adf-78ab58f14050",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v2",
+     "client_latency_s": 28.4,
+     "requirements": 6,
+     "notes": 2,
+     "current_stage_requirements": 5,
+     "queue_wait_s": 0.0,
+     "processing_s": 29.2,
+     "total_s": 29.3,
+     "pass_provider_s": [
+      26.7,
+      21.7
+     ],
+     "union_gain": 0,
+     "union_replaced": 0,
+     "union_duplicates_removed": 7,
+     "core_items_present_in_requirements_or_notes": [
+      "N1 general experience (7 years)",
+      "N2 specific experience (2 contracts / 10 years)",
+      "N3 licences (Law on Permits)",
+      "N4 organizational & technical capability",
+      "JV / association rule"
+     ],
+     "current_stage_obligations": [
+      "JV / association rule",
+      "N2 specific experience (2 contracts / 10 years)",
+      "N1 general experience (7 years)",
+      "N3 licences (Law on Permits)",
+      "N4 organizational & technical capability"
+     ],
+     "duplicated_obligations": []
+    },
+    {
+     "kind": "reoi",
+     "run_id": "bfaee8cc-9dda-46b9-9729-1b316132f046",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v2",
+     "client_latency_s": 32.5,
+     "requirements": 6,
+     "notes": 4,
+     "current_stage_requirements": 4,
+     "queue_wait_s": 0.0,
+     "processing_s": 34.5,
+     "total_s": 34.5,
+     "pass_provider_s": [
+      26.3,
+      32.0
+     ],
+     "union_gain": 2,
+     "union_replaced": 0,
+     "union_duplicates_removed": 6,
+     "core_items_present_in_requirements_or_notes": [
+      "N1 general experience (7 years)",
+      "N2 specific experience (2 contracts / 10 years)",
+      "N3 licences (Law on Permits)",
+      "N4 organizational & technical capability",
+      "JV / association rule"
+     ],
+     "current_stage_obligations": [
+      "N1 general experience (7 years)",
+      "N4 organizational & technical capability",
+      "N3 licences (Law on Permits)",
+      "N2 specific experience (2 contracts / 10 years)"
+     ],
+     "duplicated_obligations": []
+    },
+    {
+     "kind": "reoi",
+     "run_id": "a95d35fb-4552-4912-adc1-69401cd0ee48",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v2",
+     "client_latency_s": 95.2,
+     "requirements": 5,
+     "notes": 3,
+     "current_stage_requirements": 4,
+     "queue_wait_s": 0.0,
+     "processing_s": 101.6,
+     "total_s": 101.7,
+     "pass_provider_s": [
+      33.0,
+      30.6
+     ],
+     "union_gain": 0,
+     "union_replaced": 0,
+     "union_duplicates_removed": 8,
+     "core_items_present_in_requirements_or_notes": [
+      "N1 general experience (7 years)",
+      "N2 specific experience (2 contracts / 10 years)",
+      "N3 licences (Law on Permits)",
+      "N4 organizational & technical capability",
+      "JV / association rule"
+     ],
+     "current_stage_obligations": [
+      "N2 specific experience (2 contracts / 10 years)",
+      "N4 organizational & technical capability",
+      "N3 licences (Law on Permits)",
+      "N1 general experience (7 years)"
+     ],
+     "duplicated_obligations": []
+    },
+    {
+     "kind": "reoi",
+     "run_id": "35495cbb-6d92-4b53-895c-3cc4337e5f48",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v2",
+     "client_latency_s": 26.4,
+     "requirements": 5,
+     "notes": 2,
+     "current_stage_requirements": 5,
+     "queue_wait_s": 0.0,
+     "processing_s": 28.7,
+     "total_s": 28.8,
+     "pass_provider_s": [
+      26.0,
+      25.5
+     ],
+     "union_gain": 0,
+     "union_replaced": 0,
+     "union_duplicates_removed": 7,
+     "core_items_present_in_requirements_or_notes": [
+      "N1 general experience (7 years)",
+      "N2 specific experience (2 contracts / 10 years)",
+      "N3 licences (Law on Permits)",
+      "N4 organizational & technical capability",
+      "JV / association rule"
+     ],
+     "current_stage_obligations": [
+      "N1 general experience (7 years)",
+      "JV / association rule",
+      "N2 specific experience (2 contracts / 10 years)",
+      "N4 organizational & technical capability",
+      "N3 licences (Law on Permits)"
+     ],
+     "duplicated_obligations": []
+    },
+    {
+     "kind": "reoi",
+     "run_id": "b3719d2f-ccd8-4220-86f9-730c775cca85",
+     "status": "COMPLETED",
+     "pipeline": "pursuit_analysis_pipeline_d2_v2",
+     "prompt": "pursuit_analysis_d2_v2",
+     "client_latency_s": 34.5,
+     "requirements": 7,
+     "notes": 2,
+     "current_stage_requirements": 5,
+     "queue_wait_s": 0.0,
+     "processing_s": 35.4,
+     "total_s": 35.4,
+     "pass_provider_s": [
+      23.2,
+      32.7
+     ],
+     "union_gain": 0,
+     "union_replaced": 0,
+     "union_duplicates_removed": 9,
+     "core_items_present_in_requirements_or_notes": [
+      "N1 general experience (7 years)",
+      "N2 specific experience (2 contracts / 10 years)",
+      "N3 licences (Law on Permits)",
+      "N4 organizational & technical capability",
+      "JV / association rule"
+     ],
+     "current_stage_obligations": [
+      "N4 organizational & technical capability",
+      "N3 licences (Law on Permits)",
+      "N2 specific experience (2 contracts / 10 years)",
+      "N1 general experience (7 years)",
+      "JV / association rule"
+     ],
+     "duplicated_obligations": []
+    }
+   ]
+  }
+ ]
+}

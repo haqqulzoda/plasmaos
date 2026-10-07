@@ -988,15 +988,18 @@ def test_a_bad_quote_is_still_rejected_and_counts_as_the_only_provenance_rejecti
 
 def test_pipeline_and_prompt_versions_are_bumped_and_the_schema_is_not() -> None:
     # D2-01 bumps both again for the submission-instruction/informational instruction;
-    # D2 analysis quality bumps the pipeline only (two SHORT passes, same prompt).
+    # D2 analysis quality bumps both: two SHORT passes, and one restatement instruction.
     assert analyzer.PIPELINE_VERSION == "pursuit_analysis_pipeline_d2_v2"
-    assert analyzer.PROMPT_VERSION == "pursuit_analysis_d2_v1"
+    assert analyzer.PROMPT_VERSION == "pursuit_analysis_d2_v2"
     assert analyzer.SCHEMA_VERSION == "pursuit_analysis_output_p0_v2"
     prompt = " ".join(analyzer.SYSTEM_PROMPT.split())
     # D1 arm B adds exactly these two instructions; the trust rules around them are unchanged.
     assert "source_context must be copied character-for-character from the document or left null." in prompt
     assert "Treat each lettered or numbered item of a qualifications or required-materials list as a separate fact." in prompt
     assert "Return only facts directly supported by an exact verbatim quote." in prompt
+    assert ("When the notice restates a criterion already stated elsewhere (for example a summary or bulleted list "
+            "repeating numbered criteria), extract it once, quoting the most complete statement; do not extract the "
+            "restatement as a separate requirement.") in prompt
     assert analyzer.PROMPT_SHA256 == __import__("hashlib").sha256(analyzer.SYSTEM_PROMPT.encode()).hexdigest()
 
 

@@ -226,7 +226,7 @@ def test_evidence_basis_prompt_and_contract() -> None:
     prompt = " ".join(pursuit_analyzer.SYSTEM_PROMPT.split())
     assert "Use requirement_type=SUBMISSION_INSTRUCTION for a fact that only states how, where, when, or in what form the submission is delivered" in prompt
     assert "distinction=INFORMATIONAL for a statement that asks nothing of the bidder" in prompt
-    assert pursuit_analyzer.PROMPT_VERSION == "pursuit_analysis_d2_v1"
+    assert pursuit_analyzer.PROMPT_VERSION == "pursuit_analysis_d2_v2"
     assert pursuit_analyzer.PIPELINE_VERSION == "pursuit_analysis_pipeline_d2_v2"
 
     paths = app.openapi()["paths"]
