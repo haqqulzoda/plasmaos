@@ -200,6 +200,7 @@ async def _flow(sessions) -> None:
         comms_before = await _comms(db)
     first = await seed_demo.seed(sessions, options, today=TODAY, process_inline=_inline, note_call=_note)
     assert first["label"] == "20261002-1" and first["profile_mode"] == "OWN" and first["revoked_in_older_organizations"] == []
+    assert (first["notifications_emitted"], first["broadcasts_emitted"]) == (1, 0)  # the new account's approval
     assert first["counts"] == {"own_references": 18, "own_references_reviewed": 6, "partner_firms": 6,
                                "partner_references": sum(len(item["references"]) for item in demo_data.PARTNERS),
                                "experts": 12, "cv_versions": 12}
@@ -266,6 +267,7 @@ async def _flow(sessions) -> None:
     # ---- run 2: fresh organization, previous one handed to its steward ----------------------------
     second = await seed_demo.seed(sessions, options, today=TODAY, process_inline=_inline, note_call=_note)
     assert second["label"] == "20261002-2" and second["organization_id"] != first["organization_id"]
+    assert second["notifications_emitted"] == 0  # the account already exists and is approved
     assert second["revoked_in_older_organizations"] == [first["organization_id"]]
     assert len(second["profiles_handed_off"]) == 1
     async with sessions() as db:
