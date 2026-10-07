@@ -115,7 +115,8 @@ UNION_OVERLAP_RATIO = 0.6
 # The extraction pass (1-based) a chunk call belongs to; asyncio.to_thread carries it into the worker thread.
 CURRENT_PASS: contextvars.ContextVar[int] = contextvars.ContextVar("pursuit_analysis_pass", default=1)
 CONNECT_TIMEOUT_SECONDS = 10
-TRANSIENT_PROVIDER_STATUS_CODES = frozenset({429, 503, 504})
+# 500 INTERNAL is transient on Gemini too (seen live): one retry after the same jittered backoff.
+TRANSIENT_PROVIDER_STATUS_CODES = frozenset({429, 500, 503, 504})
 ACCOUNT_PROVIDER_STATUS_CODES = frozenset({401, 402, 403})
 PROVIDER_BACKOFF_SECONDS = (2.0, 8.0)
 EMPTY_RESPONSE_MESSAGE = "Pursuit analyzer returned an empty response"
@@ -700,7 +701,7 @@ def _provider_status(exc: Exception) -> int | None:
 
 
 def _is_retryable(exc: Exception) -> bool:
-    """Malformed/schema-invalid/empty output, a timeout, or 429/503/504; anything else fails as before."""
+    """Malformed/schema-invalid/empty output, a timeout, or 429/500/503/504; anything else fails as before."""
     return (
         isinstance(exc, (json.JSONDecodeError, ValidationError))
         or _is_timeout(exc)

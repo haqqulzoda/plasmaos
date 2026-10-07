@@ -671,13 +671,30 @@ def test_backoff_that_would_cross_the_budget_is_not_slept(clock, client, monkeyp
     assert clock.sleeps == [8.0] and len(client.calls) == 2
 
 
-@pytest.mark.parametrize("status", [429, 503, 504])
+@pytest.mark.parametrize("status", [429, 500, 503, 504])
 def test_transient_provider_errors_are_retried_once_after_a_jittered_backoff(clock, client, status) -> None:
     client.script = [_api_error(status), _payload(_fact())]
     facts = _extract()
     assert _models_called() == [PRIMARY, PRIMARY]
     assert clock.jitter_ranges == [(2.0, 8.0)] and clock.sleeps == [5.0]
     assert facts.meta["failure_classes"] == [f"{'ClientError' if status == 429 else 'ServerError'}:{status}"]
+
+
+def test_a_500_internal_is_retried_once_then_falls_back(clock, client) -> None:
+    # Live: a Gemini 500 INTERNAL used to fail the chunk (and the worker task) at once.
+    client.script = [_api_error(500), _api_error(500), _payload(_fact())]
+    facts = _extract()
+    assert _models_called() == [PRIMARY, PRIMARY, FALLBACKS[0]] and len(clock.sleeps) == 2
+    assert facts.meta["failure_classes"] == ["ServerError:500", "ServerError:500"]
+
+
+def test_a_500_retry_respects_the_chunk_budget(clock, client, monkeypatch) -> None:
+    monkeypatch.setattr(analyzer, "CHUNK_BUDGET_SECONDS", 100)
+    monkeypatch.setattr(analyzer, "_jitter", lambda low, high: 8.0)
+    client.script = [clock.spend(0, _api_error(500)), clock.spend(0, _api_error(500)), _payload(_fact())]
+    with pytest.raises(genai_errors.ServerError):  # the budget allows one backoff, not a second
+        _extract()
+    assert clock.sleeps == [8.0] and len(client.calls) == 2
 
 
 def test_transient_provider_errors_exhaust_into_the_fallback_chain(clock, client) -> None:
@@ -687,7 +704,7 @@ def test_transient_provider_errors_exhaust_into_the_fallback_chain(clock, client
     assert facts.meta["model_name"] == FALLBACKS[0] and len(clock.sleeps) == 2
 
 
-@pytest.mark.parametrize("status", [400, 404, 500])
+@pytest.mark.parametrize("status", [400, 404, 501])
 def test_other_provider_errors_are_not_retried(clock, client, status) -> None:
     client.script = [_api_error(status), _payload(_fact())]
     with pytest.raises(genai_errors.APIError):
