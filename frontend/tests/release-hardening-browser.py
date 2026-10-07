@@ -1036,8 +1036,14 @@ def main():
                 checkbox.check()
                 before = len(requests)
                 page.get_by_role("button", name="Analyze selected", exact=True).click()
-                page.wait_for_timeout(500)
+                # Wait for the POST itself (a fixed 500 ms was too short under load and the late POST
+                # then leaked into the next case's request log).
+                for _ in range(100):
+                    if any(method == "POST" and path.split("?")[0].endswith("/analysis-runs") for method,path in requests[before:]):
+                        break
+                    page.wait_for_timeout(100)
                 assert any(method == "POST" and path.split("?")[0].endswith("/analysis-runs") for method,path in requests[before:])
+                page.wait_for_load_state("networkidle")
                 return {"stale_banner":True,"source_first":True,"explicit_selection":True,"post_count":len(requests[before:])}
             case("w4/requirements-pack-review", w4_requirements_review)
             def p1_async_analysis_states():
@@ -1447,6 +1453,7 @@ def main():
                 for locale in ("en", "ru"):
                     s72.State.users["s72-token-a"]["ui_locale"] = locale
                     page.set_viewport_size({"width": 1440, "height": 900})
+                    dashboard_start = len(requests)
                     response = page.goto(BASE + "/dashboard", wait_until="networkidle")
                     assert response is not None and response.status == 200, page.url
                     expect(page.locator("[data-page='dashboard']")).to_be_visible(timeout=30000)
@@ -1458,7 +1465,7 @@ def main():
                     assert href.endswith(f"?organization_id={ORGANIZATION_ID}"), href
                     assert page.locator("[data-company-link]").get_attribute("href") == "/dashboard/settings"
                     assert page.locator('a[href="/dashboard/readiness-vault"]').count() == 0
-                    assert not any("latest-analysis" in path for _, path in requests)
+                    assert not any("latest-analysis" in path for _, path in requests[dashboard_start:])  # this page only
                     assert page.get_by_role("link", name=dashboard["openExplorer"]).count() >= 1
                     evidence[locale] = href
                 return evidence
