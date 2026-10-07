@@ -246,3 +246,41 @@ def test_beat_heartbeat_is_written_on_receipt_of_the_beat_task_only() -> None:
     finally:
         module.record_beat_heartbeat = original
     assert seen == [True]
+
+
+_FAKE_BEAT_DOCKER = """#!/usr/bin/env bash
+# Fake docker: one running celery_beat whose PID 1 has $FAKE_RSS_KB resident, limit 192 MiB.
+case "$1" in
+  ps) echo beatcid ;;
+  exec) printf 'VmRSS:\t  %s kB\n' "$FAKE_RSS_KB" ;;
+  inspect) echo 201326592 ;;
+esac
+exit 0
+"""
+
+
+def test_beat_memory_records_and_compares_against_a_baseline(tmp_path) -> None:
+    import os
+    import subprocess
+
+    docker = tmp_path / "docker"
+    docker.write_text(_FAKE_BEAT_DOCKER, encoding="utf-8")
+    docker.chmod(0o755)
+
+    def run(rss_kb: int, *args: str) -> subprocess.CompletedProcess:
+        env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}", "FAKE_RSS_KB": str(rss_kb)}
+        return subprocess.run(["bash", "scripts/ops/beat_memory.sh", "--target", "local", *args], cwd=ROOT, env=env,
+                              capture_output=True, text=True, timeout=30)
+
+    recorded = run(140_000)  # at deploy: no baseline
+    assert recorded.returncode == 0, recorded.stderr
+    assert recorded.stdout.strip() == "celery_beat rss_kb=140000 limit_kb=196608 of_limit=71%"
+    steady = run(150_000, "--baseline", "140000")  # final step / day after: +7%
+    assert steady.returncode == 0 and "baseline_kb=140000 growth=7%" in steady.stdout
+    grown = run(150_000, "--baseline", "90000")  # +66% since deploy
+    assert grown.returncode == 1 and "growth=66%" in grown.stdout
+    near_limit = run(170_000, "--baseline", "160000")  # 86% of the 192 MiB limit
+    assert near_limit.returncode == 1 and "of_limit=86%" in near_limit.stdout
+    assert run(140_000, "--baseline", "abc").returncode == 2
+    script = (ROOT / "scripts" / "ops" / "beat_memory.sh").read_text(encoding="utf-8")
+    assert "Changes nothing" in script and " rm " not in script and "restart" not in script
