@@ -130,7 +130,7 @@ function RequirementCard({ item, packName, group, gap, matchedNames, review }: {
     {item.generated_interpretation && <p className="analysis-interpretation" data-generated-interpretation>
       <span>{tl('review.generatedLabel')}</span> <BidiText>{item.generated_interpretation}</BidiText>
     </p>}
-    {group === 'partial' && (matchedNames.names.length > 0 || matchedNames.unresolved > 0) && <p className="analysis-matched" data-matched-references>
+    {(matchedNames.names.length > 0 || matchedNames.unresolved > 0) && <p className="analysis-matched" data-matched-references>
       <span>{tl('review.matchedExperience')}</span> <BidiText>{matchedNames.names.join('; ')}</BidiText>
       {matchedNames.unresolved > 0 && <small> {tl('review.matchedUnresolved', { count: matchedNames.unresolved })}</small>}
     </p>}
@@ -164,10 +164,11 @@ function BulkConfirm({ items, gaps, pursuitId, runId, headers, onDone }: {
     }, (done, total) => setProgress({ done, total }), requestFailure);
     setReport(result);
     setProgress(null);
+    setOpen(false);
     await onDone();
   };
   return <div className="analysis-bulk" data-bulk-confirm>
-    {!open ? <Button size="sm" variant="secondary" leadingIcon={<CheckCheck aria-hidden />} onClick={() => { setOpen(true); setReport(null); }}>
+    {!open ? pending.length > 0 && <Button size="sm" variant="secondary" leadingIcon={<CheckCheck aria-hidden />} onClick={() => { setOpen(true); setReport(null); }}>
       {t('review.confirmGroup', { count: pending.length })}
     </Button> : <div className="analysis-bulk-panel ds-stack">
       <Input label={t('review.bulkReason')} placeholder={defaultReason} value={reason} onChange={(event) => setReason(event.target.value)}
@@ -280,7 +281,9 @@ export function PursuitRequirements({ pursuitId, headers, initialReviewableAnaly
 
   const currentQualityReady = analysis?.status === 'COMPLETED' && analysis.quality_state === 'READY_FOR_REVIEW';
   const resultAnalysis = currentQualityReady ? analysis : lastReadyAnalysis;
-  const packNames = useMemo(() => new Map(resultAnalysis?.pack_items.map((item) => [item.pack_item_id, item.display_name]) || []), [resultAnalysis]);
+  const packNames = useMemo(() => new Map(resultAnalysis?.pack_items.map((item) => [
+    item.pack_item_id, item.role === 'OFFICIAL_NOTICE' ? t('documentRoles.OFFICIAL_NOTICE') : item.display_name,
+  ]) || []), [resultAnalysis, t]);
   const groups = useMemo(() => groupRequirements(resultAnalysis), [resultAnalysis]);
   const gaps = useMemo(() => gapsByRequirement(resultAnalysis?.gaps || []), [resultAnalysis]);
   const analysisFailed = Boolean(analysis && (analysis.status === 'FAILED' || analysis.quality_state === 'FAILED'));

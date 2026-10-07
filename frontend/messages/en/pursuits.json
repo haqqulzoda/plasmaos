@@ -236,7 +236,7 @@
     "loadFailed": "Requirements could not be loaded.",
     "startFailed": "Analysis could not be started. Your documents are safe; try again.",
     "packTitle": "Choose documents to analyze",
-    "packHelp": "Choose the documents to analyze.",
+    "packHelp": "Only the documents you select are analyzed.",
     "sourceDocument": "Official/source document",
     "privateDocument": "Your document",
     "documentRoles": {
@@ -1062,7 +1062,7 @@
       "REFERENCE_ARCHIVED": "A selected reference was archived since.",
       "OTHER": "The package may be out of date."
     },
-    "versionSummary": "{references} own assignments · {partners} partners · {addressed} of {total} criteria addressed · notes kept {notes}, dropped {dropped}",
+    "versionSummary": "{references, plural, one {# own assignment} other {# own assignments}} · {partners, plural, one {# partner} other {# partners}} · {addressed} of {total} criteria addressed · notes kept {notes}, dropped {dropped}",
     "noVersions": "No versions yet."
   }
 }

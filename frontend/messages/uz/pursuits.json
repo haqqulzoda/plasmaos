@@ -236,7 +236,7 @@
     "loadFailed": "Talablarni yuklab bo‘lmadi.",
     "startFailed": "Tahlilni boshlab bo‘lmadi. Hujjatlaringiz xavfsiz — qayta urinib ko‘ring.",
     "packTitle": "Tahlil qilinadigan hujjatlarni tanlang",
-    "packHelp": "Tahlil uchun hujjatlarni tanlang.",
+    "packHelp": "Faqat siz tanlagan hujjatlar tahlil qilinadi.",
     "sourceDocument": "Rasmiy/manba hujjati",
     "privateDocument": "Sizning hujjatingiz",
     "documentRoles": {

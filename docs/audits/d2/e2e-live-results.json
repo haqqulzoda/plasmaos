@@ -1,0 +1,204 @@
+{
+ "steps": [
+  {
+   "locale": "en",
+   "step": "our-experience",
+   "ok": true,
+   "references": 4,
+   "screenshot": "en-01-our-experience-1440.png"
+  },
+  {
+   "locale": "en",
+   "step": "workspace",
+   "ok": true,
+   "stage": "SAVED",
+   "screenshot": "en-02-workspace-1440.png"
+  },
+  {
+   "locale": "en",
+   "step": "analyze",
+   "ok": true,
+   "run": "1836b249-b8a9-4f63-828f-2f673e59e6fb",
+   "status": "COMPLETED",
+   "quality": "READY_FOR_REVIEW",
+   "pipeline": "pursuit_analysis_pipeline_d2_v2",
+   "prompt": "pursuit_analysis_d2_v2",
+   "seconds": 30.4,
+   "requirements": 6,
+   "notes": 3,
+   "groups": [
+    "attention",
+    "notes",
+    "later"
+   ],
+   "cards": 9,
+   "unique_cards": 9,
+   "screenshot": "en-03b-requirements-grouped-1440.png"
+  },
+  {
+   "locale": "en",
+   "step": "bulk-confirm",
+   "ok": true,
+   "group": "attention",
+   "review_posts": 10,
+   "screenshot": "en-04b-bulk-confirm-done-1440.png"
+  },
+  {
+   "locale": "en",
+   "step": "eoi-experience",
+   "ok": true,
+   "criteria": 5,
+   "suggested_checked": 2,
+   "screenshot": "en-05a-eoi-experience-1440.png"
+  },
+  {
+   "locale": "en",
+   "step": "eoi-partners",
+   "ok": true,
+   "partners": 1,
+   "screenshot": "en-05b-eoi-partners-1440.png"
+  },
+  {
+   "locale": "en",
+   "step": "eoi-letter",
+   "ok": true,
+   "addressee": "Ministry of Energy, Mongolia",
+   "screenshot": "en-05c-eoi-letter-1440.png"
+  },
+  {
+   "locale": "en",
+   "step": "eoi-generate",
+   "ok": true,
+   "version": "4",
+   "seconds": 9.4,
+   "progress_seen": true,
+   "screenshot": "en-06-eoi-versions-1440.png"
+  },
+  {
+   "locale": "en",
+   "step": "download-docx",
+   "ok": true,
+   "file": "en-eoi-v4.docx",
+   "bytes": 39997,
+   "sections_missing": [],
+   "cyrillic_characters": 0,
+   "suggested_filename": "expression-of-interest-v4-en.docx"
+  },
+  {
+   "locale": "en",
+   "step": "download-pdf",
+   "ok": true,
+   "file": "en-eoi-v4.pdf",
+   "bytes": 32789,
+   "sections_missing": [],
+   "cyrillic_characters": 0,
+   "pages": 4,
+   "fonts": [
+    "AAAAAA+Roboto-Bold",
+    "AAAAAA+Roboto-Light",
+    "Helvetica"
+   ],
+   "suggested_filename": "expression-of-interest-v4-en.pdf"
+  },
+  {
+   "locale": "ru",
+   "step": "our-experience",
+   "ok": true,
+   "references": 4,
+   "screenshot": "ru-01-our-experience-1440.png"
+  },
+  {
+   "locale": "ru",
+   "step": "workspace",
+   "ok": true,
+   "stage": "SAVED",
+   "screenshot": "ru-02-workspace-1440.png"
+  },
+  {
+   "locale": "ru",
+   "step": "analyze",
+   "ok": true,
+   "run": "1ae9af51-d7e0-434d-9d96-aef616ac033e",
+   "status": "COMPLETED",
+   "quality": "READY_FOR_REVIEW",
+   "pipeline": "pursuit_analysis_pipeline_d2_v2",
+   "prompt": "pursuit_analysis_d2_v2",
+   "seconds": 27.3,
+   "requirements": 5,
+   "notes": 2,
+   "groups": [
+    "attention",
+    "notes"
+   ],
+   "cards": 7,
+   "unique_cards": 7,
+   "screenshot": "ru-03b-requirements-grouped-1440.png"
+  },
+  {
+   "locale": "ru",
+   "step": "bulk-confirm",
+   "ok": true,
+   "group": "attention",
+   "review_posts": 10,
+   "screenshot": "ru-04b-bulk-confirm-done-1440.png"
+  },
+  {
+   "locale": "ru",
+   "step": "eoi-experience",
+   "ok": true,
+   "criteria": 5,
+   "suggested_checked": 2,
+   "screenshot": "ru-05a-eoi-experience-1440.png"
+  },
+  {
+   "locale": "ru",
+   "step": "eoi-partners",
+   "ok": true,
+   "partners": 1,
+   "screenshot": "ru-05b-eoi-partners-1440.png"
+  },
+  {
+   "locale": "ru",
+   "step": "eoi-letter",
+   "ok": true,
+   "addressee": "Ministry of Energy, Mongolia",
+   "screenshot": "ru-05c-eoi-letter-1440.png"
+  },
+  {
+   "locale": "ru",
+   "step": "eoi-generate",
+   "ok": true,
+   "version": "5",
+   "seconds": 8.4,
+   "progress_seen": true,
+   "screenshot": "ru-06-eoi-versions-1440.png"
+  },
+  {
+   "locale": "ru",
+   "step": "download-docx",
+   "ok": true,
+   "file": "ru-eoi-v5.docx",
+   "bytes": 41090,
+   "sections_missing": [],
+   "cyrillic_characters": 2726,
+   "suggested_filename": "expression-of-interest-v5-ru.docx"
+  },
+  {
+   "locale": "ru",
+   "step": "download-pdf",
+   "ok": true,
+   "file": "ru-eoi-v5.pdf",
+   "bytes": 41605,
+   "sections_missing": [],
+   "cyrillic_characters": 3294,
+   "pages": 4,
+   "fonts": [
+    "AAAAAA+Roboto-Bold",
+    "AAAAAA+Roboto-Light",
+    "Helvetica"
+   ],
+   "suggested_filename": "expression-of-interest-v5-ru.pdf"
+  }
+ ],
+ "issues": []
+}
