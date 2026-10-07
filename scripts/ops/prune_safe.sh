@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reclaim Docker disk space without touching data or the release you can roll back to.
 #
-#   scripts/ops/prune_safe.sh [--apply] [--keep SHA]... [--keep-build-cache]
+#   scripts/ops/prune_safe.sh [--apply] [--keep SHA]... [--keep-build-cache] [--min-releases N]
 #
 # Dry run by default: prints what would be removed. With --apply it removes:
 #   1. dangling images (untagged layers left behind by rebuilds and retags)
@@ -15,7 +15,9 @@
 #   * the last two releases recorded in .release-history by compose-release.sh (current, previous)
 #   * every release newer than the newest in-use one (a build/import waiting to be deployed)
 #   * --keep SHA (repeatable) and PLASMA_KEEP_SHAS="sha1 sha2" (e.g. the production tag a275357)
-#   * if that still leaves fewer than two, the newest remaining ones until two are kept
+#   * if that still leaves fewer than --min-releases (default 2), the newest remaining ones until
+#     that many are kept. --min-releases 1 (with --keep) lets a deploy remove the release before the
+#     rollback point when no newer release is on the host yet (Deploy 2: --keep 0bea1f1 --min-releases 1).
 # SHAs match by prefix, so a275357 keeps plasma-<service>:a275357... tags.
 set -euo pipefail
 # shellcheck source=lib.sh
@@ -23,6 +25,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 APPLY=0
 KEEP_BUILD_CACHE=0
+MIN_RELEASES=2
 KEEP=()
 RELEASE_IMAGE_PREFIX="${RELEASE_IMAGE_PREFIX:-plasma-}"
 RELEASE_HISTORY="${RELEASE_HISTORY:-$OPS_ROOT/.release-history}"
@@ -31,7 +34,8 @@ while [ "$#" -gt 0 ]; do
     --apply) APPLY=1; shift ;;
     --keep) [[ "${2:-}" =~ ^[0-9a-f]{7,40}$ ]] || die "--keep needs a SHA"; KEEP+=("$2"); shift 2 ;;
     --keep-build-cache) KEEP_BUILD_CACHE=1; shift ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    --min-releases) [[ "${2:-}" =~ ^[1-9][0-9]*$ ]] || die "--min-releases needs a number >= 1"; MIN_RELEASES="$2"; shift 2 ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -82,11 +86,11 @@ if [ -n "$newest_in_use" ]; then
     if [[ "$(newest_created "$sha")" > "$newest_in_use" ]]; then add_keep "$sha" "newer than the running release (deploy candidate)"; fi
   done
 fi
-# At least two releases that are actually on this host (a --keep SHA with no images here
-# does not count, or it would cost the host its rollback image).
+# At least --min-releases releases that are actually on this host (a --keep SHA with no images
+# here does not count, or it would cost the host its rollback image).
 kept_present() { local n=0 sha; for sha in "${SHAS[@]}"; do if matches "$sha"; then n=$((n + 1)); fi; done; echo "$n"; }
-for ((i = ${#SHAS[@]} - 1; i >= 0 && $(kept_present) < 2; i--)); do
-  add_keep "${SHAS[$i]}" "newest remaining (keeping at least two releases present on this host)"
+for ((i = ${#SHAS[@]} - 1; i >= 0 && $(kept_present) < MIN_RELEASES; i--)); do
+  add_keep "${SHAS[$i]}" "newest remaining (keeping at least $MIN_RELEASES release(s) present on this host)"
 done
 
 echo "== release SHAs kept"

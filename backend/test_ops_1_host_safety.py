@@ -347,3 +347,45 @@ def test_clamav_watchdog_grace_defaults_to_15_minutes() -> None:
     script = (ROOT / "deploy" / "clamav" / "supervise.sh").read_text(encoding="utf-8")
     assert 'STARTUP_GRACE="${CLAMD_STARTUP_GRACE:-900}"' in script
     assert 'INIT="${CLAMAV_INIT:-/init}"' in script and "sh \"$INIT\" \"$@\" &" in script
+
+
+_FAKE_PRUNE_DOCKER = """#!/usr/bin/env bash
+# Fake docker: production before the Deploy 2 import. Containers use 0bea1f1; a275357 is the older release.
+case "$1 $2" in
+  "ps -aq") echo c1 ;;
+  "inspect -f") echo sha256:in-use-0bea ;;
+  "images --no-trunc")
+    echo "plasma-backend:0bea1f1ffc624b58a49b429c50055962e2cf47cd sha256:in-use-0bea"
+    echo "plasma-backend:a2753573191fc82ff9b403148c2183291bda94bf sha256:old-a275"
+    echo "plasma-frontend:a2753573191fc82ff9b403148c2183291bda94bf sha256:old-a275-frontend" ;;
+  "image inspect") case "$5" in sha256:in-use-0bea) echo 2026-10-01T00:00:00Z ;; *) echo 2026-09-20T00:00:00Z ;; esac ;;
+  "images -q") ;;
+  *) echo "docker $*" ;;
+esac
+exit 0
+"""
+
+
+def test_prune_keeps_two_releases_by_default_and_min_releases_1_frees_the_pre_rollback_release(tmp_path) -> None:
+    import os
+    import subprocess
+
+    docker = tmp_path / "docker"
+    docker.write_text(_FAKE_PRUNE_DOCKER, encoding="utf-8")
+    docker.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
+           "RELEASE_HISTORY": str(tmp_path / "no-history")}
+
+    def removed(*args: str) -> list[str]:
+        out = subprocess.run(["bash", "scripts/ops/prune_safe.sh", *args], cwd=ROOT, env=env, capture_output=True,
+                             text=True, timeout=60, check=True).stdout
+        block = out.split("== release tags to remove")[1].split("== dangling")[0]
+        return [line.split()[0] for line in block.strip().splitlines() if line.strip() != "none"]
+
+    assert removed("--keep", "0bea1f1") == []  # default: two releases stay (a275357 is the second)
+    freed = removed("--keep", "0bea1f1", "--min-releases", "1")
+    assert freed == ["plasma-backend:a2753573191fc82ff9b403148c2183291bda94bf",
+                     "plasma-frontend:a2753573191fc82ff9b403148c2183291bda94bf"]  # never the in-use 0bea1f1
+    bad = subprocess.run(["bash", "scripts/ops/prune_safe.sh", "--min-releases", "0"], cwd=ROOT, env=env,
+                         capture_output=True, text=True, timeout=60)
+    assert bad.returncode != 0
