@@ -79,7 +79,7 @@ def _tender(number: int, *, title: str, country: str, body: str, **values) -> Te
     base = dict(
         source_system="world_bank", external_id=f"OP0099{number:04d}", canonical_source_key=f"world_bank:OP0099{number:04d}",
         source_url=f"https://projects.worldbank.org/notice/OP0099{number:04d}", title=title,
-        description=body + "\n" + "Further information is available at the address below. " * 6,
+        description=body + "\n" + "Further information is available at the address below. " * 40,  # notice >= 2,000 chars
         notice_type="Request for Expression of Interest", procurement_category="Consultant Services",
         buyer="Ministry of Energy", country=country, publication_date=datetime(2026, 9, 20, tzinfo=timezone.utc),
         deadline=datetime(2026, 10, 30, 17, 0, tzinfo=timezone.utc), budget=0, currency="USD",
@@ -101,13 +101,22 @@ async def _seed_tenders(sessions) -> dict[str, UUID]:
         "elsewhere": _tender(5, title="Power grid design", country="Georgia", body=body),
         "no_notice": _tender(6, title="Substation design", country="Tajikistan", body="Short.", description="Short."),
         "not_reoi": _tender(7, title="Substation supervision", country="Kyrgyz Republic", body=body, notice_type="Contract Award"),
+        # firm-level only: an individual-consultant method or an individual's job title is never auto-picked
+        "individual": _tender(8, title="Design review of substations", country="Mongolia", body=body,
+                              procurement_method="Individual Consultant Selection"),
+        "specialist": _tender(9, title="Energy Specialist for grid reinforcement", country="Uzbekistan", body=body),
+        "closed": _tender(10, title="Substation design", country="Mongolia", body=body,
+                          deadline=datetime(2026, 9, 1, tzinfo=timezone.utc)),
+        "kenya": _tender(11, title="Power grid design", country="Kenya", body=body),
     }
     async with sessions() as db:
         db.add_all(rows.values())
         await db.flush()
         await sync_official_notices(db, list(rows.values()))
+        unsynced = _tender(12, title="Substation design", country="Mongolia", body=body)  # no OFFICIAL_NOTICE row
+        db.add(unsynced)
         await db.commit()
-    return {key: row.id for key, row in rows.items()}
+    return {**{key: row.id for key, row in rows.items()}, "unsynced": unsynced.id}
 
 
 async def _comms(db) -> dict[str, int]:
@@ -188,12 +197,28 @@ async def _flow(sessions) -> None:
     plan = await seed_demo.plan(sessions, Options(target="local", dry_run=True), today=TODAY)
     assert plan["label"] == "20261002-1" and plan["organization_name"] == "Demo Consulting LLC — 20261002-1"
     assert plan["demo_user_action"] == "create_preprovisioned" and plan["profile_mode"] == "OWN"
-    assert plan["pursuit_b_tender"]["tender_id"] == str(tenders["energy"])  # most relevant first
-    assert plan["pursuit_a_tender"]["tender_id"] == str(tenders["water"])
+    # Ranked by sector match (water + urban beats energy alone), then region (Mongolia before Georgia before
+    # Kenya), then latest deadline. Goods, awards, individual consultants and specialists are never candidates.
+    shown = [item["tender_id"] for item in plan["candidates"]]
+    assert shown == [str(tenders[key]) for key in ("water", "energy", "elsewhere", "kenya")], shown
+    assert plan["pursuit_b_tender"]["tender_id"] == str(tenders["water"])
+    assert plan["pursuit_a_tender"]["tender_id"] == str(tenders["energy"])
+    reasons = plan["candidates"][0]["reasons"]
+    assert reasons["sector_match_title"] == ["water", "urban"] and reasons["region"] == "Central Asia"
+    assert reasons["notice_characters"] >= 2_000
     async with sessions() as db:
         assert (await db.scalar(text("SELECT count(*) FROM organizations")), await db.scalar(text("SELECT count(*) FROM users"))) == before
-    with pytest.raises(DemoSeedError, match="REOI"):
-        await seed_demo.plan(sessions, Options(target="local", dry_run=True, tenders=(tenders["energy"], tenders["goods"])), today=TODAY)
+    # The demo date moves the floor: only tenders closing >= demo date + 7 days are candidates.
+    with pytest.raises(DemoSeedError, match="found 1 open firm-level"):
+        await seed_demo.plan(sessions, Options(target="local", dry_run=True, demo_date=date(2026, 11, 10)), today=TODAY)
+    pinned = await seed_demo.plan(sessions, Options(target="local", dry_run=True, demo_date=date(2026, 11, 10),
+                                                    externals=("world_bank:OP00990001",)), today=TODAY)
+    assert pinned["pursuit_b_tender"]["tender_id"] == str(tenders["energy"])  # a pinned tender has no demo-date floor
+    assert pinned["pursuit_a_tender"]["tender_id"] == str(tenders["water"])
+    for external, message in (("world_bank:OP_MISSING", "no such tender"), ("world_bank:OP00990010", "CLOSED"),
+                              ("world_bank:OP00990012", "no OFFICIAL_NOTICE"), ("OP00990001", "SOURCE:EXTERNAL_ID")):
+        with pytest.raises(DemoSeedError, match=message):
+            await seed_demo.plan(sessions, Options(target="local", dry_run=True, externals=(external,)), today=TODAY)
 
     # ---- run 1 ------------------------------------------------------------------------------------
     async with sessions() as db:

@@ -4,6 +4,8 @@
     python scripts/demo/seed_demo.py --target local --dry-run                 # plan only, no writes
     python scripts/demo/seed_demo.py --target local --confirm SEED_DEMO       # seed
     python scripts/demo/seed_demo.py --target local --confirm SEED_DEMO --resume 20261002-1
+    python scripts/demo/seed_demo.py --target local --dry-run --demo-date 2026-10-20  # top 5 candidates + reasons
+    python scripts/demo/seed_demo.py --target local --confirm SEED_DEMO         --tender-external world_bank:OP00468882 [--tender-external world_bank:OP...]   # pin B (analysed), then A
 
 Run inside the backend (or pursuit-analysis worker) container: it uses the service
 layer directly and waits for the pursuit-analysis worker to complete the analysis.
@@ -34,7 +36,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 from pathlib import Path
 import re
@@ -47,7 +49,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.endpoints.auth import PREPROVISIONED_GOOGLE_ID_PREFIX
@@ -74,7 +76,6 @@ CONFIRMATION = "SEED_DEMO"
 DEMO_EMAIL = "support.plasma@gmail.com"
 PROFILE_MARKER = "[plasma-demo-seed]"
 STEWARD_DOMAIN = "plasma.invalid"
-MIN_DEADLINE = date(2026, 10, 9)
 TARGET_ENVIRONMENTS = {"local": {"development", "test"}, "production": {"production"}}
 REVIEWABLE = "PROVISIONAL"
 
@@ -148,54 +149,159 @@ async def demo_user_plan(db: AsyncSession, email: str) -> dict[str, Any]:
     return {"user": user, "profile": profile, "user_action": action, "profile_mode": mode}
 
 
-_CENTRAL_ASIA_MONGOLIA = ("uzbek", "kazakh", "kyrgyz", "tajik", "mongolia")
+# ---- tender selection --------------------------------------------------------------------------------
+#
+# Pinned (--tender-external SOURCE:EXTERNAL_ID, repeatable): the first is pursuit B (analysed, EOI),
+# the second pursuit A (saved). A pinned tender must exist, be open by its deadline-derived status
+# and have an OFFICIAL_NOTICE. Any pursuit not pinned is auto-picked from open, firm-level World Bank
+# consulting notices whose deadline is at least AUTO_PICK_LEAD_DAYS after the demo date.
+
+AUTO_PICK_LEAD_DAYS = 7
+MIN_NOTICE_CHARACTERS = 2_000
+CANDIDATES_SHOWN = 5
+# Region preference after sector match: earlier is better; any other country ranks after these.
+REGION_PREFERENCE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Central Asia", ("uzbek", "kazakh", "kyrgyz", "tajik", "turkmen")),
+    ("Mongolia", ("mongolia",)),
+    ("Caucasus", ("georgia", "armenia", "azerbaijan")),
+    ("Türkiye", ("türkiye", "turkiye", "turkey")),
+    ("South Asia", ("india", "pakistan", "bangladesh", "nepal", "sri lanka", "bhutan", "maldives", "afghanistan")),
+)
+# Individual-consultant notices: by procurement method and by title.
+_INDIVIDUAL_METHOD = r"individual"
+_INDIVIDUAL_TITLE = r"\mindividual\s+consultant|\mspecialist\M|\mofficer\M"
 
 
-def reoi_condition(min_deadline: datetime):
+@dataclass(frozen=True)
+class Candidate:
+    tender: Tender
+    notice_characters: int
+    sectors_in_title: tuple[str, ...]
+    sectors_in_text: tuple[str, ...]
+    region: str | None
+    region_rank: int
+
+    def sort_key(self):
+        deadline = self.tender.deadline.timestamp() if self.tender.deadline else 0.0
+        return (-len(self.sectors_in_title), -len(self.sectors_in_text), self.region_rank, -deadline, str(self.tender.id))
+
+    def summary(self) -> dict[str, Any]:
+        return {
+            **_tender_summary(self.tender),
+            "reasons": {
+                "sector_match_title": list(self.sectors_in_title), "sector_match_text": list(self.sectors_in_text),
+                "region": self.region or "other", "notice_characters": self.notice_characters,
+                "procurement_method": self.tender.procurement_method,
+            },
+        }
+
+
+def _sectors(text: str | None) -> tuple[str, ...]:
+    value = (text or "").casefold()
+    return tuple(name for name, words in data.SECTOR_KEYWORDS.items() if any(word in value for word in words))
+
+
+def _region(country: str | None) -> tuple[str | None, int]:
+    value = (country or "").casefold()
+    for rank, (name, keys) in enumerate(REGION_PREFERENCE):
+        if any(key in value for key in keys):
+            return name, rank
+    return None, len(REGION_PREFERENCE)
+
+
+def _notice_characters():
+    return (select(func.max(func.length(func.coalesce(TenderDocument.parsed_text, ""))))
+            .where(TenderDocument.tender_id == Tender.id, TenderDocument.source_document_type == "OFFICIAL_NOTICE")
+            .correlate(Tender).scalar_subquery())
+
+
+def candidate_condition(demo_date: date):
+    """Open, firm-level World Bank consulting notices closing >= demo date + AUTO_PICK_LEAD_DAYS."""
+    from sqlalchemy import Text, cast
+
+    from app.core.deadline_truth import closing_deadline_sql, deadline_not_passed_sql
+    from app.models.base import TenderStatus
     from app.services.tender_sources.uzex_scope import customer_visible_tender_condition
 
-    has_notice = exists().where(
-        TenderDocument.tender_id == Tender.id, TenderDocument.source_document_type == "OFFICIAL_NOTICE",
-        func.length(func.coalesce(TenderDocument.parsed_text, "")) > 0,
+    floor = datetime.combine(demo_date + timedelta(days=AUTO_PICK_LEAD_DAYS), datetime.min.time(), tzinfo=timezone.utc)
+    metadata = func.lower(func.coalesce(cast(Tender.source_metadata_json, Text), ""))
+    consulting = or_(
+        Tender.procurement_category.op("~*")(r"^\s*consult"),
+        metadata.like('%"procurement_group": "cs"%'), metadata.like('%"procurement_group":"cs"%'),
     )
     return and_(
         Tender.source_system == "world_bank",
         customer_visible_tender_condition(Tender),
-        Tender.deadline >= min_deadline,
-        Tender.notice_type.op("~*")(r"expression of interest|\mREOI\M"),
-        or_(Tender.procurement_category.is_(None), ~Tender.procurement_category.op("~*")(r"goods|works|non-consult")),
-        or_(*(Tender.country.ilike(f"%{name}%") for name in _CENTRAL_ASIA_MONGOLIA)),
-        has_notice,
+        Tender.status.in_((TenderStatus.OPEN, TenderStatus.UNKNOWN)),
+        deadline_not_passed_sql(Tender),
+        closing_deadline_sql(Tender) >= floor,
+        consulting,
+        ~func.coalesce(Tender.procurement_category, "").op("~*")(r"non-consult"),
+        ~func.coalesce(Tender.procurement_method, "").op("~*")(_INDIVIDUAL_METHOD),
+        ~func.coalesce(Tender.notice_type, "").op("~*")(r"award"),
+        ~Tender.title.op("~*")(_INDIVIDUAL_TITLE),
+        _notice_characters() >= MIN_NOTICE_CHARACTERS,
     )
 
 
-def sector_score(tender: Tender) -> int:
-    """Relevance to the demo firm's sectors (energy first); the title outweighs the description."""
-    def score(value: str | None) -> int:
-        text = (value or "").casefold()
-        return sum(any(word in text for word in words) for words in data.SECTOR_KEYWORDS.values()) + \
-            (2 if any(word in text for word in data.SECTOR_KEYWORDS["energy"]) else 0)
+async def ranked_candidates(db: AsyncSession, *, demo_date: date, exclude: set[UUID]) -> list[Candidate]:
+    rows = (await db.execute(
+        select(Tender, _notice_characters()).where(candidate_condition(demo_date)).limit(2_000)
+    )).all()
+    candidates = []
+    for tender, characters in rows:
+        if tender.id in exclude:
+            continue
+        in_title = _sectors(f"{tender.title or ''} {tender.sector or ''}")
+        in_text = tuple(name for name in _sectors(tender.description) if name not in in_title)
+        region, rank = _region(tender.country)
+        candidates.append(Candidate(tender, int(characters or 0), in_title, in_text, region, rank))
+    return sorted(candidates, key=Candidate.sort_key)
 
-    return 10 * score(tender.title) + score(tender.description)
+
+def parse_tender_external(value: str) -> tuple[str, str]:
+    source, separator, external_id = value.partition(":")
+    if not separator or not source.strip() or not external_id.strip():
+        raise DemoSeedError(f"--tender-external must be SOURCE:EXTERNAL_ID, got {value!r}")
+    return source.strip().lower(), external_id.strip()
 
 
-async def pick_tenders(db: AsyncSession, *, min_deadline: date, overrides: list[UUID]) -> list[Tender]:
-    """Pursuit B (analysed) first, then pursuit A: open World Bank consulting REOIs in Central Asia/Mongolia."""
-    floor = max(datetime.combine(min_deadline, datetime.min.time(), tzinfo=timezone.utc), utcnow())
-    if overrides:
-        rows = [await db.get(Tender, value) for value in overrides]
-        if any(row is None for row in rows):
-            raise DemoSeedError("a --tender id does not exist")
-        eligible = set((await db.scalars(select(Tender.id).where(Tender.id.in_(overrides), reoi_condition(floor)))).all())
-        rejected = [str(row.id) for row in rows if row.id not in eligible]
-        if rejected:
-            raise DemoSeedError("not an open World Bank consulting REOI in Central Asia/Mongolia with an official notice: " + ", ".join(rejected))
-        return rows
-    rows = list((await db.scalars(select(Tender).where(reoi_condition(floor)).limit(500))).all())
-    rows.sort(key=lambda row: (-sector_score(row), row.deadline, str(row.id)))
-    if len(rows) < 2:
-        raise DemoSeedError(f"found {len(rows)} open World Bank consulting REOIs in Central Asia/Mongolia; need 2 (or pass --tender)")
-    return rows[:2]
+async def resolve_pinned(db: AsyncSession, value: str) -> Tender:
+    """A pinned tender, refused clearly when missing, closed or without an official notice."""
+    from app.core.deadline_truth import derived_status
+    from app.models.base import TenderStatus
+
+    source, external_id = parse_tender_external(value)
+    tender = await db.scalar(select(Tender).where(Tender.source_system == source, Tender.external_id == external_id))
+    if tender is None:
+        raise DemoSeedError(f"--tender-external {value}: no such tender")
+    status, _ = derived_status(tender.status, tender.source_system, tender.deadline, country=tender.country)
+    if status != TenderStatus.OPEN and status != TenderStatus.UNKNOWN:
+        raise DemoSeedError(f"--tender-external {value}: the tender is {status.value} (deadline "
+                            f"{tender.deadline.isoformat() if tender.deadline else 'unknown'}); it can no longer be seeded")
+    characters = await db.scalar(
+        select(func.max(func.length(func.coalesce(TenderDocument.parsed_text, "")))).where(
+            TenderDocument.tender_id == tender.id, TenderDocument.source_document_type == "OFFICIAL_NOTICE"))
+    if not characters:
+        raise DemoSeedError(f"--tender-external {value}: the tender has no OFFICIAL_NOTICE to analyse")
+    return tender
+
+
+async def pick_tenders(db: AsyncSession, *, demo_date: date, externals: list[str]) -> tuple[list[Tender], list[Candidate]]:
+    """[pursuit B, pursuit A] and the ranked auto-pick candidates (pinned ones first, then the best candidates)."""
+    if len(externals) > 2:
+        raise DemoSeedError("--tender-external is given at most twice (pursuit B, then pursuit A)")
+    pinned = [await resolve_pinned(db, value) for value in externals]
+    if len({tender.id for tender in pinned}) != len(pinned):
+        raise DemoSeedError("--tender-external names the same tender twice")
+    candidates = await ranked_candidates(db, demo_date=demo_date, exclude={tender.id for tender in pinned})
+    needed = 2 - len(pinned)
+    if len(candidates) < needed:
+        raise DemoSeedError(
+            f"found {len(candidates)} open firm-level World Bank consulting notices closing on or after "
+            f"{demo_date + timedelta(days=AUTO_PICK_LEAD_DAYS)} with an official notice of at least "
+            f"{MIN_NOTICE_CHARACTERS} characters; need {needed} (or pin them with --tender-external)")
+    return [*pinned, *(candidate.tender for candidate in candidates[:needed])], candidates
 
 
 # ---- write side --------------------------------------------------------------------------------------
@@ -544,22 +650,25 @@ class Options:
     confirm: str = ""
     dry_run: bool = False
     resume: str | None = None
-    tenders: tuple[UUID, ...] = ()
+    externals: tuple[str, ...] = ()  # --tender-external SOURCE:EXTERNAL_ID: pursuit B, then pursuit A
     email: str = DEMO_EMAIL
-    min_deadline: date = MIN_DEADLINE
+    demo_date: date | None = None  # default: today
     analysis_timeout: float = 900.0
     poll_seconds: float = 5.0
 
 
 async def plan(sessions, options: Options, *, today: date | None = None) -> dict[str, Any]:
     """Everything the run would do; no writes."""
+    today = today or utcnow().date()
+    demo_date = options.demo_date or today
     async with sessions() as db:
-        label = options.resume or await next_label(db, today or utcnow().date())
+        label = options.resume or await next_label(db, today)
         user_plan = await demo_user_plan(db, options.email)
-        tenders = await pick_tenders(db, min_deadline=options.min_deadline, overrides=list(options.tenders))
+        tenders, candidates = await pick_tenders(db, demo_date=demo_date, externals=list(options.externals))
         existing = await db.scalar(select(Organization.id).where(Organization.display_name == organization_name(label)))
         older = [str(item.id) for item in await demo_organizations(db) if item.display_name != organization_name(label)]
         picked = [_tender_summary(item) for item in tenders]
+        shown = [candidate.summary() for candidate in candidates[:CANDIDATES_SHOWN]]
         await db.rollback()
     return {
         "mode": "dry-run" if options.dry_run else "seed", "target": options.target, "label": label,
@@ -567,6 +676,11 @@ async def plan(sessions, options: Options, *, today: date | None = None) -> dict
         "demo_user": options.email, "demo_user_action": user_plan["user_action"], "profile_mode": user_plan["profile_mode"],
         "older_demo_organizations": older,
         "pursuit_b_tender": picked[0], "pursuit_a_tender": picked[1],
+        "pinned": list(options.externals), "demo_date": demo_date.isoformat(),
+        "auto_pick_rule": (f"World Bank, consulting group, firm-level, open, closing on or after demo date + "
+                           f"{AUTO_PICK_LEAD_DAYS} days, official notice >= {MIN_NOTICE_CHARACTERS} characters; ranked by "
+                           "sector match, then region, then latest deadline"),
+        "candidates": shown,
         "will_create": {"own_references": len(data.OWN_REFERENCES), "partner_firms": len(data.PARTNERS),
                         "partner_references": sum(len(item["references"]) for item in data.PARTNERS),
                         "experts": len(data.EXPERTS), "cv_versions": len(data.EXPERTS), "pursuits": 2},
@@ -633,10 +747,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--confirm", default="", help=f"Required for any write: {CONFIRMATION}")
     parser.add_argument("--dry-run", action="store_true", help="Print the plan; write nothing.")
     parser.add_argument("--resume", metavar="YYYYMMDD-N", help="Continue an interrupted run with this label.")
-    parser.add_argument("--tender", action="append", type=UUID, default=[],
-                        help="Pin the tenders: first is pursuit B (analysed), second pursuit A.")
+    parser.add_argument("--tender-external", action="append", default=[], metavar="SOURCE:EXTERNAL_ID",
+                        help="Pin a tender (repeatable): first is pursuit B (analysed, EOI), second pursuit A (saved). "
+                             "An unpinned pursuit is auto-picked.")
+    parser.add_argument("--demo-date", type=date.fromisoformat, default=None, metavar="YYYY-MM-DD",
+                        help=f"First demo day (default today); auto-picked tenders close >= this + {AUTO_PICK_LEAD_DAYS} days.")
     parser.add_argument("--email", default=DEMO_EMAIL)
-    parser.add_argument("--min-deadline", type=date.fromisoformat, default=MIN_DEADLINE)
     parser.add_argument("--analysis-timeout", type=float, default=900.0)
     return parser
 
@@ -648,11 +764,11 @@ async def main(argv: list[str] | None = None) -> int:
     if args.resume and not re.fullmatch(r"\d{8}-\d+", args.resume):
         print("--resume takes a run label such as 20261002-1", file=sys.stderr)
         return 2
-    if args.tender and len(args.tender) != 2:
-        print("--tender is given twice (pursuit B, then pursuit A) or not at all", file=sys.stderr)
+    if len(args.tender_external) > 2:
+        print("--tender-external is given at most twice (pursuit B, then pursuit A)", file=sys.stderr)
         return 2
     options = Options(target=args.target, confirm=args.confirm, dry_run=args.dry_run, resume=args.resume,
-                      tenders=tuple(args.tender), email=args.email.strip().lower(), min_deadline=args.min_deadline,
+                      externals=tuple(args.tender_external), email=args.email.strip().lower(), demo_date=args.demo_date,
                       analysis_timeout=args.analysis_timeout)
     try:
         check_target(options.target, settings.ENVIRONMENT)
