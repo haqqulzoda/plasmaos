@@ -249,17 +249,46 @@ def test_a_failed_second_pass_is_recorded_and_does_not_fail_the_run(short_route,
     d = result.diagnostics
     assert (d["pass_count"], d["passes_completed"], d["union_gain"]) == (2, 1, 0)
     assert d["passes"][1]["status"] == "FAILED" and d["passes"][1]["failure_class"] == "ValidationError"
+    assert d["primary_pass"] == 1 and d["passes_failed"] == [{"pass": 2, "failure_class": "ValidationError"}]
 
 
-def test_a_failed_first_pass_fails_the_run_as_before(short_route, monkeypatch) -> None:
+def test_a_first_pass_timeout_with_a_completed_second_pass_uses_pass_2(short_route, monkeypatch) -> None:
+    # INT-5: seen in the Deploy 2 rehearsal: pass 1 timed out twice while pass 2 completed.
+    import requests
+
+    def stub(item, chunk, language, api_key, models=None):
+        if analyzer.CURRENT_PASS.get() == 1:
+            raise requests.exceptions.ReadTimeout("read timed out (read timeout=90)")
+        return _chunk_facts(_fact(PRINTED), _fact(REFERENCES))
+
+    monkeypatch.setattr(analyzer, "_extract_chunk_sync", stub)
+    result = asyncio.run(analyzer.analyze_pack_items([SealedTextInput(uuid4(), "rfp.txt", TEXT)], "en"))
+    assert [fact.fact.original_quote for fact in result] == [PRINTED, REFERENCES]  # pass 2's verified facts
+    d = result.diagnostics
+    assert (d["pass_count"], d["passes_completed"], d["primary_pass"]) == (2, 1, 2)
+    assert d["passes_succeeded"] == [2] and d["passes_failed"] == [{"pass": 1, "failure_class": "ReadTimeout"}]
+    assert d["passes"][0]["status"] == "FAILED" and d["passes"][1]["status"] == "COMPLETED"
+    # top-level counters describe the primary (completed) pass
+    assert (d["raw_requirement_count"], d["verified_requirement_count"], d["chunk_count"]) == (2, 2, 1)
+    assert "chunks" not in d["passes"][1] and d["union_gain"] == 0
+
+
+def test_when_every_pass_fails_the_run_fails_with_pass_1s_failure(short_route, monkeypatch) -> None:
     def stub(item, chunk, language, api_key, models=None):
         if analyzer.CURRENT_PASS.get() == 1:
             raise analyzer.EXTRACTED_FACTS.validate_json("{not json")
-        return _chunk_facts(_fact(REFERENCES))
+        raise TimeoutError("pass 2 timed out")
 
     monkeypatch.setattr(analyzer, "_extract_chunk_sync", stub)
     with pytest.raises(ValidationError):  # classified exactly as a single-pass failure
         asyncio.run(analyzer.analyze_pack_items([SealedTextInput(uuid4(), "rfp.txt", TEXT)], "en"))
+
+
+def test_when_both_passes_complete_the_diagnostics_name_both(short_route, monkeypatch) -> None:
+    monkeypatch.setattr(analyzer, "_extract_chunk_sync", lambda *args, **kwargs: _chunk_facts(_fact(REFERENCES)))
+    d = asyncio.run(analyzer.analyze_pack_items([SealedTextInput(uuid4(), "rfp.txt", TEXT)], "en")).diagnostics
+    assert (d["primary_pass"], d["passes_succeeded"], d["passes_failed"]) == (1, [1, 2], [])
+    assert d["union_duplicates_removed"] == 1  # the union is unchanged: identical facts dedupe
 
 
 def test_the_long_route_and_one_configured_pass_run_a_single_pass(short_route, monkeypatch) -> None:

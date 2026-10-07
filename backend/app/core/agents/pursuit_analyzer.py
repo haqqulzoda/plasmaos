@@ -865,11 +865,12 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
     persisted fact order do not depend on provider completion order.
 
     On the SHORT route ``SHORT_PASSES`` independent passes run concurrently. Each pass
-    is extracted and verified exactly like a single pass; their verified facts are then
-    united (``union_verified_facts``). The first pass decides success: its failure fails
-    the run as before, while a later pass that fails is recorded and contributes nothing.
-    The top-level raw/rejected/duplicate counters and ``chunks`` describe the first pass;
-    ``passes`` has every pass, and the verified/context counters describe the union.
+    is extracted and verified exactly like a single pass; the verified facts of the passes
+    that completed are then united (``union_verified_facts``). The run succeeds when at
+    least one pass completed; a failed pass is recorded (``passes_failed``) and contributes
+    nothing. When every pass failed, pass 1's failure is raised as before. The top-level
+    raw/rejected/duplicate counters and ``chunks`` describe the primary pass (the first that
+    completed); ``passes`` has every pass, and the verified/context counters the union.
     """
     api_key = _resolve_gemini_api_key()
     if not api_key:
@@ -920,9 +921,13 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
         return list(outcomes), round((_monotonic() - pass_started) * 1000)
 
     pass_results = await asyncio.gather(*(run_pass(index) for index in range(1, pass_count + 1)))
-    for outcome in pass_results[0][0]:
-        if isinstance(outcome, BaseException):
-            raise outcome  # first failure in chunk order, so the classification is deterministic
+    # First failure of each pass in chunk order (None when the pass completed). The run fails only
+    # when every pass failed, with pass 1's failure, so the classification is deterministic and a
+    # single-pass run (LONG route, or one configured pass) fails exactly as before.
+    failures = [next((outcome for outcome in outcomes if isinstance(outcome, BaseException)), None)
+                for outcomes, _ in pass_results]
+    if all(failure is not None for failure in failures):
+        raise failures[0]
 
     def verify(outcomes: list[object]) -> tuple[list[VerifiedFact], dict[str, int], list[dict[str, object]]]:
         """One pass, verified exactly as a single-pass run is."""
@@ -993,16 +998,16 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
     first_counts: dict[str, int] = {}
     first_chunks: list[dict[str, object]] = []
     later_chunks: list[dict[str, object]] = []
-    for pass_index, (outcomes, latency_ms) in enumerate(pass_results, start=1):
-        failure = next((outcome for outcome in outcomes if isinstance(outcome, BaseException)), None)
-        if failure is not None:  # only a later pass gets here: the first pass's failure was raised above
+    primary_pass = next(index for index, failure in enumerate(failures, start=1) if failure is None)
+    for pass_index, ((outcomes, latency_ms), failure) in enumerate(zip(pass_results, failures), start=1):
+        if failure is not None:  # at least one other pass completed, so the run continues without this one
             logger.warning("pursuit_analysis_pass_failed pass=%s error=%s", pass_index, _failure_class(failure))
             pass_records.append({"pass": pass_index, "status": "FAILED", "failure_class": _failure_class(failure),
                                  "latency_ms": latency_ms})
             continue
         verified, counts, chunk_records = verify(outcomes)
         pass_facts.append(verified)
-        if pass_index == 1:
+        if pass_index == primary_pass:
             first_counts, first_chunks = counts, chunk_records
         else:
             later_chunks.extend(chunk_records)
@@ -1013,7 +1018,7 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
             "verified_count": len(verified),
             "verified_requirement_count": sum(value.fact.kind == "CORPORATE_REQUIREMENT" for value in verified),
             "verified_position_count": sum(value.fact.kind == "POSITION" for value in verified),
-            **({"chunks": chunk_records} if pass_index > 1 else {}),
+            **({"chunks": chunk_records} if pass_index != primary_pass else {}),
         })
     verified, union_counts = union_verified_facts(pass_facts)
 
@@ -1051,6 +1056,10 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
         "chunks": first_chunks,
         "pass_count": pass_count,
         "passes_completed": len(pass_facts),
+        "primary_pass": primary_pass,
+        "passes_succeeded": [record["pass"] for record in pass_records if record["status"] == "COMPLETED"],
+        "passes_failed": [{"pass": record["pass"], "failure_class": record["failure_class"]}
+                          for record in pass_records if record["status"] == "FAILED"],
         "passes": pass_records,
         **union_counts,
     })
