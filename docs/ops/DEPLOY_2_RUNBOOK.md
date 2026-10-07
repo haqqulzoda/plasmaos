@@ -1,4 +1,4 @@
-# Deploy 2 runbook: production f7c61fb / images 0bea1f1 → pilot/week1, images d10bb82
+# Deploy 2 runbook: production f7c61fb / images 0bea1f1 → pilot/week1, images 4f09b8e
 
 For the owner, copy-paste on the production host. Every step has the command, what you must
 see, and a **STOP** condition. Same rules as Deploy 1: a short clean cut-over (the app is
@@ -7,13 +7,14 @@ forward first, and two proven rollbacks.
 
 | | |
 | --- | --- |
-| Checkout | `pilot/week1` @ the commit that adds this file (given with the runbook; = images' code `d10bb82` + this file, no code change) |
-| Images | `plasma-<service>:d10bb826389e4a0f066a629d645c440a7b43162a`, bundle `plasma-release-d10bb82.tar.gz`, **2,505,534,065 bytes (2.3 GiB)**, sha256 `8ba1035f67fcf73619a63b819279177e8488b346a9d3726de42035b3382322bb`; `/health` reports `build_sha` `d10bb82…` |
+| Checkout | `pilot/week1` @ the commit that updates this file (given with the runbook; = images' code `4f09b8e` + this file, no code change) |
+| Images | `plasma-<service>:4f09b8e1cf1be6a9c6c8ef5c63a6ef2b8af37c2d`, bundle `plasma-release-4f09b8e.tar.gz`, **1,530,311,016 bytes (1.43 GiB)**, sha256 `bd2948ee9faf14e91538e244799513ff8f68d1d19701d3887d17ca0e7e634cbd`; `/health` reports `build_sha` `4f09b8e…`. The six backend-family services share one image (one build); the frontend is the unchanged `d10bb82` image retagged (its own `PLASMA_BUILD_SHA` still says `d10bb82…`; only the backend's `/health` is checked) |
 | Running today | checkout `f7c61fbd36dee77bd5621f5031da1ae6a0096045`, images `0bea1f1ffc624b58a49b429c50055962e2cf47cd`, schema `20261003_0001_d1_03_official_notice_unique` |
 | Host | Hetzner 2 vCPU / 3.7 GiB, `/opt/plasma-console/plasmaos`, `HOST_PROFILE=4gb`, `PLASMA_NO_BUILD=1` (from Deploy 1) |
 | Migrations | `20261004_0001_d2_01_own_experience` (own firm, non-destructive reference edits: nullable columns, constraints, a reference-facts immutability trigger) and `20261005_0001_d2_05_eoi_drafts` (two new tables). Additive: the old build runs on the new schema (proven, Rollback A). |
-| New in the release | D2-01 own experience in analysis; D2-02 Partners & Experts library; D2-05 EOI package (DOCX/PDF) and grouped Requirements; two-pass SHORT-route analysis (`pursuit_analysis_pipeline_d2_v2`, prompt `pursuit_analysis_d2_v2`); D3-04 demo seed; Beat heartbeat in `smoke.sh`; `beat_memory.sh`; `eoi_smoke.py` |
-| **Not touched** | **`db` and `redis` keep their containers** (never `up`, `down`, `restart` or `rollback` them here) |
+| New in the release | D2-01 own experience in analysis; D2-02 Partners & Experts library; D2-05 EOI package (DOCX/PDF) and grouped Requirements; two-pass SHORT-route analysis (`pursuit_analysis_pipeline_d2_v2`, prompt `pursuit_analysis_d2_v2`; the run succeeds when at least one of the two passes succeeds); D3-04 demo seed (one-off container); Beat heartbeat in `smoke.sh`; `beat_memory.sh`; `eoi_smoke.py`; ClamAV watchdog startup grace (15 min); backend limit 512m in the 4gb profile; `prune_safe.sh --min-releases` |
+| Gate | re-run at `4f09b8e` (INT-5, disposable DB): backend 1090 passed / 1 skipped, security 118, analysis 50, config-dependencies 24 + `pip check` + `npm audit --omit=dev` found 0 (full audit reported: 5 high, dev-only); the other groups unchanged since the INT-4 gate at `d10bb82` (frontend code identical); the dependency gate blocks on production npm dependencies under the dated exception in `docs/ops/DEPENDENCY_EXCEPTIONS.md` (dev-only `braces` chain, expires 2026-11-08) |
+| **Not touched** | **`db`, `redis` and `clamav` keep their containers** (never `up`, `down`, `restart` or `rollback` them here; ClamAV: see below) |
 | Downtime | step 9 → step 11: **134 s** in the local rehearsal (stop 12 s, image switch + both migrations 45 s, start to `/health/ready` 62 s) |
 | Window | ~30 min to step 11 plus the transfer (step 6), then ~60 min of checks (steps 12-16) |
 
@@ -25,13 +26,24 @@ Conventions as in Deploy 1: `prod$` on the production host in `/opt/plasma-conso
 `laptop$` on the owner's PC (Git Bash). `<prod>`, `<APP_DOMAIN>`, `<API_DOMAIN>` as before.
 
 APP services (the only ones this runbook ever recreates):
-`clamav celery_worker worker_heavy worker_private_documents worker_pursuit_analysis celery_beat backend frontend`
+`celery_worker worker_heavy worker_private_documents worker_pursuit_analysis celery_beat backend frontend`
+
+**ClamAV stays running, untouched (decision).** Between `f7c61fb` and this release ClamAV's compose
+definition, image (`clamav/clamav:1.4`) and 4gb limit (1536m) are unchanged; the only change is its
+bind-mounted `deploy/clamav/supervise.sh` (the startup grace: exit when clamd has not answered PING
+within 15 minutes, so `restart: always` brings it back). That fix only matters when the container
+starts, while recreating ClamAV in the cut-over repeats the first-boot signature load that crossed the
+1.5 GiB limit in the rehearsal and pauses upload scanning. So Deploy 2 leaves the running ClamAV alone:
+it is not in `$APPS` (stop, up, Rollback A/A2). The running wrapper keeps its old copy (the checkout
+replaces the file; the container still holds the old one); the new script takes effect at the
+container's next start, by its restart policy or by the optional restart in step 16.
 
 **Rehearsed locally** (an isolated `plasma_rehearsal` copy: the pre-Deploy-2 local database
 restored at schema `20261003_0001`, Deploy 1 images, `HOST_PROFILE=4gb`, then every step below,
 then Rollback A): results are quoted at each step. Peak memory in the rehearsal: ClamAV 1,497 MiB
 (limit 1,536), celery_worker 639 MiB (768), backend 402 MiB (448, during the demo seed),
-whole app 2.7 GiB.
+whole app 2.7 GiB. The backend limit is now 512 MiB (was 448): the demo seed runs in its own
+one-off backend container (step 15), which gets the same limit.
 
 ---
 
@@ -40,13 +52,13 @@ whole app 2.7 GiB.
 ```
 prod$ cd /opt/plasma-console/plasmaos
 prod$ COMMIT=<this runbook's commit on pilot/week1>
-prod$ SHA=d10bb826389e4a0f066a629d645c440a7b43162a
+prod$ SHA=4f09b8e1cf1be6a9c6c8ef5c63a6ef2b8af37c2d
 prod$ PREV_COMMIT=f7c61fbd36dee77bd5621f5031da1ae6a0096045
 prod$ PREV_SHA=0bea1f1ffc624b58a49b429c50055962e2cf47cd
-prod$ APPS="clamav celery_worker worker_heavy worker_private_documents worker_pursuit_analysis celery_beat backend frontend"
+prod$ APPS="celery_worker worker_heavy worker_private_documents worker_pursuit_analysis celery_beat backend frontend"
 prod$ curl -fsS http://127.0.0.1:8000/health; echo
 ```
-Expect: `"build_sha":"0bea1f1ffc624b58a49b429c50055962e2cf47cd"` before step 9, `d10bb82…` after step 11.
+Expect: `"build_sha":"0bea1f1ffc624b58a49b429c50055962e2cf47cd"` before step 9, `4f09b8e…` after step 11.
 **STOP** before step 9 if it is anything else.
 
 ## 1. Pre-checks (nothing changes)
@@ -57,11 +69,42 @@ prod$ git status --porcelain; git rev-parse HEAD
 Expect: no file lines (an untracked `.env.pre-deploy1` is fine), then `f7c61fbd…`. **STOP** otherwise.
 
 ```
-prod$ free -h; df -h /
+prod$ free -h
 ```
-Expect: `available` ≥ ~700Mi; `Avail` ≥ **12G** (bundle 2.3 GB + loaded images ~8.5 GB, the Deploy 1
-images stay as the rollback point). If less: `prod$ docker builder prune -f && docker image prune -f && df -h /`
-(never `docker system prune`, never images tagged `:$PREV_SHA`). **STOP** below 12G.
+Expect: `available` ≥ ~700Mi.
+
+**Disk pre-step** (removes only the a275357 images and, if verified off-host, the Deploy 1 backup):
+```
+prod$ docker images --format '{{.Repository}}:{{.Tag}}' | grep -c ":$PREV_SHA"
+prod$ df -h /; docker system df
+prod$ scripts/ops/prune_safe.sh --keep 0bea1f1 --min-releases 1
+```
+Expect: `7` (the Deploy 1 images, the rollback point; **STOP** below 7: do not prune). The dry run
+lists under "release SHAs kept" `0bea1f1…` only (used by a container, `.release-history`, `--keep`),
+and under "release tags to remove" exactly the `plasma-<service>:a2753573…` tags (seven, plus six
+`:a2753573191f` tags if `compose-release.sh tag` ran in Deploy 1). **STOP** if a `0bea1f1` tag is
+listed for removal. If `.release-history` keeps a275357, put `RELEASE_HISTORY=/dev/null` in front of
+the command (the in-use and `--keep` rules still protect 0bea1f1). `--min-releases 1` is needed
+because no newer release is on the host yet (the default 2 would keep a275357 as the second one).
+Then:
+```
+prod$ scripts/ops/prune_safe.sh --keep 0bea1f1 --min-releases 1 --apply
+prod$ docker images --format '{{.Repository}}:{{.Tag}}' | grep -c ":$PREV_SHA"; df -h /
+```
+Expect: `7` again and about **4-5 GB freed**: the a275357 set (a backend-family image of ~4.3 GB
+shared by six services plus the ~1.2 GB frontend, less the base layers it shares with 0bea1f1; Deploy 1
+loaded ~5 GB per release), plus the build cache and dangling images the dry run showed.
+
+Only if the laptop copy of the Deploy 1 backup was verified (`sha256sum -c` OK in Deploy 1 step 4):
+```
+prod$ ls -l /var/backups/plasma/
+prod$ rm /var/backups/plasma/<Deploy 1 SET>.*; df -h /
+```
+This frees the Deploy 1 dump and private-document archive (their sizes as listed). Otherwise keep them.
+
+Expect `Avail` ≥ **12G** (bundle 1.5 GB + loaded images ~5.6 GB + the step 4 backup and headroom;
+the Deploy 1 images stay as the rollback point). **STOP** below 12G (never `docker system prune`,
+never images tagged `:$PREV_SHA`).
 
 ```
 prod$ docker exec plasma_backend alembic current
@@ -115,10 +158,10 @@ Stay on 4gb. Nothing to do.
 ## 6. Transfer the image bundle
 
 ```
-laptop$ scp /d/plasma-release/plasma-release-d10bb82.tar.gz "$PROD:/opt/plasma-console/"
-prod$ sha256sum /opt/plasma-console/plasma-release-d10bb82.tar.gz
+laptop$ scp /d/plasma-release/plasma-release-4f09b8e.tar.gz "$PROD:/opt/plasma-console/"
+prod$ sha256sum /opt/plasma-console/plasma-release-4f09b8e.tar.gz
 ```
-Expect: `8ba1035f67fcf73619a63b819279177e8488b346a9d3726de42035b3382322bb`. **STOP** if it differs (copy again).
+Expect: `bd2948ee9faf14e91538e244799513ff8f68d1d19701d3887d17ca0e7e634cbd`. **STOP** if it differs (copy again).
 
 ## 7. `.env`: keep a copy, then add one line
 
@@ -128,8 +171,34 @@ prod$ printf '\n# --- Deploy 2 (pilot/week1) ---\n# Independent extraction passe
 prod$ scripts/compose-release.sh config --quiet && echo CONFIG_OK
 prod$ scripts/compose-release.sh config | grep -E -- '--concurrency=|mem_limit|PURSUIT_ANALYSIS_SHORT_PASSES' | sort | uniq -c
 ```
-Expect: `ENV_SAVED`, `CONFIG_OK`, the same eight `--concurrency`/`mem_limit` lines as Deploy 1
-step 7 (unchanged), plus `PURSUIT_ANALYSIS_SHORT_PASSES: "2"` on the services that read `.env`.
+Expect: `ENV_SAVED`, `CONFIG_OK`, then exactly these `--concurrency`/`mem_limit` lines (only the
+backend changes against `f7c61fb`: 448m → **512m**, `469762048` → `536870912`; ClamAV's 1536m line
+is still there although ClamAV is not recreated), plus `PURSUIT_ANALYSIS_SHORT_PASSES: "2"` on the
+services that read `.env`:
+```
+      3       - --concurrency=1          (worker_heavy, worker_private_documents, worker_pursuit_analysis)
+      1       - --concurrency=2          (celery_worker)
+      1     mem_limit: "1610612736"      (clamav 1536m)
+      1     mem_limit: "201326592"       (celery_beat 192m)
+      2     mem_limit: "268435456"       (worker_heavy, frontend 256m)
+      2     mem_limit: "402653184"       (worker_private_documents, worker_pursuit_analysis 384m)
+      1     mem_limit: "536870912"       (backend 512m)
+      1     mem_limit: "805306368"       (celery_worker 768m)
+```
+**STOP** on different numbers (wrong `HOST_PROFILE`, or `deploy/host-profiles/4gb.env` not from this checkout).
+
+4gb profile after Deploy 2 (sum of limits 4,288 MiB = 4.19 GiB, plus PostgreSQL and Redis unlimited):
+
+| Service | Limit | Change |
+| --- | --- | --- |
+| clamav | 1536m | — (container not recreated) |
+| celery_worker | 768m | — |
+| backend | **512m** | was 448m; the demo seed's one-off container peaked at 402 MiB |
+| worker_pursuit_analysis | 384m | — |
+| worker_private_documents | 384m | — |
+| worker_heavy | 256m | — |
+| frontend | 256m | — |
+| celery_beat | 192m | — |
 
 Variables the merged code reads that `f7c61fb` did not (all with defaults):
 
@@ -144,10 +213,10 @@ the existing `ENVIRONMENT`. The Deploy 1 additions in `.env` (models, budgets, s
 ## 8. Import the images
 
 ```
-prod$ scripts/compose-release.sh import --expect "$SHA" < /opt/plasma-console/plasma-release-d10bb82.tar.gz
-prod$ rm /opt/plasma-console/plasma-release-d10bb82.tar.gz && df -h /
+prod$ scripts/compose-release.sh import --expect "$SHA" < /opt/plasma-console/plasma-release-4f09b8e.tar.gz
+prod$ rm /opt/plasma-console/plasma-release-4f09b8e.tar.gz && df -h /
 ```
-Expect: seven `Loaded image: plasma-<service>:d10bb82…`, then `every service has plasma-<service>:d10bb82…`;
+Expect: seven `Loaded image: plasma-<service>:4f09b8e…`, then `every service has plasma-<service>:4f09b8e…`;
 `Use%` ≤ 85 %. **STOP** on `import incomplete` (repeat step 6).
 
 ## 9. Stop the app (db and redis keep running)
@@ -157,7 +226,7 @@ prod$ date -u +%T
 prod$ scripts/compose-release.sh stop $APPS
 prod$ docker ps --format '{{.Names}}' | sort
 ```
-Expect: eight `Stopped`, then only `plasma_db` and `plasma_redis` (rehearsal: 12 s).
+Expect: seven `Stopped`, then only `plasma_clamav`, `plasma_db` and `plasma_redis` (rehearsal: 12 s).
 Abort without deploying: `prod$ for s in $APPS; do docker start plasma_$s; done`.
 
 ## 10. Switch images, migrate
@@ -169,7 +238,7 @@ prod$ scripts/compose-release.sh run --rm --no-deps backend alembic current
 ```
 Expect (rehearsal: 45 s for the three commands):
 ```
-images switched to d10bb826389e4a0f066a629d645c440a7b43162a; nothing was restarted
+images switched to 4f09b8e1cf1be6a9c6c8ef5c63a6ef2b8af37c2d; nothing was restarted
 INFO  [alembic.runtime.migration] Running upgrade 20261003_0001_d1_03_official_notice_unique -> 20261004_0001_d2_01_own_experience, D2-01 the organization's own firm and non-destructive project reference edits.
 INFO  [alembic.runtime.migration] Running upgrade 20261004_0001_d2_01_own_experience -> 20261005_0001_d2_05_eoi_drafts, D2-05 Expression of Interest drafts and their rendered artifacts.
 20261005_0001_d2_05_eoi_drafts (head)
@@ -183,16 +252,14 @@ the schema at its previous revision).
 prod$ scripts/compose-release.sh up "$SHA" --no-deps $APPS
 prod$ until curl -fsS http://127.0.0.1:8000/health/ready >/dev/null; do sleep 3; done; curl -fsS http://127.0.0.1:8000/health; echo
 prod$ until curl -fsS -o /dev/null http://127.0.0.1:3000/; do sleep 3; done; echo FRONTEND_OK
-prod$ until [ "$(docker inspect -f '{{.State.Health.Status}}' plasma_clamav)" = healthy ]; do sleep 10; done; echo CLAMAV_HEALTHY
+prod$ docker inspect -f '{{.State.Health.Status}} started={{.State.StartedAt}} restarts={{.RestartCount}}' plasma_clamav
 prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | diff - $HOME/deploy2-dbredis.txt && echo DBREDIS_UNCHANGED
 ```
-Expect: `"build_sha":"d10bb826389e4a0f066a629d645c440a7b43162a"` within ~1 minute (rehearsal:
-62 s; whole cut-over 134 s), `FRONTEND_OK`, `CLAMAV_HEALTHY`, `DBREDIS_UNCHANGED`.
-**ClamAV:** a fresh container updates its signatures while clamd loads; in one rehearsal start
-this crossed the 1.5 GiB limit (`oom=true`) and the container stayed `unhealthy` (the watchdog only
-acts after clamd has answered once). If it is not healthy after 10 minutes:
-`prod$ docker inspect -f 'oom={{.State.OOMKilled}}' plasma_clamav` and, if `oom=true`,
-`prod$ docker restart plasma_clamav` (healthy in ~3.5 min in the rehearsal). Only uploads wait meanwhile.
+Expect: `"build_sha":"4f09b8e1cf1be6a9c6c8ef5c63a6ef2b8af37c2d"` within ~1 minute (rehearsal:
+62 s; whole cut-over 134 s), `FRONTEND_OK`, ClamAV `healthy` with its old start time (it was not
+recreated), `DBREDIS_UNCHANGED`. If `up` printed a `plasma_clamav` line, ClamAV was recreated after
+all: wait for `healthy` (~1-4 min; if not healthy after 10 minutes and `oom=true`, `docker restart
+plasma_clamav`; from this release the watchdog also exits by itself after 15 minutes without a PING).
 **STOP → Rollback A** if `/health/ready` is not OK after 5 minutes.
 
 ## 12. Smoke and Beat memory
@@ -218,11 +285,16 @@ Expect: `"status": "COMPLETED"`, `"quality_state": "READY_FOR_REVIEW"`,
 `"pipeline": "pursuit_analysis_pipeline_d2_v2"`, then `live analysis smoke: OK`. Check that both passes ran:
 ```
 prod$ RUN=<run_id above>
-prod$ docker exec plasma_db sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -At -c \"select extraction_diagnostics->>'route', extraction_diagnostics->>'pass_count', extraction_diagnostics->>'passes_completed', extraction_diagnostics->>'union_gain' from pursuit_analysis_runs where id='$RUN'\""
+prod$ docker exec plasma_db sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -At -c \"select extraction_diagnostics->>'route', extraction_diagnostics->>'pass_count', extraction_diagnostics->>'passes_completed', extraction_diagnostics->>'union_gain', extraction_diagnostics->>'passes_succeeded', extraction_diagnostics->>'passes_failed' from pursuit_analysis_runs where id='$RUN'\""
 ```
-Expect: `SHORT|2|2|<n>`. Rehearsal: 14 requirements, provider time 38 s per pass, but the first
-worker attempt failed on two 90 s Gemini read timeouts and the run was redelivered (281 s in all);
-`--max-latency 300` covers that. A provider-only failure (quota, key, timeout) is fixed in `.env`/the
+Expect: `SHORT|2|2|<n>|[1, 2]|[]`. `SHORT|2|1|0|[2]|[{"pass": 1, "failure_class": "…"}]` (or the
+mirror) is also a pass: from this release a SHORT run succeeds when at least one of its two passes
+succeeds and uses that pass's verified facts; the diagnostics record which pass failed and why
+(quality-state rules unchanged; the LONG route still runs one pass). Local check of this image
+(INT-5, shared local stack): `SHORT`, both passes completed (30 s and 27 s), 30.7 s end to end,
+6 requirements + 2 notes. Rehearsal (previous image): 14 requirements, provider time 38 s per
+pass, but pass 1 hit two 90 s Gemini read timeouts and the whole run was redelivered (281 s); with
+this release such a run completes on pass 2 instead. `--max-latency 300` stays. A provider-only failure (quota, key, timeout) is fixed in `.env`/the
 key; a failure inside Plasma is a **STOP → fix forward or Rollback A**.
 
 ## 14. EOI smoke (smoke organization)
@@ -240,7 +312,12 @@ English draft and downloads both files. Expect one JSON line with `"files": {"DO
 
 ## 15. Demo seed (production)
 
-Runs inside the backend container; writes only into a new organization "Demo Consulting LLC —
+Runs in a **one-off backend container** (`compose-release.sh run --rm --no-deps -T backend …`),
+never via `exec` into `plasma_backend`: the seed's ~400 MiB peak then counts against its own 512m
+limit instead of the serving API's, and the container is removed when it ends. It uses the release
+image and `.env` like the API. Check `free -h` shows `available` ≥ ~600Mi first (the one-off
+container runs next to the stack; local check: the dry run took 24 s and left no container).
+It writes only into a new organization "Demo Consulting LLC —
 <yyyymmdd-n>", makes `support.plasma@gmail.com` its OWNER (pre-provisioning or approving that user
 if needed; the first Google sign-in binds a pre-provisioned record), and revokes that user's
 membership in older demo organizations. No broadcasts; the only notification is the demo user's own
@@ -253,7 +330,7 @@ longer be seeded** (the seed refuses closed tenders).
 
 First the plan (read-only): it prints the five best candidates for the second pursuit with reasons:
 ```
-prod$ scripts/compose-release.sh exec -T backend python scripts/demo/seed_demo.py --target production --dry-run --tender-external world_bank:OP00468882
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python scripts/demo/seed_demo.py --target production --dry-run --tender-external world_bank:OP00468882
 ```
 The second pursuit is auto-picked with this selection (`seed_demo.candidate_condition`): World Bank,
 consulting procurement group, firm-level (no "Individual Consultant Selection", no "Individual
@@ -264,7 +341,7 @@ Türkiye, South Asia), then latest deadline. In the rehearsal (local data of 2 O
 `OP00472724` (Pakistan, PLIOF consultancy firm, closes 2026-10-20); production data may differ.
 Review the five; to keep the auto-pick run the same command without `--dry-run`, or pin your choice:
 ```
-prod$ scripts/compose-release.sh exec -T backend python scripts/demo/seed_demo.py --target production --confirm SEED_DEMO --tender-external world_bank:OP00468882 [--tender-external world_bank:<chosen OP id>]
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python scripts/demo/seed_demo.py --target production --confirm SEED_DEMO --tender-external world_bank:OP00468882 [--tender-external world_bank:<chosen OP id>]
 ```
 Expect (rehearsal, 109 s): a JSON summary with `"label": "<yyyymmdd-1>"`, `"organization_name":
 "Demo Consulting LLC — <label>"`, `"counts": {"own_references": 18, "own_references_reviewed": 6,
@@ -304,18 +381,33 @@ Expect: `oom=false restarts=0` everywhere; smoke `0 failure(s)`; Beat growth exi
 step 3 and ≤ 80 % of its 192 MiB limit). Beat at exit 1: note the numbers and raise
 `PLASMA_MEM_CELERY_BEAT` in the next window. Then delete `/var/backups/plasma/$SET.*` and `.env.pre-deploy2`.
 
+**Optional, at a quiet time (no uploads expected; not part of the cut-over): give ClamAV the new
+watchdog.** ClamAV still runs the `f7c61fb` wrapper (no startup grace) until its next start. To load
+the new `deploy/clamav/supervise.sh` without recreating the container:
+```
+prod$ docker restart plasma_clamav
+prod$ until [ "$(docker inspect -f '{{.State.Health.Status}}' plasma_clamav)" = healthy ]; do sleep 10; done; echo CLAMAV_HEALTHY
+prod$ docker exec plasma_clamav grep -c STARTUP_GRACE /plasma/supervise.sh
+```
+Expect `CLAMAV_HEALTHY` in ~1-4 minutes and `4` (the new wrapper; the old one prints `0`). Uploads are queued for scanning meanwhile. Fallback
+(manual restart, as in the Deploy 2 rehearsal): if it is not healthy after 10 minutes, check
+`docker inspect -f 'oom={{.State.OOMKilled}} restarts={{.RestartCount}}' plasma_clamav`; with the new
+wrapper the container restarts itself after 15 minutes without a PING; if it does not, run
+`docker restart plasma_clamav` once more. Never `up`/recreate it in this window. Skipping this step is
+safe: the restart policy loads the new wrapper the next time the container starts for any reason.
+
 ---
 
 ## Demo refresh routine (before each demo week)
 
 3-5 days before the demo week, with the first demo day as `--demo-date`:
 ```
-prod$ scripts/compose-release.sh exec -T backend python scripts/demo/seed_demo.py --target production --confirm SEED_DEMO --demo-date <YYYY-MM-DD> --dry-run
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python scripts/demo/seed_demo.py --target production --confirm SEED_DEMO --demo-date <YYYY-MM-DD> --dry-run
 ```
 Review the five candidates (auto-picked tenders close at least 7 days after the demo date). Then run
 it for real, pinning your choice (first = analysed pursuit with the EOI, second = saved):
 ```
-prod$ scripts/compose-release.sh exec -T backend python scripts/demo/seed_demo.py --target production --confirm SEED_DEMO --demo-date <YYYY-MM-DD> --tender-external world_bank:<B> --tender-external world_bank:<A>
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python scripts/demo/seed_demo.py --target production --confirm SEED_DEMO --demo-date <YYYY-MM-DD> --tender-external world_bank:<B> --tender-external world_bank:<A>
 ```
 Expect the step 15 summary with a new `label` and `"revoked_in_older_organizations": ["<previous demo organization id>"]`.
 Notes: each run creates a fresh "Demo Consulting LLC — <yyyymmdd-n>"; the demo user's membership in
@@ -327,6 +419,8 @@ refused with that reason.
 ---
 
 ## Rollback
+
+ClamAV is not part of any rollback (not in `$APPS`): it keeps running whatever the app build.
 
 **Default: fix forward.** Roll back only if the API/frontend do not come up (step 11), sign-in,
 Explorer, tender details, the workspace or analysis fail (steps 12-16) and cannot be fixed within an
