@@ -111,6 +111,38 @@ def test_eoi_criteria_exclude_later_stage_obligations_and_assignment_duties() ->
     assert [is_eoi_criterion(item) for item in kept] == [True] * len(kept)
 
 
+MONGOLIA_JV = ("Consultants may associate with other firms to enhance their qualifications but should indicate clearly "
+               "whether the association is in the form of a joint venture and/or sub-consultancy. In the case of a joint "
+               "venture, all the partners in the joint venture shall be jointly and severally liable for the entire "
+               "contract, if selected.")
+
+
+def test_participation_and_eligibility_rules_are_not_eoi_criteria() -> None:
+    excluded = [
+        _requirement(MONGOLIA_JV, requirement_type="LEGAL_REQUIREMENT", category="CONSORTIUM"),  # Mongolia REOI, live labels
+        _requirement(MONGOLIA_JV, requirement_type="JOINT_VENTURE_RULE", category="LEGAL"),
+        _requirement(MONGOLIA_JV, requirement_type="QUALIFICATION", category="ELIGIBILITY"),  # a qualification type does not save it
+        _requirement("The attention of interested Consultants is drawn to Section III, paragraphs 3.14, 3.16, and 3.17 of "
+                     "the World Bank's Procurement Regulations, setting forth the World Bank's policy on conflict of interest.",
+                     requirement_type="COMPLIANCE", category="ETHICS_COMPLIANCE"),
+        _requirement("Firms from countries that are not World Bank member countries are not eligible to participate.",
+                     requirement_type="ELIGIBILITY"),
+        _requirement("Bidders shall observe the highest standard of ethics; fraud and corruption will lead to sanctions.",
+                     requirement_type="DECLARATION"),
+        _requirement("The consultant shall be a national of an eligible country.", requirement_type="QUALIFICATION"),
+    ]
+    kept = [
+        _requirement("Joint venture members may combine experience in substation design contracts, subject to review.",
+                     requirement_type="JV_EXPERIENCE", category="EXPERIENCE"),
+        _requirement("Successful completion of at least two (2) contracts within the last ten (10) years.",
+                     requirement_type="MINIMUM_THRESHOLD", category="EXPERIENCE"),
+        _requirement("Firms shall have appropriate skills among staff.", requirement_type="ELIGIBILITY"),
+    ]
+    assert [eoi_service.is_participation_rule(item) for item in excluded] == [True] * len(excluded)
+    assert [is_eoi_criterion(item) for item in excluded] == [False] * len(excluded)
+    assert [is_eoi_criterion(item) for item in kept] == [True] * len(kept)
+
+
 # ---- contract ---------------------------------------------------------------------------------------
 
 def test_contract_shapes_match_the_frontend_contract() -> None:

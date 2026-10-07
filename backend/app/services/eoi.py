@@ -170,16 +170,49 @@ _DUTY_WORDING = re.compile(
 )
 
 
+# Participation and eligibility rules: who may take part and on what terms, not what the firm
+# has done. They stay in Requirements/notes but are not shortlisting criteria of the EOI.
+_PARTICIPATION_WORDING = re.compile(
+    r"\bassociat\w*\s+with\s+other\s+firms\b|\bjoint(?:ly)?\s+and\s+several(?:ly)?\b|"
+    r"\bjoint[\s-]+ventures?\b[^.;]{0,120}?\b(?:liab\w*|form|indicate|partners?|lead\s+member)\b|\bsub-?consultancy\b|"
+    r"\bconflicts?\s+of\s+interest\b|\b(?:in)?eligib\w*\b|\bnationality\b|\bnationals?\s+of\b|\bcountry\s+of\s+origin\b|"
+    r"\bfraud\w*\b|\bcorrupt\w*\b|\bsanction\w*\b|\bdebar\w*\b|\bprocurement\s+regulations\b|\banti-?corruption\b",
+    re.IGNORECASE,
+)
+_PARTICIPATION_LABELS = (
+    frozenset({"JOINT", "VENTURE"}), frozenset({"CONSORTIUM"}), frozenset({"CONFLICT"}), frozenset({"INTEGRITY"}),
+    frozenset({"ETHICS"}), frozenset({"FRAUD"}), frozenset({"CORRUPTION"}), frozenset({"SANCTION"}),
+    frozenset({"SANCTIONS"}), frozenset({"DEBARMENT"}), frozenset({"NATIONALITY"}),
+)
+
+
+def is_participation_rule(requirement: Any) -> bool:
+    """A JV/association, conflict-of-interest, eligibility/nationality or fraud-and-corruption rule.
+
+    An experience requirement that mentions a joint venture ("JV members may combine
+    experience in similar contracts") is not one: it still asks for experience.
+    """
+    statement = " ".join(part for part in (requirement.original_quote, requirement.effective_normalized_requirement) if part)
+    labels = {token for value in (requirement.category, requirement.requirement_type)
+              for token in re.split(r"[^A-Z0-9]+", (value or "").upper()) if token}
+    if not (_PARTICIPATION_WORDING.search(statement) or any(group <= labels for group in _PARTICIPATION_LABELS)):
+        return False
+    return not is_experience_requirement(requirement.category, requirement.requirement_type, statement)
+
+
 def is_eoi_criterion(requirement: Any) -> bool:
     """Whether a requirement belongs in the EOI as a shortlisting criterion.
 
-    Excluded: later-stage obligations (by coverage or stage scope) and duties of the
-    assignment itself — requirement types naming tasks/scope/deliverables, or a quote
-    worded as an obligation on the consultant to perform work. Deterministic; no AI.
+    Excluded: later-stage obligations (by coverage or stage scope), participation and
+    eligibility rules (``is_participation_rule``), and duties of the assignment itself —
+    requirement types naming tasks/scope/deliverables, or a quote worded as an obligation
+    on the consultant to perform work. Deterministic; no AI.
     """
     if requirement.effective_coverage_state == "LATER_STAGE_OBLIGATION":
         return False
     if (requirement.stage_scope or "").upper() in LATER_STAGE_SCOPES:
+        return False
+    if is_participation_rule(requirement):
         return False
     tokens = {token for token in re.split(r"[^A-Z0-9]+", (requirement.requirement_type or "").upper()) if token}
     if tokens & _QUALIFICATION_TYPE_TOKENS:
