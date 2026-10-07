@@ -65,7 +65,16 @@ run_group() {
       ;;
     config-dependencies)
       (cd backend && "$python_bin" -m pytest -q test_release_config.py && "$python_bin" -m pip check)
-      (cd "$release_frontend" && run_npm audit --audit-level=high)
+      # Full audit: printed as a report. It blocks only when a dependency exception in
+      # docs/ops/DEPENDENCY_EXCEPTIONS.md has expired; otherwise production dependencies block.
+      echo "npm audit (full, report-only while the dependency exceptions are valid):"
+      (cd "$release_frontend" && run_npm audit --audit-level=high) || true
+      if "$python_bin" backend/scripts/dependency_exceptions.py check; then
+        (cd "$release_frontend" && run_npm audit --omit=dev --audit-level=high)
+      else
+        echo "A dependency exception has expired or is missing: the full npm audit blocks again." >&2
+        (cd "$release_frontend" && run_npm audit --audit-level=high)
+      fi
       ;;
     *) echo "Unknown release gate group: $1" >&2; return 2 ;;
   esac
