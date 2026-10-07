@@ -308,6 +308,8 @@ def small_chunks(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(analyzer, "SMALL_CHUNK_OVERLAP_CHARACTERS", 10)
     monkeypatch.setattr(analyzer, "MODEL_NAME", PRIMARY)
     monkeypatch.setattr(analyzer, "FALLBACK_MODEL_NAMES", FALLBACKS)
+    # These tests pin the chunk mechanics of one extraction pass; test_d2_analysis_quality covers passes.
+    monkeypatch.setattr(analyzer, "SHORT_PASSES", 1)
 
 
 def _pack(text: str = CHUNK_TEXT) -> list[SealedTextInput]:
@@ -985,8 +987,9 @@ def test_a_bad_quote_is_still_rejected_and_counts_as_the_only_provenance_rejecti
 
 
 def test_pipeline_and_prompt_versions_are_bumped_and_the_schema_is_not() -> None:
-    # D2-01 bumps both again for the submission-instruction/informational instruction.
-    assert analyzer.PIPELINE_VERSION == "pursuit_analysis_pipeline_d2_v1"
+    # D2-01 bumps both again for the submission-instruction/informational instruction;
+    # D2 analysis quality bumps the pipeline only (two SHORT passes, same prompt).
+    assert analyzer.PIPELINE_VERSION == "pursuit_analysis_pipeline_d2_v2"
     assert analyzer.PROMPT_VERSION == "pursuit_analysis_d2_v1"
     assert analyzer.SCHEMA_VERSION == "pursuit_analysis_output_p0_v2"
     prompt = " ".join(analyzer.SYSTEM_PROMPT.split())
@@ -1162,9 +1165,12 @@ def test_the_route_uses_total_pack_characters_its_chain_and_its_chunk_size(route
     assert d["route_models"] == ["long-primary", "long-fallback"] and d["route_chunk_characters"] == 400
     assert d["model_name"] == "long-primary" and d["fallback_chunk_count"] == 0
 
+    assert d["pass_count"] == 1  # the LONG route runs one pass
+
     result, seen = _routed_run(monkeypatch, ["z " * 500])
-    assert seen == [(1_000, ("short-primary", "short-fallback", "short-last"))]
+    assert seen == [(1_000, ("short-primary", "short-fallback", "short-last"))] * analyzer.SHORT_PASSES
     assert result.diagnostics["route"] == "SHORT" and result.diagnostics["route_chunk_characters"] == 5_000
+    assert result.diagnostics["pass_count"] == analyzer.SHORT_PASSES == 2
 
 
 def test_fallback_chains_follow_the_route(clock, client, routes) -> None:

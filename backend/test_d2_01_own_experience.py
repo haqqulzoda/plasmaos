@@ -134,9 +134,11 @@ def test_informational_statements_and_submission_instructions_are_notes() -> Non
 
 
 def test_experience_requirements_are_recognized_by_label_or_wording() -> None:
-    assert is_experience_requirement("EXPERIENCE", "QUALIFICATION", "")
+    # D2 analysis quality narrowed the scope: "EXPERIENCE" alone, or a references list, is not
+    # enough; the label or the statement must ask for similar assignments or a track record.
+    assert not is_experience_requirement("EXPERIENCE", "QUALIFICATION", "")
     assert is_experience_requirement("Corporate Experience", "References", "")
-    assert is_experience_requirement("SUBMISSION_REQUIREMENT", "REFERENCES", "")
+    assert not is_experience_requirement("SUBMISSION_REQUIREMENT", "REFERENCES", "")
     assert is_experience_requirement("QUALIFICATION", "TRACK_RECORD", "")
     assert is_experience_requirement("ELIGIBILITY", "SIMILAR_ASSIGNMENTS", "")
     assert is_experience_requirement("QUALIFICATION", "OTHER", "The firm shall have experience in energy projects.")
@@ -225,7 +227,7 @@ def test_evidence_basis_prompt_and_contract() -> None:
     assert "Use requirement_type=SUBMISSION_INSTRUCTION for a fact that only states how, where, when, or in what form the submission is delivered" in prompt
     assert "distinction=INFORMATIONAL for a statement that asks nothing of the bidder" in prompt
     assert pursuit_analyzer.PROMPT_VERSION == "pursuit_analysis_d2_v1"
-    assert pursuit_analyzer.PIPELINE_VERSION == "pursuit_analysis_pipeline_d2_v1"
+    assert pursuit_analyzer.PIPELINE_VERSION == "pursuit_analysis_pipeline_d2_v2"
 
     paths = app.openapi()["paths"]
     assert set(paths["/api/v1/candidates/self-firm"]) == {"get", "put"}
@@ -610,7 +612,7 @@ async def _exclusions_and_analysis(sessions, ids, organization_a, owner_a, refer
     async with sessions() as db:
         await process_analysis_run(db, started.analysis_run_id, worker_id="d2-01-worker")
         run = await db.get(AnalysisRun, started.analysis_run_id)
-        assert run.status == "COMPLETED" and run.pipeline_version == "pursuit_analysis_pipeline_d2_v1"
+        assert run.status == "COMPLETED" and run.pipeline_version == "pursuit_analysis_pipeline_d2_v2"
         assert run.extraction_diagnostics["persisted_requirement_count"] == 5
         assert run.extraction_diagnostics["persisted_gap_count"] == 3  # no Gap for either note
         assert run.extraction_diagnostics["submission_and_notes_count"] == 2

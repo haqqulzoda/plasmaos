@@ -7,6 +7,7 @@ and every returned fact is verified against the supplied text before persistence
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import hashlib
 import json
 import logging
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 PROMPT_VERSION = "pursuit_analysis_d2_v1"
 SCHEMA_VERSION = "pursuit_analysis_output_p0_v2"
-PIPELINE_VERSION = "pursuit_analysis_pipeline_d2_v1"
+PIPELINE_VERSION = "pursuit_analysis_pipeline_d2_v2"
 MODEL_PROVIDER = "google-gemini"
 DEFAULT_CHUNK_CHARACTERS = 100_000
 # Chunk size of the SHORT route (GEMINI_PURSUIT_CHUNK_CHARS) and of the LONG route.
@@ -106,6 +107,13 @@ def _timeout_for(model: str) -> int:
 CHUNK_BUDGET_SECONDS: int = max(1, _env_int("PURSUIT_ANALYSIS_CHUNK_BUDGET_SECONDS", 240))
 RUN_BUDGET_SECONDS: int = max(1, _env_int("PURSUIT_ANALYSIS_RUN_BUDGET_SECONDS", 480))
 CHUNK_CONCURRENCY: int = max(1, _env_int("PURSUIT_ANALYSIS_CHUNK_CONCURRENCY", 3))
+# Independent extraction passes on the SHORT route (D2 analysis quality); the LONG route runs one.
+SHORT_PASSES: int = max(1, _env_int("PURSUIT_ANALYSIS_SHORT_PASSES", 2))
+# Two verified facts of the same kind in the same pack item are one fact when their quote
+# spans overlap by at least this share of the shorter span.
+UNION_OVERLAP_RATIO = 0.6
+# The extraction pass (1-based) a chunk call belongs to; asyncio.to_thread carries it into the worker thread.
+CURRENT_PASS: contextvars.ContextVar[int] = contextvars.ContextVar("pursuit_analysis_pass", default=1)
 CONNECT_TIMEOUT_SECONDS = 10
 TRANSIENT_PROVIDER_STATUS_CODES = frozenset({429, 503, 504})
 ACCOUNT_PROVIDER_STATUS_CODES = frozenset({401, 402, 403})
@@ -784,8 +792,8 @@ def _extract_chunk_sync(
             failure_classes.append(_failure_class(exc))
             delay = _jitter(*PROVIDER_BACKOFF_SECONDS) if status in TRANSIENT_PROVIDER_STATUS_CODES else 0.0
             logger.warning(
-                "pursuit_analysis_chunk_attempt_failed model=%s attempt=%s error=%s",
-                model, attempt, _failure_class(exc),
+                "pursuit_analysis_chunk_attempt_failed pass=%s model=%s attempt=%s error=%s",
+                CURRENT_PASS.get(), model, attempt, _failure_class(exc),
             )
             continue
         return ChunkFacts(
@@ -796,30 +804,75 @@ def _extract_chunk_sync(
     raise last_error
 
 
+def _is_note(fact: ExtractedFact) -> bool:
+    from app.services.own_experience import note_kind  # deterministic rule shared with the service layer
+
+    return fact.kind == "CORPORATE_REQUIREMENT" and note_kind(fact.distinction, fact.requirement_type) is not None
+
+
+def _same_fact(left: VerifiedFact, right: VerifiedFact) -> bool:
+    """Same pack item, same kind, and quote spans overlapping by >= UNION_OVERLAP_RATIO of the shorter."""
+    if left.pack_item_id != right.pack_item_id or left.fact.kind != right.fact.kind:
+        return False
+    shorter = min(left.char_end - left.char_start, right.char_end - right.char_start)
+    overlap = min(left.char_end, right.char_end) - max(left.char_start, right.char_start)
+    return shorter > 0 and overlap >= UNION_OVERLAP_RATIO * shorter
+
+
+def _replaces(candidate: VerifiedFact, existing: VerifiedFact) -> bool:
+    """A requirement beats a note; otherwise the longer verified quote; a tie keeps the earlier pass."""
+    candidate_note, existing_note = _is_note(candidate.fact), _is_note(existing.fact)
+    if candidate_note != existing_note:
+        return existing_note
+    return (candidate.char_end - candidate.char_start) > (existing.char_end - existing.char_start)
+
+
+def union_verified_facts(passes: list[list[VerifiedFact]]) -> tuple[list[VerifiedFact], dict[str, int]]:
+    """Union of independently verified passes, de-duplicated by quote-span overlap.
+
+    The first pass keeps its order; a later fact either replaces the facts it duplicates
+    (in place of the first of them) or, when it duplicates nothing, is appended.
+    """
+    result = list(passes[0]) if passes else []
+    counts = {"union_gain": 0, "union_replaced": 0, "union_duplicates_removed": 0}
+    for facts in passes[1:]:
+        for candidate in facts:
+            overlapping = [index for index, existing in enumerate(result) if _same_fact(existing, candidate)]
+            if not overlapping:
+                result.append(candidate)
+                counts["union_gain"] += 1
+                continue
+            if all(_replaces(candidate, result[index]) for index in overlapping):
+                result[overlapping[0]] = candidate
+                for index in reversed(overlapping[1:]):
+                    del result[index]
+                counts["union_replaced"] += 1
+                counts["union_duplicates_removed"] += len(overlapping)
+            else:
+                counts["union_duplicates_removed"] += 1
+    return result, counts
+
+
 async def analyze_pack_items(items: list[SealedTextInput], language: str) -> list[VerifiedFact]:
     """Extract and locally verify every quote against immutable sealed text.
 
     Chunks are extracted concurrently (bounded by ``CHUNK_CONCURRENCY``) but
     merged strictly in item/chunk order, so de-duplication, counters and the
     persisted fact order do not depend on provider completion order.
+
+    On the SHORT route ``SHORT_PASSES`` independent passes run concurrently. Each pass
+    is extracted and verified exactly like a single pass; their verified facts are then
+    united (``union_verified_facts``). The first pass decides success: its failure fails
+    the run as before, while a later pass that fails is recorded and contributes nothing.
+    The top-level raw/rejected/duplicate counters and ``chunks`` describe the first pass;
+    ``passes`` has every pass, and the verified/context counters describe the union.
     """
     api_key = _resolve_gemini_api_key()
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured for pursuit analysis")
-    verified: list[VerifiedFact] = []
-    seen: set[str] = set()
-    diagnostics: dict[str, object] = {
-        "raw_requirement_count": 0,
-        "raw_position_count": 0,
-        "schema_rejected_count": 0,
-        "provenance_rejected_count": 0,
-        "normalization_dropped_count": 0,
-        "duplicate_count": 0,
-    }
-    # provenance_rejected_count counts quote failures only; contexts never reject a fact.
-    context_counts = {"MODEL_VERBATIM": 0, "SOURCE_WINDOW": 0, "NONE": 0}
     pack_characters = sum(len(item.text) for item in items)
     route = route_for(pack_characters)
+    pass_count = SHORT_PASSES if route.name == "SHORT" else 1
     jobs = [
         (item_index, chunk_index, item, chunk_start, chunk)
         for item_index, item in enumerate(items)
@@ -832,109 +885,154 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
         if index not in normalized_items:
             normalized_items[index] = _normalized_evidence(text, map_offsets=True)
         return normalized_items[index]
-    semaphore = asyncio.Semaphore(CHUNK_CONCURRENCY)
-    failed = asyncio.Event()
     run_started = _monotonic()
 
-    async def extract(job: tuple[int, int, SealedTextInput, int, str]):
-        async with semaphore:
-            if failed.is_set():
-                return None  # a sibling chunk already failed; do not start new provider work
-            if _monotonic() - run_started >= RUN_BUDGET_SECONDS:
-                failed.set()
-                raise RunBudgetExceeded(
-                    "The analysis time budget was exhausted before every document section could be processed"
-                )
-            started = _monotonic()
-            try:
-                facts = await asyncio.to_thread(_extract_chunk_sync, job[2], job[4], language, api_key, route.models)
-            except BaseException:
-                failed.set()
-                raise
-            return facts, round((_monotonic() - started) * 1000)
+    async def run_pass(pass_index: int) -> tuple[list[object], int]:
+        # Each pass has its own concurrency bound and failure flag, so passes run side by
+        # side and a failing later pass never stops the first one.
+        CURRENT_PASS.set(pass_index)  # this task's context; copied into every chunk thread
+        semaphore = asyncio.Semaphore(CHUNK_CONCURRENCY)
+        failed = asyncio.Event()
+        pass_started = _monotonic()
 
-    outcomes = await asyncio.gather(*(extract(job) for job in jobs), return_exceptions=True)
-    for outcome in outcomes:
+        async def extract(job: tuple[int, int, SealedTextInput, int, str]):
+            async with semaphore:
+                if failed.is_set():
+                    return None  # a sibling chunk already failed; do not start new provider work
+                if _monotonic() - run_started >= RUN_BUDGET_SECONDS:
+                    failed.set()
+                    raise RunBudgetExceeded(
+                        "The analysis time budget was exhausted before every document section could be processed"
+                    )
+                started = _monotonic()
+                try:
+                    facts = await asyncio.to_thread(_extract_chunk_sync, job[2], job[4], language, api_key, route.models)
+                except BaseException:
+                    failed.set()
+                    raise
+                return facts, round((_monotonic() - started) * 1000)
+
+        outcomes = await asyncio.gather(*(extract(job) for job in jobs), return_exceptions=True)
+        return list(outcomes), round((_monotonic() - pass_started) * 1000)
+
+    pass_results = await asyncio.gather(*(run_pass(index) for index in range(1, pass_count + 1)))
+    for outcome in pass_results[0][0]:
         if isinstance(outcome, BaseException):
             raise outcome  # first failure in chunk order, so the classification is deterministic
 
-    chunk_records: list[dict[str, object]] = []
-    for (item_index, chunk_index, item, chunk_start, chunk), outcome in zip(jobs, outcomes):
-        facts, latency_ms = outcome
-        meta = getattr(facts, "meta", {})
-        attempts = int(meta.get("attempts", 1))
-        chunk_records.append({
-            "item_index": item_index,
-            "chunk_index": chunk_index,
-            "model_name": str(meta.get("model_name", MODEL_NAME)),
-            "attempts": attempts,
-            "retry_count": attempts - 1,
-            "latency_ms": latency_ms,
-            "failure_classes": list(meta.get("failure_classes", [])),
-            **{key: meta[key] for key in ("prompt_tokens", "output_tokens", "thinking_tokens") if key in meta},
+    def verify(outcomes: list[object]) -> tuple[list[VerifiedFact], dict[str, int], list[dict[str, object]]]:
+        """One pass, verified exactly as a single-pass run is."""
+        verified: list[VerifiedFact] = []
+        seen: set[str] = set()
+        counts = {
+            "raw_requirement_count": 0, "raw_position_count": 0, "schema_rejected_count": 0,
+            "provenance_rejected_count": 0, "normalization_dropped_count": 0, "duplicate_count": 0,
+        }
+        chunk_records: list[dict[str, object]] = []
+        for (item_index, chunk_index, item, chunk_start, chunk), outcome in zip(jobs, outcomes):
+            facts, latency_ms = outcome
+            meta = getattr(facts, "meta", {})
+            attempts = int(meta.get("attempts", 1))
+            chunk_records.append({
+                "item_index": item_index,
+                "chunk_index": chunk_index,
+                "model_name": str(meta.get("model_name", MODEL_NAME)),
+                "attempts": attempts,
+                "retry_count": attempts - 1,
+                "latency_ms": latency_ms,
+                "failure_classes": list(meta.get("failure_classes", [])),
+                **{key: meta[key] for key in ("prompt_tokens", "output_tokens", "thinking_tokens") if key in meta},
+            })
+            counts["raw_requirement_count"] += sum(fact.kind == "CORPORATE_REQUIREMENT" for fact in facts)
+            counts["raw_position_count"] += sum(fact.kind == "POSITION" for fact in facts)
+            for fact in facts:
+                if fact.kind == "POSITION" and fact.position is None:
+                    counts["normalization_dropped_count"] += 1
+                    continue
+                if fact.kind == "POSITION" and fact.distinction not in {"MANDATORY", "SCORED"}:
+                    counts["normalization_dropped_count"] += 1
+                    continue
+                if fact.kind == "CORPORATE_REQUIREMENT" and fact.position is not None:
+                    counts["normalization_dropped_count"] += 1
+                    continue
+                location = _locate(
+                    item.text,
+                    fact.original_quote,
+                    chunk_start=chunk_start,
+                    chunk_end=chunk_start + len(chunk),
+                    page_count=item.page_count,
+                    page_count_known=item.page_count_known,
+                )
+                if location is None:
+                    counts["provenance_rejected_count"] += 1
+                    continue
+                key = hashlib.sha256(
+                    json.dumps(
+                        [str(item.pack_item_id), fact.kind, fact.original_quote, fact.normalized_text],
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ).encode()
+                ).hexdigest()
+                if key in seen:
+                    counts["duplicate_count"] += 1
+                    continue
+                seen.add(key)
+                start, end, page, paragraph = location
+                fact, origin = _resolve_context(
+                    fact, item.text, start, end, lambda index=item_index, text=item.text: normalized_for(index, text)
+                )
+                verified.append(VerifiedFact(item.pack_item_id, fact, start, end, page, paragraph, origin))
+        return verified, counts, chunk_records
+
+    pass_facts: list[list[VerifiedFact]] = []
+    pass_records: list[dict[str, object]] = []
+    first_counts: dict[str, int] = {}
+    first_chunks: list[dict[str, object]] = []
+    later_chunks: list[dict[str, object]] = []
+    for pass_index, (outcomes, latency_ms) in enumerate(pass_results, start=1):
+        failure = next((outcome for outcome in outcomes if isinstance(outcome, BaseException)), None)
+        if failure is not None:  # only a later pass gets here: the first pass's failure was raised above
+            logger.warning("pursuit_analysis_pass_failed pass=%s error=%s", pass_index, _failure_class(failure))
+            pass_records.append({"pass": pass_index, "status": "FAILED", "failure_class": _failure_class(failure),
+                                 "latency_ms": latency_ms})
+            continue
+        verified, counts, chunk_records = verify(outcomes)
+        pass_facts.append(verified)
+        if pass_index == 1:
+            first_counts, first_chunks = counts, chunk_records
+        else:
+            later_chunks.extend(chunk_records)
+        pass_records.append({
+            "pass": pass_index, "status": "COMPLETED", "latency_ms": latency_ms,
+            "raw_requirement_count": counts["raw_requirement_count"], "raw_position_count": counts["raw_position_count"],
+            "provenance_rejected_count": counts["provenance_rejected_count"],
+            "verified_count": len(verified),
+            "verified_requirement_count": sum(value.fact.kind == "CORPORATE_REQUIREMENT" for value in verified),
+            "verified_position_count": sum(value.fact.kind == "POSITION" for value in verified),
+            **({"chunks": chunk_records} if pass_index > 1 else {}),
         })
-        diagnostics["raw_requirement_count"] = int(diagnostics["raw_requirement_count"]) + sum(
-            fact.kind == "CORPORATE_REQUIREMENT" for fact in facts
-        )
-        diagnostics["raw_position_count"] = int(diagnostics["raw_position_count"]) + sum(
-            fact.kind == "POSITION" for fact in facts
-        )
-        for fact in facts:
-            if fact.kind == "POSITION" and fact.position is None:
-                diagnostics["normalization_dropped_count"] = int(diagnostics["normalization_dropped_count"]) + 1
-                continue
-            if fact.kind == "POSITION" and fact.distinction not in {"MANDATORY", "SCORED"}:
-                diagnostics["normalization_dropped_count"] = int(diagnostics["normalization_dropped_count"]) + 1
-                continue
-            if fact.kind == "CORPORATE_REQUIREMENT" and fact.position is not None:
-                diagnostics["normalization_dropped_count"] = int(diagnostics["normalization_dropped_count"]) + 1
-                continue
-            location = _locate(
-                item.text,
-                fact.original_quote,
-                chunk_start=chunk_start,
-                chunk_end=chunk_start + len(chunk),
-                page_count=item.page_count,
-                page_count_known=item.page_count_known,
-            )
-            if location is None:
-                diagnostics["provenance_rejected_count"] = int(diagnostics["provenance_rejected_count"]) + 1
-                continue
-            key = hashlib.sha256(
-                json.dumps(
-                    [str(item.pack_item_id), fact.kind, fact.original_quote, fact.normalized_text],
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ).encode()
-            ).hexdigest()
-            if key in seen:
-                diagnostics["duplicate_count"] = int(diagnostics["duplicate_count"]) + 1
-                continue
-            seen.add(key)
-            start, end, page, paragraph = location
-            fact, origin = _resolve_context(
-                fact, item.text, start, end, lambda index=item_index, text=item.text: normalized_for(index, text)
-            )
-            context_counts[origin] += 1
-            verified.append(VerifiedFact(item.pack_item_id, fact, start, end, page, paragraph, origin))
+    verified, union_counts = union_verified_facts(pass_facts)
+
+    diagnostics: dict[str, object] = dict(first_counts)
     diagnostics["verified_requirement_count"] = sum(
         value.fact.kind == "CORPORATE_REQUIREMENT" for value in verified
     )
     diagnostics["verified_position_count"] = sum(value.fact.kind == "POSITION" for value in verified)
-    diagnostics["context_model_verbatim"] = context_counts["MODEL_VERBATIM"]
-    diagnostics["context_source_window"] = context_counts["SOURCE_WINDOW"]
-    diagnostics["context_none"] = context_counts["NONE"]
+    # Contexts never reject a fact; these count the united facts by context origin.
+    diagnostics["context_model_verbatim"] = sum(value.context_origin == "MODEL_VERBATIM" for value in verified)
+    diagnostics["context_source_window"] = sum(value.context_origin == "SOURCE_WINDOW" for value in verified)
+    diagnostics["context_none"] = sum(value.context_origin == "NONE" for value in verified)
     chain = route.models
-    used = list(dict.fromkeys(str(record["model_name"]) for record in chunk_records))
+    used = list(dict.fromkeys(str(record["model_name"]) for record in first_chunks + later_chunks))
     models_used = [name for name in chain if name in used] + [name for name in used if name not in chain]
     diagnostics.update({
         # Models that produced accepted output, primary first; the worker records this as the run's model_name.
         "model_name": ",".join(models_used) or route.models[0],
         "analysis_models": models_used,
-        "chunk_count": len(chunk_records),
-        "attempt_count": sum(int(record["attempts"]) for record in chunk_records),
-        "retry_count": sum(int(record["retry_count"]) for record in chunk_records),
-        "fallback_chunk_count": sum(record["model_name"] != route.models[0] for record in chunk_records),
+        "chunk_count": len(first_chunks),
+        "attempt_count": sum(int(record["attempts"]) for record in first_chunks),
+        "retry_count": sum(int(record["retry_count"]) for record in first_chunks),
+        "fallback_chunk_count": sum(record["model_name"] != route.models[0] for record in first_chunks),
         "route": route.name,
         "route_models": list(route.models),
         "route_chunk_characters": route.chunk_characters,
@@ -946,6 +1044,10 @@ async def analyze_pack_items(items: list[SealedTextInput], language: str) -> lis
         "model_timeout_seconds": dict(MODEL_TIMEOUT_SECONDS),
         "chunk_budget_seconds": CHUNK_BUDGET_SECONDS,
         "run_budget_seconds": RUN_BUDGET_SECONDS,
-        "chunks": chunk_records,
+        "chunks": first_chunks,
+        "pass_count": pass_count,
+        "passes_completed": len(pass_facts),
+        "passes": pass_records,
+        **union_counts,
     })
     return VerifiedFacts(verified, diagnostics)
