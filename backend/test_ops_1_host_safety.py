@@ -80,7 +80,8 @@ def test_4gb_profile_fits_the_measured_host_and_8gb_scales_up() -> None:
     assert small["PURSUIT_ANALYSIS_WORKER_CONCURRENCY"] == "1"
     assert large["PURSUIT_ANALYSIS_WORKER_CONCURRENCY"] == "2"
     limits = [key for key in small if key.startswith("PLASMA_MEM_")]
-    assert sum(_mib(small[key]) for key in limits) == 4224  # documented 4.12 GiB (R1: frontend 256m, backend 448m, pursuit 384m, celery_worker 768m, beat 192m)
+    assert small["PLASMA_MEM_BACKEND"] == "512m"         # INT-5: the backend image also runs the demo seed (peak 402 MiB)
+    assert sum(_mib(small[key]) for key in limits) == 4288  # documented 4.19 GiB (R1 + INT-5: frontend 256m, backend 512m, pursuit 384m, celery_worker 768m, beat 192m)
     assert sum(_mib(large[key]) for key in limits) == 6272
     for key in limits:
         assert _mib(large[key]) >= _mib(small[key]), key
