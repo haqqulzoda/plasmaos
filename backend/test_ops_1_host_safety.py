@@ -284,3 +284,65 @@ def test_beat_memory_records_and_compares_against_a_baseline(tmp_path) -> None:
     assert run(140_000, "--baseline", "abc").returncode == 2
     script = (ROOT / "scripts" / "ops" / "beat_memory.sh").read_text(encoding="utf-8")
     assert "Changes nothing" in script and " rm " not in script and "restart" not in script
+
+
+# ---- ClamAV watchdog startup grace (INT-5) ------------------------------------------------------------
+
+_FAKE_NC = """#!/bin/sh
+# Fake clamd on TCP 3310: answers PONG while $FAKE_CLAMD_STATE says "up".
+cat >/dev/null
+[ "$(cat "$FAKE_CLAMD_STATE" 2>/dev/null)" = up ] && echo PONG
+exit 0
+"""
+
+
+def _watchdog(tmp_path, state: str, *, grace: int, timeout: float, after: str | None = None, delay: float = 0):
+    import os
+    import subprocess
+
+    nc = tmp_path / "nc"
+    nc.write_text(_FAKE_NC, encoding="utf-8")
+    nc.chmod(0o755)
+    init = tmp_path / "init"
+    init.write_text("#!/bin/sh\nexec sleep 600\n", encoding="utf-8")  # /init that never exits
+    status = tmp_path / "state"
+    status.write_text(state, encoding="utf-8")
+    env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}", "FAKE_CLAMD_STATE": str(status),
+           "CLAMAV_INIT": str(init), "CLAMD_WATCHDOG_INTERVAL": "1", "CLAMD_WATCHDOG_FAILURES": "2",
+           "CLAMD_STARTUP_GRACE": str(grace)}
+    log = tmp_path / "watchdog.log"
+    # Output goes to a file: the fake init's sleep would keep a pipe open after the watchdog exits.
+    with log.open("w") as handle:
+        process = subprocess.Popen(["sh", str(ROOT / "deploy" / "clamav" / "supervise.sh")], env=env,
+                                   stdout=handle, stderr=subprocess.STDOUT, start_new_session=True)
+    if after is not None:
+        import time
+        time.sleep(delay)
+        status.write_text(after, encoding="utf-8")
+    try:
+        code = process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        code = None  # still running: the watchdog kept the container up
+    finally:
+        try:
+            os.killpg(process.pid, 9)  # the fake init's sleep
+        except ProcessLookupError:
+            pass
+    return code, log.read_text(encoding="utf-8")
+
+
+def test_clamav_watchdog_exits_when_clamd_never_answers_within_the_startup_grace(tmp_path) -> None:
+    code, output = _watchdog(tmp_path, "down", grace=3, timeout=20)
+    assert code == 1 and "did not answer PING within 3s of the start" in output
+
+
+def test_clamav_watchdog_keeps_a_healthy_clamd_and_still_restarts_one_that_dies(tmp_path) -> None:
+    assert _watchdog(tmp_path, "up", grace=3, timeout=6)[0] is None  # answering: never exits, grace irrelevant
+    code, output = _watchdog(tmp_path, "up", grace=600, timeout=20, after="down", delay=2.5)
+    assert code == 1 and "clamd is down" in output and "within" not in output  # the post-start rule, as before
+
+
+def test_clamav_watchdog_grace_defaults_to_15_minutes() -> None:
+    script = (ROOT / "deploy" / "clamav" / "supervise.sh").read_text(encoding="utf-8")
+    assert 'STARTUP_GRACE="${CLAMD_STARTUP_GRACE:-900}"' in script
+    assert 'INIT="${CLAMAV_INIT:-/init}"' in script and "sh \"$INIT\" \"$@\" &" in script
