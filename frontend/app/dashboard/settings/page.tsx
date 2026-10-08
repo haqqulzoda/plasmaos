@@ -26,6 +26,7 @@ import { api } from "@/lib/api";
 import { useGeographyMeta } from "@/lib/geography";
 import { useServiceMeta } from "@/lib/services";
 import { TeamSection } from "@/components/team/TeamSection";
+import { EmailNotificationSettings } from "@/components/settings/EmailNotificationSettings";
 
 type CompanyProfile = {
   company_name: string;
@@ -507,6 +508,7 @@ export default function CompanyProfilePage() {
         </aside>
       </div>
       <TeamSection />
+      <EmailNotificationSettings />
       <Surface
         className="profile-section"
         aria-labelledby="analysis-language-title"

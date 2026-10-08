@@ -35,7 +35,7 @@ from app.services.source_refresh_jobs import (
 )
 from scripts import bootstrap_database as bootstrap
 
-HEAD = "20261009_0001_r3_cv_library_drafts"
+HEAD = "20261010_0001_r3_email_notifications"
 PREVIOUS_HEAD = "20260929_0001_w6_participation"
 PREFIX = "plasma_sr22_"
 

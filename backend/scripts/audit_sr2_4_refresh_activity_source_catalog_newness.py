@@ -38,7 +38,7 @@ from app.services.source_registry import SOURCE_REGISTRY
 from scripts import bootstrap_database as bootstrap
 
 
-HEAD = "20261009_0001_r3_cv_library_drafts"
+HEAD = "20261010_0001_r3_email_notifications"
 PREFIX = "plasma_sr24_"
 
 

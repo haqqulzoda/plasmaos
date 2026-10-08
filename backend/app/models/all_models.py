@@ -66,6 +66,7 @@ from app.models.eoi import (  # noqa: F401,E402
 )
 from app.models.invitations import PendingInvitation  # noqa: F401,E402
 from app.models.cv_drafts import CVDraft  # noqa: F401,E402
+from app.models.email import EmailDelivery, EmailNotificationPreference  # noqa: F401,E402
 
 
 # ============================================================================
@@ -901,4 +902,6 @@ __all__ = [
     "EoiDraftArtifact",
     "PendingInvitation",
     "CVDraft",
+    "EmailDelivery",
+    "EmailNotificationPreference",
 ]

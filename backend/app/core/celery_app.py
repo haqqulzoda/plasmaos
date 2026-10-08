@@ -77,6 +77,16 @@ celery_app.conf.update(
             "task": "app.workers.pursuit_analysis_tasks.dispatch_pursuit_analysis",
             "schedule": timedelta(seconds=10),
         },
+        # R3 Task 4: SMTP e-mail (no-op while SMTP_HOST/SMTP_FROM are unset).
+        "send-email-notifications": {
+            "task": "app.workers.communications_tasks.send_emails",
+            "schedule": timedelta(seconds=30),
+        },
+        # 08:00 Asia/Tashkent (UTC+5, no daylight saving) = 03:00 UTC.
+        "stage-daily-opportunity-digests": {
+            "task": "app.workers.communications_tasks.stage_daily_digests",
+            "schedule": crontab(hour=3, minute=0),
+        },
         # R3: CV draft extraction recovery (the document job also publishes directly).
         "dispatch-cv-extraction-work": {
             "task": "app.workers.cv_extraction_tasks.dispatch_cv_extraction",

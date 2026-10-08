@@ -609,6 +609,7 @@ async def create_eoi_draft(
                 storage_key=storage_key, content_sha256=hashlib.sha256(content).hexdigest(),
                 byte_size=len(content), media_type=MEDIA_TYPES[fmt],
             ))
+        await _stage_draft_ready(db, organization_id, pursuit, draft_id, version, membership_id)
         await db.commit()
     except Exception:
         await db.rollback()
@@ -619,6 +620,31 @@ async def create_eoi_draft(
     if response is None:
         raise RuntimeError("The EOI draft could not be read back")
     return response
+
+
+async def _stage_draft_ready(
+    db: AsyncSession, organization_id: UUID, pursuit: OrganizationPursuit, draft_id: UUID, version: int,
+    membership_id: UUID,
+) -> None:
+    """R3 Task 4: the creator and the pursuit owner hear that the draft is ready."""
+    from app.services.notifications import stage_system_outbox
+
+    memberships = {membership_id, *([pursuit.owner_membership_id] if pursuit.owner_membership_id else [])}
+    user_ids = set((await db.scalars(
+        select(Membership.user_id).where(
+            Membership.id.in_(memberships), Membership.organization_id == organization_id,
+            Membership.state == MembershipState.ACTIVE,
+        )
+    )).all())
+    for user_id in sorted(user_ids, key=str):
+        await stage_system_outbox(
+            db, user_id=user_id, event_type="EOI_DRAFT_READY",
+            payload={
+                "organization_id": str(organization_id), "pursuit_id": str(pursuit.id),
+                "eoi_draft_id": str(draft_id), "version_number": int(version),
+            },
+            dedupe_key=f"eoi-draft:{draft_id}:{user_id}",
+        )
 
 
 def _write_private(storage_key: str, content: bytes) -> Path:

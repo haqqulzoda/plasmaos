@@ -71,7 +71,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
 D2_01_HEAD = "20261004_0001_d2_01_own_experience"
-HEAD = "20261009_0001_r3_cv_library_drafts"
+HEAD = "20261010_0001_r3_email_notifications"
 PRICE_WORDS = re.compile(r"\bprice|\bpricing|\bfee\b|\bfees\b|remuneration|financial proposal|цен[аыу]|стоимость услуг|вознагражд", re.I)
 
 
@@ -594,6 +594,12 @@ async def _eoi_flow(sessions, database, ids, org_a, org_b, owner_a, owner_b, mon
         "own_reference_count": 2, "partner_count": 1, "relevance_notes_generated": 1, "relevance_notes_dropped": 2,
     }
     async with sessions() as db:
+        # R3 Task 4: the creator hears that the draft is ready (inbox, and e-mail by preference).
+        from app.models.communications import NotificationOutbox
+        ready = list((await db.scalars(select(NotificationOutbox).where(NotificationOutbox.event_type == "EOI_DRAFT_READY"))).all())
+        assert [(item.user_id, item.payload["eoi_draft_id"], item.payload["version_number"]) for item in ready] == [
+            (ids["user_a"], str(draft.draft_id), 1)
+        ]
         row = await db.get(EoiDraft, draft.draft_id)
         manifest = row.manifest
         assert manifest["price_information_included"] is False

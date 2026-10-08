@@ -77,6 +77,16 @@ class Settings(BaseSettings):
     # Absolute origin of the customer app (https://app.example), used for links in
     # invitations and e-mails. Unset: invitation links are returned as relative paths.
     PUBLIC_APP_URL: str | None = None
+    # R3 Task 4: SMTP e-mail channel. Disabled unless SMTP_HOST and SMTP_FROM are set.
+    # SMTP_TLS: "starttls" (default, port 587), "ssl" (implicit TLS, port 465) or
+    # "none" (development and tests only; refused in production).
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM: str | None = None
+    SMTP_TLS: str = "starttls"
+    SMTP_TIMEOUT_SECONDS: int = 20
 
     @model_validator(mode="after")
     def validate_release(self):
@@ -93,6 +103,8 @@ class Settings(BaseSettings):
                 raise ValueError("Release secrets must be explicitly configured")
             if not self.PRIVATE_DOCUMENT_SCAN_HOST or not (1 <= self.PRIVATE_DOCUMENT_SCAN_PORT <= 65535):
                 raise ValueError("Release requires a private document malware scanner")
+            if self.SMTP_HOST and self.SMTP_TLS not in {"starttls", "ssl"}:
+                raise ValueError("Release e-mail requires SMTP_TLS starttls or ssl")
             if not self.BACKEND_CORS_ORIGINS or any(
                 urlparse(origin).scheme != "https" or not urlparse(origin).hostname
                 or urlparse(origin).path or "*" in origin or urlparse(origin).username

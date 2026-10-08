@@ -34,7 +34,7 @@ from scripts import test_s0_5b4_baseline as support
 
 
 S2_1_HEAD = "20260827_0001_s2_1_compliance_ownership"
-HEAD = "20261009_0001_r3_cv_library_drafts"
+HEAD = "20261010_0001_r3_email_notifications"
 
 
 def decoded_json(value: Any) -> Any:

@@ -38,7 +38,7 @@ from test_d2_01_own_experience import SUBSTATION, _fact
 from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
-HEAD = "20261009_0001_r3_cv_library_drafts"
+HEAD = "20261010_0001_r3_email_notifications"
 
 
 def _sha(payload) -> str:
@@ -171,6 +171,12 @@ async def _flow(sessions, ids, org_a, org_b, owner_a, monkeypatch) -> None:
 
     monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", extracted)
     first = await _run(sessions, ids, org_a, owner_a, pursuit_id, document_id)
+    async with sessions() as db:
+        # R3 Task 4: the requester hears that the run finished (inbox, and e-mail by preference).
+        from app.models.communications import NotificationOutbox
+        outcome = await db.scalar(select(NotificationOutbox).where(NotificationOutbox.dedupe_key == f"pursuit-analysis:{first}:COMPLETED"))
+        assert outcome.event_type == "PURSUIT_ANALYSIS_COMPLETED" and outcome.user_id == ids["user_a"]
+        assert outcome.payload == {"organization_id": str(org_a), "pursuit_id": str(pursuit_id), "analysis_run_id": str(first)}
 
     async with sessions() as db:
         before = await _counts(db)

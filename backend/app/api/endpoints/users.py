@@ -17,6 +17,7 @@ from app.api.deps import (
     is_operator_user,
     require_admin,
     require_approved_pilot_access,
+    require_approved_user,
 )
 from app.core.access import (
     COMPANY_APPROVAL_APPROVED,
@@ -590,3 +591,52 @@ async def submit_company_onboarding(
     await db.refresh(profile)
 
     return _company_profile_response(current_user=current_user, profile=profile)
+
+
+# ---- R3 Task 4: e-mail notification preferences ----------------------------------------------------
+
+
+class EmailPreferencesResponse(BaseModel):
+    """Effective switches (stored, else defaults) and whether e-mail is configured at all."""
+
+    email_channel_enabled: bool
+    analysis_enabled: bool
+    eoi_enabled: bool
+    digest_enabled: bool
+    digest_schedule: str = "08:00 Asia/Tashkent"
+
+
+class EmailPreferencesUpdate(BaseModel):
+    analysis_enabled: bool | None = None
+    eoi_enabled: bool | None = None
+    digest_enabled: bool | None = None
+
+
+def _email_preferences_response(values: dict[str, bool]) -> EmailPreferencesResponse:
+    from app.services.email_notifications import email_channel_enabled
+
+    return EmailPreferencesResponse(email_channel_enabled=email_channel_enabled(), **values)
+
+
+@router.get("/me/email-preferences", response_model=EmailPreferencesResponse)
+async def get_email_preferences(
+    current_user: User = Depends(require_approved_user),
+    db: AsyncSession = Depends(get_db),
+) -> EmailPreferencesResponse:
+    """Passive: defaults are computed, nothing is stored until the user changes a switch."""
+    from app.services.email_notifications import effective_preferences
+
+    return _email_preferences_response(await effective_preferences(db, current_user))
+
+
+@router.put("/me/email-preferences", response_model=EmailPreferencesResponse)
+async def update_email_preferences(
+    payload: EmailPreferencesUpdate,
+    current_user: User = Depends(require_approved_user),
+    db: AsyncSession = Depends(get_db),
+) -> EmailPreferencesResponse:
+    from app.services.email_notifications import update_preferences
+
+    values = await update_preferences(db, current_user, payload.model_dump(exclude_unset=True))
+    await db.commit()
+    return _email_preferences_response(values)

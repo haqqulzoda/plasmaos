@@ -37,7 +37,7 @@ for (const [filter, expected] of [
 
 for (const locale of ['en', 'uz', 'ru', 'ar']) test(`${locale} has complete notification contract`, () => {
   const messages = JSON.parse(source(`messages/${locale}/notifications.json`));
-  assert.deepEqual(Object.keys(messages.templates).sort(), ['accountApproved', 'analysisCompleted', 'documentsFailed', 'documentsPartial', 'documentsReady', 'privateDocumentsFailed', 'privateDocumentsPartial', 'privateDocumentsReady', 'recommendationCreated']);
+  assert.deepEqual(Object.keys(messages.templates).sort(), ['accountApproved', 'analysisCompleted', 'documentsFailed', 'documentsPartial', 'documentsReady', 'eoiDraftReady', 'privateDocumentsFailed', 'privateDocumentsPartial', 'privateDocumentsReady', 'pursuitAnalysisCompleted', 'pursuitAnalysisFailed', 'recommendationCreated']);
   assert.deepEqual(Object.keys(messages.filters).sort(), ['ADMIN', 'ALL', 'SYSTEM', 'TENDER_ALERT', 'UNREAD']);
   assert.ok(messages.fallback.title && messages.fallback.body && messages.states.mutationFailure);
 });

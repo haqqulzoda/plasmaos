@@ -140,5 +140,20 @@
       "emailMismatch": "Bu taklif boshqa e-mail manzili uchun.",
       "failed": "O‘zgarishni saqlab bo‘lmadi. Qayta urinib ko‘ring."
     }
+  },
+  "emailNotifications": {
+    "title": "E-mail bildirishnomalari",
+    "help": "Qaysi xatlarni olishni tanlang. Ilova ichidagi bildirishnomalar o‘zgarmaydi.",
+    "channelOff": "Bu serverda e-mail yuborish hali sozlanmagan. Tanlovingiz saqlanadi va sozlangach amal qiladi.",
+    "analysis": "Tahlil yakunlandi yoki bajarilmadi",
+    "analysisHelp": "Siz boshlagan tahlil yakunlanganda yoki yakunlab bo‘lmaganda.",
+    "eoi": "Qiziqish bildirish xati loyihasi tayyor",
+    "eoiHelp": "Siz yaratgan yoki sizga biriktirilgan tender bo‘yicha loyiha tayyor bo‘lganda.",
+    "digest": "Kundalik imkoniyatlar to‘plami",
+    "digestHelp": "Kompaniya profilingizga mos 10 tagacha yangi ochiq imkoniyat, soat {time} da, faqat mos imkoniyatlar bo‘lgan kunlari.",
+    "save": "E-mail sozlamalarini saqlash",
+    "saved": "E-mail sozlamalari saqlandi",
+    "loadFailed": "E-mail sozlamalarini yuklab bo‘lmadi.",
+    "saveFailed": "E-mail sozlamalarini saqlab bo‘lmadi."
   }
 }

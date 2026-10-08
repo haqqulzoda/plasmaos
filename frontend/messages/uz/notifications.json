@@ -58,9 +58,30 @@
       "title": "Tender hujjatlarini olish amalga oshmadi",
       "body": "Tender hujjatlarini tayyorlab bo‘lmadi. Qayta urinish uchun tenderni oching."
     },
-    "privateDocumentsReady": {"title":"Xususiy hujjatlar tayyor","body":"{totalCount} tadan {processedCount} ta xususiy hujjat tayyor."},
-    "privateDocumentsPartial": {"title":"Xususiy hujjatlar qisman tayyor","body":"{totalCount} tadan {processedCount} tasi qayta ishlandi; {failedCount} tasi bajarilmadi."},
-    "privateDocumentsFailed": {"title":"Xususiy hujjatlarni qayta ishlashda xato","body":"Hujjatlar to‘plamini tayyorlab bo‘lmadi. Ish maydonini ochib tekshiring."}
+    "privateDocumentsReady": {
+      "title": "Xususiy hujjatlar tayyor",
+      "body": "{totalCount} tadan {processedCount} ta xususiy hujjat tayyor."
+    },
+    "privateDocumentsPartial": {
+      "title": "Xususiy hujjatlar qisman tayyor",
+      "body": "{totalCount} tadan {processedCount} tasi qayta ishlandi; {failedCount} tasi bajarilmadi."
+    },
+    "privateDocumentsFailed": {
+      "title": "Xususiy hujjatlarni qayta ishlashda xato",
+      "body": "Hujjatlar to‘plamini tayyorlab bo‘lmadi. Ish maydonini ochib tekshiring."
+    },
+    "pursuitAnalysisCompleted": {
+      "title": "Tahlil tayyor",
+      "body": "Siz boshlagan tahlil yakunlandi. Talablar va kamchiliklarni ko‘rib chiqing."
+    },
+    "pursuitAnalysisFailed": {
+      "title": "Tahlilni yakunlab bo‘lmadi",
+      "body": "Siz boshlagan tahlilni yakunlab bo‘lmadi. Qayta urinish uchun tenderni oching."
+    },
+    "eoiDraftReady": {
+      "title": "Qiziqish bildirish xati loyihasi tayyor",
+      "body": "{versionNumber}-loyiha (DOCX va PDF) yuklab olishga tayyor."
+    }
   },
   "fallback": {
     "title": "Hisob yangilanishi",

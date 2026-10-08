@@ -140,5 +140,20 @@
       "emailMismatch": "This invitation is for a different e-mail address.",
       "failed": "The change could not be saved. Try again."
     }
+  },
+  "emailNotifications": {
+    "title": "E-mail notifications",
+    "help": "Choose which e-mails you receive. In-app notifications are not affected.",
+    "channelOff": "E-mail delivery is not configured on this server yet. Your choices are saved and apply once it is.",
+    "analysis": "Analysis finished or failed",
+    "analysisHelp": "When an analysis you started completes or cannot be completed.",
+    "eoi": "Expression of Interest draft ready",
+    "eoiHelp": "When an EOI draft you created, or for a pursuit you own, is ready.",
+    "digest": "Daily opportunities digest",
+    "digestHelp": "At most 10 new open opportunities matching your company profile, at {time}, only on days with matches.",
+    "save": "Save e-mail settings",
+    "saved": "E-mail settings saved",
+    "loadFailed": "E-mail settings could not be loaded.",
+    "saveFailed": "E-mail settings could not be saved."
   }
 }

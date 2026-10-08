@@ -630,6 +630,26 @@ def _coverage_for_position(fact: pursuit_analyzer.ExtractedFact) -> tuple[str, s
     )
 
 
+async def _stage_run_outcome(db: AsyncSession, run: AnalysisRun) -> None:
+    """R3 Task 4: tell the person who started the run that it finished (inbox and e-mail)."""
+    if run.status not in {"COMPLETED", "FAILED"}:
+        return
+    from app.services.notifications import stage_system_outbox
+
+    user_id = await db.scalar(select(Membership.user_id).where(Membership.id == run.requested_by_membership_id))
+    if user_id is None:
+        return
+    event_type = "PURSUIT_ANALYSIS_COMPLETED" if run.status == "COMPLETED" else "PURSUIT_ANALYSIS_FAILED"
+    await stage_system_outbox(
+        db, user_id=user_id, event_type=event_type,
+        payload={
+            "organization_id": str(run.organization_id), "pursuit_id": str(run.pursuit_id),
+            "analysis_run_id": str(run.id),
+        },
+        dedupe_key=f"pursuit-analysis:{run.id}:{run.status}",
+    )
+
+
 async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str) -> None:
     """Lease and execute one durable run. Replays are terminally idempotent."""
     now = datetime.now(timezone.utc)
@@ -645,6 +665,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
         run.failure_stage = "LEASE"
         run.failure_reason = "Retry limit exhausted before a worker could complete the run"
         run.completed_at = now
+        await _stage_run_outcome(db, run)
         await db.commit()
         return
     run.status = "RUNNING"
@@ -810,6 +831,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
         run.lease_owner = None
         run.failure_stage = None
         run.failure_reason = None
+        await _stage_run_outcome(db, run)
         await db.commit()
     except Exception as exc:
         await db.rollback()
@@ -853,6 +875,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
             }
             run.lease_until = None
             run.lease_owner = None
+            await _stage_run_outcome(db, run)
             await db.commit()
         raise
 

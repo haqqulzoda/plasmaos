@@ -58,6 +58,17 @@ export function notificationDestination(item: NotificationItem): NotificationDes
       labelKey: 'openWorkspace',
     };
   }
+  // R3: pursuit analysis outcomes and EOI drafts open the pursuit on the right tab.
+  if (
+    ['PURSUIT_ANALYSIS_COMPLETED', 'PURSUIT_ANALYSIS_FAILED', 'EOI_DRAFT_READY'].includes(item.event_type) &&
+    uuid(item.payload.pursuit_id) && uuid(item.payload.organization_id)
+  ) {
+    const tab = item.event_type === 'EOI_DRAFT_READY' ? 'eoi' : 'requirements';
+    return {
+      href: `/dashboard/pursuits/${encodeURIComponent(item.payload.pursuit_id)}?organization_id=${encodeURIComponent(item.payload.organization_id)}&tab=${tab}`,
+      labelKey: 'openWorkspace',
+    };
+  }
   if (item.event_type === 'ANALYSIS_COMPLETED' && uuid(item.payload.analysis_id)) {
     // The approved backend contract does not carry tender_id for analysis events.
     // Compliance can safely resolve the user's current version context.
@@ -79,6 +90,9 @@ export const SYSTEM_TEMPLATE_KEYS = {
   'notifications.private_documents_ready': 'privateDocumentsReady',
   'notifications.private_documents_partial': 'privateDocumentsPartial',
   'notifications.private_documents_failed': 'privateDocumentsFailed',
+  'notifications.pursuit_analysis_completed': 'pursuitAnalysisCompleted',
+  'notifications.pursuit_analysis_failed': 'pursuitAnalysisFailed',
+  'notifications.eoi_draft_ready': 'eoiDraftReady',
 } as const;
 
 export type SystemTemplateKey = keyof typeof SYSTEM_TEMPLATE_KEYS;

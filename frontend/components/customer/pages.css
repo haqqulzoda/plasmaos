@@ -4129,3 +4129,17 @@
     inset-block-start: var(--ds-space-4);
   }
 }
+
+/* R3 Task 4: e-mail notification switches. */
+.email-preferences {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+.email-preference {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+.email-preference p {
+  margin: 0;
+  padding-inline-start: var(--ds-space-6);
+}
