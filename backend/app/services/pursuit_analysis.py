@@ -915,8 +915,11 @@ async def _latest_assertions(db: AsyncSession, run_id: UUID) -> dict[tuple[str, 
 
 
 async def get_analysis_run(
-    db: AsyncSession, *, organization_id: UUID, pursuit_id: UUID, run_id: UUID | None = None
+    db: AsyncSession, *, organization_id: UUID, pursuit_id: UUID, run_id: UUID | None = None,
+    include_company_evidence: bool = False,
 ) -> PursuitAnalysisResponse | None:
+    """One run with effective review state. ``include_company_evidence`` (the customer
+    analysis reads) also rebuilds the company snapshot to flag changed experience (R3)."""
     statement = select(AnalysisRun).where(
         AnalysisRun.organization_id == organization_id, AnalysisRun.pursuit_id == pursuit_id
     )
@@ -1028,7 +1031,10 @@ async def get_analysis_run(
             effective_review_state=review, rationale=item.rationale,
             matched_reference_ids=matched_by_requirement.get(item.requirement_id, []) if item.requirement_id else [],
         ))
-    evidence = await company_evidence_state(db, organization_id=organization_id, run_id=run.id)
+    evidence = (
+        await company_evidence_state(db, organization_id=organization_id, run_id=run.id)
+        if include_company_evidence else CompanyEvidenceState(changed=False)
+    )
     return PursuitAnalysisResponse(
         company_evidence_changed=evidence.changed,
         company_evidence_change_reason=evidence.reason,

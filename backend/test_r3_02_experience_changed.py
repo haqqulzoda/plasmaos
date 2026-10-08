@@ -38,7 +38,7 @@ from test_d2_01_own_experience import SUBSTATION, _fact
 from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
-HEAD = "20261008_0001_r3_pending_invitations"
+HEAD = "20261009_0001_r3_cv_library_drafts"
 
 
 def _sha(payload) -> str:
@@ -174,7 +174,7 @@ async def _flow(sessions, ids, org_a, org_b, owner_a, monkeypatch) -> None:
 
     async with sessions() as db:
         before = await _counts(db)
-        analysis = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id)
+        analysis = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id, include_company_evidence=True)
         assert analysis.status == "COMPLETED" and analysis.company_evidence_changed is False
         assert analysis.company_evidence_change_reason is None and analysis.company_evidence_changed_sections == []
         # The pack selection is exposed for a re-run.
@@ -188,7 +188,7 @@ async def _flow(sessions, ids, org_a, org_b, owner_a, monkeypatch) -> None:
             db, organization_id=org_b, firm_id=firm_b.firm_id, actor_user_id=ids["user_b"], operator=False,
             payload=_reference("Somewhere else"),
         )
-        assert (await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id)).company_evidence_changed is False
+        assert (await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id, include_company_evidence=True)).company_evidence_changed is False
 
     # Editing an own reference (supersede) flags the run on both reads, with a reason.
     async with sessions() as db:
@@ -199,11 +199,11 @@ async def _flow(sessions, ids, org_a, org_b, owner_a, monkeypatch) -> None:
         )
     async with sessions() as db:
         before = await _counts(db)
-        analysis = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id)
+        analysis = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id, include_company_evidence=True)
         assert analysis.company_evidence_changed is True
         assert analysis.company_evidence_changed_sections == ["OWN_EXPERIENCE"]
         assert "project references" in analysis.company_evidence_change_reason
-        by_id = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id, run_id=first)
+        by_id = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id, run_id=first, include_company_evidence=True)
         assert by_id.company_evidence_changed is True
         suggestions = await eoi_suggestions(db, organization_id=org_a, pursuit_id=pursuit_id, analysis_run_id=first)
         assert suggestions.company_evidence_changed is True and suggestions.run_current is True
@@ -218,13 +218,13 @@ async def _flow(sessions, ids, org_a, org_b, owner_a, monkeypatch) -> None:
         profile = await db.get(CompanyProfile, ids["profile_a"])
         profile.website = "https://codex.example"
         await db.commit()
-        analysis = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id)
+        analysis = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id, include_company_evidence=True)
         assert analysis.company_evidence_changed_sections == ["OWN_EXPERIENCE", "COMPANY_PROFILE"]
 
     # The explicit re-run seals the current records: the new run is current again.
     second = await _run(sessions, ids, org_a, owner_a, pursuit_id, document_id)
     async with sessions() as db:
-        latest = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id)
+        latest = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id, include_company_evidence=True)
         assert latest.analysis_run_id == second and latest.company_evidence_changed is False
-        old = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id, run_id=first)
+        old = await get_analysis_run(db, organization_id=org_a, pursuit_id=pursuit_id, run_id=first, include_company_evidence=True)
         assert old.company_evidence_changed is True
