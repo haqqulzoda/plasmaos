@@ -85,7 +85,7 @@ from test_w6_participation import W6_HEAD
 
 
 W7_HEAD = "20260930_0001_w7_team_scenarios"
-CURRENT_HEAD = "20261005_0001_d2_05_eoi_drafts"
+CURRENT_HEAD = "20261008_0001_r3_pending_invitations"
 
 
 def test_w7_model_and_semantic_contracts() -> None:

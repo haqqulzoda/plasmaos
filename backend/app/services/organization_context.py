@@ -161,3 +161,23 @@ async def ensure_profile_organization(
         )
         await db.flush()
     return OrganizationContext(organization=organization, membership=membership)
+
+
+async def effective_company_profile(db: AsyncSession, *, user_id: UUID) -> CompanyProfile | None:
+    """The user's own legacy profile, else the profile of the organization they joined.
+
+    R3 Task 1: a teammate who joined by e-mail invitation has no CompanyProfile of their
+    own; their account gates (onboarding, approval) follow the organization they are an
+    ACTIVE member of (the earliest such membership when there are several).
+    """
+    own = await db.scalar(select(CompanyProfile).where(CompanyProfile.user_id == user_id))
+    if own is not None:
+        return own
+    return await db.scalar(
+        select(CompanyProfile)
+        .join(Organization, Organization.legacy_company_profile_id == CompanyProfile.id)
+        .join(Membership, Membership.organization_id == Organization.id)
+        .where(Membership.user_id == user_id, Membership.state == MembershipState.ACTIVE)
+        .order_by(Membership.activated_at, Membership.id)
+        .limit(1)
+    )

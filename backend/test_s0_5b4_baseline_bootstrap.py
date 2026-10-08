@@ -93,7 +93,7 @@ def test_bootstrap_has_no_create_all_call_or_orm_import() -> None:
 
 def test_repository_head_is_the_approved_single_head() -> None:
     module = _load_module()
-    assert module.repository_head() == "20261005_0001_d2_05_eoi_drafts"
+    assert module.repository_head() == "20261008_0001_r3_pending_invitations"
 
 
 def test_target_display_masks_password() -> None:

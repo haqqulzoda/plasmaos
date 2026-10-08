@@ -6,7 +6,8 @@ import { isCustomerSelectableLocale, UI_LOCALE_COOKIE_NAME } from '@/i18n/locale
 import { PERSISTED_UI_LOCALE_HEADER } from '@/i18n/requestLocale';
 
 const PUBLIC_PATHS = ['/', '/api/auth', '/api/build', '/_next', '/favicon.ico'];
-const PUBLIC_EXACT_PATHS = ['/api/v1/health/version'];
+// The invitation preview is token-gated and public; accepting requires a session (R3).
+const PUBLIC_EXACT_PATHS = ['/api/v1/health/version', '/api/v1/invitations/preview'];
 
 function shouldUseSecureCookies(): boolean {
   const authUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;

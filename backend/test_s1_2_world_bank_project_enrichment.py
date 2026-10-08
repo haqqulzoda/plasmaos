@@ -35,7 +35,7 @@ from app.services.world_bank_projects import (
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
-HEAD = "20261005_0001_d2_05_eoi_drafts"
+HEAD = "20261008_0001_r3_pending_invitations"
 MIGRATION_PATH = BACKEND_DIR / "alembic/versions/20260826_0002_s1_2_wb_project_enrichment.py"
 OBSERVED_AT = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
 

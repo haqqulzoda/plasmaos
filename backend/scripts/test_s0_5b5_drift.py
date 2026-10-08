@@ -21,7 +21,7 @@ from scripts import test_s0_5b4_baseline as support
 
 
 BASELINE = "20260824_0002_s0_4c"
-HEAD = "20261005_0001_d2_05_eoi_drafts"
+HEAD = "20261008_0001_r3_pending_invitations"
 CANONICAL_COMMENT = (
     "SHA-256 seal incorporating override state. "
     "Null when no overrides have been applied."

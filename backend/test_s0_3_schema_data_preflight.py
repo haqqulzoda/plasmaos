@@ -70,7 +70,7 @@ class SchemaDataPreflightSafetyTests(unittest.TestCase):
     def test_repository_head_is_resolved_without_running_migrations(self) -> None:
         self.assertEqual(
             MODULE._repository_heads(),
-            ["20261005_0001_d2_05_eoi_drafts"],
+            ["20261008_0001_r3_pending_invitations"],
         )
 
 

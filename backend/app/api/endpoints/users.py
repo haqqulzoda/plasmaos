@@ -34,7 +34,9 @@ from app.core.services import normalize_target_services
 from app.db.session import get_db
 from app.models.all_models import User, SubscriptionTier
 from app.models.company import CompanyProfile
-from app.services.organization_context import ensure_profile_organization
+from app.models.base import MembershipRole, MembershipState
+from app.models.tenancy import Membership, Organization
+from app.services.organization_context import effective_company_profile, ensure_profile_organization
 
 router = APIRouter()
 
@@ -459,10 +461,34 @@ async def _get_company_profile(
     db: AsyncSession,
     user_id: UUID,
 ) -> CompanyProfile | None:
+    """Profile for reads: own, else the organization joined by invitation (R3)."""
+    return await effective_company_profile(db, user_id=user_id)
+
+
+async def _get_own_company_profile(
+    *,
+    db: AsyncSession,
+    user_id: UUID,
+) -> CompanyProfile | None:
     result = await db.execute(
         select(CompanyProfile).where(CompanyProfile.user_id == user_id)
     )
     return result.scalar_one_or_none()
+
+
+async def _is_active_owner_of_profile(db: AsyncSession, *, user_id: UUID, profile_id: UUID) -> bool:
+    return (
+        await db.scalar(
+            select(Membership.id)
+            .join(Organization, Organization.id == Membership.organization_id)
+            .where(
+                Organization.legacy_company_profile_id == profile_id,
+                Membership.user_id == user_id,
+                Membership.state == MembershipState.ACTIVE,
+                Membership.role == MembershipRole.OWNER,
+            )
+        )
+    ) is not None
 
 
 @router.get("/me/company", response_model=CompanyProfileResponse)
@@ -494,7 +520,16 @@ async def update_company_profile(
     
     Only updates fields that are provided (not None).
     """
-    profile = await _get_company_profile(db=db, user_id=current_user.id)
+    profile = await _get_own_company_profile(db=db, user_id=current_user.id)
+    if profile is None:
+        profile = await effective_company_profile(db, user_id=current_user.id)
+        if profile is not None and not await _is_active_owner_of_profile(
+            db, user_id=current_user.id, profile_id=profile.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="OWNER membership required",
+            )
     if profile is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -520,7 +555,13 @@ async def submit_company_onboarding(
     db: AsyncSession = Depends(get_db),
 ) -> CompanyProfileResponse:
     """Create or update the current user's company profile from onboarding."""
-    profile = await _get_company_profile(db=db, user_id=current_user.id)
+    profile = await _get_own_company_profile(db=db, user_id=current_user.id)
+    if profile is None and await effective_company_profile(db, user_id=current_user.id) is not None:
+        # Joined an organization by invitation: onboarding is skipped, never a second company.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Already a member of an organization",
+        )
     is_new_profile = profile is None
     if profile is None:
         profile = CompanyProfile(

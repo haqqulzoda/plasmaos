@@ -33,6 +33,8 @@ from app.core.auth_bridge import verify_bridge_assertion
 from app.db.session import get_db
 from app.models.all_models import User
 from app.models.company import CompanyProfile
+from app.services.invitations import accept_open_invitations_for_sign_in
+from app.services.organization_context import effective_company_profile
 from app.services.admin_activity import (
     ACTION_ADMIN_GRANTED,
     ACTION_ALLOWLIST_PRIVILEGE_RECONCILED,
@@ -115,10 +117,8 @@ async def _load_company_profile(
     db: AsyncSession,
     user_id,
 ) -> CompanyProfile | None:
-    result = await db.execute(
-        select(CompanyProfile).where(CompanyProfile.user_id == user_id)
-    )
-    return result.scalar_one_or_none()
+    # Own profile, else the organization joined by invitation: onboarding is skipped.
+    return await effective_company_profile(db, user_id=user_id)
 
 
 def _token_payload(user: User, profile: CompanyProfile | None) -> dict:
@@ -229,6 +229,10 @@ async def google_auth_bridge(
                 "operator_allowlist_match": email in operator_email_allowlist(),
             },
         )
+
+    # R3: an open invitation for exactly this verified e-mail binds now (never by domain).
+    await db.flush()
+    await accept_open_invitations_for_sign_in(db, user=user, verified_email=email)
 
     await db.commit()
     await db.refresh(user)

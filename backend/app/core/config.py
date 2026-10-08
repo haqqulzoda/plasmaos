@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     PRIVATE_DOCUMENT_SCAN_PORT: int = 3310
     PRIVATE_DOCUMENT_SCAN_TIMEOUT_SECONDS: int = 30
     PRIVATE_DOCUMENT_OCR_MAX_PAGES: int = 25
+    # Absolute origin of the customer app (https://app.example), used for links in
+    # invitations and e-mails. Unset: invitation links are returned as relative paths.
+    PUBLIC_APP_URL: str | None = None
 
     @model_validator(mode="after")
     def validate_release(self):

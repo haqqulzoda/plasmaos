@@ -31,7 +31,7 @@ from scripts.demo import demo_data, seed_demo
 from scripts.demo.seed_demo import DemoSeedError, Options
 
 
-HEAD = "20261005_0001_d2_05_eoi_drafts"
+HEAD = "20261008_0001_r3_pending_invitations"
 TODAY = date(2026, 10, 2)
 EXPERIENCE = "The Consultant should have at least two completed contracts within the last 10 years involving detailed engineering design of substations."
 SUBMISSION = "Expressions of interest must be delivered in written form by e-mail no later than 30 October 2026."

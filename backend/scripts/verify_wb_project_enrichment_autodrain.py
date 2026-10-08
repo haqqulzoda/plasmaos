@@ -32,7 +32,7 @@ from app.workers import project_enrichment_tasks
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261005_0001_d2_05_eoi_drafts"
+HEAD = "20261008_0001_r3_pending_invitations"
 BATCH_SIZE = 25
 
 

@@ -68,5 +68,77 @@
     "paused": "Paused"
   },
   "readinessLink": "Readiness records",
-  "readinessHelp": "Certificates, licences and other records used as evidence."
+  "readinessHelp": "Certificates, licences and other records used as evidence.",
+  "team": {
+    "title": "Team",
+    "help": "Invite colleagues by e-mail. They join this organization when they sign in with Google using exactly that address.",
+    "ownerOnlyTitle": "Only owners manage the team",
+    "ownerOnlyHelp": "Ask an owner of your organization to invite colleagues or change roles.",
+    "loadFailed": "The team could not be loaded.",
+    "loading": "Loading the team…",
+    "retry": "Retry",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "roles": {
+      "OWNER": "Owner",
+      "MEMBER": "Member"
+    },
+    "members": {
+      "title": "Members",
+      "unnamed": "Unnamed member",
+      "role": "Role",
+      "you": "you",
+      "revoke": "Remove",
+      "revokeTitle": "Remove this member?",
+      "revokeHelp": "{name} will lose access to this organization.",
+      "revokeDetail": "Pursuits they own become unassigned. You can invite them again later.",
+      "revokeConfirm": "Remove member",
+      "states": {
+        "ACTIVE": "Active",
+        "INVITED": "Invited",
+        "REVOKED": "Removed"
+      }
+    },
+    "invite": {
+      "title": "Invite by e-mail",
+      "help": "The invitation is valid for 14 days. It never applies to other addresses on the same domain.",
+      "email": "E-mail address",
+      "role": "Role",
+      "submit": "Send invitation"
+    },
+    "link": {
+      "title": "Invitation for {email} is ready",
+      "label": "Invitation link",
+      "copy": "Copy link",
+      "copied": "Copied",
+      "emailQueued": "An e-mail is on its way. You can also share the link yourself.",
+      "emailDisabled": "E-mail delivery is not configured. Copy the link and send it yourself.",
+      "linkOnly": "A new link was created. The previous link no longer works."
+    },
+    "pending": {
+      "title": "Pending invitations",
+      "empty": "No pending invitations.",
+      "meta": "{role} · expires {date} · sent {count, plural, one {# time} other {# times}}",
+      "copy": "Copy new link",
+      "copyHelp": "Creates a new link and copies it. The previous link stops working.",
+      "resend": "Resend",
+      "revoke": "Revoke",
+      "states": {
+        "OPEN": "Open",
+        "EXPIRED": "Expired",
+        "ACCEPTED": "Accepted",
+        "REVOKED": "Revoked"
+      }
+    },
+    "errors": {
+      "alreadyMember": "This person is already a member.",
+      "alreadyInvited": "An invitation for this address is already open. Use Resend.",
+      "tooMany": "Too many open invitations. Revoke some first.",
+      "invalidEmail": "Enter a valid e-mail address.",
+      "ownerOnly": "Only an owner can do this.",
+      "lastOwner": "The last owner cannot be removed or demoted.",
+      "emailMismatch": "This invitation is for a different e-mail address.",
+      "failed": "The change could not be saved. Try again."
+    }
+  }
 }

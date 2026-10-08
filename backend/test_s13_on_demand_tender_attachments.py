@@ -220,4 +220,4 @@ def test_security_cleanup_and_no_migration_contract() -> None:
     assert "outside approved giz.de hosts" in connector
     config = Config(str(ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20261005_0001_d2_05_eoi_drafts"]
+    assert script.get_heads() == ["20261008_0001_r3_pending_invitations"]
