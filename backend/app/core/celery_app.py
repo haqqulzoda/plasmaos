@@ -43,6 +43,7 @@ celery_app = Celery(
         "app.workers.communications_tasks",
         "app.workers.private_document_tasks",
         "app.workers.pursuit_analysis_tasks",
+        "app.workers.cv_extraction_tasks",
     ],
 )
 
@@ -75,6 +76,11 @@ celery_app.conf.update(
         "dispatch-pursuit-analysis-work": {
             "task": "app.workers.pursuit_analysis_tasks.dispatch_pursuit_analysis",
             "schedule": timedelta(seconds=10),
+        },
+        # R3: CV draft extraction recovery (the document job also publishes directly).
+        "dispatch-cv-extraction-work": {
+            "task": "app.workers.cv_extraction_tasks.dispatch_cv_extraction",
+            "schedule": timedelta(seconds=30),
         },
         "run-hunter-sweep-every-30-minutes": {
             "task": "app.workers.hunter_tasks.run_hunter_sweep",
@@ -118,6 +124,10 @@ celery_app.conf.task_routes = {
         "routing_key": "private_documents",
     },
     "app.workers.pursuit_analysis_tasks.*": {
+        "queue": "pursuit_analysis",
+        "routing_key": "pursuit_analysis",
+    },
+    "app.workers.cv_extraction_tasks.extract_cv_draft": {
         "queue": "pursuit_analysis",
         "routing_key": "pursuit_analysis",
     },

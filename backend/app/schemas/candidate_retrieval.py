@@ -314,3 +314,48 @@ class CandidateSearchRunResponse(BaseModel):
     stale_reason: str | None = None
     matches: list[CandidateMatchResponse] = Field(default_factory=list)
 
+
+
+# ---- R3 Task 3: CV upload -> reviewed CV draft --------------------------------------------------
+
+
+class CVDraftResponse(BaseModel):
+    cv_draft_id: UUID
+    expert_id: UUID | None = None
+    expert_name: str | None = None
+    state: str
+    failure_code: str | None = None
+    display_filename: str
+    private_document_id: UUID
+    document_version_id: UUID
+    model_name: str | None = None
+    proposed_counts: dict[str, int] = Field(default_factory=dict)
+    confirmed_cv_version_id: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CVDraftReviewResponse(CVDraftResponse):
+    # Parsed document text for the side-by-side review (None when unavailable).
+    document_text: str | None = None
+    document_text_truncated: bool = False
+    proposal: dict[str, Any] = Field(default_factory=dict)
+    extraction_summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class CVDraftConfirmRequest(BaseModel):
+    """The reviewed fields. Rows may carry the proposal's ``quote``; it is kept as
+    provenance only when it is still verbatim in the document."""
+
+    new_expert_name: str | None = Field(default=None, max_length=500)
+    education: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+    assignments: list[dict[str, Any]] = Field(default_factory=list, max_length=250)
+    languages: list[dict[str, Any]] = Field(default_factory=list, max_length=50)
+    certifications: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+
+
+class CVDraftConfirmResponse(BaseModel):
+    cv_draft_id: UUID
+    expert_id: UUID
+    expert_name: str
+    cv_version: CVVersionResponse

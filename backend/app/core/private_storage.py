@@ -71,6 +71,11 @@ def opaque_storage_key(*, organization_id: UUID, pursuit_id: UUID, version_id: U
     return f"objects/{organization_id.hex}/{pursuit_id.hex}/{version_id.hex}.bin"
 
 
+def opaque_library_storage_key(*, organization_id: UUID, version_id: UUID) -> str:
+    # Organization library documents (R3 CV intake) belong to no pursuit.
+    return f"objects/{organization_id.hex}/library/{version_id.hex}.bin"
+
+
 def safe_display_filename(filename: str | None, suffix: str) -> str:
     raw = unicodedata.normalize("NFKC", Path(filename or f"document{suffix}").name)
     raw = "".join(ch for ch in raw if ch.isprintable() and ch not in "/\\\x00")

@@ -31,7 +31,7 @@ from app.services.recommendations import (
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261008_0001_r3_pending_invitations"
+HEAD = "20261009_0001_r3_cv_library_drafts"
 TENDER_COUNT = 10_000
 RECOMMENDATION_COUNT = 20_000
 

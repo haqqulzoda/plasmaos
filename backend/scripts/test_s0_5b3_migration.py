@@ -32,7 +32,7 @@ from app.models.audit import TenderRecommendation
 
 
 PREVIOUS_HEAD = "20260824_0002_s0_4c"
-EXPECTED_HEAD = "20261008_0001_r3_pending_invitations"
+EXPECTED_HEAD = "20261009_0001_r3_cv_library_drafts"
 DATABASE_PREFIX = "plasma_s05b3_"
 BOOTSTRAP_CONFIRMATION = "BOOTSTRAP_EMPTY_DATABASE"
 

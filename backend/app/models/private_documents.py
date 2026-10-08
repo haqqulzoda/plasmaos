@@ -34,7 +34,11 @@ from app.models.base import (
 
 
 class PrivateDocument(Base):
-    """Logical private file identity beneath one pursuit."""
+    """Logical private file identity beneath one pursuit, or in the organization library.
+
+    R3: a library document (``library_kind`` CV) belongs to no pursuit. It uses the same
+    intake, versions, malware scan and sandboxed parse; pursuit-scoped reads never see it.
+    """
 
     __tablename__ = "private_documents"
 
@@ -42,7 +46,8 @@ class PrivateDocument(Base):
     organization_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False
     )
-    pursuit_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    pursuit_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    library_kind: Mapped[str | None] = mapped_column(String(20), nullable=True)
     role: Mapped[PrivateDocumentRole] = mapped_column(
         Enum(PrivateDocumentRole, name="private_document_role"), nullable=False
     )
@@ -96,7 +101,19 @@ class PrivateDocument(Base):
             "(state = 'ARCHIVED' AND archived_at IS NOT NULL)",
             name="ck_private_document_archive_state",
         ),
+        CheckConstraint(
+            "(pursuit_id IS NOT NULL AND library_kind IS NULL) OR "
+            "(pursuit_id IS NULL AND library_kind = 'CV')",
+            name="ck_private_document_pursuit_or_library",
+        ),
         Index("ix_private_documents_pursuit_state", "pursuit_id", "state"),
+        Index(
+            "ix_private_documents_library",
+            "organization_id",
+            "library_kind",
+            "created_at",
+            postgresql_where=text("library_kind IS NOT NULL"),
+        ),
     )
 
 
@@ -159,7 +176,8 @@ class PrivateDocumentBatch(Base):
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     organization_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    pursuit_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    # NULL for an organization library upload (R3 CV intake).
+    pursuit_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     requested_by_membership_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     state: Mapped[DocumentProcessingState] = mapped_column(
         Enum(DocumentProcessingState, name="document_processing_state"), nullable=False

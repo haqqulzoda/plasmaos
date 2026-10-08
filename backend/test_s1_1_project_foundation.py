@@ -26,7 +26,7 @@ MIGRATION_PATH = (
     BACKEND_DIR
     / "alembic/versions/20260826_0001_s1_1_project_foundation.py"
 )
-HEAD = "20261008_0001_r3_pending_invitations"
+HEAD = "20261009_0001_r3_cv_library_drafts"
 
 
 def _load_migration():

@@ -28,7 +28,7 @@ from app.models.all_models import User
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261008_0001_r3_pending_invitations"
+HEAD = "20261009_0001_r3_cv_library_drafts"
 S31 = "20260828_0001_s3_1_admin_account_lifecycle"
 
 

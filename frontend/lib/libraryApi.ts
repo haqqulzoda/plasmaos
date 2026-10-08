@@ -4,7 +4,7 @@
  * D2-01 is deployed, GET /candidates/self-firm answers 404, which reads as "not set up yet".
  */
 import { api } from './api';
-import { isNotFound, type ReferencePayload } from './library';
+import { isNotFound, type CvDraftState, type CvProposal, type ReferencePayload } from './library';
 import type { CandidateCVVersion, CandidateExpert, CandidateFirm, CandidateLibrary, CandidateProjectReference } from '@/types/pursuit';
 
 const scoped = (organizationId: string) => ({ headers: { 'X-Organization-ID': organizationId } });
@@ -87,4 +87,42 @@ export function requestFailure(error: unknown): string {
         if (typeof first?.msg === 'string') return first.msg.slice(0, 240);
     }
     return response?.status ? `HTTP ${response.status}` : 'Network error';
+}
+
+// ---- CV upload -> reviewed CV draft (R3 Task 3) -------------------------------------------------------
+
+export type CvDraftSummary = {
+    cv_draft_id: string; expert_id: string | null; expert_name: string | null;
+    state: CvDraftState; failure_code: string | null; display_filename: string;
+    private_document_id: string; document_version_id: string; model_name: string | null;
+    proposed_counts: Record<string, number>; confirmed_cv_version_id: string | null;
+    created_at: string; updated_at: string;
+};
+export type CvDraftReview = CvDraftSummary & {
+    document_text: string | null; document_text_truncated: boolean;
+    proposal: CvProposal; extraction_summary: Record<string, unknown>;
+};
+
+/** Multipart upload through the private intake (PDF/DOCX, 25 MiB). Nothing is saved as a CV. */
+export async function uploadCv(organizationId: string, file: File, expertId: string | null): Promise<CvDraftSummary> {
+    const form = new FormData();
+    form.append('file', file);
+    if (expertId) form.append('expert_id', expertId);
+    return (await api.post<CvDraftSummary>('/candidates/cv-uploads', form, {
+        headers: { 'X-Organization-ID': organizationId, 'Content-Type': 'multipart/form-data' },
+    })).data;
+}
+
+export async function listCvDrafts(organizationId: string): Promise<CvDraftSummary[]> {
+    return (await api.get<CvDraftSummary[]>('/candidates/cv-drafts', scoped(organizationId))).data;
+}
+
+export async function getCvDraft(organizationId: string, draftId: string): Promise<CvDraftReview> {
+    return (await api.get<CvDraftReview>(`/candidates/cv-drafts/${encodeURIComponent(draftId)}`, scoped(organizationId))).data;
+}
+
+export async function confirmCvDraft(
+    organizationId: string, draftId: string, body: Record<string, unknown>,
+): Promise<{ expert_id: string; expert_name: string; cv_version: CandidateCVVersion }> {
+    return (await api.post(`/candidates/cv-drafts/${encodeURIComponent(draftId)}/confirm`, body, scoped(organizationId))).data;
 }

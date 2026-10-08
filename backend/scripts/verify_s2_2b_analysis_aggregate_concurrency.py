@@ -29,7 +29,7 @@ from scripts import verify_s2_2_analysis_version_foundation as s22
 
 
 S2_1_HEAD = "20260827_0001_s2_1_compliance_ownership"
-HEAD = "20261008_0001_r3_pending_invitations"
+HEAD = "20261009_0001_r3_cv_library_drafts"
 
 
 async def revision(database: str) -> str:

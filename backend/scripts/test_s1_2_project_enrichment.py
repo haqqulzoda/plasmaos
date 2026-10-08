@@ -32,7 +32,7 @@ from scripts import test_s0_5b4_baseline as support
 
 
 S1_1_HEAD = "20260826_0001_s1_1_project_foundation"
-HEAD = "20261008_0001_r3_pending_invitations"
+HEAD = "20261009_0001_r3_cv_library_drafts"
 
 
 def fixture(project_id: str = "P179267", **overrides: Any) -> dict[str, Any]:

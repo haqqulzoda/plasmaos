@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, is_operator_user, require_approved_user
 from app.core.security import authenticated_dependency
+from app.core.private_storage import PrivateUploadError, private_storage_root, stage_private_upload
 from app.db.session import get_db
+from app.models.base import PrivateDocumentRole
+from app.models.candidate_retrieval import Expert
 from app.models.user import User
 from app.schemas.candidate_retrieval import (
+    CVDraftConfirmRequest,
+    CVDraftConfirmResponse,
+    CVDraftResponse,
+    CVDraftReviewResponse,
     CVVersionCreateRequest,
     CVVersionResponse,
     CandidateLibraryResponse,
@@ -52,6 +62,18 @@ from app.services.candidate_retrieval import (
     update_project_reference,
     upsert_self_firm,
 )
+from app.services.candidate_retrieval import _cv_response
+from app.services.cv_library import (
+    CVLibraryConflictError,
+    CVLibraryError,
+    CVLibraryNotFoundError,
+    confirm_cv_draft,
+    get_cv_draft,
+    list_cv_drafts,
+    upload_cv,
+)
+from app.services.private_documents import StagedPrivateFile
+from app.workers.private_document_tasks import dispatch_job_ids
 from app.services.organization_context import (
     OrganizationAccessDeniedError,
     OrganizationContextRequiredError,
@@ -313,3 +335,123 @@ async def review_candidate_match(
     except (CandidateAccessError, CandidateEligibilityError, CandidateNotFoundError) as exc:
         _raise_domain(exc)
 
+
+
+# ---- R3 Task 3: CV upload -> reviewed CV draft ----------------------------------------------------
+
+
+def _cv_draft_response(draft, display_filename: str, expert_name: str | None) -> CVDraftResponse:
+    return CVDraftResponse(
+        cv_draft_id=draft.id, expert_id=draft.expert_id, expert_name=expert_name, state=draft.state,
+        failure_code=draft.failure_code, display_filename=display_filename,
+        private_document_id=draft.private_document_id, document_version_id=draft.document_version_id,
+        model_name=draft.model_name,
+        proposed_counts={
+            section: len((draft.proposal or {}).get(section) or [])
+            for section in ("education", "assignments", "languages", "certifications")
+        },
+        confirmed_cv_version_id=draft.confirmed_cv_version_id,
+        created_at=draft.created_at, updated_at=draft.updated_at,
+    )
+
+
+def _raise_cv(exc: Exception) -> None:
+    if isinstance(exc, CVLibraryNotFoundError):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if isinstance(exc, CVLibraryConflictError):
+        raise HTTPException(status.HTTP_409_CONFLICT, detail={"code": exc.code, "message": str(exc)}) from exc
+    raise exc
+
+
+@router.post("/cv-uploads", response_model=CVDraftResponse, status_code=status.HTTP_201_CREATED)
+async def upload_cv_endpoint(
+    file: UploadFile = File(...),
+    expert_id: UUID | None = Form(default=None),
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> CVDraftResponse:
+    """Upload one CV (PDF/DOCX, 25 MiB) for a new or existing private expert.
+
+    The same intake as tender documents: signature checks, malware scan and sandboxed
+    parse. A draft is proposed once the document is ready; nothing is saved as a CV here.
+    """
+    context = await _context(db, current_user, x_organization_id)
+    staging_root = private_storage_root() / ".staging"
+    staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        with TemporaryDirectory(prefix="cv-", dir=staging_root) as temporary:
+            path, original, display, size, digest = await stage_private_upload(file, Path(temporary))
+            staged = StagedPrivateFile(
+                path=path, original_filename=original, safe_display_filename=display,
+                media_type=(file.content_type or "").split(";", 1)[0].casefold(),
+                byte_size=size, sha256=digest, role=PrivateDocumentRole.OTHER,
+            )
+            draft, job_id = await upload_cv(
+                db, organization_id=context.organization.id, membership_id=context.membership.id,
+                staged=staged, expert_id=expert_id,
+            )
+    except PrivateUploadError as exc:
+        raise HTTPException(exc.status_code, detail={"code": exc.code, "message": exc.detail}) from exc
+    except CVLibraryError as exc:
+        _raise_cv(exc)
+    dispatch_job_ids([job_id])
+    expert_name = None
+    if draft.expert_id is not None:
+        expert_name = await db.scalar(select(Expert.display_name).where(Expert.id == draft.expert_id))
+    return _cv_draft_response(draft, display, expert_name)
+
+
+@router.get("/cv-drafts", response_model=list[CVDraftResponse])
+async def list_cv_drafts_endpoint(
+    expert_id: UUID | None = None,
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> list[CVDraftResponse]:
+    context = await _context(db, current_user, x_organization_id)
+    rows = await list_cv_drafts(db, organization_id=context.organization.id, expert_id=expert_id)
+    return [_cv_draft_response(draft, filename, expert_name) for draft, filename, expert_name in rows]
+
+
+@router.get("/cv-drafts/{draft_id}", response_model=CVDraftReviewResponse)
+async def read_cv_draft_endpoint(
+    draft_id: UUID,
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> CVDraftReviewResponse:
+    """Side-by-side review: the parsed document text and the proposed fields. Passive."""
+    context = await _context(db, current_user, x_organization_id)
+    try:
+        review = await get_cv_draft(db, organization_id=context.organization.id, draft_id=draft_id)
+    except CVLibraryError as exc:
+        _raise_cv(exc)
+    draft = review["draft"]
+    base = _cv_draft_response(draft, review["display_filename"], review["expert_name"])
+    return CVDraftReviewResponse(
+        **base.model_dump(), document_text=review["document_text"],
+        document_text_truncated=review["document_text_truncated"],
+        proposal=draft.proposal or {}, extraction_summary=draft.extraction_summary or {},
+    )
+
+
+@router.post("/cv-drafts/{draft_id}/confirm", response_model=CVDraftConfirmResponse, status_code=status.HTTP_201_CREATED)
+async def confirm_cv_draft_endpoint(
+    draft_id: UUID, payload: CVDraftConfirmRequest,
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> CVDraftConfirmResponse:
+    """The person's reviewed fields become a new immutable CV version (UNVERIFIED)."""
+    context = await _context(db, current_user, x_organization_id)
+    try:
+        cv, expert = await confirm_cv_draft(
+            db, organization_id=context.organization.id, membership_id=context.membership.id,
+            actor_user_id=current_user.id, draft_id=draft_id, new_expert_name=payload.new_expert_name,
+            sections={
+                "education": payload.education, "assignments": payload.assignments,
+                "languages": payload.languages, "certifications": payload.certifications,
+            },
+        )
+    except CVLibraryError as exc:
+        _raise_cv(exc)
+    return CVDraftConfirmResponse(
+        cv_draft_id=draft_id, expert_id=expert.id, expert_name=expert.display_name, cv_version=_cv_response(cv),
+    )

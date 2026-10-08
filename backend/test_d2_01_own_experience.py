@@ -71,7 +71,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
 D1_03_HEAD = "20261003_0001_d1_03_official_notice_unique"
-HEAD = "20261008_0001_r3_pending_invitations"
+HEAD = "20261009_0001_r3_cv_library_drafts"
 AS_OF = date(2026, 9, 30)
 SUBSTATION = (
     "Successful completion of at least two contracts within the last 10 years involving detailed "

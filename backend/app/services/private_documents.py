@@ -27,6 +27,7 @@ from app.core.private_storage import (
     MalwareScanError,
     PrivateUploadError,
     commit_staged_file,
+    opaque_library_storage_key,
     opaque_storage_key,
     resolve_private_storage_key,
     scan_with_clamav,
@@ -870,6 +871,81 @@ async def _persist_suggestions(
             existing.confidence = 0.9 if span else 0.7
 
 
+@dataclass(frozen=True)
+class PersistedLibraryDocument:
+    batch: PrivateDocumentBatch
+    document_id: UUID
+    version_id: UUID
+    job_id: UUID
+
+
+async def persist_library_document(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    membership_id: UUID,
+    file: StagedPrivateFile,
+    library_kind: str = "CV",
+) -> PersistedLibraryDocument:
+    """R3: the same intake as a pursuit pack, for one organization library document.
+
+    Bytes, immutable version and durable job are flushed in the caller's transaction;
+    the caller commits (with whatever it records about the document) or rolls back.
+    """
+    await _require_active_membership(db, organization_id=organization_id, membership_id=membership_id)
+    batch = PrivateDocumentBatch(
+        organization_id=organization_id,
+        pursuit_id=None,
+        requested_by_membership_id=membership_id,
+        state=DocumentProcessingState.QUEUED,
+        file_count=1,
+        processed_count=0,
+        failed_count=0,
+    )
+    db.add(batch)
+    await db.flush()
+    document_id = uuid4()
+    version_id = uuid4()
+    storage_key = opaque_library_storage_key(organization_id=organization_id, version_id=version_id)
+    document = PrivateDocument(
+        id=document_id,
+        organization_id=organization_id,
+        pursuit_id=None,
+        library_kind=library_kind,
+        role=PrivateDocumentRole.OTHER,
+        display_name=file.safe_display_filename,
+        state=PrivateDocumentState.ACTIVE,
+        created_by_membership_id=membership_id,
+    )
+    version = DocumentVersion(
+        id=version_id,
+        organization_id=organization_id,
+        private_document_id=document_id,
+        version_number=1,
+        original_filename=file.original_filename,
+        safe_display_filename=file.safe_display_filename,
+        media_type=file.media_type,
+        byte_size=file.byte_size,
+        sha256=file.sha256,
+        storage_key=storage_key,
+        uploader_membership_id=membership_id,
+    )
+    db.add_all([document, version])
+    await db.flush()
+    job = DocumentProcessingJob(
+        batch_id=batch.id,
+        document_version_id=version_id,
+        state=DocumentProcessingState.QUEUED,
+        next_dispatch_at=datetime.now(timezone.utc),
+    )
+    db.add(job)
+    await db.flush()
+    document.current_version_id = version_id
+    await db.flush()
+    commit_staged_file(file.path, storage_key)
+    return PersistedLibraryDocument(batch=batch, document_id=document_id, version_id=version_id, job_id=job.id)
+
+
 async def _rollup_batch(db: AsyncSession, batch_id: UUID) -> None:
     batch = await db.scalar(
         select(PrivateDocumentBatch).where(PrivateDocumentBatch.id == batch_id).with_for_update()
@@ -901,6 +977,9 @@ async def _rollup_batch(db: AsyncSession, batch_id: UUID) -> None:
     else:
         batch.state = DocumentProcessingState.READY
         outcome = "ready"
+    if batch.pursuit_id is None:
+        # A library upload (R3 CV intake) reports through its CV draft, not the pursuit inbox.
+        return
     requester_user_id = await db.scalar(
         select(Membership.user_id).where(Membership.id == batch.requested_by_membership_id)
     )
@@ -958,6 +1037,10 @@ async def process_document_job(db: AsyncSession, job_id: UUID) -> dict[str, Any]
         job.last_error_detail = "Stored document bytes are unavailable"
         job.completed_at = now
         await _rollup_batch(db, job.batch_id)
+        if document.library_kind == "CV":
+            from app.services.cv_library import on_library_document_processed
+
+            await on_library_document_processed(db, version_id=version.id, job=job)
         await db.commit()
         return {"state": "FAILED"}
     try:
@@ -1003,13 +1086,14 @@ async def process_document_job(db: AsyncSession, job_id: UUID) -> dict[str, Any]
         job.last_error_detail = None
         job.completed_at = datetime.now(timezone.utc)
         job.lease_until = None
-        await _persist_suggestions(
-            db,
-            organization_id=document.organization_id,
-            pursuit_id=document.pursuit_id,
-            version_id=version.id,
-            extracted_text=extracted,
-        )
+        if document.pursuit_id is not None:
+            await _persist_suggestions(
+                db,
+                organization_id=document.organization_id,
+                pursuit_id=document.pursuit_id,
+                version_id=version.id,
+                extracted_text=extracted,
+            )
     except MalwareDetectedError:
         if result is None:
             result = DocumentProcessingResult(
@@ -1049,5 +1133,10 @@ async def process_document_job(db: AsyncSession, job_id: UUID) -> dict[str, Any]
         job.completed_at = datetime.now(timezone.utc)
         job.lease_until = None
     await _rollup_batch(db, job.batch_id)
+    cv_draft_ids: list[str] = []
+    if document.library_kind == "CV":
+        from app.services.cv_library import on_library_document_processed
+
+        cv_draft_ids = [str(value) for value in await on_library_document_processed(db, version_id=version.id, job=job)]
     await db.commit()
-    return {"state": job.state.value, "job_id": str(job.id)}
+    return {"state": job.state.value, "job_id": str(job.id), "cv_draft_ids": cv_draft_ids}

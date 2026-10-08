@@ -766,7 +766,7 @@
       "datesOrder": "Boshlanishdan oldin boʻlishi mumkin emas.",
       "tooMany": "Elementlar juda koʻp.",
       "year": "YYYY formatidagi yil.",
-      "month": "YYYY-MM formatidagi oy.",
+      "month": "Oy YYYY-MM yoki yil YYYY ko‘rinishida.",
       "emptyCv": "Versiyani saqlashdan oldin kamida bitta qator qoʻshing.",
       "emptyFile": "Fayl boʻsh.",
       "unknownColumn": "Nomaʼlum ustun.",
@@ -792,7 +792,9 @@
       "editTitle": "Ekspertni tahrirlash",
       "save": "Ekspertni saqlash",
       "saveChanges": "Oʻzgarishlarni saqlash",
-      "privacyHelp": "Faqat tashkilotingizga koʻrinadi; xususiy yozuv uchun rozilik talab qilinmaydi."
+      "privacyHelp": "Faqat tashkilotingizga koʻrinadi; xususiy yozuv uchun rozilik talab qilinmaydi.",
+      "uploadCv": "Rezyume yuklash",
+      "uploadCvNew": "Rezyume yuklash"
     },
     "cv": {
       "addTitle": "CV {version}-versiyasini qoʻshish",
@@ -907,6 +909,58 @@
       "help": "Taklif qilishingiz mumkin boʻlgan ekspertlar va ularning oʻzgarmas tuzilgan CV versiyalari.",
       "emptyTitle": "Hozircha ekspertlar yoʻq",
       "emptyHelp": "Ekspert qoʻshing yoki CSV import qiling, soʻng CV versiyasini qoʻshing."
+    },
+    "cvUpload": {
+      "titleNew": "Yangi ekspert uchun rezyume yuklash",
+      "titleFor": "{name} uchun yangi rezyume yuklash",
+      "help": "Rezyumeni o‘qib, har biriga iqtibos bilan maydonlarni taklif qilamiz. Saqlashdan oldin ularni tekshirib, tasdiqlaysiz.",
+      "file": "Rezyume fayli",
+      "limits": "PDF yoki DOCX, 25 MiB gacha. Fayl zararli dasturlarga tekshiriladi.",
+      "noAutoSave": "Siz tasdiqlamaguningizcha hech narsa rezyume sifatida saqlanmaydi. Yangi yuklash saqlangan rezyumeni o‘zgartirmaydi.",
+      "submit": "Yuklash va tekshirish",
+      "cancel": "Bekor qilish",
+      "failed": "Rezyumeni yuklab bo‘lmadi"
+    },
+    "cvDrafts": {
+      "title": "Tekshiruvni kutayotgan rezyumelar",
+      "newExpert": "Yangi ekspert",
+      "review": "Tekshirish",
+      "states": {
+        "PROCESSING_DOCUMENT": "Fayl tekshirilmoqda",
+        "QUEUED": "O‘qilishini kutmoqda",
+        "EXTRACTING": "Rezyume o‘qilmoqda",
+        "READY": "Tekshirishga tayyor",
+        "FAILED": "Qo‘lda to‘ldiring",
+        "CONFIRMED": "Rezyume sifatida saqlandi"
+      }
+    },
+    "cvReview": {
+      "eyebrow": "Hamkorlar va ekspertlar",
+      "title": "Rezyumeni tekshirish",
+      "description": "Taklif qilingan maydonlarni rezyume matni bilan solishtiring. Kerakli joyni tuzating va yangi rezyume versiyasini saqlash uchun tasdiqlang.",
+      "back": "Ekspertlarga qaytish",
+      "loading": "Rezyume yuklanmoqda…",
+      "loadFailed": "Bu rezyumeni yuklab bo‘lmadi.",
+      "reading": "Rezyume o‘qilmoqda…",
+      "readingHelp": "Fayl tekshirilmoqda va o‘qilmoqda. Sahifa o‘zi yangilanadi.",
+      "proposed": "Rezyumedan {count} ta qator taklif qilindi",
+      "dropped": "Iqtibosi rezyumeda topilmagani uchun {count} ta taklif qilingan qator kiritilmadi. Saqlashdan oldin hammasini tekshiring.",
+      "checkEverything": "Har bir qator yonida u olingan rezyume parchasi ko‘rsatilgan. Saqlashdan oldin hammasini tekshiring.",
+      "failed": "Rezyumeni avtomatik o‘qib bo‘lmadi",
+      "manualHelp": "Chapdagi rezyume matni asosida maydonlarni o‘zingiz to‘ldiring. Saqlash xuddi shunday ishlaydi.",
+      "rejected": "Bu fayl zararli dasturlar tekshiruvidan o‘tmadi. Undan hech narsa saqlab bo‘lmaydi.",
+      "alreadySaved": "Bu rezyume allaqachon versiya sifatida saqlangan.",
+      "saved": "{name} uchun {version}-rezyume versiyasi sifatida saqlandi.",
+      "document": "Rezyume matni",
+      "documentLabel": "Yuklangan rezyumedan o‘qilgan matn",
+      "fields": "Taklif qilingan maydonlar",
+      "noText": "Bu fayldan matn o‘qib bo‘lmadi.",
+      "truncated": "Juda uzun rezyumening faqat boshi ko‘rsatilgan.",
+      "expertName": "Ekspert ismi",
+      "noQuote": "Siz qo‘shgansiz: rezyumedan iqtibos yo‘q.",
+      "unverifiedNote": "Saqlangan rezyume versiyasi kimdir asl hujjatlarni tekshirmaguncha «Tasdiqlanmagan» deb belgilanadi.",
+      "confirm": "Tasdiqlash va rezyume versiyasini saqlash",
+      "saveFailed": "Rezyume versiyasini saqlab bo‘lmadi"
     }
   },
   "proposal": {

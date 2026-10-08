@@ -35,7 +35,8 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
 PREVIOUS_HEAD = "20261005_0001_d2_05_eoi_drafts"
-HEAD = "20261008_0001_r3_pending_invitations"
+REVISION = "20261008_0001_r3_pending_invitations"
+HEAD = "20261009_0001_r3_cv_library_drafts"
 
 
 # ---- pure rules -----------------------------------------------------------------------------------
@@ -65,10 +66,10 @@ def test_r3_01_migration_is_additive_reversible_and_drift_free() -> None:
         try:
             await support.raw_baseline(database)
             await asyncio.to_thread(support.alembic, database, "upgrade", PREVIOUS_HEAD)
-            await asyncio.to_thread(support.alembic, database, "upgrade", HEAD)
+            await asyncio.to_thread(support.alembic, database, "upgrade", REVISION)
             connection = await support.database_connection(database)
             try:
-                assert await connection.fetchval("SELECT version_num FROM alembic_version") == HEAD
+                assert await connection.fetchval("SELECT version_num FROM alembic_version") == REVISION
                 assert await connection.fetchval("SELECT to_regclass('pending_invitations')")
                 assert await connection.fetchval("SELECT to_regclass('uq_pending_invitation_open_email')")
                 assert await connection.fetchval(

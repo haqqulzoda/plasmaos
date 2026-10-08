@@ -65,6 +65,7 @@ from app.models.eoi import (  # noqa: F401,E402
     EoiDraftArtifact,
 )
 from app.models.invitations import PendingInvitation  # noqa: F401,E402
+from app.models.cv_drafts import CVDraft  # noqa: F401,E402
 
 
 # ============================================================================
@@ -899,4 +900,5 @@ __all__ = [
     "EoiDraft",
     "EoiDraftArtifact",
     "PendingInvitation",
+    "CVDraft",
 ]

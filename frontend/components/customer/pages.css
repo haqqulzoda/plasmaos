@@ -4017,3 +4017,115 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+/* R3 Task 3: CV upload, pending drafts and the side-by-side review. */
+.library-cv-drafts {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+.library-cv-drafts h3 {
+  margin: 0;
+  font-size: var(--ds-heading-sm);
+}
+.library-cv-drafts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--ds-space-2);
+}
+.library-cv-drafts li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: var(--ds-space-3);
+  align-items: center;
+  padding: var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+}
+.library-cv-drafts li > span {
+  display: grid;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.library-cv-drafts li > svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+.cv-review-page {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+.cv-review-meta {
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.cv-review-layout {
+  display: grid;
+  gap: var(--ds-space-4);
+  min-inline-size: 0;
+}
+.cv-review-document,
+.cv-review-form {
+  padding: var(--ds-space-5);
+  display: grid;
+  gap: var(--ds-space-3);
+  align-content: start;
+  min-inline-size: 0;
+}
+.cv-review-document h2,
+.cv-review-form h2 {
+  margin: 0;
+  font-size: var(--ds-heading-sm);
+}
+.cv-review-text {
+  margin: 0;
+  max-block-size: 70vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: var(--ds-body-secondary);
+  line-height: 1.6;
+  padding: var(--ds-space-3);
+  background: var(--ds-background);
+  border-radius: var(--ds-radius-md);
+}
+.cv-review-text mark {
+  background: var(--ds-warning-subtle);
+  color: inherit;
+  border-radius: var(--ds-radius-sm);
+}
+.cv-review-quote {
+  display: flex;
+  gap: var(--ds-space-2);
+  align-items: start;
+  text-align: start;
+  inline-size: 100%;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 0;
+  border-inline-start: 3px solid var(--ds-border-strong);
+  background: var(--ds-background);
+  color: var(--ds-text-secondary);
+  font: inherit;
+  font-size: var(--ds-body-secondary);
+  font-style: italic;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.cv-review-quote svg {
+  flex: none;
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin-block-start: 0.15rem;
+}
+@media (min-width: 1024px) {
+  .cv-review-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+  }
+  .cv-review-document {
+    position: sticky;
+    inset-block-start: var(--ds-space-4);
+  }
+}
