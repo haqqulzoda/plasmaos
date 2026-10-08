@@ -411,6 +411,9 @@ async def eoi_suggestions(
         ))
     return EoiSuggestionsResponse(
         analysis_run_id=run.id, run_current=not reasons, defaults=defaults, criteria=criteria, notes=notes,
+        company_evidence_changed=analysis.company_evidence_changed,
+        company_evidence_change_reason=analysis.company_evidence_change_reason,
+        company_evidence_changed_sections=analysis.company_evidence_changed_sections,
         own_references=_ranked(data["own"], data["own_matches"]), partner_firms=partner_firms,
     )
 

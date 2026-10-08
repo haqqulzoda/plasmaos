@@ -154,6 +154,8 @@ def test_contract_shapes_match_the_frontend_contract() -> None:
     assert set(paths["/api/v1/pursuits/{pursuit_id}/eoi-artifacts/{artifact_id}/download"]) == {"get"}
     assert set(EoiSuggestionsResponse.model_fields) == {
         "analysis_run_id", "run_current", "defaults", "criteria", "notes", "own_references", "partner_firms",
+        # R3 Task 2: the experience-changed banner.
+        "company_evidence_changed", "company_evidence_change_reason", "company_evidence_changed_sections",
     }
     assert set(EoiReference.model_fields) == {
         "reference_id", "project_name", "client_name", "country", "sector", "service", "role",

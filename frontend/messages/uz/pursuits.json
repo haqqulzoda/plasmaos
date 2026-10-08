@@ -1064,5 +1064,18 @@
     },
     "versionSummary": "Oʻz topshiriqlari: {references} · hamkorlar: {partners} · qamralgan mezonlar: {total} tadan {addressed} · izohlar qoldirildi {notes}, tashlandi {dropped}",
     "noVersions": "Hozircha versiyalar yoʻq."
+  },
+  "experienceChanged": {
+    "title": "Ushbu tahlildan keyin tajriba yozuvlaringiz o‘zgardi — mosliklarni yangilash uchun tahlilni qayta ishga tushiring.",
+    "help": "Ko‘rsatilgan mosliklar ushbu tahlil vaqtidagi yozuvlaringiz asosida hisoblangan.",
+    "changed": "Tahlildan keyin o‘zgargan: {sections}.",
+    "sections": {
+      "OWN_EXPERIENCE": "o‘z kompaniyangiz va loyiha referenslari",
+      "COMPANY_PROFILE": "kompaniya profili",
+      "READINESS_RECORDS": "tayyorlik hujjatlari va yozuvlar"
+    },
+    "rerun": "Tahlilni qayta ishga tushirish",
+    "rerunFailed": "Tahlilni boshlab bo‘lmadi. «Talablar» bo‘limida qayta urinib ko‘ring.",
+    "noDocuments": "Ushbu tahlil hujjatlari endi mavjud emas. «Talablar» bo‘limida hujjatlarni tanlang."
   }
 }

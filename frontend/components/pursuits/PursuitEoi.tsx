@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { BidiText } from '@/components/i18n/BidiText';
+import { ExperienceChangedBanner } from '@/components/pursuits/ExperienceChangedBanner';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { EmptyState, StatusBadge, Surface } from '@/components/ui/Display';
 import { Alert } from '@/components/ui/Feedback';
@@ -158,6 +159,7 @@ export function PursuitEoi({ pursuitId, headers, runId, onOpenRequirements }: Pr
 
   return <div className="pursuit-eoi ds-stack" data-eoi-builder>
     {!suggestions.run_current && <Alert tone="warning" title={t('runNotCurrentTitle')}>{t('runNotCurrentHelp')}</Alert>}
+    {suggestions.company_evidence_changed && <ExperienceChangedBanner pursuitId={pursuitId} headers={headers} runId={suggestions.analysis_run_id} sections={suggestions.company_evidence_changed_sections} onStarted={onOpenRequirements} />}
     <nav className="eoi-steps" aria-label={t('stepsLabel')}>
       <ol>{EOI_STEPS.map((value, index) => <li key={value}>
         <button type="button" aria-current={step === value ? 'step' : undefined} onClick={() => setStep(value)} data-eoi-step={value}>

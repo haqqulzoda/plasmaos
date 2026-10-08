@@ -75,6 +75,10 @@ class EoiPartnerFirm(BaseModel):
 class EoiSuggestionsResponse(BaseModel):
     analysis_run_id: UUID
     run_current: bool
+    # R3: recorded experience changed since the run sealed its company snapshot.
+    company_evidence_changed: bool = False
+    company_evidence_change_reason: str | None = None
+    company_evidence_changed_sections: list[str] = Field(default_factory=list)
     defaults: EoiDefaults
     criteria: list[EoiCriterion] = Field(default_factory=list)
     notes: list[EoiNote] = Field(default_factory=list)

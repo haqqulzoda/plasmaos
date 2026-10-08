@@ -62,6 +62,10 @@ export type EoiPartnerFirm = {
 export type EoiSuggestions = {
   analysis_run_id: string;
   run_current: boolean;
+  /** R3: recorded experience changed since the run; absent before R3. */
+  company_evidence_changed?: boolean;
+  company_evidence_change_reason?: string | null;
+  company_evidence_changed_sections?: string[];
   defaults: EoiDefaults;
   criteria: EoiCriterion[];
   notes: EoiNote[];

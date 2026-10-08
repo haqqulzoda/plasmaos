@@ -348,6 +348,9 @@ class PursuitAnalysisPackItemResponse(BaseModel):
     page_count_known: bool
     content_sha256: str
     source_url: str | None = None
+    # R3: the pack selection, so a re-run can repeat it.
+    tender_document_id: UUID | None = None
+    document_version_id: UUID | None = None
 
 
 class PursuitRequirementResponse(BaseModel):
@@ -443,6 +446,11 @@ class PursuitAnalysisResponse(BaseModel):
     failure_reason: str | None = None
     inputs_changed: bool
     stale_reason: str | None = None
+    # R3: the organization's recorded experience/company evidence differs from the
+    # snapshot this run sealed; a re-run (explicit POST) updates the matches.
+    company_evidence_changed: bool = False
+    company_evidence_change_reason: str | None = None
+    company_evidence_changed_sections: list[str] = Field(default_factory=list)
     page_count_known: bool
     limit_disclosure: str
     pack_items: list[PursuitAnalysisPackItemResponse] = Field(default_factory=list)

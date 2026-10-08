@@ -1064,5 +1064,18 @@
     },
     "versionSummary": "{references, plural, one {# own assignment} other {# own assignments}} · {partners, plural, one {# partner} other {# partners}} · {addressed} of {total} criteria addressed · notes kept {notes}, dropped {dropped}",
     "noVersions": "No versions yet."
+  },
+  "experienceChanged": {
+    "title": "Your experience records changed since this analysis — re-run to update matches.",
+    "help": "The matches shown were computed from your records as they were when this analysis ran.",
+    "changed": "Changed since this analysis: {sections}.",
+    "sections": {
+      "OWN_EXPERIENCE": "own firm and project references",
+      "COMPANY_PROFILE": "company profile",
+      "READINESS_RECORDS": "readiness documents and records"
+    },
+    "rerun": "Re-run analysis",
+    "rerunFailed": "The analysis could not be started. Try again from the Requirements tab.",
+    "noDocuments": "The documents of this analysis are no longer available. Choose documents on the Requirements tab."
   }
 }

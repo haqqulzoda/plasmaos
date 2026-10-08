@@ -220,6 +220,9 @@ export type AnalysisPackItem = {
   page_count_known: boolean;
   content_sha256: string;
   source_url: string | null;
+  /** R3: the pack selection, so a re-run can repeat it. Absent before R3. */
+  tender_document_id?: string | null;
+  document_version_id?: string | null;
 };
 
 export type PursuitRequirement = {
@@ -315,6 +318,10 @@ export type PursuitAnalysis = {
   failure_reason: string | null;
   inputs_changed: boolean;
   stale_reason: string | null;
+  /** R3: recorded experience/company evidence changed since this run sealed it. */
+  company_evidence_changed?: boolean;
+  company_evidence_change_reason?: string | null;
+  company_evidence_changed_sections?: string[];
   page_count_known: boolean;
   limit_disclosure: string;
   pack_items: AnalysisPackItem[];
