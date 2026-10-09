@@ -18,6 +18,7 @@ from app.api.endpoints.communications import notifications_router, broadcasts_ro
 from app.api.endpoints import candidates, eoi, participation, proposal_evidence, team_scenarios, operations, admin, auth, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
+from app.core.observability import init_error_tracking
 from app.core.release import VERSION, public_release_metadata, release_metadata_with_database
 from app.db.session import engine, get_db
 from app.models.all_models import Base
@@ -58,6 +59,9 @@ async def lifespan(app: FastAPI):
 
     print("--- LIFESPAN: SHUTTING DOWN ---")
 
+
+# Error tracking (R3): a no-op unless SENTRY_DSN_BACKEND is set.
+init_error_tracking("backend")
 
 # Initialize FastAPI application
 app = FastAPI(

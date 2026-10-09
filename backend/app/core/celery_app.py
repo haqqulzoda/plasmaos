@@ -10,9 +10,10 @@ from datetime import timedelta
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import beat_init, task_prerun, worker_ready
+from celery.signals import beat_init, celeryd_init, task_prerun, worker_ready
 from kombu import Queue
 
+from app.core.observability import init_error_tracking
 from app.core.release import public_release_metadata
 from app.services.source_refresh_schedule import (
     build_beat_schedule,
@@ -170,6 +171,18 @@ def log_worker_release_identity(**_: object) -> None:
 @beat_init.connect
 def log_beat_release_identity(**_: object) -> None:
     _log_release_identity("celery_beat")
+
+
+# Error tracking (R3): a no-op unless SENTRY_DSN_BACKEND is set. Workers initialise in the main
+# process before the pool forks (the children inherit the client); Beat when it starts.
+@celeryd_init.connect
+def init_worker_error_tracking(**_: object) -> None:
+    init_error_tracking(os.getenv("PLASMA_SERVICE_NAME") or "celery_worker")
+
+
+@beat_init.connect
+def init_beat_error_tracking(**_: object) -> None:
+    init_error_tracking("celery_beat")
 
 
 # ---- Beat liveness (smoke.sh) ----------------------------------------------------------------------

@@ -35,6 +35,9 @@ python-multipart>=0.0.12
 celery>=5.4.0
 redis>=5.2.0
 
+# Error tracking (enabled only when SENTRY_DSN_BACKEND is set)
+sentry-sdk>=2.40.0
+
 pymupdf>=1.24.0
 pytesseract>=0.3.10
 pdf2image==1.17.0

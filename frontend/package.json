@@ -41,6 +41,7 @@
     "test:dashboard": "node --no-warnings --experimental-strip-types --test tests/s14-1-dashboard.test.mjs"
   },
   "dependencies": {
+    "@sentry/nextjs": "11.5.0",
     "axios": "1.20.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
