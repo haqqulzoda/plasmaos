@@ -7,3 +7,5 @@ scripts/*.sh text eol=lf
 scripts/ops/* text eol=lf
 deploy/caddy/Caddyfile text eol=lf
 deploy/clamav/*.sh text eol=lf
+deploy/systemd/* text eol=lf
+deploy/compose/* text eol=lf

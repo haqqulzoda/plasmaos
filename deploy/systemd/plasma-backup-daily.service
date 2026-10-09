@@ -1,0 +1,17 @@
+# Daily off-host backup: database + private documents -> <BACKUP_REMOTE>/daily, newest 14 kept.
+# Installed by docs/ops/HOST_SETUP.md; settings in /etc/plasma/ops.env (mode 600).
+[Unit]
+Description=Plasma daily off-host backup (database + private documents)
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+OnFailure=plasma-notify@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/plasma-console/plasmaos
+EnvironmentFile=/etc/plasma/ops.env
+Environment=BACKUP_DIR=/var/backups/plasma
+ExecStart=/opt/plasma-console/plasmaos/scripts/ops/backup.sh --target production --tier daily
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h

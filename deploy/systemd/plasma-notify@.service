@@ -1,0 +1,9 @@
+# OnFailure= target: sends "<unit> failed" with its last journal lines to Telegram.
+[Unit]
+Description=Plasma failure alert for %i
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/plasma-console/plasmaos
+EnvironmentFile=/etc/plasma/ops.env
+ExecStart=/opt/plasma-console/plasmaos/scripts/ops/notify.sh --unit %i

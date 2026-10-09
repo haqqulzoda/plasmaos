@@ -1,0 +1,15 @@
+# Health checks with Telegram alerts on state change (scripts/ops/monitor.sh).
+[Unit]
+Description=Plasma host monitor
+Wants=docker.service
+After=docker.service
+OnFailure=plasma-notify@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/plasma-console/plasmaos
+EnvironmentFile=/etc/plasma/ops.env
+Environment=MONITOR_STATE_DIR=/var/lib/plasma-monitor
+ExecStart=/opt/plasma-console/plasmaos/scripts/ops/monitor.sh --target production
+Nice=5
+TimeoutStartSec=4min

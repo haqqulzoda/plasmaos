@@ -1,0 +1,17 @@
+# Weekly off-host backup -> <BACKUP_REMOTE>/weekly, newest 4 kept. Tender documents only with
+# BACKUP_WEEKLY_TENDER_DOCUMENTS=1 in /etc/plasma/ops.env (off by default: stay within ~10 GB).
+[Unit]
+Description=Plasma weekly off-host backup
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+OnFailure=plasma-notify@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/plasma-console/plasmaos
+EnvironmentFile=/etc/plasma/ops.env
+Environment=BACKUP_DIR=/var/backups/plasma
+ExecStart=/opt/plasma-console/plasmaos/scripts/ops/backup.sh --target production --tier weekly
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=4h

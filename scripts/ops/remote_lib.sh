@@ -56,6 +56,7 @@ remote_setup() {
           export RCLONE_CONFIG_PLASMAR2_ENDPOINT="$BACKUP_S3_ENDPOINT"
           export RCLONE_CONFIG_PLASMAR2_REGION="${BACKUP_S3_REGION:-auto}"
           export RCLONE_CONFIG_PLASMAR2_NO_CHECK_BUCKET=true
+          export RCLONE_CONFIG=/dev/null RCLONE_LOG_LEVEL="${RCLONE_LOG_LEVEL:-ERROR}"  # no config file, no notices
           REMOTE_KIND=rclone; RPATH="plasmar2:$bucket${prefix:+/$prefix}" ;;
         aws)
           export AWS_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY"
