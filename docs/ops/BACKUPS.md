@@ -88,6 +88,7 @@ private documents, `BACKUP_REMOTE=r2://plasma-backups-test/plasma`:
 | `--tier weekly` | aws CLI | 119,697,619 bytes in 38 s; tender documents skipped (default) |
 | `--tier daily`, `BACKUP_DAILY_KEEP=1`, `BACKUP_VERIFY_DOWNLOAD=1` | rclone | 47 s, remote SHA-256 verified by download; the older daily set removed, the weekly set untouched |
 | wrong secret key | aws CLI | exit 1, `SignatureDoesNotMatch`, the failed object removed |
+| `restore_drill.sh --tier daily --images 4f09b8e` (2026-10-09) | rclone | newest set found, 119,726,223 bytes verified against manifest + `.sha256` in 3 s, restored into `plasma_staging` and started in 98 s, smoke 27 ok / 0 failures after ClamAV's first signature load (the drill now waits for ClamAV to be healthy) |
 
 In all four runs the output contained none of the endpoint, bucket name, key id or secret
 (`grep -c` = 0); errors read `s3://<bucket>/plasma/daily/…`. Known limit: the aws CLI v1

@@ -29,6 +29,7 @@ env_file_value() {
   local file="$1" key="$2" value
   [ -f "$file" ] || return 1
   value="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1 | cut -d= -f2- || true)"
+  value="${value%$''}"   # a file edited on Windows
   value="${value%\"}"; value="${value#\"}"; value="${value%\'}"; value="${value#\'}"
   printf '%s' "$value"
 }
@@ -189,8 +190,10 @@ ops_host_profile_file() {
   local profile="${HOST_PROFILE:-}"
   if [ -z "$profile" ]; then profile="$(env_file_value "$1" HOST_PROFILE || true)"; fi
   [ -n "$profile" ] || return 0
-  local file="$OPS_ROOT/deploy/host-profiles/$profile.env"
-  [ -f "$file" ] || die "HOST_PROFILE=$profile has no deploy/host-profiles/$profile.env (use 4gb or 8gb)"
+  # Relative to the repository root (ops_compose_setup runs from there): an absolute Git Bash
+  # path such as /d/projects/... is not understood by docker.exe on Windows.
+  local file="deploy/host-profiles/$profile.env"
+  [ -f "$OPS_ROOT/$file" ] || die "HOST_PROFILE=$profile has no deploy/host-profiles/$profile.env (use 4gb or 8gb)"
   echo "$file"
 }
 

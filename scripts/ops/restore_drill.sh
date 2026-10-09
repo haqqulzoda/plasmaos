@@ -98,6 +98,13 @@ for _ in $(seq 1 100); do
   sleep 3
 done
 curl -fsS --max-time 5 "$ready_url" >/dev/null 2>&1 || log "WARN: $ready_url is not ready after 5 minutes"
+# A fresh ClamAV loads its signatures for 1-4 minutes before it answers (smoke checks it).
+clam_cid="$(ops_cid "$STAGING_PROJECT" clamav)"
+for _ in $(seq 1 60); do
+  [ -z "$clam_cid" ] && break
+  [ "$("${_DOCKER[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$clam_cid")" = healthy ] && break
+  sleep 10
+done
 restore_seconds=$((SECONDS - started))
 
 # ---- 4. smoke -----------------------------------------------------------------------------------------------
