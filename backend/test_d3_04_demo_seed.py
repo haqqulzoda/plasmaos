@@ -55,7 +55,7 @@ def test_target_must_match_the_environment_and_writes_need_confirmation() -> Non
 
 
 def test_preprovisioned_record_is_bound_by_the_first_google_sign_in() -> None:
-    assert _bound_google_id(SimpleNamespace(google_id=PREPROVISIONED_GOOGLE_ID_PREFIX + "support.plasma@gmail.com")) is None
+    assert _bound_google_id(SimpleNamespace(google_id=PREPROVISIONED_GOOGLE_ID_PREFIX + seed_demo.DEMO_EMAIL)) is None
     assert _bound_google_id(SimpleNamespace(google_id="1234567890")) == "1234567890"
     assert _bound_google_id(SimpleNamespace(google_id="plasma-demo-steward:20261002-1:not-a-google-account")) is not None
 

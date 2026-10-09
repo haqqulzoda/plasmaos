@@ -73,7 +73,7 @@ from app.models.tenancy import Membership, Organization, OrganizationPursuit
 from scripts.demo import demo_data as data
 
 CONFIRMATION = "SEED_DEMO"
-DEMO_EMAIL = "support.plasma@gmail.com"
+DEMO_EMAIL = "plasmatest0@gmail.com"
 PROFILE_MARKER = "[plasma-demo-seed]"
 STEWARD_DOMAIN = "plasma.invalid"
 TARGET_ENVIRONMENTS = {"local": {"development", "test"}, "production": {"production"}}
