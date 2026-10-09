@@ -4154,3 +4154,45 @@
   margin: 0;
   padding-inline-start: var(--ds-space-6);
 }
+
+/* Sign-in error page (/auth/error). */
+.auth-error {
+  display: grid;
+  place-items: center;
+  padding: var(--ds-space-8) var(--ds-space-4);
+}
+.auth-error-card {
+  max-inline-size: 34rem;
+  inline-size: 100%;
+  display: grid;
+  gap: var(--ds-space-3);
+}
+.auth-error-card h1 {
+  margin: 0;
+  font-size: var(--ds-heading-md);
+}
+.auth-error-card p {
+  margin: 0;
+}
+.auth-error-icon {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-warning-subtle);
+  color: var(--ds-warning);
+}
+.auth-error-icon svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+.auth-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  margin-block-start: var(--ds-space-2);
+}
+.auth-error-code {
+  font-size: var(--ds-body-secondary);
+}

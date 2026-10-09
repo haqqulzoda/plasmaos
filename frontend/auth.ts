@@ -102,6 +102,8 @@ export const { handlers, auth } = NextAuth({
   session: { strategy: 'jwt', maxAge: 60 * 60 * 8 },
   pages: {
     signIn: '/',
+    // Our own localized page instead of Auth.js's built-in "Server error" screen.
+    error: '/auth/error',
   },
   providers: [
     GoogleProvider({
