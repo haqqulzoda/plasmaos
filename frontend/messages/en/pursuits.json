@@ -766,7 +766,7 @@
       "datesOrder": "Cannot be before the start.",
       "tooMany": "Too many items.",
       "year": "A year as YYYY.",
-      "month": "A month as YYYY-MM.",
+      "month": "A month as YYYY-MM, or a year as YYYY.",
       "emptyCv": "Add at least one row before saving the version.",
       "emptyFile": "The file is empty.",
       "unknownColumn": "Unknown column.",
@@ -792,7 +792,9 @@
       "editTitle": "Edit expert",
       "save": "Save expert",
       "saveChanges": "Save changes",
-      "privacyHelp": "Private to your organization; no consent record is needed for a private expert."
+      "privacyHelp": "Private to your organization; no consent record is needed for a private expert.",
+      "uploadCv": "Upload CV",
+      "uploadCvNew": "Upload CV"
     },
     "cv": {
       "addTitle": "Add CV version {version}",
@@ -907,6 +909,58 @@
       "help": "Experts you may propose, with immutable structured CV versions.",
       "emptyTitle": "No experts yet",
       "emptyHelp": "Add an expert or import a CSV, then add a structured CV version."
+    },
+    "cvUpload": {
+      "titleNew": "Upload a CV for a new expert",
+      "titleFor": "Upload a new CV for {name}",
+      "help": "We read the CV and propose its fields with a quote for each. You review and confirm them before anything is saved.",
+      "file": "CV file",
+      "limits": "PDF or DOCX, up to 25 MiB. The file is scanned for malware.",
+      "noAutoSave": "Nothing is saved as a CV until you confirm it. A new upload never changes a saved CV.",
+      "submit": "Upload and review",
+      "cancel": "Cancel",
+      "failed": "The CV could not be uploaded"
+    },
+    "cvDrafts": {
+      "title": "CVs awaiting review",
+      "newExpert": "New expert",
+      "review": "Review",
+      "states": {
+        "PROCESSING_DOCUMENT": "Checking the file",
+        "QUEUED": "Waiting to be read",
+        "EXTRACTING": "Reading the CV",
+        "READY": "Ready for review",
+        "FAILED": "Fill in manually",
+        "CONFIRMED": "Saved as CV"
+      }
+    },
+    "cvReview": {
+      "eyebrow": "Partners & Experts",
+      "title": "Review CV",
+      "description": "Compare the proposed fields with the CV text. Edit anything, then confirm to save a new CV version.",
+      "back": "Back to experts",
+      "loading": "Loading the CV…",
+      "loadFailed": "This CV could not be loaded.",
+      "reading": "Reading the CV…",
+      "readingHelp": "The file is being checked and read. This page updates by itself.",
+      "proposed": "{count, plural, one {# field row proposed} other {# field rows proposed}} from the CV",
+      "dropped": "{count, plural, one {# proposed row was left out} other {# proposed rows were left out}} because its quote was not found in the CV. Check everything before saving.",
+      "checkEverything": "Each row shows the CV passage it came from. Check everything before saving.",
+      "failed": "The CV could not be read automatically",
+      "manualHelp": "Fill in the fields yourself from the CV text on the left. Your entries are saved the same way.",
+      "rejected": "This file failed the malware check. Nothing can be saved from it.",
+      "alreadySaved": "This CV was already saved as a CV version.",
+      "saved": "Saved as CV version {version} for {name}.",
+      "document": "CV text",
+      "documentLabel": "Text read from the uploaded CV",
+      "fields": "Proposed fields",
+      "noText": "No text could be read from this file.",
+      "truncated": "Only the beginning of a very long CV is shown.",
+      "expertName": "Expert name",
+      "noQuote": "Added by you: no quote from the CV.",
+      "unverifiedNote": "The saved CV version is marked Unverified until someone checks the original documents.",
+      "confirm": "Confirm and save CV version",
+      "saveFailed": "The CV version could not be saved"
     }
   },
   "proposal": {
@@ -1064,5 +1118,18 @@
     },
     "versionSummary": "{references, plural, one {# own assignment} other {# own assignments}} · {partners, plural, one {# partner} other {# partners}} · {addressed} of {total} criteria addressed · notes kept {notes}, dropped {dropped}",
     "noVersions": "No versions yet."
+  },
+  "experienceChanged": {
+    "title": "Your experience records changed since this analysis — re-run to update matches.",
+    "help": "The matches shown were computed from your records as they were when this analysis ran.",
+    "changed": "Changed since this analysis: {sections}.",
+    "sections": {
+      "OWN_EXPERIENCE": "own firm and project references",
+      "COMPANY_PROFILE": "company profile",
+      "READINESS_RECORDS": "readiness documents and records"
+    },
+    "rerun": "Re-run analysis",
+    "rerunFailed": "The analysis could not be started. Try again from the Requirements tab.",
+    "noDocuments": "The documents of this analysis are no longer available. Choose documents on the Requirements tab."
   }
 }

@@ -37,6 +37,56 @@ class MembershipResponse(BaseModel):
     updated_at: datetime
     activated_at: datetime | None = None
     revoked_at: datetime | None = None
+    # R3: filled on the OWNER member list so the Team section can name people.
+    user_name: str | None = None
+    user_email: str | None = None
+
+
+class EmailInvitationCreateRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    role: MembershipRole = MembershipRole.MEMBER
+
+
+class EmailInvitationResponse(BaseModel):
+    invitation_id: UUID
+    organization_id: UUID
+    email: str
+    role: MembershipRole
+    status: str
+    invited_by_membership_id: UUID
+    invited_by_name: str | None = None
+    expires_at: datetime
+    created_at: datetime
+    last_sent_at: datetime
+    send_count: int
+    accepted_at: datetime | None = None
+    revoked_at: datetime | None = None
+    accepted_user_id: UUID | None = None
+    # One-time link: present only in the create and resend responses.
+    invite_path: str | None = None
+    invite_url: str | None = None
+    # Present only in the create and resend responses: QUEUED when an e-mail was
+    # queued, DISABLED when e-mail delivery is not configured (copy the link instead),
+    # SKIPPED when a resend asked for a link only.
+    email_delivery: str | None = None
+
+
+class InvitationResendRequest(BaseModel):
+    # False: only issue a fresh link to copy (the previous link stops working), no e-mail.
+    send_email: bool = True
+
+
+class InvitationTokenRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=200)
+
+
+class InvitationPreviewResponse(BaseModel):
+    organization_name: str | None = None
+    inviter_name: str | None = None
+    role: MembershipRole
+    email_hint: str
+    status: str
+    expires_at: datetime
 
 
 class MembershipInvitationRequest(BaseModel):
@@ -298,6 +348,9 @@ class PursuitAnalysisPackItemResponse(BaseModel):
     page_count_known: bool
     content_sha256: str
     source_url: str | None = None
+    # R3: the pack selection, so a re-run can repeat it.
+    tender_document_id: UUID | None = None
+    document_version_id: UUID | None = None
 
 
 class PursuitRequirementResponse(BaseModel):
@@ -393,6 +446,11 @@ class PursuitAnalysisResponse(BaseModel):
     failure_reason: str | None = None
     inputs_changed: bool
     stale_reason: str | None = None
+    # R3: the organization's recorded experience/company evidence differs from the
+    # snapshot this run sealed; a re-run (explicit POST) updates the matches.
+    company_evidence_changed: bool = False
+    company_evidence_change_reason: str | None = None
+    company_evidence_changed_sections: list[str] = Field(default_factory=list)
     page_count_known: bool
     limit_disclosure: str
     pack_items: list[PursuitAnalysisPackItemResponse] = Field(default_factory=list)

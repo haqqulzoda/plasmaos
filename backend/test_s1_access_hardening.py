@@ -32,7 +32,9 @@ class S14AccessHardeningTests(unittest.TestCase):
 
         self.assertIn("async def require_approved_pilot_access", deps)
         self.assertIn("has_approved_pilot_account_access(current_user, profile)", deps)
-        self.assertIn("select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)", deps)
+        # R3 Task 6: the organization's profile through an ACTIVE membership, never the user's own.
+        self.assertIn("profile = await effective_company_profile(db, user_id=current_user.id)", deps)
+        self.assertNotIn("CompanyProfile.user_id == current_user.id", deps)
         self.assertIn("Approved pilot access required", deps)
         self.assertIn("if is_operator_user(current_user):", deps)
 

@@ -68,5 +68,92 @@
     "paused": "To‘xtatilgan"
   },
   "readinessLink": "Tayyorgarlik hujjatlari",
-  "readinessHelp": "Dalil sifatida ishlatiladigan sertifikat, litsenziya va boshqa hujjatlar."
+  "readinessHelp": "Dalil sifatida ishlatiladigan sertifikat, litsenziya va boshqa hujjatlar.",
+  "team": {
+    "title": "Jamoa",
+    "help": "Hamkasblarni e-mail orqali taklif qiling. Ular aynan shu manzil bilan Google orqali kirganda tashkilotga qo‘shiladi.",
+    "ownerOnlyTitle": "Jamoani faqat egalar boshqaradi",
+    "ownerOnlyHelp": "Hamkasblarni taklif qilish yoki rollarni o‘zgartirish uchun tashkilot egasiga murojaat qiling.",
+    "loadFailed": "Jamoani yuklab bo‘lmadi.",
+    "loading": "Jamoa yuklanmoqda…",
+    "retry": "Qayta urinish",
+    "dismiss": "Yopish",
+    "cancel": "Bekor qilish",
+    "roles": {
+      "OWNER": "Ega",
+      "MEMBER": "A’zo"
+    },
+    "members": {
+      "title": "A’zolar",
+      "unnamed": "Nomsiz a’zo",
+      "role": "Rol",
+      "you": "siz",
+      "revoke": "Chiqarish",
+      "revokeTitle": "Bu a’zoni chiqarasizmi?",
+      "revokeHelp": "{name} bu tashkilotga kirish huquqini yo‘qotadi.",
+      "revokeDetail": "Unga biriktirilgan tenderlar mas’ulsiz qoladi. Keyinroq uni yana taklif qilishingiz mumkin.",
+      "revokeConfirm": "A’zoni chiqarish",
+      "states": {
+        "ACTIVE": "Faol",
+        "INVITED": "Taklif qilingan",
+        "REVOKED": "Chiqarilgan"
+      }
+    },
+    "invite": {
+      "title": "E-mail orqali taklif qilish",
+      "help": "Taklif 14 kun amal qiladi. U hech qachon shu domendagi boshqa manzillarga tatbiq etilmaydi.",
+      "email": "E-mail manzili",
+      "role": "Rol",
+      "submit": "Taklif yuborish"
+    },
+    "link": {
+      "title": "{email} uchun taklif tayyor",
+      "label": "Taklif havolasi",
+      "copy": "Havolani nusxalash",
+      "copied": "Nusxalandi",
+      "emailQueued": "Xat yuborilmoqda. Havolani o‘zingiz ham ulashishingiz mumkin.",
+      "emailDisabled": "E-mail yuborish sozlanmagan. Havolani nusxalab, o‘zingiz yuboring.",
+      "linkOnly": "Yangi havola yaratildi. Avvalgi havola endi ishlamaydi."
+    },
+    "pending": {
+      "title": "Kutilayotgan takliflar",
+      "empty": "Kutilayotgan takliflar yo‘q.",
+      "meta": "{role} · {date} gacha amal qiladi · {count} marta yuborilgan",
+      "copy": "Yangi havolani nusxalash",
+      "copyHelp": "Yangi havola yaratib, uni nusxalaydi. Avvalgi havola ishlamay qoladi.",
+      "resend": "Qayta yuborish",
+      "revoke": "Bekor qilish",
+      "states": {
+        "OPEN": "Ochiq",
+        "EXPIRED": "Muddati o‘tgan",
+        "ACCEPTED": "Qabul qilingan",
+        "REVOKED": "Bekor qilingan"
+      }
+    },
+    "errors": {
+      "alreadyMember": "Bu shaxs allaqachon a’zo.",
+      "alreadyInvited": "Bu manzil uchun ochiq taklif mavjud. «Qayta yuborish»dan foydalaning.",
+      "tooMany": "Ochiq takliflar juda ko‘p. Avval ba’zilarini bekor qiling.",
+      "invalidEmail": "To‘g‘ri e-mail manzilini kiriting.",
+      "ownerOnly": "Buni faqat ega bajarishi mumkin.",
+      "lastOwner": "Oxirgi egani chiqarib yoki rolini pasaytirib bo‘lmaydi.",
+      "emailMismatch": "Bu taklif boshqa e-mail manzili uchun.",
+      "failed": "O‘zgarishni saqlab bo‘lmadi. Qayta urinib ko‘ring."
+    }
+  },
+  "emailNotifications": {
+    "title": "E-mail bildirishnomalari",
+    "help": "Qaysi xatlarni olishni tanlang. Ilova ichidagi bildirishnomalar o‘zgarmaydi.",
+    "channelOff": "Bu serverda e-mail yuborish hali sozlanmagan. Tanlovingiz saqlanadi va sozlangach amal qiladi.",
+    "analysis": "Tahlil yakunlandi yoki bajarilmadi",
+    "analysisHelp": "Siz boshlagan tahlil yakunlanganda yoki yakunlab bo‘lmaganda.",
+    "eoi": "Qiziqish bildirish xati loyihasi tayyor",
+    "eoiHelp": "Siz yaratgan yoki sizga biriktirilgan tender bo‘yicha loyiha tayyor bo‘lganda.",
+    "digest": "Kundalik imkoniyatlar to‘plami",
+    "digestHelp": "Kompaniya profilingizga mos 10 tagacha yangi ochiq imkoniyat, soat {time} da, faqat mos imkoniyatlar bo‘lgan kunlari.",
+    "save": "E-mail sozlamalarini saqlash",
+    "saved": "E-mail sozlamalari saqlandi",
+    "loadFailed": "E-mail sozlamalarini yuklab bo‘lmadi.",
+    "saveFailed": "E-mail sozlamalarini saqlab bo‘lmadi."
+  }
 }

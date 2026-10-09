@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -161,3 +162,76 @@ async def ensure_profile_organization(
         )
         await db.flush()
     return OrganizationContext(organization=organization, membership=membership)
+
+
+# R3 Task 6: the organization a request works in, from the X-Organization-ID header
+# (set by app.main's OrganizationSelectionMiddleware); None when the request names none.
+SELECTED_ORGANIZATION: ContextVar[UUID | None] = ContextVar("plasma_selected_organization", default=None)
+
+
+@dataclass(frozen=True)
+class ProfileContext:
+    organization: Organization
+    membership: Membership
+    profile: CompanyProfile
+
+
+async def organization_profile_context(
+    db: AsyncSession, *, user_id: UUID, organization_id: UUID | None = None
+) -> ProfileContext | None:
+    """The organization context whose ONE company profile every profile-dependent read uses.
+
+    R3 Task 6: the profile is always the organization's (legacy_company_profile_id),
+    reached through an ACTIVE membership, never "the user's own profile":
+
+    * an explicit organization (argument or X-Organization-ID) must be an ACTIVE
+      membership, else OrganizationAccessDeniedError;
+    * otherwise the organization whose profile the user created (an owner's own
+      company, so existing single-user accounts are unchanged), else the earliest
+      activated membership.
+
+    A revoked membership is invisible at once. None when the user belongs nowhere.
+    """
+    selected = organization_id or SELECTED_ORGANIZATION.get()
+    statement = (
+        select(Organization, Membership, CompanyProfile)
+        .join(Membership, Membership.organization_id == Organization.id)
+        .join(CompanyProfile, CompanyProfile.id == Organization.legacy_company_profile_id)
+        .where(Membership.user_id == user_id, Membership.state == MembershipState.ACTIVE)
+        .order_by(
+            case((CompanyProfile.user_id == user_id, 0), else_=1),
+            Membership.activated_at.asc().nulls_last(),
+            Membership.id,
+        )
+        .limit(1)
+    )
+    if selected is not None:
+        statement = statement.where(Organization.id == selected)
+    row = (await db.execute(statement)).first()
+    if row is None:
+        if selected is not None:
+            raise OrganizationAccessDeniedError("active organization membership required")
+        return None
+    return ProfileContext(organization=row[0], membership=row[1], profile=row[2])
+
+
+async def effective_company_profile(db: AsyncSession, *, user_id: UUID) -> CompanyProfile | None:
+    """The company profile of the user's organization context (see organization_profile_context).
+
+    Legacy accounts whose own profile was never mapped to an organization keep it.
+    """
+    context = await organization_profile_context(db, user_id=user_id)
+    if context is not None:
+        return context.profile
+    if SELECTED_ORGANIZATION.get() is not None:
+        return None
+    own = await db.scalar(select(CompanyProfile).where(CompanyProfile.user_id == user_id))
+    if own is None:
+        return None
+    organized = await db.scalar(select(Organization.id).where(Organization.legacy_company_profile_id == own.id))
+    return own if organized is None else None
+
+
+async def effective_company_profile_id(db: AsyncSession, *, user_id: UUID) -> UUID | None:
+    profile = await effective_company_profile(db, user_id=user_id)
+    return profile.id if profile is not None else None

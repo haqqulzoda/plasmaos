@@ -118,3 +118,38 @@ async def dispatch_pending():
 @celery_app.task(name="app.workers.communications_tasks.dispatch_broadcasts")
 def dispatch_broadcasts():
     return asyncio.run(dispatch_pending())
+
+
+# ---- R3 Task 4: SMTP e-mail channel ----------------------------------------------------------------
+
+
+async def _send_emails():
+    from app.services.email_notifications import send_due_emails
+
+    try:
+        async with AsyncSessionLocal() as db:
+            return await send_due_emails(db)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.communications_tasks.send_emails")
+def send_emails():
+    return asyncio.run(_send_emails())
+
+
+async def _stage_digests():
+    from app.services.email_notifications import stage_daily_digests
+
+    try:
+        async with AsyncSessionLocal() as db:
+            staged = await stage_daily_digests(db)
+            await db.commit()
+            return {"staged": staged}
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.communications_tasks.stage_daily_digests")
+def stage_daily_digests_task():
+    return asyncio.run(_stage_digests())

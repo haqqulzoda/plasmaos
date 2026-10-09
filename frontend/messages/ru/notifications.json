@@ -58,9 +58,30 @@
       "title": "Не удалось получить документы тендера",
       "body": "Документы тендера не удалось подготовить. Откройте тендер и повторите попытку."
     },
-    "privateDocumentsReady": {"title":"Частные документы готовы","body":"Готово частных документов: {processedCount} из {totalCount}."},
-    "privateDocumentsPartial": {"title":"Частные документы готовы частично","body":"Обработано {processedCount} из {totalCount}; ошибок: {failedCount}."},
-    "privateDocumentsFailed": {"title":"Ошибка обработки частных документов","body":"Не удалось подготовить пакет. Откройте рабочую область для проверки."}
+    "privateDocumentsReady": {
+      "title": "Частные документы готовы",
+      "body": "Готово частных документов: {processedCount} из {totalCount}."
+    },
+    "privateDocumentsPartial": {
+      "title": "Частные документы готовы частично",
+      "body": "Обработано {processedCount} из {totalCount}; ошибок: {failedCount}."
+    },
+    "privateDocumentsFailed": {
+      "title": "Ошибка обработки частных документов",
+      "body": "Не удалось подготовить пакет. Откройте рабочую область для проверки."
+    },
+    "pursuitAnalysisCompleted": {
+      "title": "Анализ готов",
+      "body": "Запущенный вами анализ завершён. Проверьте требования и пробелы."
+    },
+    "pursuitAnalysisFailed": {
+      "title": "Не удалось завершить анализ",
+      "body": "Запущенный вами анализ не удалось завершить. Откройте тендер, чтобы повторить."
+    },
+    "eoiDraftReady": {
+      "title": "Черновик заявления о заинтересованности готов",
+      "body": "Черновик {versionNumber} (DOCX и PDF) готов к скачиванию."
+    }
   },
   "fallback": {
     "title": "Обновление аккаунта",

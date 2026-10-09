@@ -245,6 +245,63 @@ async def _company_snapshot(db: AsyncSession, organization_id: UUID) -> tuple[UU
     return profile.id, snapshot, metadata_only, file_backed
 
 
+# R3 Task 2: which recorded company evidence a sealed run used, by banner section.
+COMPANY_EVIDENCE_SECTIONS: dict[str, tuple[str, ...]] = {
+    "OWN_EXPERIENCE": ("self_firm", "own_project_references"),
+    "COMPANY_PROFILE": ("profile",),
+    "READINESS_RECORDS": ("readiness_documents", "certifications", "licenses", "financial_history"),
+}
+COMPANY_EVIDENCE_REASONS = {
+    "OWN_EXPERIENCE": "Your own firm or its project references changed since this analysis.",
+    "COMPANY_PROFILE": "Your company profile changed since this analysis.",
+    "READINESS_RECORDS": "Your readiness documents, certifications, licenses or financial records changed since this analysis.",
+}
+
+
+@dataclass(frozen=True)
+class CompanyEvidenceState:
+    changed: bool
+    reason: str | None = None
+    sections: tuple[str, ...] = ()
+
+
+def _section_value(snapshot: dict[str, Any], key: str, *, sealed: bool) -> Any:
+    value = snapshot.get(key)
+    # A run sealed before a section existed recorded nothing for it: an empty current
+    # value is no change.
+    if sealed and key not in snapshot:
+        return None
+    return value or None
+
+
+def compare_company_evidence(sealed_sha256: str, sealed: dict[str, Any], current: dict[str, Any]) -> CompanyEvidenceState:
+    """Pure comparison of a run's sealed company snapshot with the current records."""
+    if _sha(current) == sealed_sha256:
+        return CompanyEvidenceState(changed=False)
+    sections = tuple(
+        name for name, keys in COMPANY_EVIDENCE_SECTIONS.items()
+        if any(
+            _sha(_section_value(sealed, key, sealed=True)) != _sha(_section_value(current, key, sealed=False))
+            for key in keys
+        )
+    )
+    if not sections:
+        return CompanyEvidenceState(changed=False)
+    return CompanyEvidenceState(changed=True, reason=COMPANY_EVIDENCE_REASONS[sections[0]], sections=sections)
+
+
+async def company_evidence_state(db: AsyncSession, *, organization_id: UUID, run_id: UUID) -> CompanyEvidenceState:
+    """Passive: recompute the company snapshot (reads only) and compare with the sealed one."""
+    sealed = await db.scalar(select(AnalysisCompanySnapshot).where(AnalysisCompanySnapshot.analysis_run_id == run_id))
+    if sealed is None:
+        return CompanyEvidenceState(changed=False)
+    try:
+        _, current, _, _ = await _company_snapshot(db, organization_id)
+    except AnalysisAdmissionError:
+        return CompanyEvidenceState(changed=False)
+    return compare_company_evidence(sealed.snapshot_sha256, sealed.snapshot_json, current)
+
+
 def _own_reference_snapshot(row: ProjectReference) -> dict[str, Any]:
     return {
         "id": str(row.id), "project_name": row.project_name, "client_name": row.client_name,
@@ -575,6 +632,26 @@ def _coverage_for_position(fact: pursuit_analyzer.ExtractedFact) -> tuple[str, s
     )
 
 
+async def _stage_run_outcome(db: AsyncSession, run: AnalysisRun) -> None:
+    """R3 Task 4: tell the person who started the run that it finished (inbox and e-mail)."""
+    if run.status not in {"COMPLETED", "FAILED"}:
+        return
+    from app.services.notifications import stage_system_outbox
+
+    user_id = await db.scalar(select(Membership.user_id).where(Membership.id == run.requested_by_membership_id))
+    if user_id is None:
+        return
+    event_type = "PURSUIT_ANALYSIS_COMPLETED" if run.status == "COMPLETED" else "PURSUIT_ANALYSIS_FAILED"
+    await stage_system_outbox(
+        db, user_id=user_id, event_type=event_type,
+        payload={
+            "organization_id": str(run.organization_id), "pursuit_id": str(run.pursuit_id),
+            "analysis_run_id": str(run.id),
+        },
+        dedupe_key=f"pursuit-analysis:{run.id}:{run.status}",
+    )
+
+
 async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str) -> None:
     """Lease and execute one durable run. Replays are terminally idempotent."""
     now = datetime.now(timezone.utc)
@@ -590,6 +667,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
         run.failure_stage = "LEASE"
         run.failure_reason = "Retry limit exhausted before a worker could complete the run"
         run.completed_at = now
+        await _stage_run_outcome(db, run)
         await db.commit()
         return
     run.status = "RUNNING"
@@ -771,6 +849,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
         run.lease_owner = None
         run.failure_stage = None
         run.failure_reason = None
+        await _stage_run_outcome(db, run)
         await db.commit()
     except Exception as exc:
         await db.rollback()
@@ -815,6 +894,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
             }
             run.lease_until = None
             run.lease_owner = None
+            await _stage_run_outcome(db, run)
             await db.commit()
         raise
 
@@ -877,8 +957,11 @@ async def _latest_assertions(db: AsyncSession, run_id: UUID) -> dict[tuple[str, 
 
 
 async def get_analysis_run(
-    db: AsyncSession, *, organization_id: UUID, pursuit_id: UUID, run_id: UUID | None = None
+    db: AsyncSession, *, organization_id: UUID, pursuit_id: UUID, run_id: UUID | None = None,
+    include_company_evidence: bool = False,
 ) -> PursuitAnalysisResponse | None:
+    """One run with effective review state. ``include_company_evidence`` (the customer
+    analysis reads) also rebuilds the company snapshot to flag changed experience (R3)."""
     statement = select(AnalysisRun).where(
         AnalysisRun.organization_id == organization_id, AnalysisRun.pursuit_id == pursuit_id
     )
@@ -990,7 +1073,14 @@ async def get_analysis_run(
             effective_review_state=review, rationale=item.rationale,
             matched_reference_ids=matched_by_requirement.get(item.requirement_id, []) if item.requirement_id else [],
         ))
+    evidence = (
+        await company_evidence_state(db, organization_id=organization_id, run_id=run.id)
+        if include_company_evidence else CompanyEvidenceState(changed=False)
+    )
     return PursuitAnalysisResponse(
+        company_evidence_changed=evidence.changed,
+        company_evidence_change_reason=evidence.reason,
+        company_evidence_changed_sections=list(evidence.sections),
         analysis_run_id=run.id, analysis_pack_id=pack.id, status=run.status,
         result_completeness=run.result_completeness, analysis_language=run.analysis_language,
         quality_state=quality_state, quality_summary=quality_summary,
@@ -1005,6 +1095,7 @@ async def get_analysis_run(
             display_name=item.display_name, role=item.role, version_number=item.version_number,
             page_count=item.page_count, page_count_known=item.page_count_known,
             content_sha256=item.content_sha256, source_url=item.source_url,
+            tender_document_id=item.tender_document_id, document_version_id=item.document_version_id,
         ) for item in items],
         requirements=requirement_responses, positions=position_responses, gaps=gap_responses,
         submission_and_notes=note_responses,

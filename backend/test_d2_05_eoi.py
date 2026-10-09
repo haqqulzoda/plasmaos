@@ -71,7 +71,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
 D2_01_HEAD = "20261004_0001_d2_01_own_experience"
-HEAD = "20261005_0001_d2_05_eoi_drafts"
+HEAD = "20261011_0001_r3_organization_record_events"
 PRICE_WORDS = re.compile(r"\bprice|\bpricing|\bfee\b|\bfees\b|remuneration|financial proposal|цен[аыу]|стоимость услуг|вознагражд", re.I)
 
 
@@ -154,6 +154,8 @@ def test_contract_shapes_match_the_frontend_contract() -> None:
     assert set(paths["/api/v1/pursuits/{pursuit_id}/eoi-artifacts/{artifact_id}/download"]) == {"get"}
     assert set(EoiSuggestionsResponse.model_fields) == {
         "analysis_run_id", "run_current", "defaults", "criteria", "notes", "own_references", "partner_firms",
+        # R3 Task 2: the experience-changed banner.
+        "company_evidence_changed", "company_evidence_change_reason", "company_evidence_changed_sections",
     }
     assert set(EoiReference.model_fields) == {
         "reference_id", "project_name", "client_name", "country", "sector", "service", "role",
@@ -592,6 +594,12 @@ async def _eoi_flow(sessions, database, ids, org_a, org_b, owner_a, owner_b, mon
         "own_reference_count": 2, "partner_count": 1, "relevance_notes_generated": 1, "relevance_notes_dropped": 2,
     }
     async with sessions() as db:
+        # R3 Task 4: the creator hears that the draft is ready (inbox, and e-mail by preference).
+        from app.models.communications import NotificationOutbox
+        ready = list((await db.scalars(select(NotificationOutbox).where(NotificationOutbox.event_type == "EOI_DRAFT_READY"))).all())
+        assert [(item.user_id, item.payload["eoi_draft_id"], item.payload["version_number"]) for item in ready] == [
+            (ids["user_a"], str(draft.draft_id), 1)
+        ]
         row = await db.get(EoiDraft, draft.draft_id)
         manifest = row.manifest
         assert manifest["price_information_included"] is False

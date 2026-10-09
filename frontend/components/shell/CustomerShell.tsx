@@ -18,6 +18,7 @@ import {
   Users,
 } from 'lucide-react';
 import { PlasmaLogo, PlasmaMark } from '@/components/brand/PlasmaLogo';
+import { OrganizationSwitcher } from '@/components/shell/OrganizationSwitcher';
 import { Button } from '@/components/ui/Button';
 import { Drawer, Dropdown } from '@/components/ui/Overlay';
 import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
@@ -142,6 +143,7 @@ export function CustomerShell({
               <Upload aria-hidden />
               <span>{t('uploadTender')}</span>
             </Link>
+            <OrganizationSwitcher />
             {search}
             {refresh}
             {notifications}

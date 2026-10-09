@@ -313,7 +313,8 @@ export const emptyCvDraft = (): CvDraft => ({
 
 const filled = (row: Record<string, string>) => Object.values(row).some((value) => text(value));
 const YEAR = /^\d{4}$/;
-const MONTH_OR_DATE = /^\d{4}-\d{2}(-\d{2})?$/;
+// A year alone is allowed: CVs often state assignment periods in years (R3 CV upload).
+const MONTH_OR_DATE = /^\d{4}(-\d{2}(-\d{2})?)?$/;
 
 /** Errors keyed "section.index.field"; empty rows are ignored. */
 export function cvErrors(draft: CvDraft): FieldError[] {
@@ -556,4 +557,81 @@ export function isNotFound(error: unknown): boolean {
 
 export function reviewedState(evidenceState: string): boolean {
     return evidenceState === 'REVIEWED' || evidenceState === 'VERIFIED';
+}
+
+// ---- CV upload -> reviewed CV draft (R3 Task 3) -------------------------------------------------------
+
+export type CvDraftState = 'PROCESSING_DOCUMENT' | 'QUEUED' | 'EXTRACTING' | 'READY' | 'FAILED' | 'CONFIRMED';
+type QuotedRow = Record<string, string> & { quote?: string };
+export type CvProposal = {
+    full_name?: { value: string; quote: string } | null;
+    education?: QuotedRow[]; assignments?: QuotedRow[]; languages?: QuotedRow[]; certifications?: QuotedRow[];
+};
+/** Rows under review keep the model's quote (shown beside the field, sent back as provenance). */
+export type ReviewDraft = {
+    education: (EducationRow & { quote?: string })[];
+    assignments: (AssignmentRow & { quote?: string })[];
+    languages: (LanguageRow & { quote?: string })[];
+    certifications: (CertificationRow & { quote?: string })[];
+};
+
+export const CV_DRAFT_PENDING: readonly CvDraftState[] = ['PROCESSING_DOCUMENT', 'QUEUED', 'EXTRACTING'];
+
+/** Still being read: poll. Confirmation is allowed once the document itself is processed. */
+export function cvDraftPending(state: CvDraftState): boolean {
+    return CV_DRAFT_PENDING.includes(state);
+}
+
+export function cvDraftConfirmable(state: CvDraftState, failureCode?: string | null): boolean {
+    return state !== 'CONFIRMED' && state !== 'PROCESSING_DOCUMENT' && failureCode !== 'DOCUMENT_REJECTED';
+}
+
+function rowsFrom<T extends Record<string, string>>(rows: QuotedRow[] | undefined, empty: () => T): (T & { quote?: string })[] {
+    return (rows ?? []).map((row) => {
+        const base = empty();
+        const filledRow = Object.fromEntries(Object.keys(base).map((key) => [key, text(row[key])])) as T;
+        return row.quote ? { ...filledRow, quote: text(row.quote) } : filledRow;
+    });
+}
+
+/** Proposed rows become editable rows; a section with nothing proposed starts with one empty row. */
+export function reviewDraftFromProposal(proposal: CvProposal | null | undefined): ReviewDraft {
+    const draft: ReviewDraft = {
+        education: rowsFrom(proposal?.education, emptyEducation),
+        assignments: rowsFrom(proposal?.assignments, emptyAssignment),
+        languages: rowsFrom(proposal?.languages, emptyLanguage),
+        certifications: rowsFrom(proposal?.certifications, emptyCertification),
+    };
+    if (!draft.education.length) draft.education.push(emptyEducation());
+    if (!draft.assignments.length) draft.assignments.push(emptyAssignment());
+    if (!draft.languages.length) draft.languages.push(emptyLanguage());
+    return draft;
+}
+
+function withoutQuote<T extends { quote?: string }>(row: T): Omit<T, 'quote'> {
+    const copy = { ...row };
+    delete copy.quote;
+    return copy;
+}
+
+/** The same field rules as a manual CV version; the quote is not a field. */
+export function reviewDraftErrors(draft: ReviewDraft, expertName: string | null): FieldError[] {
+    const errors = cvErrors({
+        education: draft.education.map(withoutQuote), assignments: draft.assignments.map(withoutQuote),
+        languages: draft.languages.map(withoutQuote), certifications: draft.certifications.map(withoutQuote),
+    });
+    if (expertName !== null && text(expertName).length < 2) errors.push({field: 'expert_name', code: 'required'});
+    return errors;
+}
+
+/** CVDraftConfirmRequest: empty rows dropped, quotes kept for provenance (verified server-side). */
+export function cvConfirmPayload(draft: ReviewDraft, expertName: string | null) {
+    const keep = (rows: Record<string, string | undefined>[]) => rows
+        .filter((row) => Object.entries(row).some(([key, value]) => key !== 'quote' && text(value)))
+        .map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, text(value)]).filter(([, value]) => value)));
+    return {
+        ...(expertName !== null ? { new_expert_name: text(expertName).replace(/\s+/g, ' ') } : {}),
+        education: keep(draft.education), assignments: keep(draft.assignments),
+        languages: keep(draft.languages), certifications: keep(draft.certifications),
+    };
 }

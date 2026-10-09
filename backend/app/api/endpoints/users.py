@@ -17,6 +17,7 @@ from app.api.deps import (
     is_operator_user,
     require_admin,
     require_approved_pilot_access,
+    require_approved_user,
 )
 from app.core.access import (
     COMPANY_APPROVAL_APPROVED,
@@ -34,7 +35,10 @@ from app.core.services import normalize_target_services
 from app.db.session import get_db
 from app.models.all_models import User, SubscriptionTier
 from app.models.company import CompanyProfile
-from app.services.organization_context import ensure_profile_organization
+from app.models.base import MembershipRole, MembershipState
+from app.models.tenancy import Membership, Organization
+from app.services.organization_context import effective_company_profile, ensure_profile_organization, organization_profile_context
+from app.services.organization_records import ADMIN_ONLY_PROFILE_FIELDS, changed_fields, record_organization_change, snapshot
 
 router = APIRouter()
 
@@ -459,6 +463,15 @@ async def _get_company_profile(
     db: AsyncSession,
     user_id: UUID,
 ) -> CompanyProfile | None:
+    """Profile for reads: own, else the organization joined by invitation (R3)."""
+    return await effective_company_profile(db, user_id=user_id)
+
+
+async def _get_own_company_profile(
+    *,
+    db: AsyncSession,
+    user_id: UUID,
+) -> CompanyProfile | None:
     result = await db.execute(
         select(CompanyProfile).where(CompanyProfile.user_id == user_id)
     )
@@ -494,19 +507,31 @@ async def update_company_profile(
     
     Only updates fields that are provided (not None).
     """
-    profile = await _get_company_profile(db=db, user_id=current_user.id)
+    # R3 Task 6: the selected organization's profile; any ACTIVE member may edit it.
+    # Approval and pilot status are not in CompanyProfileUpdate: they stay admin-only.
+    context = await organization_profile_context(db, user_id=current_user.id)
+    profile = context.profile if context is not None else await effective_company_profile(db, user_id=current_user.id)
     if profile is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company onboarding required",
         )
 
-    update_data = profile_data.model_dump(exclude_unset=True)
+    update_data = {
+        field: value for field, value in profile_data.model_dump(exclude_unset=True).items()
+        if field not in ADMIN_ONLY_PROFILE_FIELDS
+    }
+    before = snapshot(profile, update_data)
     for field, value in update_data.items():
         setattr(profile, field, value)
 
     await db.flush()
-    await ensure_profile_organization(db, profile=profile)
+    organized = await ensure_profile_organization(db, profile=profile)
+    await record_organization_change(
+        db, organization_id=organized.organization.id, company_profile_id=profile.id,
+        actor_user_id=current_user.id, actor_membership_id=context.membership.id if context else organized.membership.id,
+        record_type="COMPANY_PROFILE", action="UPDATE", fields=changed_fields(before, update_data), record_id=profile.id,
+    )
     await db.commit()
     await db.refresh(profile)
     
@@ -520,7 +545,13 @@ async def submit_company_onboarding(
     db: AsyncSession = Depends(get_db),
 ) -> CompanyProfileResponse:
     """Create or update the current user's company profile from onboarding."""
-    profile = await _get_company_profile(db=db, user_id=current_user.id)
+    profile = await _get_own_company_profile(db=db, user_id=current_user.id)
+    if profile is None and await effective_company_profile(db, user_id=current_user.id) is not None:
+        # Joined an organization by invitation: onboarding is skipped, never a second company.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Already a member of an organization",
+        )
     is_new_profile = profile is None
     if profile is None:
         profile = CompanyProfile(
@@ -549,3 +580,52 @@ async def submit_company_onboarding(
     await db.refresh(profile)
 
     return _company_profile_response(current_user=current_user, profile=profile)
+
+
+# ---- R3 Task 4: e-mail notification preferences ----------------------------------------------------
+
+
+class EmailPreferencesResponse(BaseModel):
+    """Effective switches (stored, else defaults) and whether e-mail is configured at all."""
+
+    email_channel_enabled: bool
+    analysis_enabled: bool
+    eoi_enabled: bool
+    digest_enabled: bool
+    digest_schedule: str = "08:00 Asia/Tashkent"
+
+
+class EmailPreferencesUpdate(BaseModel):
+    analysis_enabled: bool | None = None
+    eoi_enabled: bool | None = None
+    digest_enabled: bool | None = None
+
+
+def _email_preferences_response(values: dict[str, bool]) -> EmailPreferencesResponse:
+    from app.services.email_notifications import email_channel_enabled
+
+    return EmailPreferencesResponse(email_channel_enabled=email_channel_enabled(), **values)
+
+
+@router.get("/me/email-preferences", response_model=EmailPreferencesResponse)
+async def get_email_preferences(
+    current_user: User = Depends(require_approved_user),
+    db: AsyncSession = Depends(get_db),
+) -> EmailPreferencesResponse:
+    """Passive: defaults are computed, nothing is stored until the user changes a switch."""
+    from app.services.email_notifications import effective_preferences
+
+    return _email_preferences_response(await effective_preferences(db, current_user))
+
+
+@router.put("/me/email-preferences", response_model=EmailPreferencesResponse)
+async def update_email_preferences(
+    payload: EmailPreferencesUpdate,
+    current_user: User = Depends(require_approved_user),
+    db: AsyncSession = Depends(get_db),
+) -> EmailPreferencesResponse:
+    from app.services.email_notifications import update_preferences
+
+    values = await update_preferences(db, current_user, payload.model_dump(exclude_unset=True))
+    await db.commit()
+    return _email_preferences_response(values)

@@ -51,7 +51,7 @@ from app.services.eoi_document import docx_bytes, pdf_bytes
 from app.services.eoi_notes import NoteRequest, ProviderCall, generate_relevance_notes
 from app.services.own_experience import is_experience_requirement, match_own_references, requirement_statement
 from app.services.private_documents import build_analysis_pack_candidate
-from app.services.pursuit_analysis import get_analysis_run
+from app.services.pursuit_analysis import company_evidence_state, get_analysis_run
 
 
 MANIFEST_SCHEMA = "d2-05.eoi-manifest.v1"
@@ -379,6 +379,7 @@ async def eoi_suggestions(
     analysis = data["analysis"]
     defaults, _ = await _defaults(db, organization_id, pursuit, data["self_firm"])
     reasons = await _run_current(db, organization_id, pursuit_id, run)
+    evidence = await company_evidence_state(db, organization_id=organization_id, run_id=run.id)
     own_ids_by_requirement: dict[str, list[str]] = defaultdict(list)
     for reference_id, requirement_ids in data["own_matches"].items():
         for requirement_id in requirement_ids:
@@ -411,6 +412,9 @@ async def eoi_suggestions(
         ))
     return EoiSuggestionsResponse(
         analysis_run_id=run.id, run_current=not reasons, defaults=defaults, criteria=criteria, notes=notes,
+        company_evidence_changed=evidence.changed,
+        company_evidence_change_reason=evidence.reason,
+        company_evidence_changed_sections=list(evidence.sections),
         own_references=_ranked(data["own"], data["own_matches"]), partner_firms=partner_firms,
     )
 
@@ -605,6 +609,7 @@ async def create_eoi_draft(
                 storage_key=storage_key, content_sha256=hashlib.sha256(content).hexdigest(),
                 byte_size=len(content), media_type=MEDIA_TYPES[fmt],
             ))
+        await _stage_draft_ready(db, organization_id, pursuit, draft_id, version, membership_id)
         await db.commit()
     except Exception:
         await db.rollback()
@@ -615,6 +620,31 @@ async def create_eoi_draft(
     if response is None:
         raise RuntimeError("The EOI draft could not be read back")
     return response
+
+
+async def _stage_draft_ready(
+    db: AsyncSession, organization_id: UUID, pursuit: OrganizationPursuit, draft_id: UUID, version: int,
+    membership_id: UUID,
+) -> None:
+    """R3 Task 4: the creator and the pursuit owner hear that the draft is ready."""
+    from app.services.notifications import stage_system_outbox
+
+    memberships = {membership_id, *([pursuit.owner_membership_id] if pursuit.owner_membership_id else [])}
+    user_ids = set((await db.scalars(
+        select(Membership.user_id).where(
+            Membership.id.in_(memberships), Membership.organization_id == organization_id,
+            Membership.state == MembershipState.ACTIVE,
+        )
+    )).all())
+    for user_id in sorted(user_ids, key=str):
+        await stage_system_outbox(
+            db, user_id=user_id, event_type="EOI_DRAFT_READY",
+            payload={
+                "organization_id": str(organization_id), "pursuit_id": str(pursuit.id),
+                "eoi_draft_id": str(draft_id), "version_number": int(version),
+            },
+            dedupe_key=f"eoi-draft:{draft_id}:{user_id}",
+        )
 
 
 def _write_private(storage_key: str, content: bytes) -> Path:

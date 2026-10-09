@@ -61,8 +61,8 @@ def test_proposal_reads_require_owned_user_and_valid_profile_context():
     assert "Proposal.user_id == current_user.id" in source
     assert "profile_id = await _owned_profile_id" in source
     assert "OrganizationPursuit.organization_id == organization_id" in source
-    assert "Membership.state == MembershipState.ACTIVE" in source
-    assert "CompanyProfile.user_id == user_id" in source
+    # R3 Task 6: the selected organization's profile through an ACTIVE membership.
+    assert "organization_profile_context(db, user_id=user_id)" in source
 
 
 def test_proposal_status_and_exports_never_write_engagement_submission():

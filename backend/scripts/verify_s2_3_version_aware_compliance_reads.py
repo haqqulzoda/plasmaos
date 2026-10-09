@@ -36,7 +36,7 @@ from scripts import test_s0_5b4_baseline as support
 from scripts import verify_s2_2_analysis_version_foundation as s22
 
 
-HEAD = "20261005_0001_d2_05_eoi_drafts"
+HEAD = "20261011_0001_r3_organization_record_events"
 S2_1_HEAD = "20260827_0001_s2_1_compliance_ownership"
 
 

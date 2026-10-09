@@ -613,7 +613,7 @@ async def latest_pursuit_analysis(
 ) -> PursuitAnalysisResponse | None:
     context = await _context(db, current_user, x_organization_id)
     return await get_analysis_run(
-        db, organization_id=context.organization.id, pursuit_id=pursuit_id
+        db, organization_id=context.organization.id, pursuit_id=pursuit_id, include_company_evidence=True,
     )
 
 
@@ -627,7 +627,8 @@ async def pursuit_analysis_run(
 ) -> PursuitAnalysisResponse:
     context = await _context(db, current_user, x_organization_id)
     response = await get_analysis_run(
-        db, organization_id=context.organization.id, pursuit_id=pursuit_id, run_id=run_id
+        db, organization_id=context.organization.id, pursuit_id=pursuit_id, run_id=run_id,
+        include_company_evidence=True,
     )
     if response is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis run not found")

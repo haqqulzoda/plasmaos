@@ -3927,3 +3927,272 @@
 @media (max-width: 720px) {
   .eoi-experience-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* R3 Task 1: Team section on Company & Experience. */
+.team-section h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  font-size: var(--ds-heading-sm);
+  margin: 0;
+}
+.team-section h3 svg {
+  inline-size: 1.1em;
+  block-size: 1.1em;
+}
+.team-block {
+  display: grid;
+  gap: var(--ds-space-3);
+  min-inline-size: 0;
+}
+.team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+}
+.team-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ds-space-3);
+  align-items: center;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  min-inline-size: 0;
+}
+.team-row + .team-row {
+  border-block-start: 1px solid var(--ds-border);
+}
+.team-row .ds-field {
+  min-inline-size: 9rem;
+}
+.team-identity {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.team-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.team-invite-fields {
+  display: grid;
+  gap: var(--ds-space-3);
+  align-items: end;
+}
+.team-link {
+  align-items: end;
+  flex-wrap: wrap;
+}
+.team-link .ds-field {
+  flex: 1 1 20rem;
+  min-inline-size: 0;
+}
+@media (min-width: 768px) {
+  .team-row {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+  }
+  .team-invite-fields {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  }
+}
+.invite-page {
+  min-block-size: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--ds-space-6) var(--ds-space-4);
+  background: var(--ds-background);
+}
+.invite-card {
+  max-inline-size: 34rem;
+  inline-size: 100%;
+  display: grid;
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-6);
+}
+.invite-card h1 {
+  font-size: var(--ds-heading-md);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* R3 Task 3: CV upload, pending drafts and the side-by-side review. */
+.library-cv-drafts {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+.library-cv-drafts h3 {
+  margin: 0;
+  font-size: var(--ds-heading-sm);
+}
+.library-cv-drafts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--ds-space-2);
+}
+.library-cv-drafts li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: var(--ds-space-3);
+  align-items: center;
+  padding: var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+}
+.library-cv-drafts li > span {
+  display: grid;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.library-cv-drafts li > svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+.cv-review-page {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+.cv-review-meta {
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.cv-review-layout {
+  display: grid;
+  gap: var(--ds-space-4);
+  min-inline-size: 0;
+}
+.cv-review-document,
+.cv-review-form {
+  padding: var(--ds-space-5);
+  display: grid;
+  gap: var(--ds-space-3);
+  align-content: start;
+  min-inline-size: 0;
+}
+.cv-review-document h2,
+.cv-review-form h2 {
+  margin: 0;
+  font-size: var(--ds-heading-sm);
+}
+.cv-review-text {
+  margin: 0;
+  max-block-size: 70vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: var(--ds-body-secondary);
+  line-height: 1.6;
+  padding: var(--ds-space-3);
+  background: var(--ds-background);
+  border-radius: var(--ds-radius-md);
+}
+.cv-review-text mark {
+  background: var(--ds-accent-subtle);
+  color: inherit;
+  border-radius: var(--ds-radius-sm);
+  outline: 2px solid var(--ds-accent);
+  outline-offset: 1px;
+}
+.cv-review-quote {
+  display: flex;
+  gap: var(--ds-space-2);
+  align-items: start;
+  text-align: start;
+  inline-size: 100%;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 0;
+  border-inline-start: 3px solid var(--ds-border-strong);
+  background: var(--ds-background);
+  color: var(--ds-text-secondary);
+  font: inherit;
+  font-size: var(--ds-body-secondary);
+  font-style: italic;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.cv-review-quote svg {
+  flex: none;
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin-block-start: 0.15rem;
+}
+@media (min-width: 1024px) {
+  .cv-review-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+  }
+  .cv-review-document {
+    position: sticky;
+    inset-block-start: var(--ds-space-4);
+  }
+}
+
+/* R3 Task 4: e-mail notification switches. */
+#email-notifications-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+#email-notifications-title svg {
+  inline-size: 1.1em;
+  block-size: 1.1em;
+}
+.email-preferences {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+.email-preference {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+.email-preference p {
+  margin: 0;
+  padding-inline-start: var(--ds-space-6);
+}
+
+/* Sign-in error page (/auth/error). */
+.auth-error {
+  display: grid;
+  place-items: center;
+  padding: var(--ds-space-8) var(--ds-space-4);
+}
+.auth-error-card {
+  max-inline-size: 34rem;
+  inline-size: 100%;
+  display: grid;
+  gap: var(--ds-space-3);
+}
+.auth-error-card h1 {
+  margin: 0;
+  font-size: var(--ds-heading-md);
+}
+.auth-error-card p {
+  margin: 0;
+}
+.auth-error-icon {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-warning-subtle);
+  color: var(--ds-warning);
+}
+.auth-error-icon svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+.auth-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  margin-block-start: var(--ds-space-2);
+}
+.auth-error-code {
+  font-size: var(--ds-body-secondary);
+}

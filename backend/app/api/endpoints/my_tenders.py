@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_active_initial_membership
+from app.services.organization_context import organization_profile_context
 from app.core.security import authenticated_dependency
 from app.db.session import get_db
 from app.models.all_models import Proposal, User
@@ -80,16 +81,9 @@ async def _owned_profile_id(
     db: AsyncSession,
     current_user: User,
 ) -> UUID:
-    profile_id = await db.scalar(
-        select(CompanyProfile.id)
-        .join(Organization, Organization.legacy_company_profile_id == CompanyProfile.id)
-        .join(Membership, Membership.organization_id == Organization.id)
-        .where(
-            CompanyProfile.user_id == current_user.id,
-            Membership.user_id == current_user.id,
-            Membership.state == MembershipState.ACTIVE,
-        )
-    )
+    # The selected organization's profile through an ACTIVE membership (R3 Task 6).
+    context = await organization_profile_context(db, user_id=current_user.id)
+    profile_id = context.profile.id if context is not None else None
     if profile_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

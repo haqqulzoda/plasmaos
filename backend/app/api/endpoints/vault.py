@@ -11,6 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_approved_pilot_access
+from app.services.organization_context import (
+    ProfileContext,
+    effective_company_profile,
+    effective_company_profile_id,
+    organization_profile_context,
+)
+from app.services.organization_records import changed_fields, record_for_context, snapshot
 from app.db.session import get_db
 from app.models.all_models import User
 from app.models.company import (
@@ -34,19 +41,20 @@ from app.schemas.vault import (
 router = APIRouter()
 
 
-async def _get_profile_or_404(db: AsyncSession, user_id) -> CompanyProfile:
-    result = await db.execute(
-        select(CompanyProfile).where(CompanyProfile.user_id == user_id)
-    )
-    profile = result.scalar_one_or_none()
-
+async def _organization_profile(db: AsyncSession, user_id) -> tuple[ProfileContext | None, CompanyProfile]:
+    """The selected organization's company profile (R3 Task 6), never the user's own."""
+    context = await organization_profile_context(db, user_id=user_id)
+    profile = context.profile if context is not None else await effective_company_profile(db, user_id=user_id)
     if profile is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company onboarding required",
         )
+    return context, profile
 
-    return profile
+
+async def _get_profile_or_404(db: AsyncSession, user_id) -> CompanyProfile:
+    return (await _organization_profile(db, user_id))[1]
 
 
 async def _get_readiness_document_or_404(
@@ -74,6 +82,9 @@ async def _load_profile_with_children(
     db: AsyncSession,
     user_id,
 ) -> CompanyProfile | None:
+    profile_id = await effective_company_profile_id(db, user_id=user_id)
+    if profile_id is None:
+        return None
     result = await db.execute(
         select(CompanyProfile)
         .options(
@@ -81,10 +92,28 @@ async def _load_profile_with_children(
             selectinload(CompanyProfile.licenses),
             selectinload(CompanyProfile.financial_history),
         )
-        .where(CompanyProfile.user_id == user_id)
+        .where(CompanyProfile.id == profile_id)
     )
-    profile = result.scalar_one_or_none()
-    return profile
+    return result.scalar_one_or_none()
+
+
+async def _children_signature(db: AsyncSession, profile_id) -> dict[str, list]:
+    """Comparable contents of the replaced vault collections (for the audit field list)."""
+    certifications = (await db.execute(
+        select(Certification.cert_type, Certification.issue_date, Certification.expiry_date)
+        .where(Certification.company_id == profile_id)
+    )).all()
+    licenses = (await db.execute(
+        select(License.license_name, License.is_active).where(License.company_id == profile_id)
+    )).all()
+    financial = (await db.execute(
+        select(FinancialHistory.year, FinancialHistory.turnover_uzs).where(FinancialHistory.company_id == profile_id)
+    )).all()
+    return {
+        "certifications": sorted(map(tuple, certifications), key=str),
+        "licenses": sorted(map(tuple, licenses), key=str),
+        "financial_history": sorted(map(tuple, financial), key=str),
+    }
 
 
 def _to_response(profile: CompanyProfile) -> CompanyVaultResponse:
@@ -155,7 +184,13 @@ async def update_company_vault(
     current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> CompanyVaultResponse:
-    profile = await _get_profile_or_404(db=db, user_id=current_user.id)
+    context, profile = await _organization_profile(db, current_user.id)
+    root_fields = (
+        "company_name", "director_name", "address", "phone_contact", "bank_name", "mfo", "account_number",
+        "inn", "industry", "website", "target_regions", "target_countries", "target_services", "notes",
+    )
+    before = snapshot(profile, root_fields)
+    before_children = await _children_signature(db, profile.id)
 
     # Update root company profile fields
     profile.company_name = payload.company_name
@@ -173,9 +208,7 @@ async def update_company_vault(
     profile.target_services = payload.target_services
     profile.notes = payload.notes
 
-    user_company_ids = select(CompanyProfile.id).where(
-        CompanyProfile.user_id == current_user.id
-    )
+    user_company_ids = select(CompanyProfile.id).where(CompanyProfile.id == profile.id)
 
     # Full replacement strategy for nested collections.
     await db.execute(
@@ -221,6 +254,14 @@ async def update_company_vault(
         ]
     )
 
+    await db.flush()
+    fields = changed_fields(before, snapshot(profile, root_fields))
+    after_children = await _children_signature(db, profile.id)
+    fields += [name for name in after_children if after_children[name] != before_children[name]]
+    await record_for_context(
+        db, context, actor_user_id=current_user.id, record_type="COMPANY_VAULT", action="UPDATE",
+        fields=fields, record_id=profile.id,
+    )
     await db.commit()
 
     refreshed = await db.execute(
@@ -230,10 +271,8 @@ async def update_company_vault(
             selectinload(CompanyProfile.licenses),
             selectinload(CompanyProfile.financial_history),
         )
-        .where(
-            CompanyProfile.id == profile.id,
-            CompanyProfile.user_id == current_user.id,
-        )
+        .where(CompanyProfile.id == profile.id)
+        .execution_options(populate_existing=True)
     )
     return _to_response(refreshed.scalar_one())
 
@@ -282,12 +321,17 @@ async def create_readiness_document(
     current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> ReadinessDocumentResponse:
-    profile = await _get_profile_or_404(db=db, user_id=current_user.id)
+    context, profile = await _organization_profile(db, current_user.id)
     document = ReadinessDocument(
         company_profile_id=profile.id,
         **payload.model_dump(),
     )
     db.add(document)
+    await db.flush()
+    await record_for_context(
+        db, context, actor_user_id=current_user.id, record_type="READINESS_DOCUMENT", action="CREATE",
+        fields=sorted(payload.model_dump(exclude_none=True)), record_id=document.id,
+    )
     await db.commit()
     await db.refresh(document)
     return ReadinessDocumentResponse.model_validate(document)
@@ -303,16 +347,22 @@ async def update_readiness_document(
     current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> ReadinessDocumentResponse:
-    profile = await _get_profile_or_404(db=db, user_id=current_user.id)
+    context, profile = await _organization_profile(db, current_user.id)
     document = await _get_readiness_document_or_404(
         db=db,
         document_id=document_id,
         company_profile_id=profile.id,
     )
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    values = payload.model_dump(exclude_unset=True)
+    before = snapshot(document, values)
+    for field, value in values.items():
         setattr(document, field, value)
 
+    await record_for_context(
+        db, context, actor_user_id=current_user.id, record_type="READINESS_DOCUMENT", action="UPDATE",
+        fields=changed_fields(before, values), record_id=document.id,
+    )
     await db.commit()
     await db.refresh(document)
     return ReadinessDocumentResponse.model_validate(document)
@@ -324,11 +374,15 @@ async def delete_readiness_document(
     current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    profile = await _get_profile_or_404(db=db, user_id=current_user.id)
+    context, profile = await _organization_profile(db, current_user.id)
     document = await _get_readiness_document_or_404(
         db=db,
         document_id=document_id,
         company_profile_id=profile.id,
+    )
+    await record_for_context(
+        db, context, actor_user_id=current_user.id, record_type="READINESS_DOCUMENT", action="DELETE",
+        fields=[], record_id=document.id,
     )
     await db.delete(document)
     await db.commit()

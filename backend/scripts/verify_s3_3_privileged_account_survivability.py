@@ -26,7 +26,7 @@ from app.services.admin_survivability import (
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261005_0001_d2_05_eoi_drafts"
+HEAD = "20261011_0001_r3_organization_record_events"
 
 
 async def seed_user(connection, label: str, state: str, role: str, is_admin: bool) -> UUID:

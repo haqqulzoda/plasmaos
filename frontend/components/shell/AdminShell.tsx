@@ -3,8 +3,11 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Activity,
+  Building2,
   ClipboardList,
   LayoutDashboard,
+  Satellite,
   Users,
   LogOut,
   Menu,
@@ -20,6 +23,10 @@ import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
 const navigation = [
   { name: 'Overview', href: '/admin', Icon: LayoutDashboard },
   { name: 'Accounts', href: '/admin/approvals', Icon: Users },
+  // R3 Task 5: operator panels (read-only, plus Run now / Retry through existing paths).
+  { name: 'Sources', href: '/admin/sources', Icon: Satellite },
+  { name: 'Analysis runs', href: '/admin/analysis-runs', Icon: Activity },
+  { name: 'Organizations', href: '/admin/organizations', Icon: Building2 },
   { name: 'Broadcasts', href: '/admin/broadcasts', Icon: Megaphone, adminOnly: true },
   {
     name: 'Audit activity',

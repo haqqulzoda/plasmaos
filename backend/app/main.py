@@ -9,13 +9,15 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from app.core.http_hardening import HardenedHTTPMiddleware, validation_error
+from app.core.organization_selection import OrganizationSelectionMiddleware, organization_access_denied
+from app.services.organization_context import OrganizationAccessDeniedError
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
 from app.api.endpoints.communications import notifications_router, broadcasts_router
-from app.api.endpoints import candidates, eoi, participation, proposal_evidence, team_scenarios, operations, admin, auth, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
+from app.api.endpoints import admin_panels, candidates, eoi, participation, proposal_evidence, team_scenarios, operations, admin, auth, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
 from app.core.observability import init_error_tracking
@@ -85,7 +87,9 @@ app.add_middleware(
 )
 
 app.add_middleware(HardenedHTTPMiddleware)
+app.add_middleware(OrganizationSelectionMiddleware)
 app.add_exception_handler(RequestValidationError, validation_error)
+app.add_exception_handler(OrganizationAccessDeniedError, organization_access_denied)
 
 # Include routers
 app.include_router(notifications_router, prefix='/api/v1/notifications', tags=['Notifications'])
@@ -93,11 +97,13 @@ app.include_router(broadcasts_router, prefix='/api/v1/admin/broadcasts', tags=['
 app.include_router(operations.router, tags=["Operations"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+app.include_router(admin_panels.router, prefix="/api/v1/admin/panels", tags=["Admin"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(tenders.router, prefix="/api/v1/tenders", tags=["Tenders"])
 app.include_router(proposals.router, prefix="/api/v1/proposals", tags=["Proposals"])
 app.include_router(my_tenders.router, prefix="/api/v1", tags=["My Tenders"])
 app.include_router(organizations.router, prefix="/api/v1/organizations", tags=["Organizations"])
+app.include_router(organizations.invitations_router, prefix="/api/v1/invitations", tags=["Organizations"])
 app.include_router(pursuits.router, prefix="/api/v1/pursuits", tags=["Pursuits"])
 app.include_router(candidates.pursuit_router, prefix="/api/v1/pursuits", tags=["Candidate Retrieval"])
 app.include_router(eoi.router, prefix="/api/v1/pursuits", tags=["Expression of Interest"])

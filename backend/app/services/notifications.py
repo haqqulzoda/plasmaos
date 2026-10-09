@@ -1,6 +1,7 @@
 """Canonical idempotent notification publisher and passive inbox queries."""
 
 import base64
+from contextvars import ContextVar
 from datetime import datetime
 import hashlib
 import hmac
@@ -20,6 +21,9 @@ from app.models.communications import (
 from app.schemas.communications import NotificationItem
 
 PUBLICATION_BATCH_SIZE = 500
+# Server commands that write synthetic records (scripts/demo/seed_demo.py) stage no
+# lifecycle events: no inbox items and no e-mails for invented analyses or drafts.
+SUPPRESS_EVENT_STAGING: ContextVar[bool] = ContextVar("plasma_suppress_event_staging", default=False)
 SYSTEM_TEMPLATES = {
     "RECOMMENDATION_CREATED": (
         "TENDER_ALERT",
@@ -65,6 +69,22 @@ SYSTEM_TEMPLATES = {
         "SYSTEM",
         "notifications.private_documents_failed",
         {"organization_id", "pursuit_id", "batch_id", "processed_count", "total_count", "failed_count"},
+    ),
+    # R3 Task 4: in the inbox and, by preference, by e-mail (app.services.email_notifications).
+    "PURSUIT_ANALYSIS_COMPLETED": (
+        "SYSTEM",
+        "notifications.pursuit_analysis_completed",
+        {"organization_id", "pursuit_id", "analysis_run_id"},
+    ),
+    "PURSUIT_ANALYSIS_FAILED": (
+        "SYSTEM",
+        "notifications.pursuit_analysis_failed",
+        {"organization_id", "pursuit_id", "analysis_run_id"},
+    ),
+    "EOI_DRAFT_READY": (
+        "SYSTEM",
+        "notifications.eoi_draft_ready",
+        {"organization_id", "pursuit_id", "eoi_draft_id", "version_number"},
     ),
 }
 
@@ -347,6 +367,27 @@ async def stage_private_document_notification(
         )
 
 
+async def stage_system_outbox(
+    db: AsyncSession, *, user_id: UUID, event_type: str, payload: dict, dedupe_key: str
+) -> None:
+    """Stage one validated SYSTEM event in the caller's transaction (replays are no-ops)."""
+    category, template_key, _ = SYSTEM_TEMPLATES[event_type]
+    if SUPPRESS_EVENT_STAGING.get():
+        return
+    validate_system_event(
+        event_type=event_type, category=category, template_key=template_key,
+        payload=payload, dedupe_key=dedupe_key,
+    )
+    await db.execute(
+        insert(NotificationOutbox)
+        .values(
+            user_id=user_id, dedupe_key=dedupe_key, event_type=event_type,
+            category=category, template_key=template_key, payload=payload,
+        )
+        .on_conflict_do_nothing(index_elements=["dedupe_key"])
+    )
+
+
 async def publish_outbox_batch(db: AsyncSession) -> int:
     """Read only committed intents; locks/insert constraints tolerate replay."""
     rows = (
@@ -377,6 +418,14 @@ async def publish_outbox_batch(db: AsyncSession) -> int:
             for row in rows
         ],
     )
+    # R3 Task 4: the e-mail channel of the same intents, by each user's preference.
+    from app.services.email_notifications import EVENT_EMAILS, stage_event_email
+
+    for row in rows:
+        if row.event_type in EVENT_EMAILS:
+            await stage_event_email(
+                db, user_id=row.user_id, event_type=row.event_type, payload=row.payload, dedupe_key=row.dedupe_key,
+            )
     await db.execute(
         update(NotificationOutbox)
         .where(NotificationOutbox.id.in_([r.id for r in rows]))

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Building2, FileUp, Pencil, Plus, UserRound } from 'lucide-react';
+import { Building2, FileUp, Pencil, Plus, Upload, UserRound } from 'lucide-react';
 import { useLibraryT } from './useLibraryT';
 
 import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
@@ -40,6 +40,7 @@ import type { CandidateExpert, CandidateFirm, CandidateProjectReference } from '
 
 import { CvVersionForm, ExpertForm, FirmForm, ReferenceForm } from './LibraryForms';
 import { CsvImportDialog, EvidenceBadge, ReferenceList, ReviewAction } from './LibraryParts';
+import { CvUploadDialog, PendingCvDrafts } from './CvUpload';
 
 type Common = { organizationId: string; reload: () => void };
 type ReferenceTarget = { firmId: string | null; reference: CandidateProjectReference | null };
@@ -256,14 +257,18 @@ export function ExpertsTab({ organizationId, reload, experts }: Common & { exper
     const [expertForm, setExpertForm] = useState<{ expert: CandidateExpert | null } | null>(null);
     const [cvFor, setCvFor] = useState<CandidateExpert | null>(null);
     const [importing, setImporting] = useState(false);
+    // R3: upload a CV for a new expert (null) or an existing one; the review opens next.
+    const [uploadFor, setUploadFor] = useState<{ expert: CandidateExpert | null } | null>(null);
     return <section className="library-tab ds-stack" data-library-tab="experts">
         <header className="library-tab-header">
             <div><h2>{t('experts')}</h2><p className="ds-muted">{t('expertsTab.help')}</p></div>
             <div className="library-actions">
                 <Button leadingIcon={<Plus aria-hidden />} onClick={() => setExpertForm({ expert: null })} data-add-expert>{t('expert.add')}</Button>
+                <Button variant="secondary" leadingIcon={<Upload aria-hidden />} onClick={() => setUploadFor({ expert: null })} data-upload-cv>{t('expert.uploadCvNew')}</Button>
                 <Button variant="secondary" leadingIcon={<FileUp aria-hidden />} onClick={() => setImporting(true)}>{t('import.open')}</Button>
             </div>
         </header>
+        <PendingCvDrafts organizationId={organizationId} version={experts.length} />
         {!experts.length ? <EmptyState icon={<UserRound aria-hidden />} title={t('expertsTab.emptyTitle')} description={t('expertsTab.emptyHelp')} />
             : <div className="library-stack">{experts.map((expert) => {
                 const editable = expert.scope === 'ORGANIZATION_PRIVATE';
@@ -281,6 +286,9 @@ export function ExpertsTab({ organizationId, reload, experts }: Common & { exper
                             onConfirm={() => attempt(() => updateExpert(organizationId, expert.expert_id, { evidence_state: 'REVIEWED' }), reload)} />
                         <Button variant="secondary" size="sm" leadingIcon={<Plus aria-hidden />} onClick={() => setCvFor(expert)} data-add-cv>
                             {t('cv.add.version')}
+                        </Button>
+                        <Button variant="secondary" size="sm" leadingIcon={<Upload aria-hidden />} onClick={() => setUploadFor({ expert })} data-upload-cv-for>
+                            {t('expert.uploadCv')}
                         </Button>
                     </div>}
                     <h4>{t('cvVersions')}</h4>
@@ -301,6 +309,7 @@ export function ExpertsTab({ organizationId, reload, experts }: Common & { exper
         {cvFor && <CvVersionForm open onClose={() => setCvFor(null)} expertName={cvFor.display_name}
             nextVersion={Math.max(0, ...cvFor.cv_versions.map((cv) => cv.version_number)) + 1}
             onSubmit={(draft) => attempt(() => createCvVersion(organizationId, cvFor.expert_id, cvPayload(draft)), () => { setCvFor(null); reload(); })} />}
+        {uploadFor && <CvUploadDialog organizationId={organizationId} expert={uploadFor.expert} onClose={() => setUploadFor(null)} />}
         {importing && <CsvImportDialog kind="experts" targetName={t('experts')} onClose={() => setImporting(false)} onFinished={reload}
             post={((payload: Record<string, unknown>) => createExpert(organizationId, payload)) as (payload: never) => Promise<unknown>} />}
     </section>;

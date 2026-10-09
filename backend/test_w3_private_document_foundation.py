@@ -250,7 +250,9 @@ def test_w3_private_authority_processing_recovery_and_source_preservation(tmp_pa
             await support.raw_baseline(database)
             await asyncio.to_thread(support.alembic, database, "upgrade", W1_HEAD)
             ids = await _seed_w1(database)
-            await asyncio.to_thread(support.alembic, database, "upgrade", W3_HEAD)
+            # The current ORM runs this scenario, so the schema is the repository head
+            # (R3 added library columns to private_documents).
+            await asyncio.to_thread(support.alembic, database, "upgrade", "head")
             connection = await support.database_connection(database)
             try:
                 organization_a = await connection.fetchval("SELECT id FROM organizations WHERE legacy_company_profile_id=$1", ids["profile_a"])

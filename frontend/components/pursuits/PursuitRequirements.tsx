@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
+import { ExperienceChangedBanner } from '@/components/pursuits/ExperienceChangedBanner';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Forms';
 import { EmptyState, StatusBadge, Surface } from '@/components/ui/Display';
@@ -152,7 +153,7 @@ function BulkConfirm({ items, gaps, pursuitId, runId, headers, onDone }: {
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [report, setReport] = useState<SequentialReport | null>(null);
-  const defaultReason = defaultBulkReason(t('review.bulkDefaultReason'), session?.user?.name);
+  const defaultReason = defaultBulkReason(t('review.bulkDefaultReason', { name: '{name}' }), session?.user?.name);
   const pending = items.filter((item) => item.effective_review_state === 'PROVISIONAL');
   if (!pending.length && !report) return null;
   const run = async () => {
@@ -315,6 +316,7 @@ export function PursuitRequirements({ pursuitId, headers, initialReviewableAnaly
 
     {!analysis ? <EmptyState icon={<FileSearch aria-hidden />} title={t('empty')} description={t('emptyHelp')} /> : <>
       {analysis.inputs_changed && <div className="analysis-stale" role="status"><AlertTriangle aria-hidden /><div><strong>{t('staleTitle')}</strong><p>{t('staleHelp')}</p></div></div>}
+      {analysis.status === 'COMPLETED' && analysis.company_evidence_changed && <ExperienceChangedBanner pursuitId={pursuitId} headers={headers} runId={analysis.analysis_run_id} sections={analysis.company_evidence_changed_sections} onStarted={() => void load(false)} />}
       <Surface className="analysis-run-summary"><header><div><h3>{t('summary')}</h3></div><StatusBadge tone={analysis.quality_state === 'READY_FOR_REVIEW' ? 'success' : analysis.quality_state === 'FAILED' ? 'danger' : 'warning'}>{t(`quality.${analysis.quality_state}`)}</StatusBadge></header>
         {resultAnalysis && <dl data-group-counts>{REQUIREMENT_GROUPS.filter((group) => group !== 'settled').map((group) => <div key={group}><dt>{tl(`review.groups.${group}`)}</dt><dd>{groups[group].length}</dd></div>)}<div><dt>{t('positionsCount')}</dt><dd>{resultAnalysis.positions.length}</dd></div></dl>}
         <p className="ds-muted">{analysisRunning ? t('runStates.inProgress') : analysisFailed ? t('runStates.failed') : t(`qualityHelp.${analysis.quality_state}`)}</p>

@@ -22,9 +22,15 @@ logger = logging.getLogger(__name__)
 async def _process(job_id: UUID):
     try:
         async with AsyncSessionLocal() as db:
-            return await process_document_job(db, job_id)
+            outcome = await process_document_job(db, job_id)
     finally:
         await engine.dispose()
+    if outcome.get("cv_draft_ids"):
+        # R3: a library CV is ready; its extraction runs on the model queue.
+        from app.workers.cv_extraction_tasks import dispatch_cv_draft_ids
+
+        dispatch_cv_draft_ids(outcome["cv_draft_ids"])
+    return outcome
 
 
 @celery_app.task(

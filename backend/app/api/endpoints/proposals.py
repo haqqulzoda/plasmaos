@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, require_active_initial_membership, require_tier
+from app.services.organization_context import effective_company_profile, organization_profile_context
 from app.core.evaluator import DynamicComplianceResult
 from app.core.security import authenticated_dependency
 from app.core.tender_actionability import (
@@ -188,16 +189,9 @@ def _proposal_with_tender_response(
 
 
 async def _owned_profile_id(db: AsyncSession, user_id: UUID) -> UUID | None:
-    return await db.scalar(
-        select(CompanyProfile.id)
-        .join(Organization, Organization.legacy_company_profile_id == CompanyProfile.id)
-        .join(Membership, Membership.organization_id == Organization.id)
-        .where(
-            CompanyProfile.user_id == user_id,
-            Membership.user_id == user_id,
-            Membership.state == MembershipState.ACTIVE,
-        )
-    )
+    """The selected organization's company profile through an ACTIVE membership (R3 Task 6)."""
+    context = await organization_profile_context(db, user_id=user_id)
+    return context.profile.id if context is not None else None
 
 
 async def _organization_id_for_profile(db: AsyncSession, profile_id: UUID) -> UUID | None:
@@ -607,10 +601,7 @@ async def ai_draft_proposal(
         )
 
     try:
-        profile_result = await db.execute(
-            select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
-        )
-        profile = profile_result.scalar_one_or_none()
+        profile = await effective_company_profile(db, user_id=current_user.id)
         company_name = str(
             (profile.company_name if profile else None)
             or current_user.company_name

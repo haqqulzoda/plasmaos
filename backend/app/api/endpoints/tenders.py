@@ -185,6 +185,7 @@ from app.services.analysis_aggregates import (
     resolve_or_create_analysis_aggregate,
 )
 from app.services.organization_context import (
+    organization_profile_context,
     OrganizationAccessDeniedError,
     resolve_legacy_profile_context,
 )
@@ -7829,16 +7830,8 @@ async def _ensure_tender_access(
 
     profile = None
     if current_user is not None:
-        profile = await db.scalar(
-            select(CompanyProfile)
-            .join(Organization, Organization.legacy_company_profile_id == CompanyProfile.id)
-            .join(Membership, Membership.organization_id == Organization.id)
-            .where(
-                CompanyProfile.user_id == current_user.id,
-                Membership.user_id == current_user.id,
-                Membership.state == MembershipState.ACTIVE,
-            )
-        )
+        context = await organization_profile_context(db, user_id=current_user.id)
+        profile = context.profile if context is not None else None
         if profile is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

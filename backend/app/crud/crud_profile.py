@@ -84,10 +84,13 @@ async def get_profile_for_compliance_match(
     Raises:
         ProfileNotFoundException: If no profile exists for the given user.
     """
+    from app.services.organization_context import effective_company_profile_id
+
+    profile_id = await effective_company_profile_id(db, user_id=user_id)
     result = await db.execute(
         select(CompanyProfile)
         .options(*_compliance_load_options())
-        .where(CompanyProfile.user_id == user_id)
+        .where(CompanyProfile.id == profile_id)
     )
     profile: CompanyProfile | None = result.scalar_one_or_none()
 

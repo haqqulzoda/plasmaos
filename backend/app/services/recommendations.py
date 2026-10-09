@@ -23,18 +23,17 @@ async def _set_recommendation_dismissed(
     dismissed: bool,
 ) -> TenderRecommendation:
     """Lock and mutate only ``is_dismissed`` on one owned canonical row."""
+    from app.services.organization_context import effective_company_profile_id
+
+    profile_id = await effective_company_profile_id(db, user_id=user_id)
     recommendation = await db.scalar(
         select(TenderRecommendation)
-        .join(
-            CompanyProfile,
-            CompanyProfile.id == TenderRecommendation.company_profile_id,
-        )
         .where(
             TenderRecommendation.id == recommendation_id,
-            CompanyProfile.user_id == user_id,
+            TenderRecommendation.company_profile_id == profile_id,
         )
         .with_for_update()
-    )
+    ) if profile_id is not None else None
     if recommendation is None:
         raise RecommendationNotFoundError(
             "recommendation not found or access denied"

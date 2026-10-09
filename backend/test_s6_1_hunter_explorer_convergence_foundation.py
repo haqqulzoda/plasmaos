@@ -48,7 +48,8 @@ def test_hunter_list_is_owned_ranked_and_passive() -> None:
     list_route = hunter.split("async def list_recommendations", 1)[1].split(
         "async def dismiss_recommendation", 1
     )[0]
-    assert "CompanyProfile.user_id == current_user.id" in list_route
+    # R3 Task 6: the organization's profile, so invited members see the same (empty) list.
+    assert "effective_company_profile_id(db, user_id=current_user.id)" in list_route
     assert "TenderRecommendation.company_profile_id == profile_id" in list_route
     assert "TenderRecommendation.is_dismissed == False" in list_route
     assert "actionable_tender_condition(Tender)" in list_route
@@ -62,7 +63,7 @@ def test_dismissal_mutates_only_the_owned_recommendation() -> None:
     service = source("backend/app/services/recommendations.py")
     dismiss_route = hunter.split("async def dismiss_recommendation", 1)[1]
     assert "dismiss_owned_recommendation(" in dismiss_route
-    assert "CompanyProfile.user_id == user_id" in service
+    assert "effective_company_profile_id(db, user_id=user_id)" in service  # R3 Task 6: the organization's rows
     assert "TenderRecommendation.id == recommendation_id" in service
     assert "recommendation.is_dismissed = dismissed" in service
     assert "status.HTTP_404_NOT_FOUND" in dismiss_route

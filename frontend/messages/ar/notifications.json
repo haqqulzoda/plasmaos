@@ -58,9 +58,30 @@
       "title": "فشل الحصول على مستندات المناقصة",
       "body": "تعذر إعداد مستندات المناقصة. افتح المناقصة للمحاولة مرة أخرى."
     },
-    "privateDocumentsReady": {"title":"الوثائق الخاصة جاهزة","body":"أصبحت {processedCount} من {totalCount} وثيقة خاصة جاهزة."},
-    "privateDocumentsPartial": {"title":"الوثائق الخاصة جاهزة جزئياً","body":"تمت معالجة {processedCount} من {totalCount}؛ وفشلت {failedCount}."},
-    "privateDocumentsFailed": {"title":"فشلت معالجة الوثائق الخاصة","body":"تعذر إعداد حزمة الوثائق. افتح مساحة العمل لمراجعتها."}
+    "privateDocumentsReady": {
+      "title": "الوثائق الخاصة جاهزة",
+      "body": "أصبحت {processedCount} من {totalCount} وثيقة خاصة جاهزة."
+    },
+    "privateDocumentsPartial": {
+      "title": "الوثائق الخاصة جاهزة جزئياً",
+      "body": "تمت معالجة {processedCount} من {totalCount}؛ وفشلت {failedCount}."
+    },
+    "privateDocumentsFailed": {
+      "title": "فشلت معالجة الوثائق الخاصة",
+      "body": "تعذر إعداد حزمة الوثائق. افتح مساحة العمل لمراجعتها."
+    },
+    "pursuitAnalysisCompleted": {
+      "title": "التحليل جاهز",
+      "body": "اكتمل التحليل الذي بدأته. راجع المتطلبات والفجوات."
+    },
+    "pursuitAnalysisFailed": {
+      "title": "تعذّر إكمال التحليل",
+      "body": "تعذّر إكمال التحليل الذي بدأته. افتح الفرصة للمحاولة مجددًا."
+    },
+    "eoiDraftReady": {
+      "title": "مسودة إبداء الاهتمام جاهزة",
+      "body": "المسودة {versionNumber} (DOCX وPDF) جاهزة للتنزيل."
+    }
   },
   "fallback": {
     "title": "تحديث الحساب",
