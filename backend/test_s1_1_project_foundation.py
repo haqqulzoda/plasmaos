@@ -150,7 +150,11 @@ def test_migration_is_the_single_head_after_sprint_zero_b3() -> None:
     script = ScriptDirectory.from_config(config)
     assert script.get_heads() == [HEAD]
     # D1-03 -> D2-01 -> D2-05 follow P0 on one chain.
-    assert script.get_revision(HEAD).down_revision == "20261004_0001_d2_01_own_experience"
+    assert script.get_revision(HEAD).down_revision == "20261010_0001_r3_email_notifications"
+    assert script.get_revision("20261010_0001_r3_email_notifications").down_revision == "20261009_0001_r3_cv_library_drafts"
+    assert script.get_revision("20261009_0001_r3_cv_library_drafts").down_revision == "20261008_0001_r3_pending_invitations"
+    assert script.get_revision("20261008_0001_r3_pending_invitations").down_revision == "20261005_0001_d2_05_eoi_drafts"
+    assert script.get_revision("20261005_0001_d2_05_eoi_drafts").down_revision == "20261004_0001_d2_01_own_experience"
     assert script.get_revision("20261004_0001_d2_01_own_experience").down_revision == "20261003_0001_d1_03_official_notice_unique"
     assert script.get_revision("20261003_0001_d1_03_official_notice_unique").down_revision == "20261002_0001_p0_extraction_trust_gate"
     assert script.get_revision("20261002_0001_p0_extraction_trust_gate").down_revision == "20261001_0001_w8_proposal_evidence_pack"

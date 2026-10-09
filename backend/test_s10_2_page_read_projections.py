@@ -58,16 +58,17 @@ def test_absent_profile_remains_no_analysis_instead_of_loading_another_tenant():
 def test_details_recommendation_is_single_bounded_owned_read():
     user_id=uuid4();tender=SimpleNamespace(id=uuid4());profile=SimpleNamespace(id=uuid4(),user_id=user_id)
     recommendation=SimpleNamespace(id=uuid4(),match_score=88,strategic_rationale='original rationale '*100,is_dismissed=True,created_at=datetime.now(timezone.utc))
-    db=MagicMock();db.scalar=AsyncMock(side_effect=[profile,recommendation]);db.commit=AsyncMock();db.flush=AsyncMock()
+    db=MagicMock();db.scalar=AsyncMock(side_effect=[recommendation]);db.commit=AsyncMock();db.flush=AsyncMock()
     empty=lambda cls:cls(state='EMPTY')
-    with patch.object(details,'_project_sections',new=AsyncMock(return_value=(empty(schemas.ProjectContextSection),empty(schemas.ProjectLeadershipSection)))),patch.object(details,'_documents_section',new=AsyncMock(return_value=empty(schemas.TenderDocumentsSection))),patch.object(details,'_private_sections',new=AsyncMock(return_value=tuple(empty(cls) for cls in [schemas.ComplianceSection,schemas.RequirementsSection,schemas.CompanyReadinessSection,schemas.PursuitSection,schemas.BidPreparationSection]))):
+    # R3 Task 6: the organization's profile comes from the organization context.
+    with patch('app.services.organization_context.effective_company_profile',new=AsyncMock(return_value=profile)),patch.object(details,'_project_sections',new=AsyncMock(return_value=(empty(schemas.ProjectContextSection),empty(schemas.ProjectLeadershipSection)))),patch.object(details,'_documents_section',new=AsyncMock(return_value=empty(schemas.TenderDocumentsSection))),patch.object(details,'_private_sections',new=AsyncMock(return_value=tuple(empty(cls) for cls in [schemas.ComplianceSection,schemas.RequirementsSection,schemas.CompanyReadinessSection,schemas.PursuitSection,schemas.BidPreparationSection]))):
         result=asyncio.run(details.compose_tender_details(db,tender=tender,user_id=user_id,procurement_contacts=None))
     statement=db.scalar.await_args_list[-1].args[0].compile(dialect=postgresql.dialect())
-    assert 'company_profiles.user_id' in str(statement) and user_id in statement.params.values()
+    assert 'tender_recommendations.company_profile_id' in str(statement) and profile.id in statement.params.values()
     assert tender.id in statement.params.values() and 1 in statement.params.values() and 'LIMIT' in str(statement)
     assert result.recommendation.match_score==88 and result.recommendation.is_dismissed
     assert len(result.recommendation.rationale_summary)==280
-    assert db.scalar.await_count==2;db.commit.assert_not_awaited();db.flush.assert_not_awaited()
+    assert db.scalar.await_count==1;db.commit.assert_not_awaited();db.flush.assert_not_awaited()
 
 
 def test_historical_requirement_list_projects_without_full_payload():
