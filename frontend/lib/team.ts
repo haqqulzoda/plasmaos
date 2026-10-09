@@ -44,7 +44,6 @@ export type InvitationPreview = {
     inviter_name: string | null;
     role: MemberRole;
     email_hint: string;
-    status: InvitationStatus;
     expires_at: string;
 };
 

@@ -344,7 +344,8 @@ async def preview_invitation(db: AsyncSession, *, token: str) -> dict | None:
     if not token or len(token) > 200:
         return None
     invitation = await db.scalar(select(PendingInvitation).where(PendingInvitation.token_hash == hash_token(token)))
-    if invitation is None:
+    # Only a usable (OPEN) invitation is described; any other token looks exactly like an unknown one.
+    if invitation is None or invitation_status(invitation) != STATUS_OPEN:
         return None
     resolved = await _organization_profile(db, invitation.organization_id)
     inviter = await db.scalar(
@@ -360,7 +361,6 @@ async def preview_invitation(db: AsyncSession, *, token: str) -> dict | None:
         "inviter_name": inviter,
         "role": invitation.role,
         "email_hint": mask_email(invitation.email),
-        "status": invitation_status(invitation),
         "expires_at": invitation.expires_at,
     }
 

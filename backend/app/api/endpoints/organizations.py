@@ -7,11 +7,12 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_approved_user
+from app.core import rate_limit
 from app.core.security import authenticated_dependency
 from app.db.session import get_db
 from app.models.base import MembershipState
@@ -358,13 +359,36 @@ async def resend_email_invitation_endpoint(
     )
 
 
-@invitations_router.post("/preview", response_model=InvitationPreviewResponse)
+# The token-gated preview is public (no session): never cached or indexed, and rate limited per
+# client address. Unknown, expired, revoked and accepted tokens all get the same 404.
+PUBLIC_TOKEN_HEADERS = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex"}
+INVITATION_PREVIEW_LIMIT = 30
+INVITATION_PREVIEW_WINDOW_SECONDS = 600
+
+
+async def invitation_preview_guard(request: Request, response: Response) -> None:
+    response.headers.update(PUBLIC_TOKEN_HEADERS)
+    client = request.client.host if request.client else "unknown"
+    retry_after = await rate_limit.hit(
+        "invitation_preview", client,
+        limit=INVITATION_PREVIEW_LIMIT, window_seconds=INVITATION_PREVIEW_WINDOW_SECONDS,
+    )
+    if retry_after is not None:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests",
+            headers={**PUBLIC_TOKEN_HEADERS, "Retry-After": str(retry_after)},
+        )
+
+
+@invitations_router.post(
+    "/preview", response_model=InvitationPreviewResponse, dependencies=[Depends(invitation_preview_guard)],
+)
 async def preview_invitation_endpoint(
     payload: InvitationTokenRequest, db: AsyncSession = Depends(get_db),
 ) -> InvitationPreviewResponse:
     preview = await preview_invitation(db, token=payload.token)
     if preview is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Invitation not found", headers=PUBLIC_TOKEN_HEADERS)
     return InvitationPreviewResponse(**preview)
 
 

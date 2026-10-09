@@ -217,13 +217,19 @@ async def _owner_endpoints(sessions, ids, org_a, org_b, owner_a) -> None:
         assert stale.value.status_code == 404
         preview = await org_endpoints.preview_invitation_endpoint(payload=InvitationTokenRequest(token=new_token), db=db)
         assert preview.organization_name == "Same Name Company" and preview.inviter_name == user_a.name
-        assert preview.email_hint == "n******@example.org" and preview.status == "OPEN"
+        assert preview.email_hint == "n******@example.org" and preview.expires_at is not None
+        assert set(preview.model_dump()) == {"organization_name", "inviter_name", "role", "email_hint", "expires_at"}
 
         # Revoke is idempotent; a revoked invitation cannot be resent.
         revoked = await create(organization_id=org_a, payload=_create("gone@example.org"), current_user=user_a, db=db)
         first = await revoke(organization_id=org_a, invitation_id=revoked.invitation_id, current_user=user_a, db=db)
         again = await revoke(organization_id=org_a, invitation_id=revoked.invitation_id, current_user=user_a, db=db)
         assert first.status == again.status == "REVOKED" and first.revoked_at == again.revoked_at
+        # A revoked token reads exactly like an unknown one (no status, no expiry).
+        with pytest.raises(HTTPException) as revoked_preview:
+            await org_endpoints.preview_invitation_endpoint(
+                payload=InvitationTokenRequest(token=revoked.invite_path.removeprefix("/invite/")), db=db)
+        assert revoked_preview.value.status_code == 404 and revoked_preview.value.detail == "Invitation not found"
         with pytest.raises(HTTPException) as dead:
             await resend(organization_id=org_a, invitation_id=revoked.invitation_id, current_user=user_a, db=db)
         assert dead.value.status_code == 409 and dead.value.detail["code"] == "REVOKED"

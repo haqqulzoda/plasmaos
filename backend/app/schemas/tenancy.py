@@ -85,7 +85,6 @@ class InvitationPreviewResponse(BaseModel):
     inviter_name: str | None = None
     role: MembershipRole
     email_hint: str
-    status: str
     expires_at: datetime
 
 

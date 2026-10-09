@@ -39,7 +39,7 @@ export default function InvitePage() {
             .then((data) => { if (!cancelled) setPreview(data); })
             .catch(() => { if (!cancelled) setMissing(true); });
         return () => { cancelled = true; };
-    }, [token, accepted]);
+    }, [token]);
 
     const accept = async () => {
         setBusy(true);
@@ -60,13 +60,16 @@ export default function InvitePage() {
 
     const organization = preview?.organization_name || t('unknownOrganization');
     const role = preview ? roles(preview.role) : '';
-    const closed = preview && preview.status !== 'OPEN' && !accepted;
 
     return <main className="ds-theme invite-page" data-invite-page>
         <Surface className="invite-card" aria-labelledby="invite-title">
             <header className="auth-header"><PlasmaLogo /><LanguageSelector surface="auth" /></header>
             <span className="ds-eyebrow"><MailCheck aria-hidden /> {t('eyebrow')}</span>
-            {missing ? <Alert tone="warning" title={t('notFound')} /> : !preview ? <p role="status" className="ds-muted">{t('loading')}</p> : <>
+            {/* The preview answers only for a usable invitation: unknown, expired, revoked and accepted
+                links all read "not found" (a signed-in invitee may already have joined at sign-in). */}
+            {missing && !accepted ? <Alert tone="warning" title={t('notFound')}
+                action={status === 'authenticated' ? <ButtonLink href="/dashboard">{t('goToWorkspace')}</ButtonLink> : undefined} />
+            : !preview ? <p role="status" className="ds-muted">{t('loading')}</p> : <>
                 <h1 id="invite-title"><BidiText>{t('title', { organization })}</BidiText></h1>
                 <p><BidiText>{preview.inviter_name
                     ? t('body', { inviter: preview.inviter_name, role })
@@ -74,13 +77,7 @@ export default function InvitePage() {
                 {accepted ? <>
                     <Alert tone="success" title={t('accepted')} />
                     <Button onClick={openWorkspace}>{t('goToWorkspace')}</Button>
-                </> : preview.status === 'ACCEPTED' && status === 'authenticated' ? <>
-                    {/* Joined at this sign-in: the session already carries the new access. */}
-                    <Alert tone="success" title={t('accepted')} />
-                    <ButtonLink href="/dashboard">{t('goToWorkspace')}</ButtonLink>
-                </> : closed ? <Alert tone="warning" title={t(`states.${preview.status as 'EXPIRED' | 'REVOKED' | 'ACCEPTED'}`)}
-                    action={preview.status === 'ACCEPTED' ? <Button variant="secondary" onClick={openWorkspace}>{t('goToWorkspace')}</Button> : undefined} />
-                : <>
+                </> : <>
                     <p className="ds-muted">{t('emailHint', { email: preview.email_hint })}</p>
                     <p><TechnicalText>{preview.email_hint}</TechnicalText></p>
                     <p className="ds-muted ds-text-small">{t('expires', { date: formatDate(preview.expires_at, locale) })}</p>
