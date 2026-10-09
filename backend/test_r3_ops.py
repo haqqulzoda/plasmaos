@@ -362,3 +362,11 @@ def test_every_app_stop_in_a_runbook_is_preceded_by_the_pre_stop_gate() -> None:
     template = (ROOT / "docs" / "ops" / "RUNBOOK_TEMPLATE.md").read_text(encoding="utf-8")
     assert "print('DNS_OK')" in template and "/health/ready" in template and "oom_adj={{.HostConfig.OomScoreAdj}}" in template
     assert "docker restart plasma_db plasma_redis plasma_clamav; then restart app services" in template
+
+
+def test_env_values_from_windows_files_and_profile_paths_work_on_any_shell(tmp_path) -> None:
+    env_file = tmp_path / ".env.staging"
+    env_file.write_bytes(b"HOST_PROFILE=4gb\r\nOTHER=x\r\n")
+    script = f'source scripts/ops/lib.sh; env_file_value "{env_file}" HOST_PROFILE; echo; ops_host_profile_file "{env_file}"'
+    result = subprocess.run(["bash", "-c", script], cwd=ROOT, capture_output=True, text=True, timeout=30)
+    assert result.stdout.split() == ["4gb", "deploy/host-profiles/4gb.env"]  # no CR; relative path for docker.exe

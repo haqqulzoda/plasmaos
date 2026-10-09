@@ -29,7 +29,7 @@ env_file_value() {
   local file="$1" key="$2" value
   [ -f "$file" ] || return 1
   value="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1 | cut -d= -f2- || true)"
-  value="${value%$''}"   # a file edited on Windows
+  value="${value%$'\r'}"   # a file edited on Windows
   value="${value%\"}"; value="${value#\"}"; value="${value%\'}"; value="${value#\'}"
   printf '%s' "$value"
 }
