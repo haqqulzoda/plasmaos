@@ -32,7 +32,7 @@ from app.workers import project_enrichment_tasks
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261010_0001_r3_email_notifications"
+HEAD = "20261011_0001_r3_organization_record_events"
 BATCH_SIZE = 25
 
 

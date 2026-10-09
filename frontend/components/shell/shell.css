@@ -259,3 +259,20 @@
     max-inline-size: 100px;
   }
 }
+
+/* R3 Task 6: organization switcher for users in several organizations. */
+.shell-organization-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+.shell-organization-switcher svg {
+  inline-size: 1.1rem;
+  block-size: 1.1rem;
+  flex: none;
+}
+.shell-organization-switcher .ds-control {
+  max-inline-size: 16rem;
+  min-block-size: 2.25rem;
+}

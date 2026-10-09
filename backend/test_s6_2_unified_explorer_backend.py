@@ -27,7 +27,7 @@ from app.services.explorer import (
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-HEAD = "20261010_0001_r3_email_notifications"
+HEAD = "20261011_0001_r3_organization_record_events"
 
 
 def source(relative: str) -> str:
@@ -162,7 +162,7 @@ def test_unified_get_dependency_graph_is_passive() -> None:
 def test_canonical_mutations_lock_owned_row_and_change_only_boolean() -> None:
     service = source("backend/app/services/recommendations.py")
     assert ".with_for_update()" in service
-    assert "CompanyProfile.user_id == user_id" in service
+    assert "effective_company_profile_id(db, user_id=user_id)" in service  # R3 Task 6: the organization's rows
     assert "TenderRecommendation.id == recommendation_id" in service
     assert "recommendation.is_dismissed = dismissed" in service
     for forbidden in (
@@ -190,7 +190,7 @@ def test_legacy_hunter_dismiss_delegates_to_canonical_service() -> None:
 def test_queries_use_uuid_authority_and_independent_pursuit_overlay() -> None:
     service = source("backend/app/services/explorer.py")
     for authority in (
-        "CompanyProfile.user_id == user_id",
+        "effective_company_profile(db, user_id=user_id)",  # R3 Task 6
         "TenderRecommendation.company_profile_id == profile_id",
         "Membership.user_id == user_id",
         "Membership.state == MembershipState.ACTIVE",
@@ -233,13 +233,18 @@ def test_query_contract_is_bounded() -> None:
     assert ExplorerQuery().offset == 0
 
 
-def test_explorer_access_allows_approved_no_profile_but_not_pending_states() -> None:
+def test_explorer_access_allows_approved_no_profile_but_not_pending_states(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeDB:
         def __init__(self, profile_approval):
             self.profile_approval = profile_approval
 
-        async def scalar(self, _statement):
-            return self.profile_approval
+    # R3 Task 6: the gate reads the selected organization's profile.
+    async def organization_profile(db, *, user_id):
+        return None if db.profile_approval is None else SimpleNamespace(approval_status=db.profile_approval)
+
+    import app.api.deps as deps_module
+
+    monkeypatch.setattr(deps_module, "effective_company_profile", organization_profile)
 
     def user(approval_status: str):
         return SimpleNamespace(

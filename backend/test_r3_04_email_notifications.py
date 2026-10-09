@@ -33,7 +33,8 @@ from scripts import test_s0_5b4_baseline as support
 from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
-HEAD = "20261010_0001_r3_email_notifications"
+REVISION = "20261010_0001_r3_email_notifications"
+HEAD = "20261011_0001_r3_organization_record_events"
 PREVIOUS = "20261009_0001_r3_cv_library_drafts"
 
 
@@ -180,7 +181,7 @@ def test_r3_04_migration_is_additive_reversible_and_drift_free() -> None:
         try:
             await support.raw_baseline(database)
             await asyncio.to_thread(support.alembic, database, "upgrade", PREVIOUS)
-            await asyncio.to_thread(support.alembic, database, "upgrade", HEAD)
+            await asyncio.to_thread(support.alembic, database, "upgrade", REVISION)
             connection = await support.database_connection(database)
             try:
                 assert await connection.fetchval("SELECT to_regclass('email_deliveries')")

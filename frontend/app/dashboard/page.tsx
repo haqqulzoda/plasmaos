@@ -36,6 +36,7 @@ import {
 } from "@/lib/dashboard";
 import { api } from "@/lib/api";
 import { listExplorer } from "@/lib/explorer";
+import { pageOrganization, readSelectedOrganization } from "@/lib/organizationSelection";
 import { OpenWorkspaceButton } from "@/components/pursuits/OpenWorkspaceButton";
 import { FactChips } from "@/components/tenders/FactChips";
 import {
@@ -103,8 +104,9 @@ async function fetchPursuits(): Promise<PursuitsState> {
     (await api.get<OrganizationSummary[]>("/organizations")).data ?? [],
   );
   if (!organizations.length) return { kind: "none" };
-  if (organizations.length > 1) return { kind: "choose" };
-  const organizationId = organizations[0].organization_id;
+  // The workspace-wide organization choice (R3 Task 6), else the only one.
+  const organizationId = pageOrganization(organizations, readSelectedOrganization());
+  if (!organizationId) return { kind: "choose" };
   const response = await api.get<PursuitListResponse>("/pursuits", {
     params: { limit: DASHBOARD_PURSUIT_LIMIT, offset: 0 },
     headers: { "X-Organization-ID": organizationId },

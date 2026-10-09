@@ -7,7 +7,7 @@ from alembic.script import ScriptDirectory
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD = "20261010_0001_r3_email_notifications"
+HEAD = "20261011_0001_r3_organization_record_events"
 
 
 def source(relative: str) -> str:
@@ -52,7 +52,7 @@ def test_legacy_backend_dismiss_delegates_canonical_service() -> None:
 def test_legacy_list_is_owned_and_read_only() -> None:
     endpoint = source("backend/app/api/endpoints/hunter.py")
     list_block = endpoint.split("async def list_recommendations", 1)[1].split("@router.post", 1)[0]
-    assert "CompanyProfile.user_id == current_user.id" in list_block
+    assert "effective_company_profile_id(db, user_id=current_user.id)" in list_block
     assert "TenderRecommendation.company_profile_id == profile_id" in list_block
     for forbidden in ("db.add(", "db.commit(", "evaluate_tenders_batch", "process_tender_docs"):
         assert forbidden not in list_block

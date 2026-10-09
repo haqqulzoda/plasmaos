@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, defer
 
+from app.services.organization_context import effective_company_profile, effective_company_profile_id
 from app.api.endpoints.tenders import (
     _apply_tender_sort,
     _batched_tender_summaries,
@@ -209,10 +210,8 @@ async def resolve_owned_profile_id(
     *,
     user_id: UUID,
 ) -> UUID | None:
-    """Resolve the schema-enforced single CompanyProfile for this exact user."""
-    return await db.scalar(
-        select(CompanyProfile.id).where(CompanyProfile.user_id == user_id)
-    )
+    """The selected organization's company profile id (R3 Task 6), never the user's own."""
+    return await effective_company_profile_id(db, user_id=user_id)
 
 
 async def owned_profile_targets(
@@ -220,20 +219,15 @@ async def owned_profile_targets(
     *,
     user_id: UUID,
 ) -> tuple[UUID | None, ProfileTargets]:
-    """The viewer's single CompanyProfile id and its normalized targets, in one read."""
-    row = (
-        await db.execute(
-            select(
-                CompanyProfile.id,
-                CompanyProfile.target_countries,
-                CompanyProfile.target_regions,
-                CompanyProfile.target_services,
-            ).where(CompanyProfile.user_id == user_id)
-        )
-    ).first()
-    if row is None:
+    """The organization's company profile id and its normalized targets (R3 Task 6).
+
+    Every ACTIVE member of the selected organization sees the same matches and the same
+    organization-level dismissals.
+    """
+    profile = await effective_company_profile(db, user_id=user_id)
+    if profile is None:
         return None, ProfileTargets()
-    return row[0], profile_targets(row[1], row[2], row[3])
+    return profile.id, profile_targets(profile.target_countries, profile.target_regions, profile.target_services)
 
 
 async def _filtered_counts(

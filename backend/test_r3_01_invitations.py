@@ -36,7 +36,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 PREVIOUS_HEAD = "20261005_0001_d2_05_eoi_drafts"
 REVISION = "20261008_0001_r3_pending_invitations"
-HEAD = "20261010_0001_r3_email_notifications"
+HEAD = "20261011_0001_r3_organization_record_events"
 
 
 # ---- pure rules -----------------------------------------------------------------------------------
@@ -298,12 +298,12 @@ async def _sign_in_binding(sessions, ids, org_a, org_b, monkeypatch, database) -
         assert access.company_profile_id == ids["profile_a"]
         assert await deps.require_approved_pilot_access(current_user=invitee, db=db) is invitee
         assert await deps.require_active_initial_membership(current_user=invitee, db=db) is invitee
-        # A MEMBER cannot edit the organization profile, and never onboards a second company.
-        with pytest.raises(HTTPException) as edit:
-            await user_endpoints.update_company_profile(
-                profile_data=user_endpoints.CompanyProfileUpdate(company_name="Hijack"), current_user=invitee, db=db,
-            )
-        assert edit.value.status_code == 403
+        # R3 Task 6: an ACTIVE member may edit the organization profile (audited), and never
+        # onboards a second company.
+        edited = await user_endpoints.update_company_profile(
+            profile_data=user_endpoints.CompanyProfileUpdate(website="https://a.example"), current_user=invitee, db=db,
+        )
+        assert edited.company_profile_id == ids["profile_a"] and edited.website == "https://a.example"
         with pytest.raises(HTTPException) as onboarding:
             await user_endpoints.submit_company_onboarding(
                 payload=user_endpoints.CompanyOnboardingRequest.model_construct(company_name="Second Co"),

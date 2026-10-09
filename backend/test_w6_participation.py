@@ -88,7 +88,7 @@ from test_w3_private_document_foundation import _pdf_bytes, _stage
 
 
 W6_HEAD = "20260929_0001_w6_participation"
-CURRENT_HEAD = "20261010_0001_r3_email_notifications"
+CURRENT_HEAD = "20261011_0001_r3_organization_record_events"
 
 
 def test_w6_semantics_are_separate_private_and_bounded() -> None:

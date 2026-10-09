@@ -696,6 +696,11 @@ async def seed(sessions, options: Options, *, today: date | None = None, process
                note_call=None) -> dict[str, Any]:
     if options.confirm != CONFIRMATION:
         raise DemoSeedError(f"writes require --confirm {CONFIRMATION}")
+    # Synthetic analyses and EOI drafts announce nothing (inbox or e-mail); the demo
+    # account's own approval is still staged by its audit trigger.
+    from app.services.notifications import SUPPRESS_EVENT_STAGING
+
+    SUPPRESS_EVENT_STAGING.set(True)
     summary = await plan(sessions, options, today=today)
     label = summary["label"]
     if options.resume is not None and not summary["organization_exists"]:

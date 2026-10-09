@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tender_actionability import is_tender_actionable
 from app.models.all_models import Proposal, Tender
+from app.models.tenancy import Membership as _Membership, Organization as _Organization
+from app.models.base import MembershipState as _MembershipState
 from app.models.base import (
     ProposalStatus,
     TenderEngagementOrigin,
@@ -128,9 +130,13 @@ async def prepare_bid(
         raise ValueError("exactly one of tender_id or proposal_id is required")
 
     profile_id = await db.scalar(
-        select(CompanyProfile.id).where(
+        select(CompanyProfile.id)
+        .join(_Organization, _Organization.legacy_company_profile_id == CompanyProfile.id)
+        .join(_Membership, _Membership.organization_id == _Organization.id)
+        .where(
             CompanyProfile.id == company_profile_id,
-            CompanyProfile.user_id == user_id,
+            _Membership.user_id == user_id,
+            _Membership.state == _MembershipState.ACTIVE,
         )
     )
     if profile_id is None:

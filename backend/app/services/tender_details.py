@@ -727,9 +727,10 @@ async def compose_tender_details(
     competitor_intelligence: TenderCompetitorIntelligenceResponse | None = None,
 ) -> TenderDetailsResponse:
     """Compose local canonical state sequentially; never flush, commit, or enqueue."""
-    profile = await db.scalar(
-        select(CompanyProfile).where(CompanyProfile.user_id == user_id)
-    )
+    # The selected organization's profile (R3 Task 6).
+    from app.services.organization_context import effective_company_profile
+
+    profile = await effective_company_profile(db, user_id=user_id)
     project_context, project_leadership = await _project_sections(
         db,
         tender_id=tender.id,
@@ -771,10 +772,9 @@ async def compose_tender_details(
     # the page needs no extra list scan or generation request for its side rail.
     recommendation = await db.scalar(
         select(TenderRecommendation)
-        .join(CompanyProfile, CompanyProfile.id == TenderRecommendation.company_profile_id)
         .where(
             TenderRecommendation.tender_id == tender.id,
-            CompanyProfile.user_id == user_id,
+            TenderRecommendation.company_profile_id == profile.id,
         )
         .order_by(TenderRecommendation.created_at.desc(), TenderRecommendation.id.asc())
         .limit(1)

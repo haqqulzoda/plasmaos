@@ -16,7 +16,7 @@ SERVICE = BACKEND_DIR / "app/services/analysis_aggregates.py"
 ENDPOINT = BACKEND_DIR / "app/api/endpoints/tenders.py"
 PROPOSALS = BACKEND_DIR / "app/api/endpoints/proposals.py"
 PREFLIGHT = BACKEND_DIR / "scripts/report_analysis_aggregate_concurrency.py"
-HEAD = "20261010_0001_r3_email_notifications"
+HEAD = "20261011_0001_r3_organization_record_events"
 
 
 def source(path: Path) -> str:

@@ -153,7 +153,7 @@ function BulkConfirm({ items, gaps, pursuitId, runId, headers, onDone }: {
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [report, setReport] = useState<SequentialReport | null>(null);
-  const defaultReason = defaultBulkReason(t('review.bulkDefaultReason'), session?.user?.name);
+  const defaultReason = defaultBulkReason(t('review.bulkDefaultReason', { name: '{name}' }), session?.user?.name);
   const pending = items.filter((item) => item.effective_review_state === 'PROVISIONAL');
   if (!pending.length && !report) return null;
   const run = async () => {

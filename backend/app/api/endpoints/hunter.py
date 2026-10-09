@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import require_approved_pilot_access
+from app.services.organization_context import effective_company_profile_id
 from app.core.security import authenticated_dependency
 from app.core.tender_actionability import actionable_tender_condition
 from app.db.session import get_db
@@ -73,12 +74,8 @@ async def list_recommendations(
     current user, ordered by match_score descending.
     """
     # Resolve the user's company profile
-    profile_result = await db.execute(
-        select(CompanyProfile.id).where(
-            CompanyProfile.user_id == current_user.id
-        )
-    )
-    profile_id = profile_result.scalar_one_or_none()
+    # The selected organization's profile (R3 Task 6).
+    profile_id = await effective_company_profile_id(db, user_id=current_user.id)
 
     if profile_id is None:
         return []

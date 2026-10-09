@@ -33,7 +33,7 @@ from app.services.tender_sources.base import NormalizedTender, persist_tender_ba
 from scripts import bootstrap_database as bootstrap
 
 
-HEAD = "20261010_0001_r3_email_notifications"
+HEAD = "20261011_0001_r3_organization_record_events"
 PREFIX = "plasma_sr21_"
 DEFAULT_BATCH_SIZE = 500
 DOMAIN_TABLES = (

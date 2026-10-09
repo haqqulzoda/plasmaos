@@ -178,13 +178,8 @@ async def require_approved_pilot_access(
     if is_operator_user(current_user):
         return current_user
 
-    result = await db.execute(
-        select(CompanyProfile).where(CompanyProfile.user_id == current_user.id)
-    )
-    profile = result.scalar_one_or_none()
-    if profile is None:
-        # A teammate who joined by invitation follows the organization's profile (R3).
-        profile = await effective_company_profile(db, user_id=current_user.id)
+    # The organization's company profile through an ACTIVE membership (R3 Task 6).
+    profile = await effective_company_profile(db, user_id=current_user.id)
 
     if not has_approved_pilot_account_access(current_user, profile):
         raise HTTPException(
@@ -240,11 +235,8 @@ async def require_explorer_access(
             detail="User approval required",
         )
 
-    profile_approval = await db.scalar(
-        select(CompanyProfile.approval_status).where(
-            CompanyProfile.user_id == current_user.id
-        )
-    )
+    profile = await effective_company_profile(db, user_id=current_user.id)
+    profile_approval = profile.approval_status if profile is not None else None
     if profile_approval is not None and profile_approval != COMPANY_APPROVAL_APPROVED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

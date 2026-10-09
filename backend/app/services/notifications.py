@@ -1,6 +1,7 @@
 """Canonical idempotent notification publisher and passive inbox queries."""
 
 import base64
+from contextvars import ContextVar
 from datetime import datetime
 import hashlib
 import hmac
@@ -20,6 +21,9 @@ from app.models.communications import (
 from app.schemas.communications import NotificationItem
 
 PUBLICATION_BATCH_SIZE = 500
+# Server commands that write synthetic records (scripts/demo/seed_demo.py) stage no
+# lifecycle events: no inbox items and no e-mails for invented analyses or drafts.
+SUPPRESS_EVENT_STAGING: ContextVar[bool] = ContextVar("plasma_suppress_event_staging", default=False)
 SYSTEM_TEMPLATES = {
     "RECOMMENDATION_CREATED": (
         "TENDER_ALERT",
@@ -368,6 +372,8 @@ async def stage_system_outbox(
 ) -> None:
     """Stage one validated SYSTEM event in the caller's transaction (replays are no-ops)."""
     category, template_key, _ = SYSTEM_TEMPLATES[event_type]
+    if SUPPRESS_EVENT_STAGING.get():
+        return
     validate_system_event(
         event_type=event_type, category=category, template_key=template_key,
         payload=payload, dedupe_key=dedupe_key,

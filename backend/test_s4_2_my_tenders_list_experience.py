@@ -13,7 +13,7 @@ from app.services.my_tenders import MyTendersQuery, _base_list_statement, _order
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT = BACKEND_DIR.parent
-HEAD = "20261010_0001_r3_email_notifications"
+HEAD = "20261011_0001_r3_organization_record_events"
 
 
 def source(relative: str) -> str:
@@ -75,7 +75,9 @@ def test_api_is_bounded_safe_and_uses_current_profile() -> None:
     assert '@router.get("/my-tenders/{engagement_id}"' in api
     assert '"/tenders/{tender_id}/engagement"' in api
     assert "le=100" in api
-    assert "CompanyProfile.user_id == current_user.id" in api
+    # R3 Task 6: the selected organization's profile through an ACTIVE membership.
+    assert "organization_profile_context(db, user_id=current_user.id)" in api
+    assert "CompanyProfile.user_id == current_user.id" not in api
     assert "require_active_initial_membership" in api
     assert "current_user.id" in api
     assert "company_name" not in api

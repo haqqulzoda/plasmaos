@@ -46,7 +46,11 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20261010_0001_r3_email_notifications"]
+    assert script.get_heads() == ["20261011_0001_r3_organization_record_events"]
+    assert (
+        script.get_revision("20261011_0001_r3_organization_record_events").down_revision
+        == "20261010_0001_r3_email_notifications"
+    )
     assert (
         script.get_revision("20261010_0001_r3_email_notifications").down_revision
         == "20261009_0001_r3_cv_library_drafts"
@@ -108,7 +112,7 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
         script.get_revision("20260925_0001_w2_organization_membership").down_revision
         == "20260912_0001_s10_5_communications"
     )
-    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 46
+    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 47
 
 
 def test_historical_migrations_are_untouched() -> None:

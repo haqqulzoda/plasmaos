@@ -24,7 +24,7 @@ from scripts import enqueue_world_bank_project_enrichment as reconciliation
 
 
 ROOT = Path(__file__).resolve().parent
-EXPECTED_HEAD = "20261010_0001_r3_email_notifications"
+EXPECTED_HEAD = "20261011_0001_r3_organization_record_events"
 
 
 class _Session:

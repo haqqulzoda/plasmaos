@@ -9,6 +9,8 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from app.core.http_hardening import HardenedHTTPMiddleware, validation_error
+from app.core.organization_selection import OrganizationSelectionMiddleware, organization_access_denied
+from app.services.organization_context import OrganizationAccessDeniedError
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,7 +83,9 @@ app.add_middleware(
 )
 
 app.add_middleware(HardenedHTTPMiddleware)
+app.add_middleware(OrganizationSelectionMiddleware)
 app.add_exception_handler(RequestValidationError, validation_error)
+app.add_exception_handler(OrganizationAccessDeniedError, organization_access_denied)
 
 # Include routers
 app.include_router(notifications_router, prefix='/api/v1/notifications', tags=['Notifications'])

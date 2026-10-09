@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
+
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import select
@@ -29,6 +32,7 @@ from app.schemas.tenancy import (
     OrganizationSummary,
 )
 from app.models.invitations import PendingInvitation
+from app.models.organization_records import OrganizationRecordEvent
 from app.services.invitations import (
     InvitationConflictError,
     InvitationEmailMismatchError,
@@ -374,3 +378,43 @@ async def accept_invitation_endpoint(
     except InvitationError as exc:
         raise _invitation_http_error(exc) from exc
     return _membership_response(membership, current_user)
+
+
+# ---- R3 Task 6: who changed the organization's company profile and readiness records -------------
+
+
+class OrganizationRecordEventResponse(BaseModel):
+    event_id: UUID
+    organization_id: UUID
+    record_type: str
+    record_id: UUID | None = None
+    action: str
+    changed_fields: list[str]
+    actor_user_id: UUID | None = None
+    actor_name: str | None = None
+    actor_membership_id: UUID | None = None
+    created_at: datetime
+
+
+@router.get("/{organization_id}/record-events", response_model=list[OrganizationRecordEventResponse])
+async def list_organization_record_events(
+    organization_id: UUID,
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> list[OrganizationRecordEventResponse]:
+    await _require_owner_context(db, current_user, organization_id)
+    rows = (await db.execute(
+        select(OrganizationRecordEvent, User.name)
+        .outerjoin(User, User.id == OrganizationRecordEvent.actor_user_id)
+        .where(OrganizationRecordEvent.organization_id == organization_id)
+        .order_by(OrganizationRecordEvent.created_at.desc(), OrganizationRecordEvent.id.desc())
+        .limit(500)
+    )).all()
+    return [
+        OrganizationRecordEventResponse(
+            event_id=event.id, organization_id=event.organization_id, record_type=event.record_type,
+            record_id=event.record_id, action=event.action, changed_fields=list(event.changed_fields or []),
+            actor_user_id=event.actor_user_id, actor_name=name, actor_membership_id=event.actor_membership_id,
+            created_at=event.created_at,
+        )
+        for event, name in rows
+    ]

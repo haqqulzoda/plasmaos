@@ -37,7 +37,8 @@ from app.models.all_models import User, SubscriptionTier
 from app.models.company import CompanyProfile
 from app.models.base import MembershipRole, MembershipState
 from app.models.tenancy import Membership, Organization
-from app.services.organization_context import effective_company_profile, ensure_profile_organization
+from app.services.organization_context import effective_company_profile, ensure_profile_organization, organization_profile_context
+from app.services.organization_records import ADMIN_ONLY_PROFILE_FIELDS, changed_fields, record_organization_change, snapshot
 
 router = APIRouter()
 
@@ -477,21 +478,6 @@ async def _get_own_company_profile(
     return result.scalar_one_or_none()
 
 
-async def _is_active_owner_of_profile(db: AsyncSession, *, user_id: UUID, profile_id: UUID) -> bool:
-    return (
-        await db.scalar(
-            select(Membership.id)
-            .join(Organization, Organization.id == Membership.organization_id)
-            .where(
-                Organization.legacy_company_profile_id == profile_id,
-                Membership.user_id == user_id,
-                Membership.state == MembershipState.ACTIVE,
-                Membership.role == MembershipRole.OWNER,
-            )
-        )
-    ) is not None
-
-
 @router.get("/me/company", response_model=CompanyProfileResponse)
 async def get_company_profile(
     current_user: User = Depends(get_current_user),
@@ -521,28 +507,31 @@ async def update_company_profile(
     
     Only updates fields that are provided (not None).
     """
-    profile = await _get_own_company_profile(db=db, user_id=current_user.id)
-    if profile is None:
-        profile = await effective_company_profile(db, user_id=current_user.id)
-        if profile is not None and not await _is_active_owner_of_profile(
-            db, user_id=current_user.id, profile_id=profile.id
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="OWNER membership required",
-            )
+    # R3 Task 6: the selected organization's profile; any ACTIVE member may edit it.
+    # Approval and pilot status are not in CompanyProfileUpdate: they stay admin-only.
+    context = await organization_profile_context(db, user_id=current_user.id)
+    profile = context.profile if context is not None else await effective_company_profile(db, user_id=current_user.id)
     if profile is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company onboarding required",
         )
 
-    update_data = profile_data.model_dump(exclude_unset=True)
+    update_data = {
+        field: value for field, value in profile_data.model_dump(exclude_unset=True).items()
+        if field not in ADMIN_ONLY_PROFILE_FIELDS
+    }
+    before = snapshot(profile, update_data)
     for field, value in update_data.items():
         setattr(profile, field, value)
 
     await db.flush()
-    await ensure_profile_organization(db, profile=profile)
+    organized = await ensure_profile_organization(db, profile=profile)
+    await record_organization_change(
+        db, organization_id=organized.organization.id, company_profile_id=profile.id,
+        actor_user_id=current_user.id, actor_membership_id=context.membership.id if context else organized.membership.id,
+        record_type="COMPANY_PROFILE", action="UPDATE", fields=changed_fields(before, update_data), record_id=profile.id,
+    )
     await db.commit()
     await db.refresh(profile)
     

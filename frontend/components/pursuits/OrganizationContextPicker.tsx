@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 
 import { Select } from '@/components/ui/Forms';
 import { api } from '@/lib/api';
+import { pageOrganization, readSelectedOrganization, writeSelectedOrganization } from '@/lib/organizationSelection';
 import type { OrganizationSummary } from '@/types/pursuit';
 
 export function OrganizationContextPicker({
@@ -27,7 +28,9 @@ export function OrganizationContextPicker({
         if (cancelled) return;
         setOrganizations(response.data);
         onOrganizations?.(response.data);
-        if (response.data.length === 1) onChange(response.data[0].organization_id);
+        // The workspace-wide choice (R3 Task 6), else the only organization.
+        const initial = pageOrganization(response.data, readSelectedOrganization());
+        if (initial) onChange(initial);
       })
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
@@ -45,7 +48,7 @@ export function OrganizationContextPicker({
       helper={t('organizations.help')}
       required
       value={value}
-      onChange={(event) => onChange(event.target.value)}
+      onChange={(event) => { writeSelectedOrganization(event.target.value || null); onChange(event.target.value); }}
     >
       <option value="">{t('organizations.choose')}</option>
       {organizations.map((organization) => (

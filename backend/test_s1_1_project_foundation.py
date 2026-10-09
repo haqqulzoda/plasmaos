@@ -26,7 +26,7 @@ MIGRATION_PATH = (
     BACKEND_DIR
     / "alembic/versions/20260826_0001_s1_1_project_foundation.py"
 )
-HEAD = "20261010_0001_r3_email_notifications"
+HEAD = "20261011_0001_r3_organization_record_events"
 
 
 def _load_migration():

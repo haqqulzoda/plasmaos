@@ -1,6 +1,8 @@
 import axios, { InternalAxiosRequestConfig } from 'axios';
 import { getSession, signOut } from 'next-auth/react';
 
+import { organizationHeader, readSelectedOrganization, writeSelectedOrganization } from './organizationSelection';
+
 type SessionWithAccessToken = {
     accessToken?: string;
 } | null;
@@ -80,6 +82,15 @@ api.interceptors.request.use(
             if (token) {
                 attachAuthorizationHeader(config, token);
             }
+            // R3 Task 6: the selected organization, unless the request names one itself.
+            const existing = typeof config.headers?.get === 'function'
+                ? config.headers.get('X-Organization-ID')
+                : (config.headers as Record<string, string> | undefined)?.['X-Organization-ID'];
+            const organizationId = organizationHeader(existing ? String(existing) : null, readSelectedOrganization());
+            if (organizationId) {
+                if (typeof config.headers?.set === 'function') config.headers.set('X-Organization-ID', organizationId);
+                (config as InternalAxiosRequestConfig & { plasmaSelectedOrganization?: boolean }).plasmaSelectedOrganization = true;
+            }
         }
         return config;
     },
@@ -95,6 +106,18 @@ api.interceptors.response.use(
         if (error.response?.status === 401 && typeof window !== 'undefined') {
             setApiAccessToken(null);
             await signOut({ callbackUrl: '/' });
+        }
+        // A stored organization the user no longer belongs to: forget it and retry once
+        // in the default organization (R3 Task 6).
+        const config = error.config as (InternalAxiosRequestConfig & { plasmaSelectedOrganization?: boolean; plasmaRetried?: boolean }) | undefined;
+        if (
+            error.response?.status === 404 && error.response?.data?.detail === 'Organization not found'
+            && config?.plasmaSelectedOrganization && !config.plasmaRetried
+        ) {
+            writeSelectedOrganization(null);
+            config.plasmaRetried = true;
+            if (typeof config.headers?.delete === 'function') config.headers.delete('X-Organization-ID');
+            return api.request(config);
         }
         return Promise.reject(error);
     }
