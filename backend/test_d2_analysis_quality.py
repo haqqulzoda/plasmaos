@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date
+from pathlib import Path
 import threading
 import time
 from uuid import uuid4
@@ -326,3 +327,34 @@ def test_the_pass_count_comes_from_the_environment() -> None:
         return int(output.strip().splitlines()[-1])
 
     assert (passes(None), passes("3"), passes("0")) == (2, 3, 1)  # default 2, at least one
+
+
+def test_a_first_pass_timeout_with_an_empty_second_pass_is_a_retryable_degraded_attempt(short_route, monkeypatch) -> None:
+    # R3: seen in the Deploy 1b rehearsal: pass 1 hit a Gemini ReadTimeout and pass 2 completed with
+    # nothing. The analyzer reports it; the analysis service must not complete it as "no gaps".
+    import requests
+
+    from app.services.pursuit_analysis import (
+        assess_extraction_quality,
+        classify_analysis_failure,
+        is_terminal_analysis_failure,
+    )
+
+    def stub(item, chunk, language, api_key, models=None):
+        if analyzer.CURRENT_PASS.get() == 1:
+            raise requests.exceptions.ReadTimeout("read timed out (read timeout=90)")
+        return _chunk_facts()
+
+    monkeypatch.setattr(analyzer, "_extract_chunk_sync", stub)
+    result = asyncio.run(analyzer.analyze_pack_items([SealedTextInput(uuid4(), "rfp.txt", TEXT)], "en"))
+    d = result.diagnostics
+    assert list(result) == [] and d["passes_failed"] == [{"pass": 1, "failure_class": "ReadTimeout"}]
+    assert (d["passes_completed"], d["verified_requirement_count"], d["verified_position_count"]) == (1, 0, 0)
+    # What the service decides on (test_w4 proves the run is retried, then FAILED, never COMPLETED):
+    assert assess_extraction_quality([TEXT], requirement_count=0, position_count=0)[0] == "NEEDS_ATTENTION"
+    degraded = analyzer.DegradedPassResult("retried", diagnostics={"passes_failed": d["passes_failed"]})
+    assert classify_analysis_failure(degraded)[1] == "DEGRADED_PASS_RESULT"
+    assert not is_terminal_analysis_failure(degraded)  # retryable through the attempt path
+    service = (Path(__file__).parent / "app" / "services" / "pursuit_analysis.py").read_text(encoding="utf-8")
+    guard = service.index('if failed_passes and quality_state != "READY_FOR_REVIEW":')
+    assert guard < service.index('run.status = "COMPLETED"', guard)  # checked before the run completes

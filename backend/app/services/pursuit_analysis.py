@@ -84,6 +84,8 @@ def classify_analysis_failure(exc: Exception) -> tuple[str, str | None]:
         return PROVIDER_UNAVAILABLE_MESSAGE, exc.code
     if isinstance(exc, pursuit_analyzer.RunBudgetExceeded):
         return str(exc)[:1000], exc.code
+    if isinstance(exc, pursuit_analyzer.DegradedPassResult):
+        return str(exc)[:1000], exc.code
     return str(exc)[:1000], None
 
 
@@ -722,17 +724,33 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
         if run is None or run.status == "COMPLETED":
             await db.rollback()
             return
+        quality_state, quality_summary, quality_diagnostics = assess_extraction_quality(
+            input_texts,
+            requirement_count=len(requirements),
+            position_count=len(positions),
+        )
+        failed_passes = analyzer_diagnostics.get("passes_failed") or []
+        if failed_passes and quality_state != "READY_FOR_REVIEW":
+            # R3: a SHORT-route pass failed (timeout, provider, schema) and the surviving pass alone
+            # is empty or implausibly sparse. That is a degraded attempt, not a reviewable result:
+            # retry it (normal attempt path) instead of completing it, so it is never shown as "no
+            # gaps". Both passes completing with few findings is still decided by the quality state.
+            raise pursuit_analyzer.DegradedPassResult(
+                "One extraction pass failed and the other found too little to rely on; "
+                "the analysis will be retried.",
+                diagnostics={
+                    key: analyzer_diagnostics[key]
+                    for key in ("route", "pass_count", "passes_completed", "passes_succeeded", "passes_failed",
+                                "verified_requirement_count", "verified_position_count")
+                    if key in analyzer_diagnostics
+                } | {"degraded_quality_state": quality_state},
+            )
         run.status = "COMPLETED"
         run.result_completeness = "FULL"
         # A fallback model may have produced some chunks; record what actually did.
         accepted_model_name = analyzer_diagnostics.get("model_name")
         if accepted_model_name:
             run.model_name = str(accepted_model_name)[:200]
-        quality_state, quality_summary, quality_diagnostics = assess_extraction_quality(
-            input_texts,
-            requirement_count=len(requirements),
-            position_count=len(positions),
-        )
         run.quality_state = quality_state
         run.extraction_diagnostics = {
             **analyzer_diagnostics,
@@ -793,6 +811,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
                 "quality_summary": quality_summary,
                 "error_type": type(exc).__name__,
                 **({"failure_code": failure_code} if failure_code else {}),
+                **(exc.diagnostics if isinstance(getattr(exc, "diagnostics", None), dict) else {}),
             }
             run.lease_until = None
             run.lease_owner = None

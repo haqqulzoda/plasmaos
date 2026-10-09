@@ -589,6 +589,74 @@ def test_w4_analysis_authority_for_upload_and_source_pursuits(tmp_path: Path, mo
                     assert prior.status == "COMPLETED" and prior.quality_state == "READY_FOR_REVIEW"
                     assert await db.scalar(select(func.count(PursuitRequirement.id)).where(PursuitRequirement.analysis_run_id == started.analysis_run_id)) == 2
 
+                    # R3: a SHORT run whose pass 1 failed (the Deploy 1b rehearsal: Gemini ReadTimeout) and whose
+                    # pass 2 found nothing is a degraded attempt: retried, never COMPLETED as "no gaps".
+                    degraded_diagnostics = {
+                        "route": "SHORT", "pass_count": 2, "passes_completed": 1, "primary_pass": 2,
+                        "passes_succeeded": [2], "passes_failed": [{"pass": 1, "failure_class": "ReadTimeout"}],
+                        "verified_requirement_count": 0, "verified_position_count": 0,
+                    }
+
+                    async def new_run():
+                        candidate = await build_analysis_pack_candidate(db, organization_id=organization_a, pursuit_id=pursuit.id)
+                        return await create_analysis_run(
+                            db, organization_id=organization_a, pursuit_id=pursuit.id, membership_id=owner_a,
+                            request=PursuitAnalysisStartRequest(
+                                candidate_sha256=candidate.candidate_sha256, analysis_language="en",
+                                private_version_ids=[pdf_candidate.document_version_id],
+                            ),
+                        )
+
+                    async def degraded_empty(*_args, **_kwargs):
+                        return pursuit_analyzer.VerifiedFacts([], dict(degraded_diagnostics))
+
+                    degraded_run = await new_run()
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", degraded_empty)
+                    with pytest.raises(pursuit_analyzer.DegradedPassResult):
+                        await process_analysis_run(db, degraded_run.analysis_run_id, worker_id="w4-degraded-worker")
+                    degraded_row = await db.get(AnalysisRun, degraded_run.analysis_run_id)
+                    await db.refresh(degraded_row)
+                    assert degraded_row.status == "QUEUED" and degraded_row.quality_state == "FAILED"  # retried
+                    assert degraded_row.extraction_diagnostics["failure_code"] == "DEGRADED_PASS_RESULT"
+                    assert degraded_row.extraction_diagnostics["passes_failed"] == [{"pass": 1, "failure_class": "ReadTimeout"}]
+                    assert degraded_row.extraction_diagnostics["degraded_quality_state"] == "NEEDS_ATTENTION"
+                    assert "retried" in degraded_row.failure_reason
+                    for table in (PursuitRequirement, PursuitGap):
+                        assert await db.scalar(select(func.count(table.id)).where(table.analysis_run_id == degraded_run.analysis_run_id)) == 0
+                    # Every attempt degraded: the run ends FAILED, never COMPLETED.
+                    while degraded_row.status == "QUEUED":
+                        degraded_row.next_dispatch_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+                        await db.commit()
+                        with pytest.raises(pursuit_analyzer.DegradedPassResult):
+                            await process_analysis_run(db, degraded_run.analysis_run_id, worker_id="w4-degraded-worker")
+                        await db.refresh(degraded_row)
+                    assert degraded_row.status == "FAILED" and degraded_row.quality_state == "FAILED"
+                    assert degraded_row.attempt_count == degraded_row.max_attempts
+
+                    # A failed pass whose sibling produced a materially populated result still completes (INT-5).
+                    async def degraded_populated(sealed, language):
+                        return pursuit_analyzer.VerifiedFacts(await extracted(sealed, language), dict(degraded_diagnostics))
+
+                    populated_run = await new_run()
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", degraded_populated)
+                    await process_analysis_run(db, populated_run.analysis_run_id, worker_id="w4-populated-worker")
+                    populated_row = await db.get(AnalysisRun, populated_run.analysis_run_id)
+                    await db.refresh(populated_row)
+                    assert (populated_row.status, populated_row.quality_state) == ("COMPLETED", "READY_FOR_REVIEW")
+
+                    # Both passes completed with nothing: unchanged, the quality state decides (NEEDS_ATTENTION).
+                    async def both_passes_empty(*_args, **_kwargs):
+                        return pursuit_analyzer.VerifiedFacts([], degraded_diagnostics | {
+                            "passes_completed": 2, "passes_succeeded": [1, 2], "passes_failed": []})
+
+                    sparse_run = await new_run()
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", both_passes_empty)
+                    await process_analysis_run(db, sparse_run.analysis_run_id, worker_id="w4-sparse-worker")
+                    sparse_row = await db.get(AnalysisRun, sparse_run.analysis_run_id)
+                    await db.refresh(sparse_row)
+                    assert (sparse_row.status, sparse_row.quality_state) == ("COMPLETED", "NEEDS_ATTENTION")
+                    monkeypatch.setattr(analysis_service.pursuit_analyzer, "analyze_pack_items", extracted)
+
                     # D1 worker concurrency 2: two workers process different runs at the same
                     # time, and two workers racing for one run never both execute it.
                     active = {"now": 0, "peak": 0}
