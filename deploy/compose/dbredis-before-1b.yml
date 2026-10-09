@@ -1,0 +1,11 @@
+# The db/redis definition production runs until Deploy 1b (containers created from a275357):
+# PostgreSQL with its own defaults (cmd=[postgres]) and no oom_score_adj on db or redis.
+# Used to rehearse Deploy 1b from the real starting point, and as its rollback:
+#   scripts/compose-release.sh -f docker-compose.yml -f deploy/compose/dbredis-before-1b.yml up -d --no-deps db redis
+# Needs Docker Compose >= 2.24 (!reset). Data volumes are not affected.
+services:
+  db:
+    command: !reset []
+    oom_score_adj: !reset null
+  redis:
+    oom_score_adj: !reset null
