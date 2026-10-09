@@ -67,6 +67,12 @@ def _notice_fixture(**overrides):
     return raw
 
 
+async def _no_pages():
+    # The sync consumes the listing page by page (R3); an empty listing yields no page.
+    return
+    yield
+
+
 class WorldBankConnectorTests(unittest.TestCase):
     def test_official_current_opportunity_filters_and_exhaustive_pagination(self) -> None:
         fixed_now = datetime(2026, 8, 24, 20, 30, tzinfo=timezone.utc)
@@ -232,6 +238,7 @@ class WorldBankConnectorTests(unittest.TestCase):
             source_newest_published_at=None,
             source_oldest_published_at=None,
             list_opportunities=AsyncMock(return_value=[]),
+            iter_pages=_no_pages,
         )
         db = SimpleNamespace(rollback=AsyncMock())
         with (

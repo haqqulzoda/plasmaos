@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 from html.parser import HTMLParser
-from typing import Any, Callable
+from typing import Any, AsyncIterator, Callable
 from urllib.parse import urljoin, urlparse
 
 logger = logging.getLogger(__name__)
@@ -478,11 +478,24 @@ class WorldBankTenderSource:
                 await asyncio.sleep(0.5 * attempt)
 
     async def list_opportunities(self) -> list[dict[str, Any]]:
+        notices: list[dict[str, Any]] = []
+        async for page in self.iter_pages():
+            notices.extend(page)
+        return notices
+
+    async def iter_pages(self) -> AsyncIterator[list[dict[str, Any]]]:
+        """Yield each listing page's new notices (first-seen ids only), one page at a time.
+
+        Same requests, de-duplication, truncation and repeated-page rules as before; the
+        caller holds one page instead of the whole listing (R3: refresh memory). The
+        publication-date bounds are set once the listing is exhausted.
+        """
         import httpx
 
-        notices: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
         seen_page_fingerprints: set[tuple[str, ...]] = set()
+        newest_published: datetime | None = None
+        oldest_published: datetime | None = None
         self.last_pages_fetched = 0
         self.last_truncated = False
         self.last_duplicate_count = 0
@@ -539,6 +552,7 @@ class WorldBankTenderSource:
                     len(rows),
                     self.last_total,
                 )
+                page_notices: list[dict[str, Any]] = []
                 for row in rows:
                     external_id = str(row.get("id") or "").strip()
                     if not external_id:
@@ -547,7 +561,15 @@ class WorldBankTenderSource:
                         self.last_duplicate_count += 1
                         continue
                     seen_ids.add(external_id)
-                    notices.append(row)
+                    page_notices.append(row)
+                    published = parse_world_bank_publication_date(row)
+                    if published is not None:
+                        newest_published = published if newest_published is None else max(newest_published, published)
+                        oldest_published = published if oldest_published is None else min(oldest_published, published)
+                del payload
+                if page_notices:
+                    yield page_notices
+                del page_notices
                 if not rows:
                     break
                 if self.last_total is not None and offset + self.config.rows >= self.last_total:
@@ -560,14 +582,8 @@ class WorldBankTenderSource:
                 if self.last_total is None or len(seen_ids) < self.last_total:
                     self.last_truncated = True
 
-        publication_dates = [
-            value
-            for value in (parse_world_bank_publication_date(row) for row in notices)
-            if value is not None
-        ]
-        self.source_newest_published_at = max(publication_dates, default=None)
-        self.source_oldest_published_at = min(publication_dates, default=None)
-        return notices
+        self.source_newest_published_at = newest_published
+        self.source_oldest_published_at = oldest_published
 
     async def fetch_detail(self, external_id: str) -> dict[str, Any] | None:
         import httpx

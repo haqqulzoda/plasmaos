@@ -727,6 +727,10 @@ COMPETITOR_TARGETED_LOOKUP_STRATEGY = "targeted-awards-v2"
 COMPETITOR_TARGETED_LOOKUP_TTL = timedelta(hours=6)
 COMPETITOR_LIVE_CACHE_TTL_SECONDS = 15 * 60
 COMPETITOR_CACHE_REFRESH_TARGET_LIMIT = 2000
+# R3: targets are scanned this many at a time and award lookups run this many groups per batch,
+# so a refresh holds a bounded slice of the (up to 2000) targets instead of all of them.
+COMPETITOR_CACHE_SCAN_WINDOW = 200
+COMPETITOR_CACHE_GROUP_BATCH = 4 * COMPETITOR_REFRESH_FETCH_CONCURRENCY
 COMPETITOR_CACHE_REFRESH_SOURCE_SYSTEMS = frozenset({"adb", "uzex", "world_bank"})
 COMPETITOR_VERIFIED_METADATA_SOURCES = COMPETITOR_CACHE_REFRESH_SOURCE_SYSTEMS
 UZEX_DEALS_LIST_URL = "https://apietender.uzex.uz/api/common/DealsList"
@@ -2128,59 +2132,77 @@ async def _refresh_source_competitor_cache(
     if normalized_source not in COMPETITOR_CACHE_REFRESH_SOURCE_SYSTEMS:
         return {"targets_considered": 0, "targets_updated": 0, "records_cached": 0}
     bounded_limit = max(1, min(int(target_limit), COMPETITOR_CACHE_REFRESH_TARGET_LIMIT))
-    result = await db.execute(
-        select(Tender)
-        .options(
-            load_only(
-                Tender.id,
-                Tender.external_id,
-                Tender.source_system,
-                Tender.source_url,
-                Tender.title,
-                Tender.description,
-                Tender.country,
-                Tender.sector,
-                Tender.buyer,
-                Tender.procurement_category,
-                Tender.procurement_method,
-                Tender.notice_type,
-                Tender.category,
-                Tender.source_metadata_json,
-                Tender.project_id,
-                Tender.publication_date,
-            )
-        )
-        .where(
-            Tender.source_system == normalized_source,
-            customer_visible_tender_condition(Tender),
-        )
-        .order_by(Tender.created_at.desc(), Tender.id.asc())
-        .limit(bounded_limit)
+    target_columns = load_only(
+        Tender.id,
+        Tender.external_id,
+        Tender.source_system,
+        Tender.source_url,
+        Tender.title,
+        Tender.description,
+        Tender.country,
+        Tender.sector,
+        Tender.buyer,
+        Tender.procurement_category,
+        Tender.procurement_method,
+        Tender.notice_type,
+        Tender.category,
+        Tender.source_metadata_json,
+        Tender.project_id,
+        Tender.publication_date,
+        Tender.created_at,
     )
-    targets = list(result.scalars().all())
-    buyer_hydrated = False
-    if normalized_source == "uzex":
-        semaphore = asyncio.Semaphore(COMPETITOR_REFRESH_FETCH_CONCURRENCY)
-
-        async def hydrate(target: Tender) -> bool:
-            async with semaphore:
-                return await _hydrate_uzex_competitor_buyer(target)
-
-        buyer_hydrated = any(await asyncio.gather(*(hydrate(target) for target in targets)))
-
-    targets_by_group: dict[tuple[str, str, str], list[Tender]] = {}
-    for target in targets:
-        if not force and _competitor_targeted_lookup_is_fresh(target):
-            continue
-        service = _infer_tender_service_category(target)
-        targets_by_group.setdefault(_competitor_refresh_group_key(target, service), []).append(target)
-
+    target_scope = (
+        Tender.source_system == normalized_source,
+        customer_visible_tender_condition(Tender),
+    )
     semaphore = asyncio.Semaphore(COMPETITOR_REFRESH_FETCH_CONCURRENCY)
 
+    async def hydrate(target: Tender) -> bool:
+        async with semaphore:
+            return await _hydrate_uzex_competitor_buyer(target)
+
+    # R3 (refresh memory). Phase 1 walks the same newest-first target list in windows and keeps
+    # only ids and group keys; phase 2 reloads, fetches and updates a bounded batch of groups at
+    # a time. Same targets, groups, lookups and single commit as loading every target at once.
+    targets_considered = 0
+    buyer_hydrated = False
+    seen_ids: set[Any] = set()
+    group_ids: dict[tuple[str, str, str], list[Any]] = {}
+    cursor: tuple[Any, Any] | None = None
+    while targets_considered < bounded_limit:
+        statement = select(Tender).options(target_columns).where(*target_scope)
+        if cursor is not None:
+            statement = statement.where(or_(
+                Tender.created_at < cursor[0],
+                and_(Tender.created_at == cursor[0], Tender.id > cursor[1]),
+            ))
+        window_size = min(COMPETITOR_CACHE_SCAN_WINDOW, bounded_limit - targets_considered)
+        result = await db.execute(
+            statement.order_by(Tender.created_at.desc(), Tender.id.asc()).limit(window_size)
+        )
+        window = [row for row in result.scalars().all() if row.id not in seen_ids][:window_size]
+        if not window:
+            break
+        targets_considered += len(window)
+        seen_ids.update(row.id for row in window)
+        if normalized_source == "uzex":
+            hydrated = await asyncio.gather(*(hydrate(target) for target in window))
+            buyer_hydrated = buyer_hydrated or any(hydrated)
+        for target in window:
+            if not force and _competitor_targeted_lookup_is_fresh(target):
+                continue
+            service = _infer_tender_service_category(target)
+            group_ids.setdefault(_competitor_refresh_group_key(target, service), []).append(target.id)
+        cursor = (getattr(window[-1], "created_at", None), window[-1].id)
+        full_window = len(window) == window_size
+        del window, result
+        await _release_persisted_source_rows(db)
+        if not full_window:
+            break
+
     async def fetch_group(
-        group_key: tuple[str, str, str], service_targets: list[Tender]
+        group_key: tuple[str, str, str], projection_target: SimpleNamespace
     ) -> list[TenderCompetitorResponse] | Exception:
-        projection_target = _competitor_cache_projection_target(service_targets[0])
         try:
             async with semaphore:
                 return await _live_source_competitor_records(
@@ -2197,58 +2219,84 @@ async def _refresh_source_competitor_cache(
             )
             return exc
 
-    groups = list(targets_by_group.items())
-    group_results = await asyncio.gather(*(fetch_group(key, rows) for key, rows in groups))
+    async def load_targets(ids: list[Any]) -> list[Tender]:
+        result = await db.execute(
+            select(Tender).options(target_columns).where(*target_scope, Tender.id.in_(ids))
+        )
+        loaded = {row.id: row for row in result.scalars().all()}
+        return [loaded[target_id] for target_id in ids if target_id in loaded]
 
     targets_updated = 0
     records_cached = 0
     successful_groups = 0
     first_error: Exception | None = None
-    for (group_key, service_targets), records in zip(groups, group_results):
-        if isinstance(records, Exception):
-            first_error = first_error or records
-            continue
-        successful_groups += 1
-        # Qualify against each target before applying its 30-company response cap.
-        # Otherwise a valid target match after the first 30 source candidates is lost.
-        bounded_records = records[:COMPETITOR_LIVE_SOURCE_ROWS]
-        for target in service_targets:
-            service_category = _infer_tender_service_category(target)
-            qualified = [
-                item for record in bounded_records
-                if (item := _qualified_competitor_record(
-                    target_tender=target,
-                    record=record,
-                    target_service_category=service_category,
-                )) is not None
-            ][:COMPETITOR_MAX_RESULTS]
-            previous = [
-                item for record in cached_competitor_records(target.source_metadata_json)
-                if (item := _qualified_competitor_record(
-                    target_tender=target,
-                    record=record,
-                    target_service_category=service_category,
-                )) is not None
-            ]
-            # A valid prior result survives an empty source window. An invalid
-            # legacy cache does not masquerade as authoritative evidence.
-            if not qualified and previous:
+
+    def apply_records(target: Tender, bounded_records: list[TenderCompetitorResponse]) -> None:
+        nonlocal targets_updated, records_cached
+        service_category = _infer_tender_service_category(target)
+        qualified = [
+            item for record in bounded_records
+            if (item := _qualified_competitor_record(
+                target_tender=target,
+                record=record,
+                target_service_category=service_category,
+            )) is not None
+        ][:COMPETITOR_MAX_RESULTS]
+        previous = [
+            item for record in cached_competitor_records(target.source_metadata_json)
+            if (item := _qualified_competitor_record(
+                target_tender=target,
+                record=record,
+                target_service_category=service_category,
+            )) is not None
+        ]
+        # A valid prior result survives an empty source window. An invalid
+        # legacy cache does not masquerade as authoritative evidence.
+        if not qualified and previous:
+            return
+        target.source_metadata_json = metadata_with_competitor_cache(
+            target.source_metadata_json,
+            qualified,
+            source_system=normalized_source,
+            lookup_strategy=COMPETITOR_TARGETED_LOOKUP_STRATEGY,
+        )
+        targets_updated += 1
+        records_cached += len(qualified)
+
+    all_groups = list(group_ids.items())
+    for batch_start in range(0, len(all_groups), COMPETITOR_CACHE_GROUP_BATCH):
+        batch = all_groups[batch_start:batch_start + COMPETITOR_CACHE_GROUP_BATCH]
+        # The lookup uses each group's first (newest) target, as before; only those are loaded.
+        firsts = {row.id: row for row in await load_targets([ids[0] for _, ids in batch])}
+        lookups = [
+            (group_key, ids, _competitor_cache_projection_target(firsts[ids[0]]))
+            for group_key, ids in batch
+            if ids[0] in firsts
+        ]
+        del firsts
+        await _release_persisted_source_rows(db)
+        group_results = await asyncio.gather(*(fetch_group(key, projection) for key, _, projection in lookups))
+
+        for (group_key, ids, _), records in zip(lookups, group_results):
+            if isinstance(records, Exception):
+                first_error = first_error or records
                 continue
-            target.source_metadata_json = metadata_with_competitor_cache(
-                target.source_metadata_json,
-                qualified,
-                source_system=normalized_source,
-                lookup_strategy=COMPETITOR_TARGETED_LOOKUP_STRATEGY,
-            )
-            targets_updated += 1
-            records_cached += len(qualified)
+            successful_groups += 1
+            # Qualify against each target before applying its 30-company response cap.
+            # Otherwise a valid target match after the first 30 source candidates is lost.
+            bounded_records = records[:COMPETITOR_LIVE_SOURCE_ROWS]
+            for chunk_start in range(0, len(ids), COMPETITOR_CACHE_SCAN_WINDOW):
+                for target in await load_targets(ids[chunk_start:chunk_start + COMPETITOR_CACHE_SCAN_WINDOW]):
+                    apply_records(target, bounded_records)
+                await _release_persisted_source_rows(db)
+        del lookups, group_results
 
     if not successful_groups and first_error is not None:
         raise first_error
     if targets_updated or buyer_hydrated:
         await db.commit()
     return {
-        "targets_considered": len(targets),
+        "targets_considered": targets_considered,
         "targets_updated": targets_updated,
         "records_cached": records_cached,
     }
@@ -6004,6 +6052,23 @@ async def refresh_tenders(
     )
 
 
+_RELEASED_SOURCE_ROW_TYPES = (Tender, TenderDocument, TenderProject, Project)
+
+
+async def _release_persisted_source_rows(db: AsyncSession) -> None:
+    """Flush, then detach the tender/document/project rows a refresh step loaded.
+
+    The rows stay written in the open transaction; the session simply stops holding them,
+    so a long refresh keeps one page or batch of ORM objects instead of all of them.
+    """
+    if not isinstance(db, AsyncSession):
+        return
+    await db.flush()
+    for instance in list(db.sync_session.identity_map.values()):
+        if isinstance(instance, _RELEASED_SOURCE_ROW_TYPES):
+            db.expunge(instance)
+
+
 async def sync_world_bank_tenders(
     max_pages: int = Query(default=25, ge=1, le=100),
     rows: int = Query(default=100, ge=1, le=100),
@@ -6031,60 +6096,73 @@ async def sync_world_bank_tenders(
     lifecycle_closed_count = 0
     skip_reasons: Counter[str] = Counter()
 
-    try:
-        raw_notices = await source.list_opportunities()
-    except Exception as exc:
-        failure = connector_failure_details(exc)
-        logger.error("operation_failed event=tenders:5441 error_type=%s", type(exc).__name__)
-        return SourceSyncResponse(
-            status=failure.status,
-            source_system=source.source_system,
-            failed_count=1,
-            dry_run=dry_run,
-            failure_stage="listing",
-            failure_class=failure.failure_class,
-            retryable=failure.retryable,
-            elapsed_ms=int((monotonic() - sync_started) * 1000),
-            errors=[type(exc).__name__],
-            message=safe_failure_message("World Bank", "listing", exc),
-        )
-
-    fetched_count = len(raw_notices) + source.last_duplicate_count
-    if source.last_duplicate_count:
-        skipped_count += source.last_duplicate_count
-        skip_reasons["duplicate"] += source.last_duplicate_count
-    normalized_tenders: list[NormalizedTender] = []
-    prepared_by_key: dict[str, tuple[NormalizedTender, list[Any]]] = {}
-    for raw_notice in raw_notices:
-        external_id = str(raw_notice.get("id") or "").strip()
+    # R3 (refresh memory): one listing page at a time is normalized, persisted, linked and
+    # released, so the worker holds one page instead of the whole listing and every row it
+    # touched. Same single transaction and commit as before; the response is assembled in
+    # the old order (normalization errors first, then persistence/related-metadata errors).
+    raw_count = 0
+    pages_persisted = 0
+    persistence_failed = False
+    normalize_errors: list[str] = []
+    persist_events: list[tuple[str, str]] = []
+    pages = source.iter_pages()
+    while True:
         try:
-            if not source.should_import(raw_notice):
-                skipped_count += 1
-                skip_reasons[source.skip_reason(raw_notice) or "non_actionable_notice"] += 1
-                continue
-
-            normalized = source.normalize(raw_notice)
-            documents = await source.discover_documents(normalized)
-            attachment_count += len(documents)
-
-            if dry_run:
-                continue
-            normalized_tenders.append(normalized)
-            prepared_by_key[normalized.canonical_source_key] = (normalized, documents)
+            raw_page = await anext(pages)
+        except StopAsyncIteration:
+            break
         except Exception as exc:
-            failed_count += 1
-            logger.error("operation_failed event=tenders:5479 error_type=%s", type(exc).__name__)
-            if len(errors) < 10:
-                errors.append(
+            if pages_persisted:
+                await db.rollback()  # nothing is kept from a listing that did not finish
+            failure = connector_failure_details(exc)
+            logger.error("operation_failed event=tenders:5441 error_type=%s", type(exc).__name__)
+            return SourceSyncResponse(
+                status=failure.status,
+                source_system=source.source_system,
+                failed_count=1,
+                dry_run=dry_run,
+                failure_stage="listing",
+                failure_class=failure.failure_class,
+                retryable=failure.retryable,
+                elapsed_ms=int((monotonic() - sync_started) * 1000),
+                errors=[type(exc).__name__],
+                message=safe_failure_message("World Bank", "listing", exc),
+            )
+
+        raw_count += len(raw_page)
+        normalized_tenders: list[NormalizedTender] = []
+        prepared_by_key: dict[str, tuple[NormalizedTender, list[Any]]] = {}
+        for raw_notice in raw_page:
+            external_id = str(raw_notice.get("id") or "").strip()
+            try:
+                if not source.should_import(raw_notice):
+                    skipped_count += 1
+                    skip_reasons[source.skip_reason(raw_notice) or "non_actionable_notice"] += 1
+                    continue
+
+                normalized = source.normalize(raw_notice)
+                documents = await source.discover_documents(normalized)
+                attachment_count += len(documents)
+
+                if dry_run:
+                    continue
+                normalized_tenders.append(normalized)
+                prepared_by_key[normalized.canonical_source_key] = (normalized, documents)
+            except Exception as exc:
+                failed_count += 1
+                logger.error("operation_failed event=tenders:5479 error_type=%s", type(exc).__name__)
+                normalize_errors.append(
                     f"{external_id or 'unknown'}: {type(exc).__name__}"
                 )
+        del raw_page
 
-    if not dry_run and normalized_tenders:
+        if dry_run or not normalized_tenders or persistence_failed:
+            continue
         try:
             persistence = await persist_tender_batch(db, normalized_tenders)
-            created_count = persistence.created_count
-            updated_count = persistence.updated_count
-            unchanged_count = persistence.unchanged_count
+            created_count += persistence.created_count
+            updated_count += persistence.updated_count
+            unchanged_count += persistence.unchanged_count
             if persistence.duplicate_count:
                 skipped_count += persistence.duplicate_count
                 skip_reasons["duplicate"] += persistence.duplicate_count
@@ -6104,16 +6182,29 @@ async def sync_world_bank_tenders(
                         )
                 except Exception as exc:
                     failed_count += 1
-                    if len(errors) < 10:
-                        errors.append(
-                            f"{normalized.external_id}: related_metadata: "
-                            f"{type(exc).__name__}"
-                        )
+                    persist_events.append((
+                        "related_metadata",
+                        f"{normalized.external_id}: related_metadata: {type(exc).__name__}",
+                    ))
                     logger.error("operation_failed event=tenders:5520 error_type=%s", type(exc).__name__)
+            del persistence
+            await _release_persisted_source_rows(db)
+            pages_persisted += 1
         except Exception as exc:
+            # The transaction is broken: later pages are still listed and counted, never written.
+            persistence_failed = True
             failed_count += 1
-            errors.append(f"persistence: {type(exc).__name__}")
+            persist_events.append(("persistence", f"persistence: {type(exc).__name__}"))
             logger.error("operation_failed event=tenders:5528 error_type=%s", type(exc).__name__)
+
+    fetched_count = raw_count + source.last_duplicate_count
+    if source.last_duplicate_count:
+        skipped_count += source.last_duplicate_count
+        skip_reasons["duplicate"] += source.last_duplicate_count
+    errors.extend(normalize_errors[:10])
+    for kind, message in persist_events:
+        if kind == "persistence" or len(errors) < 10:
+            errors.append(message)
 
     try:
         lifecycle_closed_count = await reconcile_past_deadline_open_tenders(
