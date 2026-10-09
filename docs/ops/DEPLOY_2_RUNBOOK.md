@@ -221,6 +221,16 @@ Expect: seven `Loaded image: plasma-<service>:4f09b8e…`, then `every service h
 
 ## 9. Stop the app (db and redis keep running)
 
+**Pre-stop gate** ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md), added in R3; right before the cut-over stop):
+```
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+```
+Expect `DNS_OK` (a fresh one-off container resolves `db`, `redis`, `clamav`) and `"ready":true`.
+**STOP** without `DNS_OK`: `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`,
+then run the gate again. Never stop the app while a new container cannot resolve the database.
+
 ```
 prod$ date -u +%T
 prod$ scripts/compose-release.sh stop $APPS
@@ -318,7 +328,7 @@ limit instead of the serving API's, and the container is removed when it ends. I
 image and `.env` like the API. Check `free -h` shows `available` ≥ ~600Mi first (the one-off
 container runs next to the stack; local check: the dry run took 24 s and left no container).
 It writes only into a new organization "Demo Consulting LLC —
-<yyyymmdd-n>", makes `support.plasma@gmail.com` its OWNER (pre-provisioning or approving that user
+<yyyymmdd-n>", makes `plasmatest0@gmail.com` its OWNER (pre-provisioning or approving that user
 if needed; the first Google sign-in binds a pre-provisioned record), and revokes that user's
 membership in older demo organizations. No broadcasts; the only notification is the demo user's own
 approval when the run creates/approves the account. Pursuit B (first `--tender-external`) is
@@ -352,7 +362,7 @@ requirements and gaps, `"eoi_draft_id"`, `"eoi_summary"` (rehearsal: 4 criteria,
 If it stops on the analysis wait (worker busy or provider slow): re-run with `--resume <label>`;
 every step is idempotent within a run.
 
-Owner sign-in check (a private window, `https://<APP_DOMAIN>`, Google account `support.plasma@gmail.com`):
+Owner sign-in check (a private window, `https://<APP_DOMAIN>`, Google account `plasmatest0@gmail.com`):
 1. The dashboard shows **Demo Consulting LLC — <label>** (pick it in the organization picker if asked).
 2. Partners & Experts: 18 own references, 6 partner firms, 12 experts.
 3. Pursuit B (OP00468882) → Requirements: grouped list, items confirmed; → **EOI package**: version 1
@@ -412,7 +422,7 @@ prod$ scripts/compose-release.sh run --rm --no-deps -T backend python scripts/de
 Expect the step 15 summary with a new `label` and `"revoked_in_older_organizations": ["<previous demo organization id>"]`.
 Notes: each run creates a fresh "Demo Consulting LLC — <yyyymmdd-n>"; the demo user's membership in
 the previous demo organization is revoked automatically (its data stays, owned by that run's steward);
-reseeding ends the demo user's current session, so sign in again as `support.plasma@gmail.com` and do
+reseeding ends the demo user's current session, so sign in again as `plasmatest0@gmail.com` and do
 the step 15 sign-in check. A pinned tender that is missing, closed or has no OFFICIAL_NOTICE is
 refused with that reason.
 
@@ -427,6 +437,16 @@ Explorer, tender details, the workspace or analysis fail (steps 12-16) and canno
 hour, a container keeps restarting, or data looks wrong. Keep the schema: the old build runs on it.
 
 **A. Deploy 1 images on the new schema (proven in the rehearsal; first choice).**
+**Pre-stop gate** ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md), added in R3; Rollback A recreates every app service):
+```
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+```
+Expect `DNS_OK` (a fresh one-off container resolves `db`, `redis`, `clamav`) and `"ready":true`.
+**STOP** without `DNS_OK`: `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`,
+then run the gate again. Never stop the app while a new container cannot resolve the database.
+
 ```
 prod$ scripts/compose-release.sh up "$PREV_SHA" --no-deps $APPS
 prod$ until curl -fsS http://127.0.0.1:8000/health/ready >/dev/null; do sleep 3; done; curl -fsS http://127.0.0.1:8000/health; echo
@@ -445,6 +465,16 @@ old partner list).
 
 **A2. Exact return to Deploy 1 (old images, old checkout, old `.env`).** Not rehearsed separately: the
 same images and schema as A (proven), plus the Deploy 1 checkout and `.env`.
+**Pre-stop gate** ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md), added in R3; Rollback A2 recreates every app service):
+```
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+```
+Expect `DNS_OK` (a fresh one-off container resolves `db`, `redis`, `clamav`) and `"ready":true`.
+**STOP** without `DNS_OK`: `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`,
+then run the gate again. Never stop the app while a new container cannot resolve the database.
+
 ```
 prod$ scripts/compose-release.sh use "$PREV_SHA"
 prod$ git checkout -B pilot/week1 "$PREV_COMMIT" && test "$(git rev-parse HEAD)" = "$PREV_COMMIT" && echo CHECKOUT_OK

@@ -93,6 +93,47 @@ ops_exec() {
   "${_DOCKER[@]}" exec -i "$cid" "$@"
 }
 
+# ---- DNS guard (R3) -----------------------------------------------------------------------------
+# Docker's embedded DNS can lose a service's records (Deploy 2: db and redis vanished; the running
+# app kept its pooled connections, so nothing failed until new containers started). Only a NEW
+# container proves resolution, so ops_dns_check starts a one-off container from the image the
+# backend runs, on the backend's network (what `compose run --rm --no-deps backend` does, without
+# needing the compose files), and resolves db, redis and clamav there.
+DNS_REMEDY="docker restart plasma_db plasma_redis plasma_clamav; then restart app services"
+OPS_DNS_NAMES="${OPS_DNS_NAMES:-db redis clamav}"
+
+# ops_dns_check PROJECT -> one "name=address" or "name=UNRESOLVED" line per name, then DNS_OK or
+# "DNS_FAIL name..."; returns 0 (all resolve), 1 (a name does not resolve) or 2 (cannot check).
+ops_dns_check() {
+  local project="$1" cid image network out status
+  cid="$(ops_cid "$project" backend all)"
+  if [ -z "$cid" ]; then echo "DNS_CHECK_UNAVAILABLE no backend container in project $project"; return 2; fi
+  image="$("${_DOCKER[@]}" inspect -f '{{.Image}}' "$cid")"
+  network="$("${_DOCKER[@]}" inspect -f '{{.HostConfig.NetworkMode}}' "$cid")"
+  # shellcheck disable=SC2086
+  out="$("${_DOCKER[@]}" run --rm --pull never --network "$network" --memory 128m --oom-score-adj 1000 \
+    --label plasma.ops=dns-check --entrypoint python "$image" -c '
+import socket, sys
+bad = []
+for name in sys.argv[1:]:
+    try:
+        found = sorted({info[4][0] for info in socket.getaddrinfo(name, None, proto=socket.IPPROTO_TCP)})
+        print(name + "=" + ",".join(found))
+    except OSError as exc:
+        bad.append(name)
+        print(name + "=UNRESOLVED (" + type(exc).__name__ + ")")
+print("DNS_FAIL " + " ".join(bad) if bad else "DNS_OK")
+sys.exit(1 if bad else 0)' $OPS_DNS_NAMES 2>&1)"
+  status=$?
+  printf '%s\n' "$out"
+  case "$status" in
+    0) return 0 ;;
+    1) if printf '%s\n' "$out" | grep -q '^DNS_FAIL'; then return 1; fi ;;
+  esac
+  echo "DNS_CHECK_UNAVAILABLE the one-off container did not run (status $status)"
+  return 2
+}
+
 # ---- driving a stack with Compose (restore and staging management) -----------------------------
 # ops_compose_setup TARGET  ->  fills the COMPOSE array; cds to the repo root.
 #   local       plain `docker compose` (the developer stack, project from the directory name)
@@ -130,6 +171,14 @@ ops_compose_setup() {
   fi
   if [ "${OPS_PROXY:-0}" = "1" ]; then
     COMPOSE+=(-f docker-compose.proxy.yml)
+  fi
+  # Extra staging overlays (rehearsals), e.g. OPS_STAGING_OVERLAYS=deploy/compose/dbredis-before-1b.yml
+  if [ "$target" = "staging" ] && [ -n "${OPS_STAGING_OVERLAYS:-}" ]; then
+    local overlay
+    for overlay in $OPS_STAGING_OVERLAYS; do
+      [ -f "$overlay" ] || die "OPS_STAGING_OVERLAYS: $overlay not found"
+      COMPOSE+=(-f "$overlay")
+    done
   fi
 }
 

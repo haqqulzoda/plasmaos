@@ -280,6 +280,16 @@ Expect: `Use%` at most 80 %. **STOP** above 90 %.
 No users: stop every app service so old and new code never run side by side, and the
 migration and notice backfill run while nothing is serving.
 
+**Pre-stop gate** ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md), added in R3; right before the cut-over stop):
+```
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+```
+Expect `DNS_OK` (a fresh one-off container resolves `db`, `redis`, `clamav`) and `"ready":true`.
+**STOP** without `DNS_OK`: `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`,
+then run the gate again. Never stop the app while a new container cannot resolve the database.
+
 ```
 prod$ date -u +%T                      # note the cut-over time (step 14 compares against it)
 prod$ scripts/compose-release.sh stop $APPS
@@ -395,6 +405,16 @@ Expect, within ~30 minutes: one line per source (`ebrd`, `giz`, `uzex`, `world_b
 before), and `celery_worker oom=false restarts=0`. A source whose latest job predates the
 cut-over: start one from the app's source refresh menu in step 15 and re-run the loop.
 **STOP → fix forward** if a job stays `running` for more than 20 minutes or `oom=true`:
+**Pre-stop gate** ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md), added in R3; recreating celery_worker stops it):
+```
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+```
+Expect `DNS_OK` (a fresh one-off container resolves `db`, `redis`, `clamav`) and `"ready":true`.
+**STOP** without `DNS_OK`: `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`,
+then run the gate again. Never stop the app while a new container cannot resolve the database.
+
 ```
 prod$ docker logs --since 30m plasma_celery_worker 2>&1 | grep -E 'SIGKILL|WorkerLostError|ERROR' | tail -20
 prod$ PLASMA_MEM_CELERY_WORKER=1024m scripts/compose-release.sh up "$SHA" --no-deps celery_worker   # a shell variable overrides the profile
@@ -406,7 +426,7 @@ then watch the loop again and report the numbers (the profile is updated in the 
 
 Use the admin Google account on `https://<APP_DOMAIN>` (a private window), and for the
 onboarding path a second, personal test Google account. **Not** the demo account
-`support.plasma@gmail.com`: the demo seed sets that one up later. Tick each line; on a failure
+`plasmatest0@gmail.com`: the demo seed sets that one up later. Tick each line; on a failure
 note the page and the time (`docker logs --since 10m plasma_backend` has the request).
 
 | # | Feature | Do | Expect |
@@ -455,7 +475,7 @@ EBRD and GIZ about once, no `failed`; smoke `0 failure(s)`; disk ≤ 80 %. Then 
 - [ ] **Deploy 1b** (below): with no users its downtime costs nothing; rehearse locally, then apply, so the database has its tuning and the lowest OOM priority before real load.
 - [ ] **Scheduled off-host backups**: a Storage Box (or S3) as `BACKUP_REMOTE`, a daily cron of `scripts/ops/backup.sh --target production --skip-tender-documents` and a weekly one with tender documents; one restore rehearsed (`scripts/ops/restore_to_staging.sh` on the laptop stack).
 - [ ] **Gemini**: production's own key, budget alert active, and a note of the monthly budget.
-- [ ] **Demo**: the demo organization seeded for `support.plasma@gmail.com` (D3-04).
+- [ ] **Demo**: the demo organization seeded for `plasmatest0@gmail.com` (D3-04).
 - [ ] **Feature check again** (step 15) on the release that is live at onboarding.
 
 ---
@@ -471,6 +491,16 @@ workspace or analysis fail (steps 12-15), a container keeps restarting, or data 
 Everything returns to the known-good state of this morning; the only remnants are the additive
 index and the `OFFICIAL_NOTICE` rows, which the old build lists as ordinary documents.
 Order matters: `use` exists only in the new script, so it runs before the checkout.
+
+**Pre-stop gate** ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md), added in R3; Rollback A2 recreates every app service):
+```
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+```
+Expect `DNS_OK` (a fresh one-off container resolves `db`, `redis`, `clamav`) and `"ready":true`.
+**STOP** without `DNS_OK`: `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`,
+then run the gate again. Never stop the app while a new container cannot resolve the database.
 
 ```
 prod$ scripts/compose-release.sh use "$PREV_SHA"
@@ -488,6 +518,16 @@ eight app services and builds nothing. `scripts/ops/` does not exist on `main`: 
 (sign in, open a tender). Then report what failed; the next attempt is a new release.
 
 **A. Old images under the new compose file (only if A2 is impossible, e.g. `.env.pre-deploy1` is lost).**
+**Pre-stop gate** ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md), added in R3; Rollback A recreates every app service):
+```
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+```
+Expect `DNS_OK` (a fresh one-off container resolves `db`, `redis`, `clamav`) and `"ready":true`.
+**STOP** without `DNS_OK`: `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`,
+then run the gate again. Never stop the app while a new container cannot resolve the database.
+
 ```
 prod$ scripts/compose-release.sh up "$PREV_SHA" --no-deps $APPS
 ```
@@ -498,6 +538,16 @@ If ever required, while `:latest` is still the new image:
 `prod$ scripts/compose-release.sh run --rm --no-deps backend alembic downgrade 20261002_0001_p0_extraction_trust_gate`
 
 **C. Database restore (only if data is damaged; loses everything written since step 4).**
+**Pre-stop gate** ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md), added in R3; Rollback C stops every app service):
+```
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+```
+Expect `DNS_OK` (a fresh one-off container resolves `db`, `redis`, `clamav`) and `"ready":true`.
+**STOP** without `DNS_OK`: `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`,
+then run the gate again. Never stop the app while a new container cannot resolve the database.
+
 ```
 prod$ scripts/compose-release.sh stop frontend backend celery_worker worker_heavy worker_private_documents worker_pursuit_analysis celery_beat
 prod$ docker exec -i plasma_db sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -v db="$POSTGRES_DB"' <<'SQL'
@@ -523,6 +573,7 @@ restart with new settings. With no users this is cheap; do it once Deploy 1 has 
 1. Rehearse on the local stack: db/redis created from the a275357 compose, app services from
    the release (the state Deploy 1 leaves), then the step below; smoke; measure the downtime.
 2. Off-host backup (step 4) right before.
+(Superseded by [DEPLOY_1B_RUNBOOK.md](DEPLOY_1B_RUNBOOK.md), which adds the pre-stop gate, stops the app first and rolls back with `deploy/compose/dbredis-before-1b.yml`.)
 3. `prod$ scripts/compose-release.sh up "$SHA" --no-deps db redis` then
    `until docker exec plasma_db pg_isready -q; do sleep 2; done`, then restart the app services
    so they reconnect cleanly (`up "$SHA" --no-deps --force-recreate $APPS`), then smoke.

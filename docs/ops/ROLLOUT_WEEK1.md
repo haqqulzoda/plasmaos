@@ -229,6 +229,16 @@ unchanged, below threshold). Nothing is written. Record the counts in the ticket
 `up -d --no-build --no-deps <service>`: exactly the named services are recreated, with the new
 image and the host profile's memory limits. Each step waits for the previous one.
 
+**Pre-stop gate** ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md), added in R3; the ordered restart recreates every service):
+```
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+```
+Expect `DNS_OK` (a fresh one-off container resolves `db`, `redis`, `clamav`) and `"ready":true`.
+**STOP** without `DNS_OK`: `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`,
+then run the gate again. Never stop the app while a new container cannot resolve the database.
+
 ```
 # pgAdmin must not run in production (it only starts with --profile tools now).
 $ docker rm -f plasma_pgadmin 2>/dev/null; docker ps -a --format '{{.Names}}' | grep -c pgadmin    # 0
@@ -340,6 +350,16 @@ Decide within 15 minutes of a failed smoke or a customer-visible error.
 **Code rollback (default).** The schema change is additive, so the previous build runs on the new
 schema.
 
+**Pre-stop gate** ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md), added in R3; the rollback recreates every service):
+```
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+```
+Expect `DNS_OK` (a fresh one-off container resolves `db`, `redis`, `clamav`) and `"ready":true`.
+**STOP** without `DNS_OK`: `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`,
+then run the gate again. Never stop the app while a new container cannot resolve the database.
+
 ```
 $ scripts/compose-release.sh rollback $PREV_SHA      # retags plasma-<service>:$PREV_SHA to :latest, up -d --no-build
 $ scripts/ops/smoke.sh --target production --expect-sha $PREV_SHA
@@ -372,7 +392,15 @@ The configuration works on both sizes; only `HOST_PROFILE` changes. Plan a 15-30
 
 1. Off-host backup including tender documents: `$ scripts/ops/backup.sh --target production`
    (expect `BACKUP_RESULT ... tender_documents=included`). Record the set.
-2. Stop the stack cleanly: `$ scripts/compose-release.sh stop` (containers keep their volumes).
+2. Run the pre-stop gate ([RUNBOOK_TEMPLATE.md](RUNBOOK_TEMPLATE.md)): `DNS_OK` from a one-off container,
+   `/health/ready` true, db/redis fingerprints recorded; **STOP** without `DNS_OK`
+   (`docker restart plasma_db plasma_redis plasma_clamav; then restart app services`).
+   ```
+   prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+   prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+   prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
+   ```
+   Then stop the stack cleanly: `$ scripts/compose-release.sh stop` (containers keep their volumes).
 3. Power off: `$ sudo shutdown -h now`, and wait until the Cloud Console shows the server **off**.
 4. Cloud Console → server → **Rescale**: choose the 8 GB type and leave **"CPU and RAM only"
    unchecked** so the disk grows to 80 GB. A disk upgrade is permanent (the server can never be
@@ -421,6 +449,10 @@ prod$  scripts/compose-release.sh run --rm --no-deps backend alembic upgrade hea
 prod$  scripts/compose-release.sh run --rm --no-deps backend alembic current   # 20261003_0001_d1_03_official_notice_unique (head)
 # 7. Backfill report                                                           ~30 s
 prod$  scripts/compose-release.sh run --rm --no-deps backend python scripts/backfill_official_notices.py
+# 8a. Pre-stop gate (RUNBOOK_TEMPLATE.md): expect DNS_OK and "ready":true, else STOP
+prod$ scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | tee $HOME/prestop-dbredis.txt
 # 8. Restart in order (pgAdmin removed, never started)                         ~3-4 min
 prod$  docker rm -f plasma_pgadmin 2>/dev/null; docker ps -a --format '{{.Names}}' | grep -c pgadmin   # 0
 prod$  scripts/compose-release.sh up $SHA --no-deps db redis && until docker exec plasma_db pg_isready -q; do sleep 2; done
@@ -442,6 +474,9 @@ prod$  python3 backend/scripts/analysis_smoke.py --live --api-base https://<API_
 prod$  unset ANALYSIS_SMOKE_TOKEN
 prod$  scripts/ops/disk_report.sh --threshold 80 && free -m
 # Rollback, if needed (section 11)                                             ~1 min
+# pre-stop gate first (RUNBOOK_TEMPLATE.md): expect DNS_OK and "ready":true, else STOP
+prod$  scripts/compose-release.sh run --rm --no-deps -T backend python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$  curl -fsS http://127.0.0.1:8000/health/ready; echo
 prod$  scripts/compose-release.sh rollback $PREV_SHA && scripts/ops/smoke.sh --target production --expect-sha $PREV_SHA
 ```
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test for a running Plasma stack. Read-only: GET requests, `pg_isready`,
-# `redis-cli ping`, `celery inspect`, `alembic current`, `clamdscan --version`.
+# `redis-cli ping`, `celery inspect`, `alembic current`, `clamdscan --version`, and one
+# short-lived container that only resolves host names (the DNS guard).
 # It never dispatches work, writes data or logs in.
 #
 #   scripts/ops/smoke.sh [--target local|staging|production]
@@ -8,9 +9,10 @@
 #                        [--expect-sha GIT_SHA] [--http-only]
 #
 # Checks: backend /health and release identity, /health/ready (database + redis),
-# frontend 200 and its /api/v1 rewrite to the backend, containers running, Postgres and
-# Redis answering, Alembic at head, every Celery queue consumed by a live worker, Beat
-# ticking, ClamAV signature freshness, host disk space.
+# frontend 200 and its /api/v1 rewrite to the backend, containers running, a fresh one-off
+# container resolving db, redis and clamav (Docker DNS), Postgres and Redis answering,
+# Alembic at head, every Celery queue consumed by a live worker, Beat ticking, ClamAV
+# signature freshness, host disk space.
 #
 # The stack is addressed by its Compose labels (no compose files or .env needed).
 # Targets pick the Compose project and default URLs:
@@ -127,6 +129,16 @@ else
   done
   [ "$(ops_state "$PROJECT" pgadmin || true)" = "running" ] \
     && warn "pgadmin is running (tools profile); it should not run on production or staging"
+
+  # A fresh container must resolve db, redis and clamav: running containers keep pooled
+  # connections and hide a lost Docker DNS record until the next start (Deploy 2).
+  dns_out="$(ops_dns_check "$PROJECT")"; dns_status=$?
+  dns_detail="$(printf '%s\n' "$dns_out" | grep -v '^DNS_' | tr '\n' ' ' | sed 's/ $//')"
+  case "$dns_status" in
+    0) ok "a fresh one-off container resolves ${OPS_DNS_NAMES// /, } ($dns_detail)" ;;
+    1) fail "a fresh one-off container cannot resolve $(printf '%s\n' "$dns_out" | sed -n 's/^DNS_FAIL //p') ($dns_detail). Remedy: $DNS_REMEDY" ;;
+    *) fail "DNS check could not run: $(printf '%s\n' "$dns_out" | tail -n 1)" ;;
+  esac
 
   ops_exec "$PROJECT" db sh -c 'pg_isready -q -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1 \
     && ok "postgres accepts connections (pg_isready)" || fail "postgres is not ready"
