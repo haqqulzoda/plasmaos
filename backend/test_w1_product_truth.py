@@ -72,14 +72,15 @@ def test_ai_draft_never_returns_or_persists_model_prices_and_preserves_history()
                            core_services="", past_experience="")
     db = SimpleNamespace(execute=AsyncMock(side_effect=[
         SimpleNamespace(scalar_one_or_none=lambda: proposal),
-        SimpleNamespace(scalar_one_or_none=lambda: None),
         SimpleNamespace(all=lambda: []),
     ]), commit=AsyncMock())
     generated = {"strategic_summary": "Scope", "delivery_days": "20 calendar days",
                  "suggested_price": 900,
                  "line_items": [{"name": "Delivery", "quantity": 1, "unit": "lot",
                                  "unit_price": 900, "total": 900}]}
-    with patch("app.api.endpoints.proposals.is_tender_actionable", return_value=True), \
+    # R3 Task 6: the organization's profile comes from the organization context (none here).
+    with patch("app.api.endpoints.proposals.effective_company_profile", AsyncMock(return_value=None)), \
+         patch("app.api.endpoints.proposals.is_tender_actionable", return_value=True), \
          patch("app.core.ai.draft_strategic_proposal_async", AsyncMock(return_value=generated)):
         response = asyncio.run(ai_draft_proposal(proposal.id, False, user, db))
     assert "suggested_price" not in response.model_dump()

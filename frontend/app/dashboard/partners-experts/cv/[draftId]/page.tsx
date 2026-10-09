@@ -133,7 +133,7 @@ function CvReview() {
     return <main className="customer-page cv-review-page ds-container-content" data-cv-review={review.state}>
         <PageHeader eyebrow={t('cvReview.eyebrow')} title={t('cvReview.title')}
             description={t('cvReview.description')}
-            primaryAction={<ButtonLink href={back} variant="secondary"><ArrowLeft aria-hidden />{t('cvReview.back')}</ButtonLink>} />
+            primaryAction={<ButtonLink href={back} variant="secondary"><ArrowLeft className="rtl-mirror" aria-hidden />{t('cvReview.back')}</ButtonLink>} />
         <div className="ds-row cv-review-meta">
             <StatusBadge tone={review.state === 'READY' || review.state === 'CONFIRMED' ? 'success' : review.state === 'FAILED' ? 'warning' : 'info'}>
                 {t(`cvDrafts.states.${review.state}`)}

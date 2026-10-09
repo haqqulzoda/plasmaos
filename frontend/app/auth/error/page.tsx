@@ -40,7 +40,7 @@ function AuthError() {
               {t('tryAgain')}
             </Button>
             <Link className="ds-button ds-button-secondary ds-button-lg" href="/" prefetch={false}>
-              <ArrowLeft aria-hidden />
+              <ArrowLeft className="rtl-mirror" aria-hidden />
               {t('backToSignIn')}
             </Link>
           </div>

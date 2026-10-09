@@ -51,7 +51,13 @@ class ReleaseAdminRepairTests(unittest.TestCase):
         self.assertIn("resolveBackendApiBase", auth_config)
         self.assertIn("import { handlers } from '@/auth';", auth_route)
         self.assertIn("resolveBackendApiBase", proxy)
-        self.assertIn("PUBLIC_EXACT_PATHS = ['/api/v1/health/version']", network_proxy)
+        # R3: the token-gated invitation preview is public on purpose (organization name,
+        # inviter name, masked e-mail); accepting an invitation still requires a session.
+        self.assertIn(
+            "PUBLIC_EXACT_PATHS = ['/api/v1/health/version', '/api/v1/invitations/preview']",
+            network_proxy,
+        )
+        self.assertNotIn("'/api/v1/invitations/accept'", network_proxy)
         self.assertNotIn(
             "localhost:8000",
             api + dockerfile + next_config + auth_config + auth_route + proxy + backend_resolver,

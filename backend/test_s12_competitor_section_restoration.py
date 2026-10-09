@@ -103,8 +103,13 @@ def test_details_composition_distinguishes_available_empty_and_unavailable() -> 
     target = _tender()
     profile = SimpleNamespace(id=uuid4(), user_id=user_id)
     db = MagicMock()
-    db.scalar = AsyncMock(side_effect=[profile, None])
+    db.scalar = AsyncMock(side_effect=[None])
     common_patches = (
+        # R3 Task 6: the organization's profile comes from the organization context.
+        patch(
+            "app.services.organization_context.effective_company_profile",
+            new=AsyncMock(return_value=profile),
+        ),
         patch.object(
             tender_details,
             "_project_sections",
@@ -160,7 +165,7 @@ def test_details_composition_distinguishes_available_empty_and_unavailable() -> 
             )
         ],
     )
-    with common_patches[0], common_patches[1], common_patches[2]:
+    with common_patches[0], common_patches[1], common_patches[2], common_patches[3]:
         response = asyncio.run(
             tender_details.compose_tender_details(
                 db,
@@ -174,8 +179,8 @@ def test_details_composition_distinguishes_available_empty_and_unavailable() -> 
     assert response.competitor_intelligence.data is available
 
     empty = available.model_copy(update={"groups": [], "state": "INSUFFICIENT_EVIDENCE"})
-    db.scalar = AsyncMock(side_effect=[profile, None])
-    with common_patches[0], common_patches[1], common_patches[2]:
+    db.scalar = AsyncMock(side_effect=[None])
+    with common_patches[0], common_patches[1], common_patches[2], common_patches[3]:
         response = asyncio.run(
             tender_details.compose_tender_details(
                 db,
@@ -187,8 +192,8 @@ def test_details_composition_distinguishes_available_empty_and_unavailable() -> 
         )
     assert response.competitor_intelligence.state.value == "INSUFFICIENT_EVIDENCE"
 
-    db.scalar = AsyncMock(side_effect=[profile, None])
-    with common_patches[0], common_patches[1], common_patches[2]:
+    db.scalar = AsyncMock(side_effect=[None])
+    with common_patches[0], common_patches[1], common_patches[2], common_patches[3]:
         response = asyncio.run(
             tender_details.compose_tender_details(
                 db,
