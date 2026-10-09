@@ -89,7 +89,7 @@ export default function AdminAnalysisRunsPage() {
                 { key: 'organization', heading: 'Organization', cell: (item) => <span>{item.organization_name ?? '—'}<br /><small className="ds-muted"><TechnicalText>{shortId(item.organization_id)}</TechnicalText> · pursuit <TechnicalText>{shortId(item.pursuit_id)}</TechnicalText></small></span> },
                 { key: 'state', heading: 'Status / stage', cell: (item) => <span className="ds-row">
                     {runLabels(item).map((label) => <StatusBadge key={label} tone={label === 'Failed' ? 'danger' : 'warning'}>{label}</StatusBadge>)}
-                    <small className="ds-muted">{item.status} · {item.stage}</small>
+                    <small className="ds-muted">{item.status}{item.stage !== item.status ? ` · ${item.stage}` : ''}</small>
                 </span> },
                 { key: 'code', heading: 'Failure code', cell: (item) => item.failure_code ? <TechnicalText>{item.failure_code}</TechnicalText> : '—' },
                 { key: 'model', heading: 'Model', cell: (item) => <TechnicalText>{item.model_name}</TechnicalText> },

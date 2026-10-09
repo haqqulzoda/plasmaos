@@ -4092,9 +4092,11 @@
   border-radius: var(--ds-radius-md);
 }
 .cv-review-text mark {
-  background: var(--ds-warning-subtle);
+  background: var(--ds-accent-subtle);
   color: inherit;
   border-radius: var(--ds-radius-sm);
+  outline: 2px solid var(--ds-accent);
+  outline-offset: 1px;
 }
 .cv-review-quote {
   display: flex;
@@ -4131,6 +4133,15 @@
 }
 
 /* R3 Task 4: e-mail notification switches. */
+#email-notifications-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+#email-notifications-title svg {
+  inline-size: 1.1em;
+  block-size: 1.1em;
+}
 .email-preferences {
   display: grid;
   gap: var(--ds-space-3);
