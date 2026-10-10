@@ -150,7 +150,9 @@ def test_migration_is_the_single_head_after_sprint_zero_b3() -> None:
     script = ScriptDirectory.from_config(config)
     assert script.get_heads() == [HEAD]
     # D1-03 -> D2-01 -> D2-05 follow P0 on one chain.
-    assert script.get_revision(HEAD).down_revision == "20261010_0001_r3_email_notifications"
+    assert script.get_revision(HEAD).down_revision == "20261012_0001_s1_award_ledger"
+    assert script.get_revision("20261012_0001_s1_award_ledger").down_revision == "20261011_0001_r3_organization_record_events"
+    assert script.get_revision("20261011_0001_r3_organization_record_events").down_revision == "20261010_0001_r3_email_notifications"
     assert script.get_revision("20261010_0001_r3_email_notifications").down_revision == "20261009_0001_r3_cv_library_drafts"
     assert script.get_revision("20261009_0001_r3_cv_library_drafts").down_revision == "20261008_0001_r3_pending_invitations"
     assert script.get_revision("20261008_0001_r3_pending_invitations").down_revision == "20261005_0001_d2_05_eoi_drafts"

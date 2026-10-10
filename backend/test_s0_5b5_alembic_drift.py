@@ -49,6 +49,14 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
     assert script.get_heads() == ["20261012_0002_s1_product_analytics"]
     assert (
         script.get_revision("20261012_0002_s1_product_analytics").down_revision
+        == "20261012_0001_s1_award_ledger"
+    )
+    assert (
+        script.get_revision("20261012_0001_s1_award_ledger").down_revision
+        == "20261011_0001_r3_organization_record_events"
+    )
+    assert (
+        script.get_revision("20261011_0001_r3_organization_record_events").down_revision
         == "20261010_0001_r3_email_notifications"
     )
     assert (
@@ -112,7 +120,7 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
         script.get_revision("20260925_0001_w2_organization_membership").down_revision
         == "20260912_0001_s10_5_communications"
     )
-    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 47
+    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 49
 
 
 def test_historical_migrations_are_untouched() -> None:
