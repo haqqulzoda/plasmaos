@@ -138,3 +138,37 @@ def test_accepting_needs_a_session_with_the_invited_email_and_an_open_invitation
     assert "if status != STATUS_OPEN:" in accept                     # accepted/expired/revoked tokens are dead
     assert '(user.email or "").strip().lower() != invitation.email' in accept
     assert "InvitationEmailMismatchError" in accept
+
+
+def test_the_client_address_cannot_be_chosen_by_the_client() -> None:
+    # The rate limit keys on request.client.host. docker-compose.yml runs uvicorn with
+    # --forwarded-allow-ips limited to loopback and private (Docker network) ranges.
+    import yaml
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    compose = yaml.safe_load((BACKEND.parent / "docker-compose.yml").read_text(encoding="utf-8"))
+    command = compose["services"]["backend"]["command"]
+    allowed = command[command.index("--forwarded-allow-ips") + 1]
+    assert "--proxy-headers" in command and "*" not in allowed
+    trusted = allowed.split(":-", 1)[1].rstrip("}")   # the default when BACKEND_FORWARDED_ALLOW_IPS is unset
+    assert "0.0.0.0/0" not in trusted
+
+    def client_of(peer: str, forwarded: str | None) -> str:
+        seen = {}
+
+        async def app(scope, receive, send):
+            seen["client"] = scope["client"][0]
+
+        headers = [(b"x-forwarded-for", forwarded.encode())] if forwarded else []
+        scope = {"type": "http", "client": (peer, 50000), "headers": headers, "scheme": "http"}
+        asyncio.run(ProxyHeadersMiddleware(app, trusted_hosts=trusted)(scope, None, None))
+        return seen["client"]
+
+    # A client talking to the backend directly cannot claim another address.
+    assert client_of("203.0.113.5", "198.51.100.1") == "203.0.113.5"
+    # Browser -> Caddy (sets the real client) -> Next.js (appends Caddy) -> backend.
+    assert client_of("172.18.0.6", "198.51.100.7, 172.18.0.9") == "198.51.100.7"
+    # A forged entry in front of the chain is ignored: the rightmost untrusted address wins.
+    assert client_of("172.18.0.6", "6.6.6.6, 198.51.100.7, 172.18.0.9") == "198.51.100.7"
+    # API domain: Caddy -> backend directly.
+    assert client_of("172.18.0.9", "198.51.100.7") == "198.51.100.7"

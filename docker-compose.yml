@@ -107,6 +107,12 @@ services:
         PLASMA_BUILD_TIME: ${PLASMA_BUILD_TIME:-unknown}
     container_name: plasma_backend
     restart: always
+    # X-Forwarded-For is trusted only from the proxy hops: loopback and the private ranges of the
+    # Docker networks (Caddy, the Next.js frontend). uvicorn then takes the rightmost untrusted
+    # address, so a client cannot choose its own IP (the invitation-preview rate limit keys on it).
+    # The image's default ("*" = trust any peer, leftmost entry) must never be used in production.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers",
+              "--forwarded-allow-ips", "${BACKEND_FORWARDED_ALLOW_IPS:-127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}"]
     mem_limit: ${PLASMA_MEM_BACKEND:-320m}
     memswap_limit: ${PLASMA_MEM_BACKEND:-320m}
     oom_score_adj: 100
