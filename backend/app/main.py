@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
 from app.api.endpoints.communications import notifications_router, broadcasts_router
-from app.api.endpoints import admin_award_ledger, admin_panels, candidates, eoi, participation, proposal_evidence, team_scenarios, operations, admin, auth, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
+from app.api.endpoints import admin_award_ledger, admin_metrics, admin_panels, candidates, eoi, participation, proposal_evidence, team_scenarios, operations, admin, auth, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
 from app.core.observability import init_error_tracking
@@ -99,6 +99,7 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(admin_panels.router, prefix="/api/v1/admin/panels", tags=["Admin"])
 app.include_router(admin_award_ledger.router, prefix="/api/v1/admin/award-ledger", tags=["Admin"])
+app.include_router(admin_metrics.router, prefix="/api/v1/admin/metrics", tags=["Admin"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(tenders.router, prefix="/api/v1/tenders", tags=["Tenders"])
 app.include_router(proposals.router, prefix="/api/v1/proposals", tags=["Proposals"])

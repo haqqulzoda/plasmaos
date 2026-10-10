@@ -19,9 +19,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.agents import pursuit_analyzer
+from app.core.ai_usage import AICall, collect_ai_usage
 from app.models.base import DocumentProcessingState
 from app.models.candidate_retrieval import CVVersion, Expert
 from app.models.cv_drafts import CVDraft
+from app.models.tenancy import Membership
 from app.models.private_documents import DocumentProcessingJob, DocumentProcessingResult, DocumentVersion, PrivateDocument
 from app.services.candidate_retrieval import _canonical_payload
 from app.services.cv_extraction import (
@@ -34,6 +36,7 @@ from app.services.cv_extraction import (
     extract_cv,
 )
 from app.services.private_documents import StagedPrivateFile, persist_library_document
+from app.services.product_analytics import stage_ai_costs, stage_product_event
 
 
 MAX_EXTRACTION_ATTEMPTS = 2
@@ -104,6 +107,13 @@ async def upload_cv(
             created_by_membership_id=membership_id,
         )
         db.add(draft)
+        await db.flush()
+        stage_product_event(
+            db, "cv_uploaded", organization_id=organization_id,
+            actor_user_id=await db.scalar(select(Membership.user_id).where(Membership.id == membership_id)),
+            actor_membership_id=membership_id, subject_type="CV_DRAFT", subject_id=draft.id,
+            properties={"for_existing_expert": expert_id is not None},
+        )
         await db.commit()
     except BaseException:
         await db.rollback()
@@ -193,12 +203,17 @@ async def process_cv_draft(db: AsyncSession, draft_id: UUID, *, call: ProviderCa
     await db.commit()
     if not text or not text.strip():
         return await _finish(db, draft_id, state="FAILED", failure_code="DOCUMENT_TEXT_UNAVAILABLE")
-    try:
-        result = await extract_cv(text, call)
-    except CVExtractionError as exc:
-        return await _finish(db, draft_id, state="FAILED", failure_code=exc.code, retry=exc.code in TRANSIENT_FAILURES)
+    with collect_ai_usage() as ai_calls:
+        try:
+            result = await extract_cv(text, call)
+        except CVExtractionError as exc:
+            return await _finish(
+                db, draft_id, state="FAILED", failure_code=exc.code, retry=exc.code in TRANSIENT_FAILURES,
+                ai_calls=ai_calls,
+            )
     return await _finish(
         db, draft_id, state="READY", proposal=result.proposal, summary=result.summary, model_name=result.model_name,
+        ai_calls=ai_calls,
     )
 
 
@@ -212,12 +227,21 @@ async def _finish(
     proposal: dict[str, Any] | None = None,
     summary: dict[str, Any] | None = None,
     model_name: str | None = None,
+    ai_calls: list[AICall] | None = None,
 ) -> str:
     draft = await db.scalar(select(CVDraft).where(CVDraft.id == draft_id).with_for_update())
     if draft is None:
         return "MISSING"
+    if ai_calls:
+        # Spent whatever happens next: recorded even when the draft was confirmed meanwhile.
+        stage_ai_costs(
+            db, ai_calls, call_kind="CV_EXTRACTION", subject_type="CV_DRAFT", subject_id=draft.id,
+            organization_id=draft.organization_id,
+        )
     if draft.state != "EXTRACTING":
         # Confirmed by hand while the model ran: the person's CV stands; nothing is overwritten.
+        if ai_calls:
+            await db.commit()
         return draft.state
     now = _now()
     if retry and draft.attempt_count < MAX_EXTRACTION_ATTEMPTS:

@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.award_ledger import AwardNoticeSnapshot, AwardOutcome
 from app.services.award_ledger_parser import (
+    KIND_INDIVIDUAL,
     PARSER_VERSION,
     normalize_firm_name,
     parse_money,
@@ -46,6 +47,9 @@ AWARD_NOTICE_TYPE = "Contract Award"
 LEDGER_COUNTRIES = ("Uzbekistan", "Kazakhstan", "Kyrgyz Republic", "Tajikistan")
 CONSULTING_GROUP_CODE = "CS"
 CONSULTING_GROUP = "Consultant Services"
+# Individual Consultant Selection awards go to a person; some notices name them. Every bidder of
+# such a notice is an individual, whatever the notice prints, and never enters a firm list.
+INDIVIDUAL_SELECTION_METHOD = "Individual Consultant Selection"
 DEFAULT_WINDOW_MONTHS = 24
 PAGE_ROWS = 100
 MAX_PAGES_PER_PASS = 60
@@ -121,6 +125,7 @@ def build_snapshot(row: dict[str, Any], *, retrieved_at: datetime) -> tuple[Awar
     )
     snapshot.id = uuid4()
     outcomes: list[AwardOutcome] = []
+    individual_selection = common["procurement_method"] == INDIVIDUAL_SELECTION_METHOD
     for bid_ordinal, bid in enumerate(parsed.bids, start=1):
         evaluated_currency, evaluated_amount = parse_money(bid.evaluated_price)
         signed_currency, signed_amount = parse_money(bid.signed_contract_price)
@@ -135,7 +140,7 @@ def build_snapshot(row: dict[str, Any], *, retrieved_at: datetime) -> tuple[Awar
                 bidder_name_normalized=normalize_firm_name(member.name)[:500],
                 bidder_source_id=member.source_id,
                 bidder_country=member.country,
-                bidder_kind=member.kind,
+                bidder_kind=KIND_INDIVIDUAL if individual_selection else member.kind,
                 status=bid.status,
                 evaluated_price_text=bid.evaluated_price,
                 evaluated_price_currency=evaluated_currency,

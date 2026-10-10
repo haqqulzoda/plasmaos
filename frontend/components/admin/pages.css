@@ -86,3 +86,12 @@
 
 /* R3 Task 5: operator panels. */
 .admin-run-filters { border: 0; padding: 0; margin: 0; gap: var(--ds-space-5); }
+
+/* Sprint 1: award ledger and product metrics. */
+.admin-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--ds-space-5); }
+.admin-ledger-filters { border: 0; padding: 0; margin: 0; gap: var(--ds-space-5); align-items: flex-end; flex-wrap: wrap; }
+.admin-ledger-filters .ds-search { flex: 1 1 260px; }
+.admin-export-row { flex-wrap: wrap; gap: var(--ds-space-4); }
+.admin-bar { display: block; block-size: 8px; border-radius: 4px; background: var(--ds-accent); min-inline-size: 2px; }
+.admin-bar-track { display: block; inline-size: 100%; min-inline-size: 80px; background: var(--ds-border); border-radius: 4px; }
+@media (max-width: 767px) { .admin-ledger-filters { flex-direction: column; align-items: stretch; } }

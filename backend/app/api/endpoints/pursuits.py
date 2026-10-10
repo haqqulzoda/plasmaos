@@ -26,6 +26,7 @@ from app.models.base import DocumentProcessingState, PrivateDocumentRole, Pursui
 from app.models.private_documents import DocumentProcessingJob, DocumentVersion, PrivateDocument, PrivateDocumentBatch, PursuitTenderContext
 from app.models.tenancy import Membership, OrganizationPursuit
 from app.models.user import User
+from app.services.product_analytics import track_view
 from app.schemas.tenancy import (
     AnalysisLineageRequest,
     AnalysisLineageResponse,
@@ -485,7 +486,10 @@ async def create_source_pursuit(
     return _response(result.pursuit)
 
 
-@router.get("/{pursuit_id}", response_model=PursuitResponse)
+@router.get(
+    "/{pursuit_id}", response_model=PursuitResponse,
+    dependencies=[Depends(track_view("workspace_opened", pursuit_param="pursuit_id"))],
+)
 async def get_pursuit(
     pursuit_id: UUID,
     x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),

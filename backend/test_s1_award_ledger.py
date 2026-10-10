@@ -156,6 +156,10 @@ def test_snapshot_rows_carry_provenance() -> None:
         (1, 1, 3), (1, 2, 3), (1, 3, 3)}
     assert all(row.content_hash == snapshot.content_hash and row.retrieved_at == NOW for row in rows)
     assert rows[0].evaluated_price_currency == "USD" and rows[0].evaluated_price_amount == Decimal("2236567.27")
+    assert {row.bidder_kind for row in rows} == {"FIRM"}
+    # Individual Consultant Selection: whoever the notice names is a person, never a firm.
+    named = dict(FIXTURES["OP00472568"], procurement_method_name="Individual Consultant Selection")
+    assert {row.bidder_kind for row in build_snapshot(named, retrieved_at=NOW)[1]} == {"INDIVIDUAL"}
     # A re-index that only touches api_modified_date is the same content.
     touched = dict(FIXTURES["OP00472568"], api_modified_date="2027-01-01T00:00:00Z")
     assert build_snapshot(touched, retrieved_at=NOW)[0].content_hash == snapshot.content_hash

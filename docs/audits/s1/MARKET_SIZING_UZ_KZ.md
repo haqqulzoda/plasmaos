@@ -1,21 +1,21 @@
 # MDB consulting market sizing — Uzbekistan and Kazakhstan
 
-Window: award notices published 2024-10-10 to 2026-10-10 (24 months). Generated 2026-10-10 09:14 UTC from the PlasmaOS award ledger.
+Window: award notices published 2024-10-10 to 2026-10-10 (24 months). Generated 2026-10-10 09:30 UTC from the PlasmaOS award ledger.
 
 ## Results (World Bank consulting assignments)
 
 | | Uzbekistan | Kazakhstan |
 |---|---|---|
-| Assignments with a published award notice | 168 | 30 |
-| Bids (a joint venture is one bid) | 320 | 30 |
-| Distinct firms that bid | 281 | 26 |
-| — local firms | 116 | 12 |
-| — foreign firms | 165 | 14 |
+| Assignments with a published award notice | 156 | 30 |
+| Bids (a joint venture is one bid) | 288 | 30 |
+| Distinct firms that bid | 253 | 26 |
+| — local firms | 110 | 12 |
+| — foreign firms | 143 | 14 |
 | — country not published | 0 | 0 |
 | Median bids per firm | 1 | 1 |
-| Firms with 1 bid(s) | 217 | 22 |
-| Firms with 2 bid(s) | 46 | 4 |
-| Firms with 3-5 bid(s) | 14 | 0 |
+| Firms with 1 bid(s) | 192 | 22 |
+| Firms with 2 bid(s) | 44 | 4 |
+| Firms with 3-5 bid(s) | 13 | 0 |
 | Firms with 6-10 bid(s) | 4 | 0 |
 | Firms with 11+ bid(s) | 0 | 0 |
 | Awarded contracts (firms) | 157 | 30 |
@@ -28,38 +28,37 @@ Window: award notices published 2024-10-10 to 2026-10-10 (24 months). Generated 
 - Consultant Qualification Selection: 96
 - Direct Selection: 29
 - Quality And Cost-Based Selection: 22
-- Individual Consultant Selection: 12
 - Least Cost Selection: 9
 
 ### Uzbekistan: by sector (project sector tags; a project can carry several)
 
 | Sector | Firms | Bids | Awards | Awarded value |
 |---|---|---|---|---|
-| Public Administration - Industry, Trade and Services | 64 | 90 | 25 | USD 5,537,572; UZS 7,027,156,168 |
-| Other Industry, Trade and Services | 56 | 79 | 15 | USD 794,599; UZS 6,902,656,400 |
 | ICT Services | 84 | 73 | 42 | BDT 191,779,521; EUR 3,885,504; USD 23,556,906 |
-| Agricultural markets, commercialization and agri-business | 45 | 59 | 54 | EUR 93,450; USD 6,557,714; UZS 7,725,132,038 |
-| Public Administration - Agriculture, Fishing & Forestry | 39 | 48 | 44 | EUR 93,450; USD 1,954,893; UZS 8,794,172,270 |
-| Crops | 36 | 42 | 38 | EUR 93,450; USD 1,445,841; UZS 6,453,759,770 |
-| Agricultural Extension, Research, and Other Support Activities | 33 | 40 | 36 | EUR 93,450; USD 1,182,039; UZS 5,260,219,770 |
-| ICT Infrastructure | 40 | 40 | 18 | USD 9,005,853 |
+| Public Administration - Industry, Trade and Services | 51 | 73 | 25 | USD 5,537,572; UZS 7,027,156,168 |
+| Other Industry, Trade and Services | 43 | 62 | 15 | USD 794,599; UZS 6,902,656,400 |
+| Agricultural markets, commercialization and agri-business | 43 | 57 | 54 | EUR 93,450; USD 6,557,714; UZS 7,725,132,038 |
+| Public Administration - Agriculture, Fishing & Forestry | 37 | 46 | 44 | EUR 93,450; USD 1,954,893; UZS 8,794,172,270 |
+| Crops | 34 | 40 | 38 | EUR 93,450; USD 1,445,841; UZS 6,453,759,770 |
+| ICT Infrastructure | 39 | 39 | 18 | USD 9,005,853 |
+| Agricultural Extension, Research, and Other Support Activities | 31 | 38 | 36 | EUR 93,450; USD 1,182,039; UZS 5,260,219,770 |
 | Unspecified | 50 | 37 | 15 | GBP 175,188; USD 6,849,758 |
 | Sub-National Government | 40 | 30 | 17 | BDT 191,779,521; EUR 3,885,504; USD 10,050,009 |
 | Tourism | 40 | 30 | 17 | BDT 191,779,521; EUR 3,885,504; USD 10,050,009 |
-| Public Administration - Energy and Extractives | 26 | 27 | 16 | USD 5,163,509 |
-| Early Childhood Education | 25 | 26 | 9 | EUR 127,500; USD 812,990; UZS 99,340 |
-| Secondary Education | 25 | 26 | 9 | EUR 127,500; USD 812,990; UZS 99,340 |
-| Primary Education | 25 | 26 | 9 | EUR 127,500; USD 812,990; UZS 99,340 |
-| Renewable Energy Solar | 30 | 25 | 8 | USD 5,558,149 |
-| Other Energy and Extractives | 25 | 24 | 13 | USD 4,534,091 |
+| Public Administration - Energy and Extractives | 25 | 26 | 16 | USD 5,163,509 |
+| Early Childhood Education | 23 | 24 | 9 | EUR 127,500; USD 812,990; UZS 99,340 |
+| Secondary Education | 23 | 24 | 9 | EUR 127,500; USD 812,990; UZS 99,340 |
+| Primary Education | 23 | 24 | 9 | EUR 127,500; USD 812,990; UZS 99,340 |
+| Other Energy and Extractives | 24 | 23 | 13 | USD 4,534,091 |
 | Public Administration - Information and Communications Technologies | 28 | 23 | 8 | USD 7,591,987 |
-| Water Supply | 23 | 21 | 8 | USD 3,067,342 |
-| Public Administration - Water, Sanitation and Waste Management | 25 | 20 | 7 | USD 2,701,726; UZS 1,193,540,000 |
 | Other Public Administration | 20 | 20 | 17 | USD 5,914,910 |
 | Banking Institutions | 20 | 20 | 17 | USD 5,914,910 |
-| Sanitation | 22 | 18 | 5 | USD 2,437,924 |
-| Renewable Energy Biomass | 22 | 18 | 5 | USD 2,437,924 |
-| Energy Transmission and Distribution | 15 | 17 | 10 | USD 1,413,866 |
+| Energy Transmission and Distribution | 14 | 16 | 10 | USD 1,413,866 |
+| Renewable Energy Solar | 20 | 15 | 8 | USD 5,558,149 |
+| Water Supply | 13 | 11 | 8 | USD 3,067,342 |
+| Public Administration - Water, Sanitation and Waste Management | 15 | 10 | 7 | USD 2,701,726; UZS 1,193,540,000 |
+| Sanitation | 12 | 8 | 5 | USD 2,437,924 |
+| Renewable Energy Biomass | 12 | 8 | 5 | USD 2,437,924 |
 | Livestock | 4 | 6 | 6 | USD 509,052; UZS 2,340,412,500 |
 | Non-Renewable Energy Generation | 1 | 3 | 3 | USD 629,418 |
 | Irrigation and Drainage | 3 | 2 | 2 | USD 263,802; UZS 1,193,540,000 |

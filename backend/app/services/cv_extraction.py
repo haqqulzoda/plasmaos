@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
 from app.core.agents import pursuit_analyzer
+from app.core.ai_usage import record_ai_call
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +217,7 @@ async def gemini_cv_call(model: str, prompt: str, timeout_seconds: int) -> str:
 
     def run() -> str:
         client = pursuit_analyzer._TimeoutClient(api_key=api_key, http_options={"timeout": timeout_seconds})
+        started = time.monotonic()
         try:
             response = client.models.generate_content(
                 model=model,
@@ -228,10 +230,15 @@ async def gemini_cv_call(model: str, prompt: str, timeout_seconds: int) -> str:
                 ),
             )
         except genai_errors.APIError as exc:
+            record_ai_call(model, started=started, succeeded=False)
             status = pursuit_analyzer._provider_status(exc)
             if status in pursuit_analyzer.ACCOUNT_PROVIDER_STATUS_CODES:
                 raise pursuit_analyzer.ProviderAccountError(status) from None
             raise
+        except BaseException:
+            record_ai_call(model, started=started, succeeded=False)
+            raise
+        record_ai_call(model, started=started, response=response, succeeded=True)
         return (getattr(response, "text", "") or "").strip()
 
     return await asyncio.to_thread(run)

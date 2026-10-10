@@ -1,25 +1,25 @@
 metric,country,lender,sector,segment,value,unit,note
-assignments_with_award_notice,Uzbekistan,World Bank,All,all,168,count,
-bids,Uzbekistan,World Bank,All,all,320,count,a joint venture is one bid
-distinct_firms,Uzbekistan,World Bank,All,all,281,count,joint-venture members counted as separate firms
-distinct_firms,Uzbekistan,World Bank,All,local,116,count,joint-venture members counted as separate firms
-distinct_firms,Uzbekistan,World Bank,All,foreign,165,count,joint-venture members counted as separate firms
+assignments_with_award_notice,Uzbekistan,World Bank,All,all,156,count,
+bids,Uzbekistan,World Bank,All,all,288,count,a joint venture is one bid
+distinct_firms,Uzbekistan,World Bank,All,all,253,count,joint-venture members counted as separate firms
+distinct_firms,Uzbekistan,World Bank,All,local,110,count,joint-venture members counted as separate firms
+distinct_firms,Uzbekistan,World Bank,All,foreign,143,count,joint-venture members counted as separate firms
 distinct_firms,Uzbekistan,World Bank,All,unknown,0,count,joint-venture members counted as separate firms
-firms_by_bid_count,Uzbekistan,World Bank,All,all:1 bids,217,count,
-firms_by_bid_count,Uzbekistan,World Bank,All,all:2 bids,46,count,
-firms_by_bid_count,Uzbekistan,World Bank,All,all:3-5 bids,14,count,
+firms_by_bid_count,Uzbekistan,World Bank,All,all:1 bids,192,count,
+firms_by_bid_count,Uzbekistan,World Bank,All,all:2 bids,44,count,
+firms_by_bid_count,Uzbekistan,World Bank,All,all:3-5 bids,13,count,
 firms_by_bid_count,Uzbekistan,World Bank,All,all:6-10 bids,4,count,
 firms_by_bid_count,Uzbekistan,World Bank,All,all:11+ bids,0,count,
 median_bids_per_firm,Uzbekistan,World Bank,All,all,1,bids,
-firms_by_bid_count,Uzbekistan,World Bank,All,local:1 bids,77,count,
-firms_by_bid_count,Uzbekistan,World Bank,All,local:2 bids,27,count,
+firms_by_bid_count,Uzbekistan,World Bank,All,local:1 bids,72,count,
+firms_by_bid_count,Uzbekistan,World Bank,All,local:2 bids,26,count,
 firms_by_bid_count,Uzbekistan,World Bank,All,local:3-5 bids,9,count,
 firms_by_bid_count,Uzbekistan,World Bank,All,local:6-10 bids,3,count,
 firms_by_bid_count,Uzbekistan,World Bank,All,local:11+ bids,0,count,
 median_bids_per_firm,Uzbekistan,World Bank,All,local,1.0,bids,
-firms_by_bid_count,Uzbekistan,World Bank,All,foreign:1 bids,140,count,
-firms_by_bid_count,Uzbekistan,World Bank,All,foreign:2 bids,19,count,
-firms_by_bid_count,Uzbekistan,World Bank,All,foreign:3-5 bids,5,count,
+firms_by_bid_count,Uzbekistan,World Bank,All,foreign:1 bids,120,count,
+firms_by_bid_count,Uzbekistan,World Bank,All,foreign:2 bids,18,count,
+firms_by_bid_count,Uzbekistan,World Bank,All,foreign:3-5 bids,4,count,
 firms_by_bid_count,Uzbekistan,World Bank,All,foreign:6-10 bids,1,count,
 firms_by_bid_count,Uzbekistan,World Bank,All,foreign:11+ bids,0,count,
 median_bids_per_firm,Uzbekistan,World Bank,All,foreign,1,bids,
@@ -33,17 +33,16 @@ awarded_value,Uzbekistan,World Bank,All,all,46313551.30,USD,"signed contract pri
 awarded_value,Uzbekistan,World Bank,All,all,16221427778.00,UZS,"signed contract price, else the awarded bid's evaluated price; not converted"
 assignments_by_method,Uzbekistan,World Bank,All,Consultant Qualification Selection,96,count,
 assignments_by_method,Uzbekistan,World Bank,All,Direct Selection,29,count,
-assignments_by_method,Uzbekistan,World Bank,All,Individual Consultant Selection,12,count,
 assignments_by_method,Uzbekistan,World Bank,All,Least Cost Selection,9,count,
 assignments_by_method,Uzbekistan,World Bank,All,Quality And Cost-Based Selection,22,count,
-distinct_firms,Uzbekistan,World Bank,"Agricultural Extension, Research, and Other Support Activities",all,33,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,"Agricultural Extension, Research, and Other Support Activities",all,40,count,
+distinct_firms,Uzbekistan,World Bank,"Agricultural Extension, Research, and Other Support Activities",all,31,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,"Agricultural Extension, Research, and Other Support Activities",all,38,count,
 awarded_contracts,Uzbekistan,World Bank,"Agricultural Extension, Research, and Other Support Activities",all,36,count,
 awarded_value,Uzbekistan,World Bank,"Agricultural Extension, Research, and Other Support Activities",all,93450.00,EUR,
 awarded_value,Uzbekistan,World Bank,"Agricultural Extension, Research, and Other Support Activities",all,1182038.77,USD,
 awarded_value,Uzbekistan,World Bank,"Agricultural Extension, Research, and Other Support Activities",all,5260219770.00,UZS,
-distinct_firms,Uzbekistan,World Bank,"Agricultural markets, commercialization and agri-business",all,45,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,"Agricultural markets, commercialization and agri-business",all,59,count,
+distinct_firms,Uzbekistan,World Bank,"Agricultural markets, commercialization and agri-business",all,43,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,"Agricultural markets, commercialization and agri-business",all,57,count,
 awarded_contracts,Uzbekistan,World Bank,"Agricultural markets, commercialization and agri-business",all,54,count,
 awarded_value,Uzbekistan,World Bank,"Agricultural markets, commercialization and agri-business",all,93450.00,EUR,
 awarded_value,Uzbekistan,World Bank,"Agricultural markets, commercialization and agri-business",all,6557713.77,USD,
@@ -52,20 +51,20 @@ distinct_firms,Uzbekistan,World Bank,Banking Institutions,all,20,count,sector as
 bids,Uzbekistan,World Bank,Banking Institutions,all,20,count,
 awarded_contracts,Uzbekistan,World Bank,Banking Institutions,all,17,count,
 awarded_value,Uzbekistan,World Bank,Banking Institutions,all,5914909.50,USD,
-distinct_firms,Uzbekistan,World Bank,Crops,all,36,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Crops,all,42,count,
+distinct_firms,Uzbekistan,World Bank,Crops,all,34,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Crops,all,40,count,
 awarded_contracts,Uzbekistan,World Bank,Crops,all,38,count,
 awarded_value,Uzbekistan,World Bank,Crops,all,93450.00,EUR,
 awarded_value,Uzbekistan,World Bank,Crops,all,1445840.77,USD,
 awarded_value,Uzbekistan,World Bank,Crops,all,6453759770.00,UZS,
-distinct_firms,Uzbekistan,World Bank,Early Childhood Education,all,25,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Early Childhood Education,all,26,count,
+distinct_firms,Uzbekistan,World Bank,Early Childhood Education,all,23,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Early Childhood Education,all,24,count,
 awarded_contracts,Uzbekistan,World Bank,Early Childhood Education,all,9,count,
 awarded_value,Uzbekistan,World Bank,Early Childhood Education,all,127500.00,EUR,
 awarded_value,Uzbekistan,World Bank,Early Childhood Education,all,812990.00,USD,
 awarded_value,Uzbekistan,World Bank,Early Childhood Education,all,99340.00,UZS,
-distinct_firms,Uzbekistan,World Bank,Energy Transmission and Distribution,all,15,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Energy Transmission and Distribution,all,17,count,
+distinct_firms,Uzbekistan,World Bank,Energy Transmission and Distribution,all,14,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Energy Transmission and Distribution,all,16,count,
 awarded_contracts,Uzbekistan,World Bank,Energy Transmission and Distribution,all,10,count,
 awarded_value,Uzbekistan,World Bank,Energy Transmission and Distribution,all,1413865.86,USD,
 distinct_firms,Uzbekistan,World Bank,Health,all,1,count,sector as tagged on the project; a project can carry several
@@ -76,8 +75,8 @@ distinct_firms,Uzbekistan,World Bank,Health Facilities and Construction,all,1,co
 bids,Uzbekistan,World Bank,Health Facilities and Construction,all,1,count,
 awarded_contracts,Uzbekistan,World Bank,Health Facilities and Construction,all,1,count,
 awarded_value,Uzbekistan,World Bank,Health Facilities and Construction,all,400000000.00,UZS,
-distinct_firms,Uzbekistan,World Bank,ICT Infrastructure,all,40,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,ICT Infrastructure,all,40,count,
+distinct_firms,Uzbekistan,World Bank,ICT Infrastructure,all,39,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,ICT Infrastructure,all,39,count,
 awarded_contracts,Uzbekistan,World Bank,ICT Infrastructure,all,18,count,
 awarded_value,Uzbekistan,World Bank,ICT Infrastructure,all,9005852.86,USD,
 distinct_firms,Uzbekistan,World Bank,ICT Services,all,84,count,sector as tagged on the project; a project can carry several
@@ -104,12 +103,12 @@ distinct_firms,Uzbekistan,World Bank,Non-Renewable Energy Generation,all,1,count
 bids,Uzbekistan,World Bank,Non-Renewable Energy Generation,all,3,count,
 awarded_contracts,Uzbekistan,World Bank,Non-Renewable Energy Generation,all,3,count,
 awarded_value,Uzbekistan,World Bank,Non-Renewable Energy Generation,all,629418.00,USD,
-distinct_firms,Uzbekistan,World Bank,Other Energy and Extractives,all,25,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Other Energy and Extractives,all,24,count,
+distinct_firms,Uzbekistan,World Bank,Other Energy and Extractives,all,24,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Other Energy and Extractives,all,23,count,
 awarded_contracts,Uzbekistan,World Bank,Other Energy and Extractives,all,13,count,
 awarded_value,Uzbekistan,World Bank,Other Energy and Extractives,all,4534090.86,USD,
-distinct_firms,Uzbekistan,World Bank,"Other Industry, Trade and Services",all,56,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,"Other Industry, Trade and Services",all,79,count,
+distinct_firms,Uzbekistan,World Bank,"Other Industry, Trade and Services",all,43,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,"Other Industry, Trade and Services",all,62,count,
 awarded_contracts,Uzbekistan,World Bank,"Other Industry, Trade and Services",all,15,count,
 awarded_value,Uzbekistan,World Bank,"Other Industry, Trade and Services",all,794599.00,USD,
 awarded_value,Uzbekistan,World Bank,"Other Industry, Trade and Services",all,6902656400.00,UZS,
@@ -117,28 +116,28 @@ distinct_firms,Uzbekistan,World Bank,Other Public Administration,all,20,count,se
 bids,Uzbekistan,World Bank,Other Public Administration,all,20,count,
 awarded_contracts,Uzbekistan,World Bank,Other Public Administration,all,17,count,
 awarded_value,Uzbekistan,World Bank,Other Public Administration,all,5914909.50,USD,
-distinct_firms,Uzbekistan,World Bank,Primary Education,all,25,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Primary Education,all,26,count,
+distinct_firms,Uzbekistan,World Bank,Primary Education,all,23,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Primary Education,all,24,count,
 awarded_contracts,Uzbekistan,World Bank,Primary Education,all,9,count,
 awarded_value,Uzbekistan,World Bank,Primary Education,all,127500.00,EUR,
 awarded_value,Uzbekistan,World Bank,Primary Education,all,812990.00,USD,
 awarded_value,Uzbekistan,World Bank,Primary Education,all,99340.00,UZS,
-distinct_firms,Uzbekistan,World Bank,"Public Administration - Agriculture, Fishing & Forestry",all,39,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,"Public Administration - Agriculture, Fishing & Forestry",all,48,count,
+distinct_firms,Uzbekistan,World Bank,"Public Administration - Agriculture, Fishing & Forestry",all,37,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,"Public Administration - Agriculture, Fishing & Forestry",all,46,count,
 awarded_contracts,Uzbekistan,World Bank,"Public Administration - Agriculture, Fishing & Forestry",all,44,count,
 awarded_value,Uzbekistan,World Bank,"Public Administration - Agriculture, Fishing & Forestry",all,93450.00,EUR,
 awarded_value,Uzbekistan,World Bank,"Public Administration - Agriculture, Fishing & Forestry",all,1954892.77,USD,
 awarded_value,Uzbekistan,World Bank,"Public Administration - Agriculture, Fishing & Forestry",all,8794172270.00,UZS,
-distinct_firms,Uzbekistan,World Bank,Public Administration - Energy and Extractives,all,26,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Public Administration - Energy and Extractives,all,27,count,
+distinct_firms,Uzbekistan,World Bank,Public Administration - Energy and Extractives,all,25,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Public Administration - Energy and Extractives,all,26,count,
 awarded_contracts,Uzbekistan,World Bank,Public Administration - Energy and Extractives,all,16,count,
 awarded_value,Uzbekistan,World Bank,Public Administration - Energy and Extractives,all,5163508.86,USD,
 distinct_firms,Uzbekistan,World Bank,Public Administration - Health,all,1,count,sector as tagged on the project; a project can carry several
 bids,Uzbekistan,World Bank,Public Administration - Health,all,1,count,
 awarded_contracts,Uzbekistan,World Bank,Public Administration - Health,all,1,count,
 awarded_value,Uzbekistan,World Bank,Public Administration - Health,all,400000000.00,UZS,
-distinct_firms,Uzbekistan,World Bank,"Public Administration - Industry, Trade and Services",all,64,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,"Public Administration - Industry, Trade and Services",all,90,count,
+distinct_firms,Uzbekistan,World Bank,"Public Administration - Industry, Trade and Services",all,51,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,"Public Administration - Industry, Trade and Services",all,73,count,
 awarded_contracts,Uzbekistan,World Bank,"Public Administration - Industry, Trade and Services",all,25,count,
 awarded_value,Uzbekistan,World Bank,"Public Administration - Industry, Trade and Services",all,5537572.00,USD,
 awarded_value,Uzbekistan,World Bank,"Public Administration - Industry, Trade and Services",all,7027156168.00,UZS,
@@ -146,25 +145,25 @@ distinct_firms,Uzbekistan,World Bank,Public Administration - Information and Com
 bids,Uzbekistan,World Bank,Public Administration - Information and Communications Technologies,all,23,count,
 awarded_contracts,Uzbekistan,World Bank,Public Administration - Information and Communications Technologies,all,8,count,
 awarded_value,Uzbekistan,World Bank,Public Administration - Information and Communications Technologies,all,7591987.00,USD,
-distinct_firms,Uzbekistan,World Bank,"Public Administration - Water, Sanitation and Waste Management",all,25,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,"Public Administration - Water, Sanitation and Waste Management",all,20,count,
+distinct_firms,Uzbekistan,World Bank,"Public Administration - Water, Sanitation and Waste Management",all,15,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,"Public Administration - Water, Sanitation and Waste Management",all,10,count,
 awarded_contracts,Uzbekistan,World Bank,"Public Administration - Water, Sanitation and Waste Management",all,7,count,
 awarded_value,Uzbekistan,World Bank,"Public Administration - Water, Sanitation and Waste Management",all,2701726.00,USD,
 awarded_value,Uzbekistan,World Bank,"Public Administration - Water, Sanitation and Waste Management",all,1193540000.00,UZS,
-distinct_firms,Uzbekistan,World Bank,Renewable Energy Biomass,all,22,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Renewable Energy Biomass,all,18,count,
+distinct_firms,Uzbekistan,World Bank,Renewable Energy Biomass,all,12,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Renewable Energy Biomass,all,8,count,
 awarded_contracts,Uzbekistan,World Bank,Renewable Energy Biomass,all,5,count,
 awarded_value,Uzbekistan,World Bank,Renewable Energy Biomass,all,2437924.00,USD,
-distinct_firms,Uzbekistan,World Bank,Renewable Energy Solar,all,30,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Renewable Energy Solar,all,25,count,
+distinct_firms,Uzbekistan,World Bank,Renewable Energy Solar,all,20,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Renewable Energy Solar,all,15,count,
 awarded_contracts,Uzbekistan,World Bank,Renewable Energy Solar,all,8,count,
 awarded_value,Uzbekistan,World Bank,Renewable Energy Solar,all,5558149.00,USD,
-distinct_firms,Uzbekistan,World Bank,Sanitation,all,22,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Sanitation,all,18,count,
+distinct_firms,Uzbekistan,World Bank,Sanitation,all,12,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Sanitation,all,8,count,
 awarded_contracts,Uzbekistan,World Bank,Sanitation,all,5,count,
 awarded_value,Uzbekistan,World Bank,Sanitation,all,2437924.00,USD,
-distinct_firms,Uzbekistan,World Bank,Secondary Education,all,25,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Secondary Education,all,26,count,
+distinct_firms,Uzbekistan,World Bank,Secondary Education,all,23,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Secondary Education,all,24,count,
 awarded_contracts,Uzbekistan,World Bank,Secondary Education,all,9,count,
 awarded_value,Uzbekistan,World Bank,Secondary Education,all,127500.00,EUR,
 awarded_value,Uzbekistan,World Bank,Secondary Education,all,812990.00,USD,
@@ -186,8 +185,8 @@ bids,Uzbekistan,World Bank,Unspecified,all,37,count,
 awarded_contracts,Uzbekistan,World Bank,Unspecified,all,15,count,
 awarded_value,Uzbekistan,World Bank,Unspecified,all,175187.50,GBP,
 awarded_value,Uzbekistan,World Bank,Unspecified,all,6849757.90,USD,
-distinct_firms,Uzbekistan,World Bank,Water Supply,all,23,count,sector as tagged on the project; a project can carry several
-bids,Uzbekistan,World Bank,Water Supply,all,21,count,
+distinct_firms,Uzbekistan,World Bank,Water Supply,all,13,count,sector as tagged on the project; a project can carry several
+bids,Uzbekistan,World Bank,Water Supply,all,11,count,
 awarded_contracts,Uzbekistan,World Bank,Water Supply,all,8,count,
 awarded_value,Uzbekistan,World Bank,Water Supply,all,3067342.00,USD,
 assignments_with_award_notice,Kazakhstan,World Bank,All,all,30,count,

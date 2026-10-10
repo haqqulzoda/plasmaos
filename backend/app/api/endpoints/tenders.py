@@ -241,6 +241,7 @@ from app.services.source_refresh_activity import (
     source_refresh_status,
 )
 from app.services.tender_details import compose_tender_details
+from app.services.product_analytics import track_view
 from app.services.official_notice import is_official_notice, not_official_notice
 from app.services.tender_sources.base import (
     NormalizedTender,
@@ -5484,7 +5485,10 @@ async def list_tenders(
     return serialized_tenders
 
 
-@router.get("/{tender_id}/details", response_model=TenderDetailsResponse)
+@router.get(
+    "/{tender_id}/details", response_model=TenderDetailsResponse,
+    dependencies=[Depends(track_view("tender_viewed", tender_param="tender_id"))],
+)
 async def get_tender_details(
     tender_id: UUID,
     current_user: User = Depends(require_approved_pilot_access),

@@ -23,7 +23,12 @@ from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.award_ledger import AwardNoticeSnapshot, AwardOutcome
-from app.services.award_ledger import CONSULTING_GROUP, DEFAULT_WINDOW_MONTHS, window_start
+from app.services.award_ledger import (
+    CONSULTING_GROUP,
+    DEFAULT_WINDOW_MONTHS,
+    INDIVIDUAL_SELECTION_METHOD,
+    window_start,
+)
 from app.services.award_ledger_parser import normalize_firm_name
 
 LENDER_LABELS = {"WORLD_BANK": "World Bank", "ADB": "ADB", "EBRD": "EBRD"}
@@ -51,6 +56,14 @@ FIRM_CSV_COLUMNS = (
     "example_1_title", "example_1_url", "example_2_title", "example_2_url", "example_3_title", "example_3_url",
 )
 MARKET_CSV_COLUMNS = ("metric", "country", "lender", "sector", "segment", "value", "unit", "note")
+
+
+def is_firm():
+    """Firm rows only. Read-time too: rows stored before ICS rows were marked individual."""
+    return and_(
+        AwardOutcome.bidder_kind == "FIRM",
+        func.coalesce(AwardOutcome.procurement_method, "") != INDIVIDUAL_SELECTION_METHOD,
+    )
 
 
 def country_key(value: str | None) -> str:
@@ -190,7 +203,7 @@ async def _ledger_rows(db: AsyncSession, *, where: Any = None) -> list[tuple[Awa
     statement = (
         select(AwardOutcome, AwardNoticeSnapshot.sectors)
         .join(AwardNoticeSnapshot, AwardNoticeSnapshot.id == AwardOutcome.snapshot_id)
-        .where(AwardOutcome.snapshot_id.in_(latest_snapshot_ids()), AwardOutcome.bidder_kind == "FIRM")
+        .where(AwardOutcome.snapshot_id.in_(latest_snapshot_ids()), is_firm())
     )
     if where is not None:
         statement = statement.where(where)
@@ -291,7 +304,7 @@ async def market_sizing(
     ))
     individual_awards = {country: int(count) for country, count in (await db.execute(
         select(AwardOutcome.country, func.count(func.distinct(AwardOutcome.notice_id))).where(
-            AwardOutcome.snapshot_id.in_(latest_snapshot_ids()), AwardOutcome.bidder_kind == "INDIVIDUAL",
+            AwardOutcome.snapshot_id.in_(latest_snapshot_ids()), ~is_firm(),
             AwardOutcome.status == "AWARDED", AwardOutcome.country.in_(countries),
             AwardOutcome.procurement_group == CONSULTING_GROUP,
             AwardOutcome.notice_date >= since, AwardOutcome.notice_date <= today,
