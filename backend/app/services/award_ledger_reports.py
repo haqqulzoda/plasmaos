@@ -491,7 +491,7 @@ def market_sizing_markdown(result: dict[str, Any], *, generated_at: datetime | N
         "",
         "- Coverage is World Bank contract-award notices only. ADB and EBRD consulting awards are not in the ledger "
         "(ADB and EBRD publish winners and contract values but not the other firms that bid; see "
-        "docs/sprint1/ADB_EBRD_REJECTED_BIDDER_DISCLOSURE.md): these counts are a floor for the MDB market, not its "
+        "docs/audits/s1/ADB_EBRD_REJECTED_BIDDER_DISCLOSURE.md): these counts are a floor for the MDB market, not its "
         "size.",
         "- Only assignments whose award notice is published are counted; shortlisting-only stages (expressions of "
         "interest that never reached proposals), cancelled selections and awards not yet published are missing.",
