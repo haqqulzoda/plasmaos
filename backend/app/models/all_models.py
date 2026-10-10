@@ -68,6 +68,8 @@ from app.models.invitations import PendingInvitation  # noqa: F401,E402
 from app.models.cv_drafts import CVDraft  # noqa: F401,E402
 from app.models.email import EmailDelivery, EmailNotificationPreference  # noqa: F401,E402
 from app.models.organization_records import OrganizationRecordEvent  # noqa: F401,E402
+from app.models.award_ledger import AwardNoticeSnapshot, AwardOutcome  # noqa: F401,E402
+from app.models.product_analytics import AICallCost, ProductEvent  # noqa: F401,E402
 
 
 # ============================================================================

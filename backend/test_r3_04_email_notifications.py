@@ -34,7 +34,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
 REVISION = "20261010_0001_r3_email_notifications"
-HEAD = "20261011_0001_r3_organization_record_events"
+HEAD = "20261012_0002_s1_product_analytics"
 PREVIOUS = "20261009_0001_r3_cv_library_drafts"
 
 

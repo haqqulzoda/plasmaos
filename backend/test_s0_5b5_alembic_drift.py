@@ -46,9 +46,9 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20261011_0001_r3_organization_record_events"]
+    assert script.get_heads() == ["20261012_0002_s1_product_analytics"]
     assert (
-        script.get_revision("20261011_0001_r3_organization_record_events").down_revision
+        script.get_revision("20261012_0002_s1_product_analytics").down_revision
         == "20261010_0001_r3_email_notifications"
     )
     assert (
