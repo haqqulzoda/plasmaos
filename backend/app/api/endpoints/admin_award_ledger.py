@@ -26,6 +26,7 @@ from app.services.award_ledger_reports import (
     market_sizing,
     market_sizing_csv,
     market_sizing_markdown,
+    outcome_values,
     outcomes_csv,
 )
 
@@ -123,7 +124,7 @@ async def award_ledger_outcomes(
 ) -> AwardOutcomePage:
     rows, total = await list_outcomes(db, filters=filters, limit=limit, offset=offset)
     return AwardOutcomePage(
-        items=[AwardOutcomeItem.model_validate(row, from_attributes=True) for row in rows],
+        items=[AwardOutcomeItem(**outcome_values(row, AwardOutcomeItem.model_fields)) for row in rows],
         total=total, limit=limit, offset=offset,
     )
 

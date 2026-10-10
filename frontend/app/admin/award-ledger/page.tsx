@@ -116,8 +116,10 @@ export default function AdminAwardLedgerPage() {
             <Metric label="Bidder rows" value={formatCount(summary?.row_count)} />
             {LEDGER_STATUSES.filter((status) => status !== 'NOT_EVALUATED' || totals[status]).map((status) =>
                 <Metric key={status} label={statusLabel(status)} value={formatCount(totals[status] ?? 0)} />)}
-            <Metric label="Last retrieved" value={formatTimestamp(summary?.last_retrieved_at)} />
         </section>
+        {summary?.last_retrieved_at && <p className="ds-muted">
+            Last retrieved {formatTimestamp(summary.last_retrieved_at)} · {formatCount(summary.stored_snapshot_count)} stored notice snapshots (append-only).
+        </p>}
 
         <DataTable
             caption="Bidder rows by country and status"

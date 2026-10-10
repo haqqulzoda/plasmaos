@@ -359,3 +359,16 @@ def test_ledger_routes_are_operator_reads_and_admin_downloads() -> None:
         assert denied.value.status_code == 403
 
     asyncio.run(check())
+
+
+def test_individual_consultants_are_never_named_in_views_or_exports() -> None:
+    from app.services.award_ledger_reports import OUTCOME_CSV_COLUMNS, outcome_values
+
+    named = dict(FIXTURES["OP00472568"], procurement_method_name="Individual Consultant Selection")
+    rows = build_snapshot(named, retrieved_at=NOW)[1]
+    values = outcome_values(rows[0], OUTCOME_CSV_COLUMNS)
+    assert (values["bidder_name"], values["bidder_name_normalized"], values["bidder_source_id"]) == (
+        "Individual consultant", None, None)
+    assert values["status"] == "AWARDED" and values["evaluated_price_text"] == "USD 2236567.27"
+    firm = outcome_values(build_snapshot(FIXTURES["OP00472568"], retrieved_at=NOW)[1][0], OUTCOME_CSV_COLUMNS)
+    assert firm["bidder_name"] == "ARUP INTERNATIONAL PROJECTS LTD"

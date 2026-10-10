@@ -74,7 +74,7 @@ class AwardNoticeSnapshot(Base):
         CheckConstraint("lender IN ('WORLD_BANK','ADB','EBRD')", name="ck_award_notice_snapshot_lender"),
         CheckConstraint("parse_status IN ('PARSED','NO_BIDDERS')", name="ck_award_notice_snapshot_parse_status"),
         CheckConstraint("jsonb_typeof(sectors) = 'array'", name="ck_award_notice_snapshot_sectors"),
-        Index("ix_award_notice_snapshots_lender_notice", "lender", "notice_id", "retrieved_at"),
+        Index("ix_award_notice_snapshots_lender_notice", "lender", "notice_id", "retrieved_at", "id"),
         Index("ix_award_notice_snapshots_country_date", "country", "notice_date"),
     )
 

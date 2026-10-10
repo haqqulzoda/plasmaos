@@ -66,17 +66,37 @@ def is_firm():
     )
 
 
+INDIVIDUAL_LABEL = "Individual consultant"
+_MASKED_COLUMNS = ("bidder_name", "bidder_name_normalized", "bidder_source_id")
+
+
+def is_individual_row(row: AwardOutcome) -> bool:
+    return row.bidder_kind != "FIRM" or row.procurement_method == INDIVIDUAL_SELECTION_METHOD
+
+
+def outcome_values(row: AwardOutcome, columns: Iterable[str]) -> dict[str, Any]:
+    """A row for display or export: an individual consultant is never named (the raw notice keeps it)."""
+    values = {column: getattr(row, column) for column in columns}
+    if is_individual_row(row):
+        for column in _MASKED_COLUMNS:
+            if column in values:
+                values[column] = INDIVIDUAL_LABEL if column == "bidder_name" else None
+    return values
+
+
 def country_key(value: str | None) -> str:
     key = re.sub(r"\s+", " ", (value or "").strip().upper())
     return _COUNTRY_ALIASES.get(key, key)
 
 
 def latest_snapshot_ids() -> Select:
+    # All descending so ix_award_notice_snapshots_lender_notice serves it as a backward
+    # index-only scan (the snapshot rows themselves are wide: raw text and metadata).
     return (
         select(AwardNoticeSnapshot.id)
         .distinct(AwardNoticeSnapshot.lender, AwardNoticeSnapshot.notice_id)
         .order_by(
-            AwardNoticeSnapshot.lender, AwardNoticeSnapshot.notice_id,
+            AwardNoticeSnapshot.lender.desc(), AwardNoticeSnapshot.notice_id.desc(),
             AwardNoticeSnapshot.retrieved_at.desc(), AwardNoticeSnapshot.id.desc(),
         )
     )
@@ -196,7 +216,7 @@ async def outcomes_csv(db: AsyncSession, *, filters: OutcomeFilters) -> str:
         .order_by(AwardOutcome.country, AwardOutcome.notice_date.desc().nulls_last(), AwardOutcome.notice_id,
                   AwardOutcome.bid_ordinal, AwardOutcome.member_ordinal)
     )).all()
-    return _csv(OUTCOME_CSV_COLUMNS, ({column: getattr(row, column) for column in OUTCOME_CSV_COLUMNS} for row in rows))
+    return _csv(OUTCOME_CSV_COLUMNS, (outcome_values(row, OUTCOME_CSV_COLUMNS) for row in rows))
 
 
 async def _ledger_rows(db: AsyncSession, *, where: Any = None) -> list[tuple[AwardOutcome, list[str]]]:

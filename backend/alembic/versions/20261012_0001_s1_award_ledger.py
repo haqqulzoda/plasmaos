@@ -60,7 +60,8 @@ def upgrade() -> None:
         sa.UniqueConstraint("lender", "notice_id", "content_hash", name="uq_award_notice_snapshot_content"),
     )
     op.create_index(
-        "ix_award_notice_snapshots_lender_notice", "award_notice_snapshots", ["lender", "notice_id", "retrieved_at"]
+        "ix_award_notice_snapshots_lender_notice", "award_notice_snapshots",
+        ["lender", "notice_id", "retrieved_at", "id"],
     )
     op.create_index("ix_award_notice_snapshots_country_date", "award_notice_snapshots", ["country", "notice_date"])
 
