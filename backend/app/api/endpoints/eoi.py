@@ -22,6 +22,7 @@ from app.services.eoi import (
     list_eoi_drafts,
     resolve_eoi_artifact,
 )
+from app.services.product_analytics import track_view
 from app.services.organization_context import (
     OrganizationAccessDeniedError,
     OrganizationContextRequiredError,
@@ -108,7 +109,12 @@ async def read_draft(
     return draft
 
 
-@router.get("/{pursuit_id}/eoi-artifacts/{artifact_id}/download")
+@router.get(
+    "/{pursuit_id}/eoi-artifacts/{artifact_id}/download",
+    dependencies=[Depends(track_view(
+        "eoi_downloaded", pursuit_param="pursuit_id", subject_type="EOI_ARTIFACT", subject_param="artifact_id",
+    ))],
+)
 async def download_artifact(
     pursuit_id: UUID, artifact_id: UUID,
     x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),

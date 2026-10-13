@@ -29,6 +29,7 @@ from google.genai import types
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from app.core.agents.requirement_extractor import _env_int, _resolve_gemini_api_key
+from app.core.ai_usage import record_ai_call
 from app.core.analysis_languages import analysis_language_prompt_instruction
 
 
@@ -738,21 +739,28 @@ def _generate_chunk_once(
     prompt: str, model: str, api_key: str
 ) -> tuple[list[ExtractedFact], dict[str, int]]:
     client = _TimeoutClient(api_key=api_key, http_options={"timeout": _timeout_for(model)})
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            response_mime_type="application/json",
-            response_schema=PURSUIT_ANALYSIS_RESPONSE_SCHEMA,
-            temperature=0.0,
-            max_output_tokens=MAX_OUTPUT_TOKENS,
-        ),
-    )
-    payload = (getattr(response, "text", "") or "").strip()
-    if not payload:
-        raise RuntimeError(EMPTY_RESPONSE_MESSAGE)
-    facts = EXTRACTED_FACTS.validate_json(payload)
+    started = time.monotonic()
+    response = None
+    try:
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=PURSUIT_ANALYSIS_RESPONSE_SCHEMA,
+                temperature=0.0,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
+            ),
+        )
+        payload = (getattr(response, "text", "") or "").strip()
+        if not payload:
+            raise RuntimeError(EMPTY_RESPONSE_MESSAGE)
+        facts = EXTRACTED_FACTS.validate_json(payload)
+    except BaseException:
+        record_ai_call(model, started=started, response=response, succeeded=False)
+        raise
+    record_ai_call(model, started=started, response=response, succeeded=True)
     usage = getattr(response, "usage_metadata", None)
     prompt_tokens = _token_count(usage, "prompt_token_count")
     output_tokens = _token_count(usage, "candidates_token_count")

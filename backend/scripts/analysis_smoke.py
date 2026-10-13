@@ -47,6 +47,9 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 REOI_QUERY = "Request for Expression of Interest"
+# Auto-pick only a tender whose OFFICIAL_NOTICE has at least this much text: a short notice
+# (a title and a deadline) cannot reach --min-requirements and fails the smoke for no defect.
+MIN_OFFICIAL_NOTICE_CHARACTERS = 5_000
 
 
 # ---- read-only mode (inside the stack) -------------------------------------------------------
@@ -215,12 +218,29 @@ def assert_dedicated_test_organization(api: Api, org_name: str) -> None:
         raise LiveSmokeError("the test organization must have exactly one active member: the smoke user")
 
 
-def pick_reoi(api: Api) -> str:
+def official_notice_characters(api: Api, tender_id: str) -> int:
+    status, details = api.call("GET", f"/tenders/{tender_id}/details")
+    if status != 200 or not isinstance(details, dict):
+        return 0
+    documents = details.get("documents") or {}
+    notice = (documents.get("data") or documents).get("official_notice") if isinstance(documents, dict) else None
+    return int((notice or {}).get("character_count") or 0)
+
+
+def pick_reoi(api: Api, *, min_characters: int = MIN_OFFICIAL_NOTICE_CHARACTERS) -> str:
+    """The first open World Bank REOI whose OFFICIAL_NOTICE has at least ``min_characters``."""
     query = urllib.parse.urlencode({"source_system": "world_bank", "q": REOI_QUERY, "limit": 25})
     status, page = api.call("GET", f"/explorer/tenders?{query}")
     if status != 200 or not isinstance(page, dict) or not page.get("items"):
         raise LiveSmokeError(f"no open World Bank REOI found (HTTP {status}); pass --tender-id")
-    return str(page["items"][0]["tender"]["id"])
+    for item in page["items"]:
+        tender_id = str(item["tender"]["id"])
+        if official_notice_characters(api, tender_id) >= min_characters:
+            return tender_id
+    raise LiveSmokeError(
+        f"none of the first {len(page['items'])} open World Bank REOIs has an OFFICIAL_NOTICE of at least "
+        f"{min_characters} characters; pass --tender-id"
+    )
 
 
 def live_run(api: Api, pursuit_id: str, *, poll_seconds: float, max_wait: float) -> dict:
@@ -314,7 +334,11 @@ def main(argv: list[str] | None = None) -> int:
     live_group.add_argument("--api-base", help="e.g. https://api.example.com/api/v1")
     live_group.add_argument("--org-id", help="The dedicated test organization's id.")
     live_group.add_argument("--org-name", help="Its exact display name (safety check).")
-    live_group.add_argument("--tender-id", help="Open World Bank REOI; default: first match in Explorer.")
+    live_group.add_argument(
+        "--tender-id",
+        help=f"Open World Bank REOI; default: the first in Explorer whose OFFICIAL_NOTICE has at least "
+        f"{MIN_OFFICIAL_NOTICE_CHARACTERS} characters.",
+    )
     live_group.add_argument("--runs", type=int, default=1)
     live_group.add_argument("--max-latency", type=float, default=60.0)
     live_group.add_argument("--min-requirements", type=int, default=5)

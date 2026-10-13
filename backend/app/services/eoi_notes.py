@@ -17,6 +17,8 @@ import re
 import time
 from typing import Any, Awaitable, Callable
 
+from app.core.ai_usage import record_ai_call
+
 logger = logging.getLogger(__name__)
 
 NOTE_CONCURRENCY = 4
@@ -224,13 +226,19 @@ async def gemini_note_call(request: NoteRequest) -> str:
         client = pursuit_analyzer._TimeoutClient(
             api_key=api_key, http_options={"timeout": int(NOTE_TIMEOUT_SECONDS)},
         )
-        response = client.models.generate_content(
-            model=pursuit_analyzer.MODEL_NAME,
-            contents=request.prompt(),
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT, temperature=0.0, max_output_tokens=NOTE_MAX_OUTPUT_TOKENS,
-            ),
-        )
+        started = time.monotonic()
+        try:
+            response = client.models.generate_content(
+                model=pursuit_analyzer.MODEL_NAME,
+                contents=request.prompt(),
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT, temperature=0.0, max_output_tokens=NOTE_MAX_OUTPUT_TOKENS,
+                ),
+            )
+        except BaseException:
+            record_ai_call(pursuit_analyzer.MODEL_NAME, started=started, succeeded=False)
+            raise
+        record_ai_call(pursuit_analyzer.MODEL_NAME, started=started, response=response, succeeded=True)
         return (getattr(response, "text", "") or "").strip()
 
     return await asyncio.to_thread(run)

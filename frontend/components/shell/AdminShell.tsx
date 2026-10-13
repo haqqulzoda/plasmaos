@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Activity,
+  BarChart3,
   Building2,
   ClipboardList,
   LayoutDashboard,
+  Landmark,
   Satellite,
   Users,
   LogOut,
@@ -27,6 +29,9 @@ const navigation = [
   { name: 'Sources', href: '/admin/sources', Icon: Satellite },
   { name: 'Analysis runs', href: '/admin/analysis-runs', Icon: Activity },
   { name: 'Organizations', href: '/admin/organizations', Icon: Building2 },
+  // Sprint 1: public award ledger (operators) and product metrics (administrators).
+  { name: 'Award ledger', href: '/admin/award-ledger', Icon: Landmark },
+  { name: 'Metrics', href: '/admin/metrics', Icon: BarChart3, adminOnly: true },
   { name: 'Broadcasts', href: '/admin/broadcasts', Icon: Megaphone, adminOnly: true },
   {
     name: 'Audit activity',

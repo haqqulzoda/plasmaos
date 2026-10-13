@@ -14,6 +14,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.agents import pursuit_analyzer
+from app.core.ai_usage import AICall, collect_ai_usage
 from app.core.analysis_languages import resolve_analysis_language
 from app.models.candidate_retrieval import Firm, ProjectReference
 from app.models.company import Certification, CompanyProfile, FinancialHistory, License, ReadinessDocument
@@ -50,6 +51,7 @@ from app.services.own_experience import (
     is_experience_requirement, match_own_references, note_kind, requirement_statement,
 )
 from app.services.private_documents import build_analysis_pack_candidate
+from app.services.product_analytics import stage_ai_costs, stage_product_event
 
 
 PACK_SCHEMA_VERSION = "pursuit_analysis_pack_w4_v1"
@@ -476,6 +478,12 @@ async def create_analysis_run(
             file_backed_count=file_backed, captured_at=captured_at,
         )
     )
+    actor_user_id = await db.scalar(select(Membership.user_id).where(Membership.id == membership_id))
+    stage_product_event(
+        db, "analysis_started", organization_id=organization_id, actor_user_id=actor_user_id,
+        actor_membership_id=membership_id, pursuit_id=pursuit_id, analysis_run_id=run.id,
+        properties={"language": language, "document_count": len(sealed_items), "model": run.model_name},
+    )
     await db.commit()
     return PursuitAnalysisStartResponse(
         analysis_run_id=run.id, analysis_pack_id=pack.id, status=run.status,
@@ -639,6 +647,7 @@ async def _stage_run_outcome(db: AsyncSession, run: AnalysisRun) -> None:
     from app.services.notifications import stage_system_outbox
 
     user_id = await db.scalar(select(Membership.user_id).where(Membership.id == run.requested_by_membership_id))
+    _stage_run_event(db, run, user_id)
     if user_id is None:
         return
     event_type = "PURSUIT_ANALYSIS_COMPLETED" if run.status == "COMPLETED" else "PURSUIT_ANALYSIS_FAILED"
@@ -652,8 +661,50 @@ async def _stage_run_outcome(db: AsyncSession, run: AnalysisRun) -> None:
     )
 
 
+def _ms(start: datetime | None, end: datetime | None) -> int | None:
+    if start is None or end is None:
+        return None
+    return max(0, int((end - start).total_seconds() * 1000))
+
+
+def _stage_run_event(db: AsyncSession, run: AnalysisRun, user_id: UUID | None) -> None:
+    """Sprint 1 analytics: codes and timings only (never the failure text)."""
+    diagnostics = run.extraction_diagnostics or {}
+    stage_product_event(
+        db, "analysis_completed" if run.status == "COMPLETED" else "analysis_failed",
+        organization_id=run.organization_id, actor_user_id=user_id,
+        actor_membership_id=run.requested_by_membership_id, pursuit_id=run.pursuit_id, analysis_run_id=run.id,
+        properties={
+            "time_to_result_ms": _ms(run.created_at, run.completed_at),
+            "processing_ms": _ms(run.started_at, run.completed_at),
+            "attempt_count": run.attempt_count,
+            "quality_state": run.quality_state,
+            "failure_stage": run.failure_stage,
+            "failure_code": diagnostics.get("failure_code") or diagnostics.get("error_type"),
+            "route": diagnostics.get("route"),
+        },
+    )
+
+
+def _stage_analysis_costs(db: AsyncSession, run: AnalysisRun, ai_calls: list[AICall]) -> None:
+    """Every provider call of this attempt, failed ones included, then forget them."""
+    if ai_calls:
+        stage_ai_costs(
+            db, list(ai_calls), call_kind="ANALYSIS", subject_type="ANALYSIS_RUN", subject_id=run.id,
+            organization_id=run.organization_id, pursuit_id=run.pursuit_id,
+        )
+        ai_calls.clear()
+
+
 async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str) -> None:
     """Lease and execute one durable run. Replays are terminally idempotent."""
+    with collect_ai_usage() as ai_calls:
+        await _process_analysis_run(db, run_id, worker_id=worker_id, ai_calls=ai_calls)
+
+
+async def _process_analysis_run(
+    db: AsyncSession, run_id: UUID, *, worker_id: str, ai_calls: list[AICall]
+) -> None:
     now = datetime.now(timezone.utc)
     run = (
         await db.scalars(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
@@ -849,6 +900,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
         run.lease_owner = None
         run.failure_stage = None
         run.failure_reason = None
+        _stage_analysis_costs(db, run, ai_calls)
         await _stage_run_outcome(db, run)
         await db.commit()
     except Exception as exc:
@@ -894,6 +946,7 @@ async def process_analysis_run(db: AsyncSession, run_id: UUID, *, worker_id: str
             }
             run.lease_until = None
             run.lease_owner = None
+            _stage_analysis_costs(db, run, ai_calls)
             await _stage_run_outcome(db, run)
             await db.commit()
         raise
@@ -1152,6 +1205,14 @@ async def append_review_assertion(
         corrected_fields=request.corrected_fields, reason=request.reason,
     )
     db.add(assertion)
+    if request.new_review_state == "CONFIRMED":
+        stage_product_event(
+            db, "review_confirmed", organization_id=organization_id,
+            actor_user_id=await db.scalar(select(Membership.user_id).where(Membership.id == membership_id)),
+            actor_membership_id=membership_id, pursuit_id=pursuit_id, analysis_run_id=run.id,
+            subject_type=request.target_kind, subject_id=request.target_id,
+            properties={"target_kind": request.target_kind},
+        )
     await db.commit()
     await db.refresh(assertion)
     return AnalysisReviewAssertionResponse(

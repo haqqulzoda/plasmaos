@@ -156,6 +156,22 @@ def _token_response(*, access_token: str, user: User, profile: CompanyProfile | 
         company_pilot_status=profile.pilot_status if profile is not None else None,
     )
 
+async def _stage_sign_in(db: AsyncSession, *, user: User, new_account: bool) -> None:
+    """Sprint 1 analytics: the sign-in, in the default organization context when there is one."""
+    from app.services.organization_context import organization_profile_context
+    from app.services.product_analytics import stage_product_event
+
+    try:
+        context = await organization_profile_context(db, user_id=user.id)
+    except Exception:  # no usable organization context: the event still counts the person
+        context = None
+    stage_product_event(
+        db, "sign_in", organization_id=context.organization.id if context else None, actor_user_id=user.id,
+        actor_membership_id=context.membership.id if context else None,
+        properties={"new_account": new_account, "approval_status": user.approval_status},
+    )
+
+
 @router.post("/google", response_model=TokenResponse)
 async def google_auth_bridge(
     payload: GoogleAuthRequest,
@@ -175,6 +191,7 @@ async def google_auth_bridge(
     if len(matches) > 1:
         raise HTTPException(409, detail="Account identity conflict")
     user = matches[0] if matches else None
+    new_account = user is None
     if user is not None and _bound_google_id(user) and user.google_id != google_id:
         raise HTTPException(409, detail="Account identity conflict")
 
@@ -233,6 +250,7 @@ async def google_auth_bridge(
     # R3: an open invitation for exactly this verified e-mail binds now (never by domain).
     await db.flush()
     await accept_open_invitations_for_sign_in(db, user=user, verified_email=email)
+    await _stage_sign_in(db, user=user, new_account=new_account)
 
     await db.commit()
     await db.refresh(user)

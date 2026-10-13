@@ -34,6 +34,7 @@ from app.models.invitations import INVITATION_TTL_DAYS, PendingInvitation
 from app.models.private_documents import MembershipLifecycleEvent
 from app.models.tenancy import Membership, Organization
 from app.models.user import User
+from app.services.product_analytics import stage_product_event
 from app.services.admin_activity import (
     ACTION_INVITATION_ACCEPTED,
     ACTION_INVITATION_CREATED,
@@ -261,6 +262,11 @@ async def create_email_invitation(
     db.add(invitation)
     await db.flush()
     await _audit_owner_action(db, action=ACTION_INVITATION_CREATED, actor=actor, invitation=invitation)
+    stage_product_event(
+        db, "invite_sent", organization_id=organization_id, actor_user_id=actor.id,
+        actor_membership_id=actor_membership.id, subject_type="INVITATION", subject_id=invitation.id,
+        properties={"role": role.value},
+    )
     return IssuedInvitation(invitation=invitation, token=token)
 
 
@@ -445,6 +451,11 @@ async def _accept(
     invitation.accepted_membership_id = membership.id
     invitation.updated_at = now
     await db.flush()
+    stage_product_event(
+        db, "invite_accepted", organization_id=invitation.organization_id, actor_user_id=user.id,
+        actor_membership_id=membership.id, subject_type="INVITATION", subject_id=invitation.id,
+        properties={"role": membership.role.value, "approved_by_invitation": approved_now},
+    )
     await record_admin_audit_event(
         db,
         action=ACTION_INVITATION_ACCEPTED,
