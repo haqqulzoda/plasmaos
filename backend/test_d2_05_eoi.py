@@ -71,7 +71,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
 D2_01_HEAD = "20261004_0001_d2_01_own_experience"
-HEAD = "20261011_0001_r3_organization_record_events"
+HEAD = "20261012_0002_s1_product_analytics"
 PRICE_WORDS = re.compile(r"\bprice|\bpricing|\bfee\b|\bfees\b|remuneration|financial proposal|цен[аыу]|стоимость услуг|вознагражд", re.I)
 
 
@@ -166,6 +166,10 @@ def test_contract_shapes_match_the_frontend_contract() -> None:
     assert set(EoiDraftResponse.model_fields) == {
         "draft_id", "version", "created_at", "created_by_membership_id", "analysis_run_id", "language",
         "current", "stale_reasons", "artifacts", "summary",
+        # S1-6: "NOT_REVIEWED_BY_TEAM" on prospect-preview drafts.
+        "draft_status",
+        # S1-8: a prospect preview replayed on a closed notice.
+        "replay_closed_on",
     }
     schemas = app.openapi()["components"]["schemas"]
     assert set(schemas["EoiDefaults"]["properties"]) == {

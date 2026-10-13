@@ -21,6 +21,7 @@ from app.core.security import create_access_token
 from app.db.session import get_db
 from app.models.all_models import SubscriptionTier, User
 from app.models.company import CompanyProfile
+from app.models.product_analytics import ProductEvent
 
 BRIDGE_SECRET = "synthetic-release-bridge-secret-32-characters"
 SENTINEL = "SECRET_SENTINEL AUTH_TOKEN_SENTINEL CUSTOMER_TEXT_SENTINEL"
@@ -105,6 +106,8 @@ class IdentityDB:
         return (await self.execute(query)).scalar_one_or_none()
     def add(self, value):
         self.writes.append(value)
+        if not isinstance(value, User):  # Sprint 1: the sign_in analytics event
+            return
         self.user = value
         value.id = uuid4()
         value.auth_version = 0
@@ -126,7 +129,11 @@ def test_valid_verified_login_preserves_account_policy(kind):
     assert result.access_token
     assert result.approval_status == ("pending" if kind == "new" else "approved")
     assert result.platform_role == (kind if kind in {"operator", "admin"} else "pilot_user")
-    assert len(db.writes) == (1 if kind == "new" else 0)
+    account_writes = [value for value in db.writes if not isinstance(value, ProductEvent)]
+    assert len(account_writes) == (1 if kind == "new" else 0)
+    events = [value for value in db.writes if isinstance(value, ProductEvent)]
+    assert [event.event_name for event in events] == ["sign_in"]
+    assert events[0].properties["new_account"] is (kind == "new") and "@" not in str(events[0].properties)
     db.commit.assert_awaited_once()
 
 
@@ -182,7 +189,10 @@ def test_safe_error_boundary_and_validation_do_not_echo_input(caplog):
     assert "SENTINEL" not in caplog.text
 
 
-@pytest.mark.parametrize("filename,data,status", [("bad.txt",b"%PDF-1.4",415),("fake.pdf",b"<html>bad</html>",415),("empty.pdf",b"",415),("large.pdf", b"%PDF-" + b"x" * (20*1024*1024),413)])
+# Short ids: the default id of the 20 MB case would be the payload itself (pytest copies it into
+# PYTEST_CURRENT_TEST and its reports: hundreds of MB on Linux, over the 32,767-character limit on Windows).
+@pytest.mark.parametrize("filename,data,status", [("bad.txt",b"%PDF-1.4",415),("fake.pdf",b"<html>bad</html>",415),("empty.pdf",b"",415),("large.pdf", b"%PDF-" + b"x" * (20*1024*1024),413)],
+                         ids=["bad-extension", "html-as-pdf", "empty", "large-20mb"])
 def test_upload_rejects_bad_inputs_and_cleans_files(tmp_path, filename, data, status):
     from app.core.uploads import staged_pdf
     file = UploadFile(io.BytesIO(data), filename=filename)

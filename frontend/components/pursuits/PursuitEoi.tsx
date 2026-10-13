@@ -292,6 +292,7 @@ export function PursuitEoi({ pursuitId, headers, runId, onOpenRequirements }: Pr
             <span className="ds-muted">{formatDateTime(draft.created_at, locale)} · {draft.language.toUpperCase()}</span>
             {draft.current ? <StatusBadge tone="success">{t('current')}</StatusBadge>
               : <StatusBadge tone="warning">{t('stale')}</StatusBadge>}
+            {draft.draft_status === 'NOT_REVIEWED_BY_TEAM' && <StatusBadge tone="warning" data-eoi-draft-status="not-reviewed">{t('notReviewedByTeam')}</StatusBadge>}
           </div>
           {!draft.current && <ul className="eoi-stale-reasons">{draft.stale_reasons.map((reason) => <li key={reason}>{t(`staleReasons.${staleReasonKey(reason)}`)}</li>)}</ul>}
           <p className="ds-text-small">{t('versionSummary', {

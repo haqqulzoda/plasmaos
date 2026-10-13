@@ -142,7 +142,7 @@ class S23ServiceTests(unittest.TestCase):
         services = read("../frontend/lib/services.ts")
         onboarding = read("../frontend/app/dashboard/onboarding/page.tsx")
         settings = read("../frontend/app/dashboard/settings/page.tsx")
-        readiness = read("../frontend/app/dashboard/readiness-vault/page.tsx")
+        readiness = read("../frontend/app/dashboard/settings/readiness/page.tsx")
 
         for expected in (
             "Construction",

@@ -25,6 +25,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ai_usage import AICall, collect_ai_usage
 from app.core.private_storage import resolve_private_storage_key
 from app.models.all_models import CompanyProfile, ReadinessDocument, Tender
 from app.models.base import MembershipState
@@ -51,6 +52,7 @@ from app.services.eoi_document import docx_bytes, pdf_bytes
 from app.services.eoi_notes import NoteRequest, ProviderCall, generate_relevance_notes
 from app.services.own_experience import is_experience_requirement, match_own_references, requirement_statement
 from app.services.private_documents import build_analysis_pack_candidate
+from app.services.product_analytics import stage_ai_costs, stage_product_event
 from app.services.pursuit_analysis import company_evidence_state, get_analysis_run
 
 
@@ -505,12 +507,14 @@ async def create_eoi_draft(
     criteria = data["criteria"]
     statements = {str(item.requirement_id): item.effective_normalized_requirement for item in criteria}
     note_outcome = None
+    note_calls: list[AICall] = []
     if request.include_relevance_notes:
         note_requests = [NoteRequest(
             key=row["no"], criterion_id=row["matched"][0], criterion_statement=statements[row["matched"][0]],
             reference=row, language=request.language,
         ) for row in rows if row["matched"]]
-        note_outcome = await generate_relevance_notes(note_requests, note_call)
+        with collect_ai_usage() as note_calls:
+            note_outcome = await generate_relevance_notes(note_requests, note_call)
 
     experience = []
     for row in rows:
@@ -583,6 +587,10 @@ async def create_eoi_draft(
         "notes": notes, "supporting_documents": documents, "summary": summary.model_dump(),
         "price_information_included": False,
     }
+    if request.draft_status:
+        manifest["draft_status"] = request.draft_status
+    if request.replay_closed_on:
+        manifest["replay_closed_on"] = request.replay_closed_on.isoformat()
     manifest_sha = hashlib.sha256(_canonical(manifest)).hexdigest()
     inputs = request.model_dump(mode="json")
 
@@ -610,6 +618,20 @@ async def create_eoi_draft(
                 byte_size=len(content), media_type=MEDIA_TYPES[fmt],
             ))
         await _stage_draft_ready(db, organization_id, pursuit, draft_id, version, membership_id)
+        stage_ai_costs(
+            db, list(note_calls), call_kind="EOI_NOTE", subject_type="EOI_DRAFT", subject_id=draft_id,
+            organization_id=organization_id, pursuit_id=pursuit_id,
+        )
+        stage_product_event(
+            db, "eoi_generated", organization_id=organization_id,
+            actor_user_id=await db.scalar(select(Membership.user_id).where(Membership.id == membership_id)),
+            actor_membership_id=membership_id, pursuit_id=pursuit_id, analysis_run_id=run.id,
+            subject_type="EOI_DRAFT", subject_id=draft_id,
+            properties={
+                "language": request.language, "version": version, "criteria_total": summary.criteria_total,
+                "relevance_notes_generated": summary.relevance_notes_generated,
+            },
+        )
         await db.commit()
     except Exception:
         await db.rollback()
@@ -727,6 +749,8 @@ async def _project(
                 artifact_id=item.id, format=item.format, sha256=item.content_sha256, byte_size=item.byte_size,
             ) for item in by_draft[draft.id]],
             summary=EoiDraftSummary(**draft.manifest["summary"]),
+            draft_status=draft.manifest.get("draft_status"),
+            replay_closed_on=draft.manifest.get("replay_closed_on"),
         ))
     return responses
 

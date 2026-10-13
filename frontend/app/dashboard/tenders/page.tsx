@@ -40,6 +40,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { BidiText, TechnicalText } from "@/components/i18n/BidiText";
 import { OpenWorkspaceButton } from "@/components/pursuits/OpenWorkspaceButton";
 import { FactChips } from "@/components/tenders/FactChips";
+import { CoverageStrip } from "@/components/source-refresh/CoverageStrip";
 import { SourceRefreshMenu } from "@/components/source-refresh/SourceRefreshMenu";
 import { useSourceRefresh } from "@/components/source-refresh/SourceRefreshProvider";
 import { NewTenderBadge } from "@/components/tenders/NewTenderBadge";
@@ -542,6 +543,7 @@ function TendersPageContent() {
         description={t("subtitle")}
         secondaryAction={<SourceRefreshMenu foundation triggerLabel={tRefresh("refresh")} />}
       />
+      <CoverageStrip />
       <div className="explorer-workspace">
         <div className="ds-stack">
           {newArrival && (

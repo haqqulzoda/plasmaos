@@ -197,6 +197,7 @@ test("every route maps to the destination it belongs to", () => {
     "/dashboard/partners-experts": "partnersExperts",
     "/dashboard/settings": "companyExperience",
     "/dashboard/readiness-vault": "companyExperience",
+    "/dashboard/settings/readiness": "companyExperience",
     "/dashboard/notifications": "notifications",
     "/dashboard/tendersX": null,
     "/dashboard/onboarding": null,
@@ -211,7 +212,7 @@ test("Pursuits has the From sources | Uploaded control; Company links to Readine
   assert.match(segments, /href="\/dashboard\/my-tenders"/);
   assert.match(segments, /href="\/dashboard\/uploaded-tenders"/);
   const company = read("app/dashboard/settings/page.tsx");
-  assert.match(company, /href="\/dashboard\/readiness-vault"[\s\S]*?t\("readinessLink"\)/);
+  assert.match(company, /href="\/dashboard\/settings\/readiness"[\s\S]*?t\("readinessLink"\)/);
   assert.equal(messages("en", "pursuits").library.empty, "Add your first partner or expert");
   assert.equal(messages("en", "pursuits").library.emptyHelp, "Record them here or import a CSV file.");
   for (const locale of LOCALES) {

@@ -146,5 +146,18 @@
     "tab": "Matches your profile",
     "empty": "No open tenders match your profile's countries or services.",
     "profileHelp": "Add target countries and services to your company profile to see tenders that match it."
+  },
+  "coverage": {
+    "title": "Coverage",
+    "lastRefresh": "Last successful refresh {time}",
+    "noRefreshYet": "No successful refresh yet",
+    "adbConsulting": "ADB consulting",
+    "coming": "Coming",
+    "types": {
+      "world_bank": "Requests for Expression of Interest, Invitations for Bids, Prequalification",
+      "ebrd": "Invitations for Tenders, Prequalification, General Procurement Notices",
+      "giz": "GIZ tenders for services, supplies and works",
+      "uzex": "Uzbekistan public procurement notices"
+    }
   }
 }

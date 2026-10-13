@@ -34,7 +34,7 @@ class S24ReadinessAdminTests(unittest.TestCase):
         self.assertNotIn("CompanyProfile(", get_company_block)
 
     def test_readiness_vault_ux_supports_labels_filters_and_optional_files(self) -> None:
-        readiness_page = read("../frontend/app/dashboard/readiness-vault/page.tsx")
+        readiness_page = read("../frontend/app/dashboard/settings/readiness/page.tsx")
         readiness_helpers = read("../frontend/lib/readiness.ts")
 
         self.assertIn("DOCUMENT_TYPE_OPTIONS", readiness_helpers)

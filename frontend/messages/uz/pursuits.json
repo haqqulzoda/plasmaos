@@ -112,6 +112,7 @@
     "uploadedOn": "Yuklangan tender · {date}"
   },
   "workspace": {
+    "replayClosed": "Yopilgan e'lon asosidagi takror (yopilgan sana: {date}) — namuna uchun",
     "eyebrow": "Tender ish maydoni",
     "titleFallback": "Tenderni ochish",
     "loading": "Ish maydoni yuklanmoqda",
@@ -1117,7 +1118,8 @@
       "OTHER": "Paket eskirgan boʻlishi mumkin."
     },
     "versionSummary": "Oʻz topshiriqlari: {references} · hamkorlar: {partners} · qamralgan mezonlar: {total} tadan {addressed} · izohlar qoldirildi {notes}, tashlandi {dropped}",
-    "noVersions": "Hozircha versiyalar yoʻq."
+    "noVersions": "Hozircha versiyalar yoʻq.",
+    "notReviewedByTeam": "Qoralama — jamoangiz tomonidan tekshirilmagan"
   },
   "experienceChanged": {
     "title": "Ushbu tahlildan keyin tajriba yozuvlaringiz o‘zgardi — mosliklarni yangilash uchun tahlilni qayta ishga tushiring.",

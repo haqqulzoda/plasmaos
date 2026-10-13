@@ -923,7 +923,7 @@ export default function BidPreparationWorkspacePage({
       <div className="proposal-footer">
         <Button
           variant="ghost"
-          onClick={() => router.push("/dashboard/bid-preparation")}
+          onClick={() => router.push("/dashboard/my-tenders")}
         >
           {t("back")}
         </Button>

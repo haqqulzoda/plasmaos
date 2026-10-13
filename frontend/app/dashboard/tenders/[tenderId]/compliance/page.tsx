@@ -1830,7 +1830,7 @@ function EvidenceInspector({
             </p>
           )}
           <p className="ds-muted">{t("workspace.readinessEvidenceHelp")}</p>
-          <ButtonLink href="/dashboard/readiness-vault" variant="secondary" size="sm">
+          <ButtonLink href="/dashboard/settings/readiness" variant="secondary" size="sm">
             {t("workspace.openReadinessVault")}
           </ButtonLink>
         </section>

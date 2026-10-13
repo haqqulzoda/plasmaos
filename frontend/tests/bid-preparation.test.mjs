@@ -25,7 +25,7 @@ test("Bid Preparation stays reachable by route but is no longer a menu item (D1-
 test("legacy list is a single read-only redirect", () => {
   assert.match(
     legacyList,
-    /permanentRedirect\('\/dashboard\/bid-preparation'\)/,
+    /permanentRedirect\('\/dashboard\/my-tenders'\)/, // S1: Pursuits
   );
   assert.doesNotMatch(legacyList, /api\.|\/proposals|post\(/);
 });
@@ -33,9 +33,9 @@ test("legacy list is a single read-only redirect", () => {
 test("legacy proposal list and workspace are permanent non-mutating redirects", () => {
   assert.match(
     legacyProposals,
-    /permanentRedirect\('\/dashboard\/bid-preparation'\)/,
+    /permanentRedirect\('\/dashboard\/my-tenders'\)/,
   );
-  assert.match(legacyWorkspace, /permanentRedirect\('\/dashboard\/tenders'\)/);
+  assert.match(legacyWorkspace, /permanentRedirect\('\/dashboard\/my-tenders'\)/);
   assert.doesNotMatch(
     `${legacyProposals}\n${legacyWorkspace}`,
     /api\.|post\(|put\(|patch\(|delete\(/,
@@ -75,11 +75,11 @@ test("Prepare Bid is an explicit POST with separate Tender and Proposal identifi
   assert.doesNotMatch(prepareButton, /useEffect/);
 });
 
-test("Bid Preparation list remains Proposal-backed with optional engagement context", () => {
-  assert.match(list, /api\s*\.get\(\s*["']\/proposals["'],\s*\{\s*params:\s*\{\s*limit: 25, offset\s*\},?\s*\}\)/);
-  assert.match(list, /proposal\.engagement_status/);
-  assert.match(list, /t\("open"\)/);
-  assert.doesNotMatch(list, /\/my-tenders/);
+test("S1: the Bid Preparation list redirects to Pursuits; Proposal pages still open", () => {
+  assert.match(list, /permanentRedirect\('\/dashboard\/my-tenders'\)/);
+  assert.doesNotMatch(list, /api\.|post\(/);
+  assert.match(detail, /router\.push\("\/dashboard\/my-tenders"\)/);
+  assert.match(legacyDetail, /router\.replace\(`\/dashboard\/bid-preparation\/\$\{id\}`\)/);
 });
 
 test("Compliance page no longer creates or resolves Proposal artifacts passively", () => {
@@ -99,7 +99,6 @@ test("canonical detail return links use their domain identifiers", () => {
 
 test("commercial input is user controlled and ambiguous legacy prices stay hidden", () => {
   assert.match(detail, /structured\.commercial_price_origin === "USER_ENTERED"/);
-  assert.match(list, /proposal\.structured_data\?\.commercial_price_origin === "USER_ENTERED"/);
   assert.match(detail, /summaryEdited \? \{ strategic_summary: strategicSummary \} : \{\}/);
   assert.doesNotMatch(detail, /suggestedPrice|suggested_price|unit_price|computedTotal/);
   for (const locale of ["en", "uz", "ru", "ar"]) {

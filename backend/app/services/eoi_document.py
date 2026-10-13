@@ -48,6 +48,8 @@ DOCX_FONT = "Arial"  # ships with Word and LibreOffice everywhere, with full Cyr
 LABELS: dict[str, dict[str, str]] = {
     "en": {
         "letter_heading": "Expression of Interest",
+        "draft_not_reviewed": "Draft — not reviewed by your team",
+        "replay_closed": "Replay on a closed notice (closed {date}) — for illustration",
         "subject": "Subject: Expression of Interest — {title} (Ref. {reference})",
         "to": "To:",
         "dear_named": "Dear {name},",
@@ -95,6 +97,8 @@ LABELS: dict[str, dict[str, str]] = {
     },
     "ru": {
         "letter_heading": "Выражение заинтересованности",
+        "draft_not_reviewed": "Черновик — не проверен вашей командой",
+        "replay_closed": "Повтор на закрытом объявлении (закрыто {date}) — для иллюстрации",
         "subject": "Тема: выражение заинтересованности — {title} (номер {reference})",
         "to": "Кому:",
         "dear_named": "Уважаемый(ая) {name}!",
@@ -248,11 +252,22 @@ def letter_paragraphs(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _draft_status_lines(manifest: dict[str, Any]) -> list[str]:
+    """The cover's status lines: a replay on a closed notice (S1-8) and a draft nobody on the team has
+    reviewed (S1-6 prospect previews)."""
+    t = labels(manifest["language"])
+    out = [t["replay_closed"].format(date=manifest["replay_closed_on"])] if manifest.get("replay_closed_on") else []
+    if manifest.get("draft_status") == "NOT_REVIEWED_BY_TEAM":
+        out.append(t["draft_not_reviewed"])
+    return out
+
+
 def document_text(manifest: dict[str, Any]) -> list[str]:
     """All printed text in reading order (used by tests and for a plain-text audit)."""
     t = labels(manifest["language"])
     letter = letter_paragraphs(manifest)
-    out = [t["letter_heading"], *letter["to"], letter["subject"], letter["salutation"], *letter["body"], t["contact"]]
+    out = [t["letter_heading"], *_draft_status_lines(manifest), *letter["to"], letter["subject"], letter["salutation"],
+           *letter["body"], t["contact"]]
     out += [f"{label}: {value}" for label, value in letter["contact"]]
     out += letter["signature"]
     out.append(t["profile_heading"])
@@ -330,6 +345,8 @@ def docx_bytes(manifest: dict[str, Any]) -> bytes:
     section.page_width, section.page_height = Mm(210), Mm(297)
 
     document.add_heading(t["letter_heading"], level=1)
+    for text in _draft_status_lines(manifest):
+        document.add_paragraph().add_run(text).bold = True
     document.add_paragraph(t["to"] + " " + ", ".join(letter["to"]))
     document.add_paragraph().add_run(letter["subject"]).bold = True
     document.add_paragraph(letter["salutation"])
@@ -448,7 +465,8 @@ def pdf_bytes(manifest: dict[str, Any]) -> bytes:
         PageTemplate(id="landscape", pagesize=landscape_size, onPage=footer, frames=[Frame(
             15 * mm, 16 * mm, landscape_size[0] - 30 * mm, landscape_size[1] - 31 * mm, id="landscape-frame")]),
     ])
-    story: list[Any] = [para(t["letter_heading"], heading), para(t["to"] + " " + ", ".join(letter["to"])),
+    story: list[Any] = [para(t["letter_heading"], heading), *(para(text, bold) for text in _draft_status_lines(manifest)),
+                        para(t["to"] + " " + ", ".join(letter["to"])),
                         Spacer(1, 4), para(letter["subject"], bold), Spacer(1, 4), para(letter["salutation"])]
     story += [para(text) for text in letter["body"]]
     story += [Spacer(1, 6), para(t["contact"], bold)]

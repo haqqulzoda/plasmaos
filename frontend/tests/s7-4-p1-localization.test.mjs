@@ -53,7 +53,7 @@ test('customer formatting is centralized and invalid values are safe', async () 
   assert.equal(formatting.formatFileSize(-1, 'en'), '—');
   assert.match(formatting.formatFileSize(1536, 'ru'), /KB$/);
   const customer = [
-    read('app/dashboard/page.tsx'), read('app/dashboard/readiness-vault/page.tsx'),
+    read('app/dashboard/page.tsx'), read('app/dashboard/settings/readiness/page.tsx'),
     read('app/dashboard/tenders/[tenderId]/page.tsx'), read('app/dashboard/bid-preparation/[proposalId]/page.tsx'),
   ].join('\n');
   assert.doesNotMatch(customer, /\.toLocale(?:String|DateString|TimeString)\(|new Intl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat)/);

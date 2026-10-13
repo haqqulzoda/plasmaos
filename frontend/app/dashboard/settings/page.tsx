@@ -297,7 +297,7 @@ export default function CompanyProfilePage() {
         primaryAction={
           <ButtonLink
             variant="secondary"
-            href="/dashboard/readiness-vault"
+            href="/dashboard/settings/readiness"
             title={t("readinessHelp")}
             data-readiness-link
           >

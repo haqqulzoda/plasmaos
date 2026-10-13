@@ -112,6 +112,7 @@
     "uploadedOn": "مناقصة مرفوعة · {date}"
   },
   "workspace": {
+    "replayClosed": "إعادة عرض على إعلان مغلق (أُغلق في {date}) — للتوضيح فقط",
     "eyebrow": "مساحة عمل المناقصة",
     "titleFallback": "فتح المناقصة",
     "loading": "جارٍ تحميل مساحة العمل",
@@ -1117,7 +1118,8 @@
       "OTHER": "قد تكون الحزمة قديمة."
     },
     "versionSummary": "مهامكم: {references} · الشركاء: {partners} · المعايير المغطاة: {addressed} من {total} · الملاحظات المُبقاة {notes}، المستبعدة {dropped}",
-    "noVersions": "لا توجد إصدارات بعد."
+    "noVersions": "لا توجد إصدارات بعد.",
+    "notReviewedByTeam": "مسودة — لم يراجعها فريقك"
   },
   "experienceChanged": {
     "title": "تغيّرت سجلات خبرتك منذ هذا التحليل — أعد تشغيله لتحديث المطابقات.",

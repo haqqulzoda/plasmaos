@@ -15,6 +15,17 @@ const nextConfig: NextConfig = {
       {key: 'Content-Security-Policy', value: "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com"},
     ]}];
   },
+  async redirects() {
+    // S1: short legacy URLs (old bookmarks and links). The /dashboard/... forms are
+    // permanentRedirect pages so their sign-in handling stays with the dashboard.
+    return [
+      {source: '/bids', destination: '/dashboard/my-tenders', permanent: true},
+      {source: '/proposals', destination: '/dashboard/my-tenders', permanent: true},
+      {source: '/bid-preparation', destination: '/dashboard/my-tenders', permanent: true},
+      {source: '/workspace', destination: '/dashboard/my-tenders', permanent: true},
+      {source: '/readiness-vault', destination: '/dashboard/settings/readiness', permanent: true},
+    ];
+  },
   async rewrites() {
     const backendBase =
       process.env.BACKEND_INTERNAL_URL ??

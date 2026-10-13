@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -139,6 +139,8 @@ class PursuitResponse(BaseModel):
     owner_name: str | None = None
     # D2-05: display name of the first uploaded document, used when there is no title.
     first_document_name: str | None = None
+    # S1-8: set on a prospect preview replayed on a closed notice (app.services.preview_replay).
+    replay_closed_on: date | None = None
 
 
 class PursuitListResponse(BaseModel):

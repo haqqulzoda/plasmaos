@@ -134,7 +134,7 @@ class S21ReadinessVaultTests(unittest.TestCase):
 
     def test_frontend_pages_exist_for_profile_and_readiness_vault(self) -> None:
         settings_page = read("../frontend/app/dashboard/settings/page.tsx")
-        readiness_page = read("../frontend/app/dashboard/readiness-vault/page.tsx")
+        readiness_page = read("../frontend/app/dashboard/settings/readiness/page.tsx")
         # D1-07: destinations live in lib/customerNavigation.ts; the shell renders them.
         layout = read("../frontend/components/shell/CustomerShell.tsx") + read("../frontend/lib/customerNavigation.ts")
 
@@ -147,7 +147,7 @@ class S21ReadinessVaultTests(unittest.TestCase):
         # (active state) and the Company page links to it.
         self.assertNotIn("nameKey: 'readinessVault'", layout)
         self.assertRegex(layout, r"also: \['/dashboard/readiness-vault'\]")
-        self.assertIn('href="/dashboard/readiness-vault"', settings_page)
+        self.assertIn('href="/dashboard/settings/readiness"', settings_page)
         self.assertEqual(catalog_message("navigation", "readinessVault"), "Readiness Vault")
 
 

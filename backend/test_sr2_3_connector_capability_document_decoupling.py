@@ -150,7 +150,7 @@ class DocumentAndMigrationTests(TestCase):
             self.assertTrue(SourceRefreshJob.__table__.c[name].nullable)
         config = Config(str(BACKEND / "alembic.ini"))
         script = ScriptDirectory.from_config(config)
-        self.assertEqual(script.get_heads(), ["20261011_0001_r3_organization_record_events"])
+        self.assertEqual(script.get_heads(), ["20261012_0002_s1_product_analytics"])
 
 
 if __name__ == "__main__":

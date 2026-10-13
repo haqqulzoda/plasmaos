@@ -129,3 +129,6 @@ backups/
 # Release switch log written by scripts/compose-release.sh (read by scripts/ops/prune_safe.sh)
 .release-history
 .compose-release.*.env
+
+# S1-6: private outreach and name-QA outputs (firm lists): never committed
+/private/

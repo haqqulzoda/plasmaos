@@ -198,4 +198,5 @@ def test_price_and_readiness_copy_have_truthful_active_labels():
     detail = (ROOT / "frontend/app/dashboard/bid-preparation/[proposalId]/page.tsx").read_text()
     listing = (ROOT / "frontend/app/dashboard/bid-preparation/page.tsx").read_text()
     assert 'structured.commercial_price_origin === "USER_ENTERED"' in detail
-    assert 'proposal.structured_data?.commercial_price_origin === "USER_ENTERED"' in listing
+    # S1: the list redirects to Pursuits, so no price is shown there at all.
+    assert "permanentRedirect('/dashboard/my-tenders')" in listing and "price" not in listing.lower()

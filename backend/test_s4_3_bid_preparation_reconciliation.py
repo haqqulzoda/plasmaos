@@ -106,8 +106,10 @@ def test_navigation_and_copy_use_bid_preparation():
     assert '"bidPreparation": "Bid Preparation"' in navigation
     assert "My Bids" not in navigation
     assert "Completed preparation" in frontend("types/bid-preparation.ts")
-    assert 'useTranslations("bidPreparation")' in listing
-    assert 't("title")' in listing
+    # S1: the list itself redirects to Pursuits; the proposal page keeps the Bid Preparation copy.
+    assert "permanentRedirect('/dashboard/my-tenders')" in listing
+    detail = frontend("app/dashboard/bid-preparation/[proposalId]/page.tsx")
+    assert 'useTranslations("bidPreparation")' in detail
 
 
 def test_preflight_reports_reconciliation_without_repair():

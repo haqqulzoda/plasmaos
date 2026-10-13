@@ -74,7 +74,7 @@ test("immutable version, language, export, and audited override paths remain wir
 test("unsupported notes and related-link persistence are not introduced", () => {
   assert.doesNotMatch(page, /localStorage|sessionStorage/);
   assert.doesNotMatch(page, /relatedRequirements|saveNote|linkReadinessRecord/);
-  assert.match(page, /href="\/dashboard\/readiness-vault"/);
+  assert.match(page, /href="\/dashboard\/settings\/readiness"/);
 });
 
 test("the redesigned workspace message contract is complete in all four locales", () => {

@@ -1,6 +1,6 @@
 import { permanentRedirect } from 'next/navigation';
 
 export default function WorkspacePage() {
-    permanentRedirect('/dashboard/tenders');
+    permanentRedirect('/dashboard/my-tenders');
 }
 

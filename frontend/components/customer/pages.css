@@ -879,6 +879,15 @@
   align-items: start;
 }
 .explorer-workspace { min-inline-size: 0; }
+
+/* S1 coverage strip on Opportunities: sources, notice types, last successful refresh. */
+.coverage-strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--ds-space-4) var(--ds-space-6); padding: var(--ds-space-5) var(--ds-space-6); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-lg); background: var(--ds-surface); }
+.coverage-strip-title { margin: 0; font-size: var(--ds-label); font-weight: 600; color: var(--ds-text-secondary); text-transform: uppercase; letter-spacing: var(--ds-tracking-label); }
+.coverage-strip-list { display: flex; flex-wrap: wrap; gap: var(--ds-space-4) var(--ds-space-8); margin: 0; padding: 0; list-style: none; min-inline-size: 0; }
+.coverage-strip-item { display: flex; flex-direction: column; gap: var(--ds-space-1); min-inline-size: 0; max-inline-size: 22rem; font-size: var(--ds-caption); color: var(--ds-text-secondary); }
+.coverage-strip-item strong { font-size: var(--ds-label); color: var(--ds-text); }
+.coverage-strip-refresh { color: var(--ds-text-tertiary); }
+.coverage-strip-coming strong { color: var(--ds-text-secondary); }
 .explorer-filters {
   padding: var(--ds-space-7);
 }

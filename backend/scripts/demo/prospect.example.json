@@ -1,0 +1,49 @@
+{
+  "firm_name": "Example Water Engineering LLC",
+  "country": "Uzbekistan",
+  "services": ["Engineering design", "Construction supervision", "Feasibility studies"],
+  "sectors": ["Water supply and sanitation", "Irrigation"],
+  "regions": ["Central Asia"],
+  "references": [
+    {
+      "project_name": "Water supply network rehabilitation design, district centre",
+      "client_name": "Municipal water utility PIU (World Bank-financed)",
+      "country": "Uzbekistan",
+      "sector": "Water",
+      "service": "Engineering design",
+      "role": "LEAD",
+      "start_date": "2019-03",
+      "completion_date": "2021",
+      "scope": "Detailed design of distribution mains and two pumping stations.",
+      "source_url": "https://example.org/projects/water-network-design"
+    },
+    {
+      "project_name": "Construction supervision of a wastewater treatment plant",
+      "client_name": "Regional utility (ADB-financed)",
+      "country": "Uzbekistan",
+      "sector": "Water",
+      "service": "Construction supervision",
+      "role": "JV_MEMBER",
+      "completion_date": "2023-11",
+      "source_url": "https://example.org/news/wwtp-commissioned"
+    },
+    {
+      "project_name": "Feasibility study for irrigation canal modernisation",
+      "client_name": "Ministry of Water Resources PIU",
+      "country": "Uzbekistan",
+      "sector": "Irrigation",
+      "service": "Feasibility study",
+      "completion_date": "2018",
+      "source_url": "https://example.org/reports/irrigation-feasibility"
+    }
+  ],
+  "experts": [
+    {
+      "name": "Example Expert",
+      "title": "Water Supply Engineer",
+      "years_experience": 15,
+      "languages": ["English", "Russian", "Uzbek"],
+      "source_url": "https://example.org/team"
+    }
+  ]
+}

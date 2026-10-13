@@ -110,7 +110,7 @@ test('source, user, technical, and analysis content have reusable bidi boundarie
   assert.match(css, /unicode-bidi:\s*isolate/);
   for (const file of [
     'app/dashboard/tenders/page.tsx', 'app/dashboard/my-tenders/page.tsx',
-    'app/dashboard/tenders/[tenderId]/page.tsx', 'app/dashboard/readiness-vault/page.tsx',
+    'app/dashboard/tenders/[tenderId]/page.tsx', 'app/dashboard/settings/readiness/page.tsx',
   ]) assert.match(read(file), /BidiText|dir="auto"/);
 });
 
@@ -126,7 +126,7 @@ test('profile, onboarding, search, proposal, and readiness inputs declare conten
   const natural = [
     'app/dashboard/onboarding/page.tsx', 'app/dashboard/settings/page.tsx',
     'app/dashboard/tenders/page.tsx', 'app/dashboard/my-tenders/page.tsx',
-    'app/dashboard/bid-preparation/[proposalId]/page.tsx', 'app/dashboard/readiness-vault/page.tsx',
+    'app/dashboard/bid-preparation/[proposalId]/page.tsx', 'app/dashboard/settings/readiness/page.tsx',
   ].map(read).join('\n');
   assert.match(natural, /dir="auto"/);
   assert.match(natural, /dir="ltr"/);

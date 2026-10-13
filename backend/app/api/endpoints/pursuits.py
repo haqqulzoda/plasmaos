@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -26,6 +26,7 @@ from app.models.base import DocumentProcessingState, PrivateDocumentRole, Pursui
 from app.models.private_documents import DocumentProcessingJob, DocumentVersion, PrivateDocument, PrivateDocumentBatch, PursuitTenderContext
 from app.models.tenancy import Membership, OrganizationPursuit
 from app.models.user import User
+from app.services.product_analytics import track_view
 from app.schemas.tenancy import (
     AnalysisLineageRequest,
     AnalysisLineageResponse,
@@ -106,6 +107,7 @@ def _response(
     file_count: int = 0,
     owner_name: str | None = None,
     first_document_name: str | None = None,
+    replays: dict[str, date] | None = None,
 ) -> PursuitResponse:
     truth = truth_fields(tender.source_system, tender.status, tender.deadline, country=tender.country) if tender else {}
     return PursuitResponse(
@@ -140,7 +142,19 @@ def _response(
         failed_count=batch.failed_count if batch else 0,
         owner_name=owner_name,
         first_document_name=first_document_name,
+        replay_closed_on=(replays or {}).get(tender.canonical_source_key) if tender is not None else None,
     )
+
+
+async def _replays(db: AsyncSession, organization) -> dict[str, date]:
+    """S1-8: tenders this (prospect-preview) organization replays on a closed notice (preview_replay)."""
+    from app.models.company import CompanyProfile
+    from app.services.preview_replay import parse_replays
+
+    if organization.legacy_company_profile_id is None:
+        return {}
+    notes = await db.scalar(select(CompanyProfile.notes).where(CompanyProfile.id == organization.legacy_company_profile_id))
+    return parse_replays(notes)
 
 
 async def _first_document_names(db: AsyncSession, pursuit_ids: list[UUID]) -> dict[UUID, str]:
@@ -321,6 +335,7 @@ async def list_pursuits(
     pursuit_ids = [row[0].id for row in rows]
     counts, batches = await _enrichment_maps(db, pursuit_ids)
     first_names = await _first_document_names(db, pursuit_ids)
+    replays = await _replays(db, context.organization)
     total_statement = select(func.count(OrganizationPursuit.id)).where(
         OrganizationPursuit.organization_id == context.organization.id
     )
@@ -339,6 +354,7 @@ async def list_pursuits(
                 int(counts.get(pursuit.id, 0)),
                 owner_name,
                 first_names.get(pursuit.id),
+                replays,
             )
             for pursuit, tender, private_context, owner_name in rows
         ],
@@ -485,7 +501,10 @@ async def create_source_pursuit(
     return _response(result.pursuit)
 
 
-@router.get("/{pursuit_id}", response_model=PursuitResponse)
+@router.get(
+    "/{pursuit_id}", response_model=PursuitResponse,
+    dependencies=[Depends(track_view("workspace_opened", pursuit_param="pursuit_id"))],
+)
 async def get_pursuit(
     pursuit_id: UUID,
     x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
@@ -506,6 +525,7 @@ async def get_pursuit(
         int(counts.get(pursuit.id, 0)),
         owner_name,
         first_names.get(pursuit.id),
+        await _replays(db, context.organization),
     )
 
 

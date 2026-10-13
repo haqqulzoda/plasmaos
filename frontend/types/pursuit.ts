@@ -70,6 +70,8 @@ export type Pursuit = {
   owner_name: string | null;
   /** D2-05: display name of the first uploaded document (title fallback). */
   first_document_name?: string | null;
+  /** S1-8: a prospect preview replayed on a closed notice (ISO date the notice closed). */
+  replay_closed_on?: string | null;
 };
 
 export type PursuitListResponse = {

@@ -32,7 +32,7 @@ from app.services.tender_sources.base import (
 )
 from scripts import bootstrap_database as bootstrap
 
-HEAD = "20261011_0001_r3_organization_record_events"
+HEAD = "20261012_0002_s1_product_analytics"
 PREVIOUS_HEAD = "20260831_0001_sr2_2_refresh_leases"
 PREFIX = "plasma_sr23_"
 METRICS = (

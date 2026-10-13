@@ -7,6 +7,13 @@
     python scripts/demo/seed_demo.py --target local --dry-run --demo-date 2026-10-20  # top 5 candidates + reasons
     python scripts/demo/seed_demo.py --target local --confirm SEED_DEMO         --tender-external world_bank:OP00468882 [--tender-external world_bank:OP...]   # pin B (analysed), then A
 
+S1 prospect previews ("<Firm> — Plasma preview", see scripts/demo/prospect.py):
+
+    python scripts/demo/seed_demo.py --target local --prospect-file prospect.json --dry-run
+    python scripts/demo/seed_demo.py --target local --prospect-file prospect.json --confirm SEED_DEMO
+    python scripts/demo/seed_demo.py --target local --list-previews
+    python scripts/demo/seed_demo.py --target local --archive-preview <organization-id> --confirm SEED_DEMO
+
 Run inside the backend (or pursuit-analysis worker) container: it uses the service
 layer directly and waits for the pursuit-analysis worker to complete the analysis.
 
@@ -49,7 +56,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.endpoints.auth import PREPROVISIONED_GOOGLE_ID_PREFIX
@@ -71,6 +78,11 @@ from app.models.pursuit_analysis import AnalysisRun
 from app.models.tenancy import Membership, Organization, OrganizationPursuit
 
 from scripts.demo import demo_data as data
+
+if __name__ == "__main__":
+    # One module object whether run as a script or imported (prospect.py imports scripts.demo.seed_demo), so
+    # a DemoSeedError raised there is the class main() catches: a refusal prints REFUSED, not a traceback.
+    sys.modules.setdefault("scripts.demo.seed_demo", sys.modules[__name__])
 
 CONFIRMATION = "SEED_DEMO"
 DEMO_EMAIL = "plasmatest0@gmail.com"
@@ -180,29 +192,42 @@ class Candidate:
     sectors_in_text: tuple[str, ...]
     region: str | None
     region_rank: int
+    services_in_title: tuple[str, ...] = ()  # prospect previews only; empty for the D3-04 demo
 
     def sort_key(self):
         deadline = self.tender.deadline.timestamp() if self.tender.deadline else 0.0
-        return (-len(self.sectors_in_title), -len(self.sectors_in_text), self.region_rank, -deadline, str(self.tender.id))
+        return (-len(self.sectors_in_title), -len(self.services_in_title), -len(self.sectors_in_text), self.region_rank,
+                -deadline, str(self.tender.id))
 
     def summary(self) -> dict[str, Any]:
         return {
             **_tender_summary(self.tender),
             "reasons": {
                 "sector_match_title": list(self.sectors_in_title), "sector_match_text": list(self.sectors_in_text),
+                "service_match_title": list(self.services_in_title),
                 "region": self.region or "other", "notice_characters": self.notice_characters,
                 "procurement_method": self.tender.procurement_method,
             },
         }
 
 
-def _sectors(text: str | None) -> tuple[str, ...]:
+def _sectors(text: str | None, keywords: dict[str, tuple[str, ...]] | None = None, *, whole_words: bool = False) -> tuple[str, ...]:
+    """Keyword groups found in the text: substrings (D3-04), or whole words with an optional plural "s"."""
     value = (text or "").casefold()
-    return tuple(name for name, words in data.SECTOR_KEYWORDS.items() if any(word in value for word in words))
+    if whole_words:
+        def found(word: str) -> bool:
+            return re.search(rf"\b{re.escape(word)}s?\b", value) is not None
+    else:
+        def found(word: str) -> bool:
+            return word in value
+    return tuple(name for name, words in (keywords or data.SECTOR_KEYWORDS).items() if any(found(word) for word in words))
 
 
-def _region(country: str | None) -> tuple[str | None, int]:
+def _region(country: str | None, home_country: str | None = None) -> tuple[str | None, int]:
+    """Region name and rank; with a home country (a prospect's), that country ranks first (-1)."""
     value = (country or "").casefold()
+    if home_country and home_country.casefold() in value:
+        return home_country, -1
     for rank, (name, keys) in enumerate(REGION_PREFERENCE):
         if any(key in value for key in keys):
             return name, rank
@@ -215,47 +240,67 @@ def _notice_characters():
             .correlate(Tender).scalar_subquery())
 
 
-def candidate_condition(demo_date: date):
-    """Open, firm-level World Bank consulting notices closing >= demo date + AUTO_PICK_LEAD_DAYS."""
+def firm_level_consulting_condition(notice_type: str | None = None):
+    """Firm-level World Bank consulting notices, open or not (and, when given, whose notice type matches the
+    ``notice_type`` regular expression): no individual-consultant selection, no award notices."""
     from sqlalchemy import Text, cast
 
-    from app.core.deadline_truth import closing_deadline_sql, deadline_not_passed_sql
-    from app.models.base import TenderStatus
     from app.services.tender_sources.uzex_scope import customer_visible_tender_condition
 
-    floor = datetime.combine(demo_date + timedelta(days=AUTO_PICK_LEAD_DAYS), datetime.min.time(), tzinfo=timezone.utc)
     metadata = func.lower(func.coalesce(cast(Tender.source_metadata_json, Text), ""))
     consulting = or_(
         Tender.procurement_category.op("~*")(r"^\s*consult"),
         metadata.like('%"procurement_group": "cs"%'), metadata.like('%"procurement_group":"cs"%'),
     )
     return and_(
+        func.coalesce(Tender.notice_type, "").op("~*")(notice_type) if notice_type else true(),
         Tender.source_system == "world_bank",
         customer_visible_tender_condition(Tender),
-        Tender.status.in_((TenderStatus.OPEN, TenderStatus.UNKNOWN)),
-        deadline_not_passed_sql(Tender),
-        closing_deadline_sql(Tender) >= floor,
         consulting,
         ~func.coalesce(Tender.procurement_category, "").op("~*")(r"non-consult"),
         ~func.coalesce(Tender.procurement_method, "").op("~*")(_INDIVIDUAL_METHOD),
         ~func.coalesce(Tender.notice_type, "").op("~*")(r"award"),
         ~Tender.title.op("~*")(_INDIVIDUAL_TITLE),
-        _notice_characters() >= MIN_NOTICE_CHARACTERS,
     )
 
 
-async def ranked_candidates(db: AsyncSession, *, demo_date: date, exclude: set[UUID]) -> list[Candidate]:
+def candidate_condition(demo_date: date, notice_type: str | None = None, min_notice_characters: int = MIN_NOTICE_CHARACTERS):
+    """Open, firm-level World Bank consulting notices closing >= demo date + AUTO_PICK_LEAD_DAYS
+    (and, when given, whose notice type matches the ``notice_type`` regular expression)."""
+    from app.core.deadline_truth import closing_deadline_sql, deadline_not_passed_sql
+    from app.models.base import TenderStatus
+
+    floor = datetime.combine(demo_date + timedelta(days=AUTO_PICK_LEAD_DAYS), datetime.min.time(), tzinfo=timezone.utc)
+    return and_(
+        firm_level_consulting_condition(notice_type),
+        Tender.status.in_((TenderStatus.OPEN, TenderStatus.UNKNOWN)),
+        deadline_not_passed_sql(Tender),
+        closing_deadline_sql(Tender) >= floor,
+        _notice_characters() >= min_notice_characters,
+    )
+
+
+async def ranked_candidates(
+    db: AsyncSession, *, demo_date: date, exclude: set[UUID], keywords: dict[str, tuple[str, ...]] | None = None,
+    home_country: str | None = None, notice_type: str | None = None, whole_words: bool = False, title_only: bool = False,
+    service_keywords: dict[str, tuple[str, ...]] | None = None, min_notice_characters: int = MIN_NOTICE_CHARACTERS,
+) -> list[Candidate]:
+    """Ranked candidates. ``title_only`` (prospect previews) matches sectors in the notice title first and
+    counts the World Bank project-sector field with the description, which lists every sector of a project."""
     rows = (await db.execute(
-        select(Tender, _notice_characters()).where(candidate_condition(demo_date)).limit(2_000)
+        select(Tender, _notice_characters()).where(candidate_condition(demo_date, notice_type, min_notice_characters)).limit(2_000)
     )).all()
     candidates = []
     for tender, characters in rows:
         if tender.id in exclude:
             continue
-        in_title = _sectors(f"{tender.title or ''} {tender.sector or ''}")
-        in_text = tuple(name for name in _sectors(tender.description) if name not in in_title)
-        region, rank = _region(tender.country)
-        candidates.append(Candidate(tender, int(characters or 0), in_title, in_text, region, rank))
+        title = (tender.title or "") if title_only else f"{tender.title or ''} {tender.sector or ''}"
+        text = f"{tender.sector or ''} {tender.description or ''}" if title_only else tender.description
+        in_title = _sectors(title, keywords, whole_words=whole_words)
+        in_text = tuple(name for name in _sectors(text, keywords, whole_words=whole_words) if name not in in_title)
+        services = _sectors(tender.title, service_keywords, whole_words=whole_words) if service_keywords else ()
+        region, rank = _region(tender.country, home_country)
+        candidates.append(Candidate(tender, int(characters or 0), in_title, in_text, region, rank, services))
     return sorted(candidates, key=Candidate.sort_key)
 
 
@@ -266,22 +311,27 @@ def parse_tender_external(value: str) -> tuple[str, str]:
     return source.strip().lower(), external_id.strip()
 
 
-async def resolve_pinned(db: AsyncSession, value: str) -> Tender:
-    """A pinned tender, refused clearly when missing, closed or without an official notice."""
+async def resolve_pinned(db: AsyncSession, value: str, *, allow_closed: bool = False) -> Tender:
+    """A pinned tender, refused clearly when missing, closed (unless ``allow_closed``: a prospect preview's
+    replay, S1-8) or without an official notice (a closed one's can be derived from the tender)."""
     from app.core.deadline_truth import derived_status
     from app.models.base import TenderStatus
+    from app.services.official_notice import build_official_notice_text
 
     source, external_id = parse_tender_external(value)
     tender = await db.scalar(select(Tender).where(Tender.source_system == source, Tender.external_id == external_id))
     if tender is None:
         raise DemoSeedError(f"--tender-external {value}: no such tender")
     status, _ = derived_status(tender.status, tender.source_system, tender.deadline, country=tender.country)
-    if status != TenderStatus.OPEN and status != TenderStatus.UNKNOWN:
+    closed = status != TenderStatus.OPEN and status != TenderStatus.UNKNOWN
+    if closed and not allow_closed:
         raise DemoSeedError(f"--tender-external {value}: the tender is {status.value} (deadline "
                             f"{tender.deadline.isoformat() if tender.deadline else 'unknown'}); it can no longer be seeded")
     characters = await db.scalar(
         select(func.max(func.length(func.coalesce(TenderDocument.parsed_text, "")))).where(
             TenderDocument.tender_id == tender.id, TenderDocument.source_document_type == "OFFICIAL_NOTICE"))
+    if not characters and closed:
+        characters = len(build_official_notice_text(tender) or "")  # stored when the replay is seeded
     if not characters:
         raise DemoSeedError(f"--tender-external {value}: the tender has no OFFICIAL_NOTICE to analyse")
     return tender
@@ -596,7 +646,8 @@ async def bulk_confirm(db: AsyncSession, *, organization_id: UUID, pursuit_id: U
     return counts
 
 
-def eoi_request(suggestions, *, profile: CompanyProfile, email: str):
+def eoi_request(suggestions, *, profile: CompanyProfile, email: str, draft_status: str | None = None,
+                replay_closed_on: date | None = None):
     """Suggested own references (rank order) plus the one partner that covers the most criteria
     the own selection leaves open, as a JV member with its matching references."""
     from app.schemas.eoi import EoiDraftCreateRequest
@@ -616,6 +667,7 @@ def eoi_request(suggestions, *, profile: CompanyProfile, email: str):
     return EoiDraftCreateRequest(
         analysis_run_id=suggestions.analysis_run_id, language="en",
         own_reference_ids=[item.reference_id for item in own], partners=chosen, include_relevance_notes=True,
+        draft_status=draft_status, replay_closed_on=replay_closed_on,
         letter={"addressee_organization": defaults.addressee_organization or "Procurement unit",
                 "addressee_name": defaults.addressee_name, "signatory_name": profile.director_name or "Director",
                 "signatory_title": "Director", "contact_email": email, "contact_phone": profile.phone_contact,
@@ -624,7 +676,8 @@ def eoi_request(suggestions, *, profile: CompanyProfile, email: str):
 
 
 async def ensure_eoi(db: AsyncSession, *, organization_id: UUID, pursuit_id: UUID, run_id: UUID, membership: Membership,
-                     email: str, note_call=None) -> dict[str, Any]:
+                     email: str, note_call=None, draft_status: str | None = None,
+                     replay_closed_on: date | None = None) -> dict[str, Any]:
     from app.services.eoi import create_eoi_draft, eoi_suggestions, get_eoi_draft
 
     existing = await db.scalar(select(EoiDraft).where(EoiDraft.organization_id == organization_id, EoiDraft.pursuit_id == pursuit_id,
@@ -635,7 +688,8 @@ async def ensure_eoi(db: AsyncSession, *, organization_id: UUID, pursuit_id: UUI
     suggestions = await eoi_suggestions(db, organization_id=organization_id, pursuit_id=pursuit_id, analysis_run_id=run_id)
     organization = await db.get(Organization, organization_id)
     profile = await db.get(CompanyProfile, organization.legacy_company_profile_id)
-    request = eoi_request(suggestions, profile=profile, email=email)
+    request = eoi_request(suggestions, profile=profile, email=email, draft_status=draft_status,
+                          replay_closed_on=replay_closed_on)
     started = time.monotonic()
     draft = await create_eoi_draft(db, organization_id=organization_id, pursuit_id=pursuit_id, membership_id=membership.id,
                                    request=request, note_call=note_call)
@@ -655,6 +709,10 @@ class Options:
     demo_date: date | None = None  # default: today
     analysis_timeout: float = 900.0
     poll_seconds: float = 5.0
+    keep_others: bool = False  # prospect previews: keep the demo user's other active previews
+    allow_global: bool = False  # ledger previews: REOIs outside Central Asia too
+    candidates: int = 1  # ledger previews: analyse the top N candidates, keep the best
+    replay_days: int = 0  # ledger previews: closed Central Asian REOIs published within N days (S1-8 replay)
 
 
 async def plan(sessions, options: Options, *, today: date | None = None) -> dict[str, Any]:
@@ -758,31 +816,100 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--demo-date", type=date.fromisoformat, default=None, metavar="YYYY-MM-DD",
                         help=f"First demo day (default today); auto-picked tenders close >= this + {AUTO_PICK_LEAD_DAYS} days.")
     parser.add_argument("--email", default=DEMO_EMAIL)
-    parser.add_argument("--analysis-timeout", type=float, default=900.0)
+    parser.add_argument("--analysis-timeout", type=float, default=None,
+                        help="Seconds to wait for the analysis (default 900; 480 for a prospect preview).")
+    prospect = parser.add_mutually_exclusive_group()
+    prospect.add_argument("--prospect-file", metavar="PATH",
+                          help="Build a '<Firm> — Plasma preview' organization from this prospect JSON instead of the D3-04 demo.")
+    prospect.add_argument("--from-ledger", metavar="NORMALIZED_FIRM_NAME",
+                          help="Build the preview from the firm's award-ledger consulting AWARDS (never its other bids).")
+    prospect.add_argument("--list-previews", action="store_true", help="List prospect preview organizations; write nothing.")
+    prospect.add_argument("--archive-preview", metavar="ORGANIZATION_ID", type=UUID,
+                          help="Archive a prospect preview (revoke its members, rename it); needs --confirm.")
+    parser.add_argument("--country", default=None, help="With --from-ledger: the firm's published country.")
+    parser.add_argument("--keep-others", action="store_true",
+                        help="Prospect previews: keep the demo user's other active previews (default: archive them first).")
+    parser.add_argument("--allow-global", action="store_true",
+                        help="Ledger previews: also REOIs outside Central Asia (default: own bid countries, then Central Asia).")
+    parser.add_argument("--candidates", type=int, default=3, metavar="N",
+                        help="Ledger previews: analyse the top N candidate REOIs, keep the one with the most criteria "
+                             "matched and archive the others (default 3; 1 = just the top pick).")
+    parser.add_argument("--replay-days", type=int, default=120, metavar="N",
+                        help="Ledger previews: when no open Central Asian REOI qualifies, replay a CLOSED Central Asian "
+                             "consulting REOI published within N days (own bid countries first), labelled 'Replay on a "
+                             "closed notice - for illustration' (default 120; 0 = never).")
+    parser.add_argument("--inline-analysis", action="store_true",
+                        help="Local only: run the analysis in this process instead of waiting for the worker.")
     return parser
 
 
 async def main(argv: list[str] | None = None) -> int:
     from app.core.config import settings
 
+    from scripts.demo import prospect as previews
+
     args = build_parser().parse_args(argv)
-    if args.resume and not re.fullmatch(r"\d{8}-\d+", args.resume):
-        print("--resume takes a run label such as 20261002-1", file=sys.stderr)
+    prospect_mode = bool(args.prospect_file or args.from_ledger)
+    label_ok = previews.is_prospect_label if prospect_mode else (lambda value: re.fullmatch(r"\d{8}-\d+", value))
+    if args.resume and not label_ok(args.resume):
+        example = "pv20261010-1" if prospect_mode else "20261002-1"
+        print(f"--resume takes a run label such as {example}", file=sys.stderr)
         return 2
-    if len(args.tender_external) > 2:
-        print("--tender-external is given at most twice (pursuit B, then pursuit A)", file=sys.stderr)
+    if len(args.tender_external) > (1 if prospect_mode else 2):
+        print("--tender-external is given at most twice (pursuit B, then pursuit A); once for a prospect preview", file=sys.stderr)
         return 2
+    timeout = args.analysis_timeout or (previews.DEFAULT_ANALYSIS_TIMEOUT if prospect_mode else 900.0)
     options = Options(target=args.target, confirm=args.confirm, dry_run=args.dry_run, resume=args.resume,
                       externals=tuple(args.tender_external), email=args.email.strip().lower(), demo_date=args.demo_date,
-                      analysis_timeout=args.analysis_timeout)
+                      analysis_timeout=timeout, keep_others=args.keep_others, allow_global=args.allow_global,
+                      candidates=max(1, args.candidates) if args.from_ledger else 1,
+                      replay_days=max(0, args.replay_days) if args.from_ledger else 0)
     try:
         check_target(options.target, settings.ENVIRONMENT)
-        if not options.dry_run and options.confirm != CONFIRMATION:
+        if args.inline_analysis and options.target != "local":
+            raise DemoSeedError("--inline-analysis is for --target local only")
+        if args.country and not args.from_ledger:
+            raise DemoSeedError("--country goes with --from-ledger")
+        prospect = previews.load_prospect(args.prospect_file) if args.prospect_file else None
+        read_only = options.dry_run or args.list_previews
+        if not read_only and options.confirm != CONFIRMATION:
             raise DemoSeedError(f"writes require --confirm {CONFIRMATION} (or use --dry-run)")
         from app.db.session import AsyncSessionLocal, engine
 
+        process_inline = None
+        if args.inline_analysis:
+            from app.services.pursuit_analysis import process_analysis_run
+
+            async def process_inline(db, run_id):
+                await process_analysis_run(db, run_id, worker_id="prospect-seed-inline")
         try:
-            result = await (plan(AsyncSessionLocal, options) if options.dry_run else seed(AsyncSessionLocal, options))
+            build_seconds = None
+            if args.from_ledger:
+                built = time.monotonic()
+                async with AsyncSessionLocal() as db:
+                    prospect = await previews.prospect_from_ledger(db, args.from_ledger, country=args.country)
+                build_seconds = round(time.monotonic() - built, 1)
+            if args.list_previews:
+                result = await previews.list_previews(AsyncSessionLocal)
+            elif args.archive_preview:
+                result = await previews.archive(AsyncSessionLocal, organization_id=args.archive_preview, confirm=options.confirm)
+            elif prospect is not None:
+                if options.dry_run:
+                    result = await previews.plan(AsyncSessionLocal, options, prospect)
+                elif args.from_ledger and not options.externals:
+                    try:
+                        result = await previews.seed_best_of(AsyncSessionLocal, options, prospect, candidates=options.candidates,
+                                                             process_inline=process_inline, prospect_build_seconds=build_seconds)
+                    except previews.BestOfRefused as exc:
+                        print(previews.candidates_table(exc.result), file=sys.stderr)
+                        print(json.dumps(exc.result, indent=2, ensure_ascii=False, default=str))
+                        raise DemoSeedError(str(exc)) from exc
+                    print(previews.candidates_table(result), file=sys.stderr)
+                else:
+                    result = await previews.seed(AsyncSessionLocal, options, prospect, process_inline=process_inline,
+                                                 prospect_build_seconds=build_seconds)
+            else:
+                result = await (plan(AsyncSessionLocal, options) if options.dry_run else seed(AsyncSessionLocal, options))
         finally:
             await engine.dispose()
     except DemoSeedError as exc:

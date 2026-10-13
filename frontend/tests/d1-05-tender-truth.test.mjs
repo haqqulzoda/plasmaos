@@ -42,7 +42,6 @@ test("every customer budget display site uses the shared helper", () => {
     "app/dashboard/tenders/page.tsx": 2, // Explorer card + preview drawer
     "app/dashboard/tenders/[tenderId]/page.tsx": 1,
     "app/dashboard/my-tenders/page.tsx": 1,
-    "app/dashboard/bid-preparation/page.tsx": 1,
     "app/dashboard/bid-preparation/[proposalId]/page.tsx": 1,
   };
   for (const [path, count] of Object.entries(sites)) {

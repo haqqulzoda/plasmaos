@@ -138,6 +138,12 @@ class EoiDraftCreateRequest(BaseModel):
     partners: list[EoiPartnerSelection] = Field(default_factory=list, max_length=5)
     letter: EoiLetter
     include_relevance_notes: bool = True
+    # S1-6: set by the prospect-preview seed, whose review confirmation is a seed step, not a human review.
+    # The cover and the draft status then read "Draft — not reviewed by your team".
+    draft_status: Literal["NOT_REVIEWED_BY_TEAM"] | None = None
+    # S1-8: a prospect preview replayed on a closed notice; the cover then reads "Replay on a closed notice
+    # (closed <date>) — for illustration".
+    replay_closed_on: date | None = None
 
     @field_validator("own_reference_ids")
     @classmethod
@@ -180,3 +186,5 @@ class EoiDraftResponse(BaseModel):
     stale_reasons: list[str] = Field(default_factory=list)
     artifacts: list[EoiArtifactResponse] = Field(default_factory=list)
     summary: EoiDraftSummary
+    draft_status: str | None = None
+    replay_closed_on: date | None = None

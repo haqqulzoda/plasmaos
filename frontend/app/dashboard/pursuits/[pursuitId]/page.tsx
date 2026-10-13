@@ -390,6 +390,7 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
       primaryAction={<Button onClick={() => selectTab(nextActionTab)}>{nextAction}</Button>}
       secondaryAction={<ButtonLink href={pursuit.origin === 'UPLOAD' ? '/dashboard/uploaded-tenders' : `/dashboard/tenders/${pursuit.source_tender_id}`} variant="secondary">{t('actions.back')}</ButtonLink>}
     />
+    {pursuit.replay_closed_on && <p className="pursuit-advisory" role="status" data-pursuit-replay={pursuit.replay_closed_on}>{t('workspace.replayClosed', { date: pursuit.replay_closed_on })}</p>}
     {search.get('duplicates') === '1' && <p className="pursuit-advisory" role="status">{t('upload.duplicateWarning')}</p>}
     {actionError && <p className="pursuit-upload-error" role="alert">{actionError}</p>}
 

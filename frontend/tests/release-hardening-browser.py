@@ -915,7 +915,8 @@ def main():
             page = context.new_page()
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
-            core_surfaces = [("explorer","tenders?view=all"),("my-tenders","my-tenders"),("bid-preparation","bid-preparation")]
+            # S1: the Bid Preparation list redirects to Pursuits (my-tenders); proposal pages still open by id.
+            core_surfaces = [("explorer","tenders?view=all"),("my-tenders","my-tenders")]
             w3_surfaces = [
                 ("uploaded-tenders", "uploaded-tenders"),
                 ("upload-tender", "uploaded-tenders/upload"),
@@ -992,8 +993,6 @@ def main():
                                 menu.locator('button[aria-expanded]').click()
                                 assert menu.evaluate("""x => [...x.querySelectorAll('button')].filter(b=>b.checkVisibility()).every(b=>{const r=b.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth;})""")
                                 menu.locator('button[aria-expanded]').click()
-                            if name == "bid-preparation":
-                                assert page.evaluate("""() => {const h=document.querySelector('h1').getBoundingClientRect();const badges=[...document.querySelectorAll('.rounded-full')];return badges.every(b=>{const r=b.getBoundingClientRect();return r.right<=h.left||r.left>=h.right||r.bottom<=h.top||r.top>=h.bottom;});}""")
                             if width == 320:
                                 page.screenshot(path=str(OUT / f"{locale}-{name}-320.png"), full_page=True)
                             page.keyboard.press("Tab")
@@ -1598,7 +1597,8 @@ def main():
                         return {"groups": groups}
                     case(f"d2-05/requirements/grouped/{locale}/{width}", d205_requirements)
             controls.update(d202=False, d205=False)
-            for name,path in [("proposals","bid-preparation"),("readiness","readiness-vault")]:
+            # S1: the proposal list moved into Pursuits; the Readiness Vault lives under Company & Experience.
+            for name,path in [("readiness","settings/readiness")]:
                 def pagination(path=path):
                     controls["pagination"] = True
                     load(path,"en",390)

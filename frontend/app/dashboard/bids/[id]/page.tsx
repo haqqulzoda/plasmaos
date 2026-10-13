@@ -33,7 +33,7 @@ export default function LegacyBidDetailRedirect({ params }: { params: Promise<{ 
     return (
         <div className="customer-page ds-container-content ds-stack">
             <Alert tone="warning" title={error} />
-            <Link href="/dashboard/bid-preparation" className="ds-button ds-button-secondary">{t('legacyList')}</Link>
+            <Link href="/dashboard/my-tenders" className="ds-button ds-button-secondary">{t('legacyList')}</Link>
         </div>
     );
 }

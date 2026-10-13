@@ -105,7 +105,6 @@ test("P0 pages use translations and shared locale formatters", () => {
     "app/dashboard/tenders/page.tsx",
     "app/dashboard/tenders/[tenderId]/page.tsx",
     "app/dashboard/my-tenders/page.tsx",
-    "app/dashboard/bid-preparation/page.tsx",
     "app/dashboard/bid-preparation/[proposalId]/page.tsx",
   ];
   for (const path of files) {

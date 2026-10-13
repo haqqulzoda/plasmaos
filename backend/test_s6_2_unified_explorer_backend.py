@@ -27,7 +27,7 @@ from app.services.explorer import (
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-HEAD = "20261011_0001_r3_organization_record_events"
+HEAD = "20261012_0002_s1_product_analytics"
 
 
 def source(relative: str) -> str:

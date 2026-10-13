@@ -45,7 +45,7 @@ from scripts import test_s0_5b4_baseline as support
 from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
-HEAD = "20261011_0001_r3_organization_record_events"
+HEAD = "20261012_0002_s1_product_analytics"
 PREVIOUS = "20261010_0001_r3_email_notifications"
 
 

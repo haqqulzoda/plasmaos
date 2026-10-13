@@ -146,5 +146,18 @@
     "tab": "Profilingizga mos",
     "empty": "Profilingizdagi mamlakat yoki xizmatlarga mos ochiq tenderlar yo‘q.",
     "profileHelp": "Mos tenderlarni ko‘rish uchun kompaniya profiliga maqsadli mamlakat va xizmatlarni qo‘shing."
+  },
+  "coverage": {
+    "title": "Qamrov",
+    "lastRefresh": "Soʻnggi muvaffaqiyatli yangilanish {time}",
+    "noRefreshYet": "Hali muvaffaqiyatli yangilanish yoʻq",
+    "adbConsulting": "ADB konsalting",
+    "coming": "Tez orada",
+    "types": {
+      "world_bank": "Qiziqish bildirish soʻrovlari, savdolarga takliflar, dastlabki malaka tanlovi",
+      "ebrd": "Tenderlarga takliflar, dastlabki malaka tanlovi, umumiy xarid xabarnomalari",
+      "giz": "Xizmatlar, yetkazib berish va ishlar boʻyicha GIZ tenderlari",
+      "uzex": "Oʻzbekiston davlat xaridlari eʼlonlari"
+    }
   }
 }

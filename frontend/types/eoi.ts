@@ -117,4 +117,8 @@ export type EoiDraft = {
   stale_reasons: string[];
   artifacts: EoiArtifact[];
   summary: EoiDraftSummary;
+  /** S1-6: "NOT_REVIEWED_BY_TEAM" for a prospect-preview draft (its review confirmation was a seed step). */
+  draft_status?: string | null;
+  /** S1-8: a prospect preview replayed on a closed notice (ISO date the notice closed). */
+  replay_closed_on?: string | null;
 };

@@ -13,7 +13,7 @@ from app.services.my_tenders import MyTendersQuery, _base_list_statement, _order
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT = BACKEND_DIR.parent
-HEAD = "20261011_0001_r3_organization_record_events"
+HEAD = "20261012_0002_s1_product_analytics"
 
 
 def source(relative: str) -> str:
@@ -143,8 +143,10 @@ def test_frontend_navigation_separates_bid_preparation_and_my_tenders() -> None:
     assert "'/dashboard/bid-preparation'" in layout
     assert '"pursuits": "Pursuits"' in navigation
     assert '"bidPreparation": "Bid Preparation"' in navigation
+    # S1: the Bid Preparation list redirects to Pursuits; proposal pages still open by id.
     bids = source("frontend/app/dashboard/bid-preparation/page.tsx")
-    assert 'api.get("/proposals",{params:{limit:25,offset}})' in ''.join(bids.split())
+    assert "permanentRedirect('/dashboard/my-tenders')" in bids
+    assert "api." not in bids
 
 
 def test_passive_tender_detail_only_reads_and_click_handler_is_the_only_post() -> None:

@@ -112,6 +112,7 @@
     "uploadedOn": "Uploaded tender · {date}"
   },
   "workspace": {
+    "replayClosed": "Replay on a closed notice (closed {date}) — for illustration",
     "eyebrow": "Pursuit workspace",
     "titleFallback": "Open pursuit",
     "loading": "Loading pursuit workspace",
@@ -1117,7 +1118,8 @@
       "OTHER": "The package may be out of date."
     },
     "versionSummary": "{references, plural, one {# own assignment} other {# own assignments}} · {partners, plural, one {# partner} other {# partners}} · {addressed} of {total} criteria addressed · notes kept {notes}, dropped {dropped}",
-    "noVersions": "No versions yet."
+    "noVersions": "No versions yet.",
+    "notReviewedByTeam": "Draft — not reviewed by your team"
   },
   "experienceChanged": {
     "title": "Your experience records changed since this analysis — re-run to update matches.",

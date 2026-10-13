@@ -34,13 +34,13 @@ test("dead workspace and duplicate Tender components are removed", () => {
 test("legacy lists and workspace are permanent read-only redirects", () => {
   assert.match(
     legacyBidList,
-    /permanentRedirect\('\/dashboard\/bid-preparation'\)/,
+    /permanentRedirect\('\/dashboard\/my-tenders'\)/,
   );
   assert.match(
     legacyProposals,
-    /permanentRedirect\('\/dashboard\/bid-preparation'\)/,
+    /permanentRedirect\('\/dashboard\/my-tenders'\)/,
   );
-  assert.match(legacyWorkspace, /permanentRedirect\('\/dashboard\/tenders'\)/);
+  assert.match(legacyWorkspace, /permanentRedirect\('\/dashboard\/my-tenders'\)/);
   assert.doesNotMatch(
     `${legacyBidList}\n${legacyProposals}\n${legacyWorkspace}`,
     /api\.|fetch\(|post\(|put\(|patch\(|delete\(/i,
