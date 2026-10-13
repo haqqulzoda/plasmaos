@@ -1,4 +1,4 @@
-# Deploy 4 runbook: production a83d575 / images 169d451 → pilot/s1-int, images <SHA4>
+# Deploy 4 runbook: production a83d575 / images 169d451 → pilot/s1-release, images <SHA4>
 
 For the owner, copy-paste on the production host. Every step has the command, what you must
 see, and a **STOP** condition. Same rules as Deploys 1-3: a short clean cut-over (the app is
@@ -10,7 +10,7 @@ previews on production** (after step 18).
 
 | | |
 | --- | --- |
-| Checkout | `pilot/s1-int` @ the commit that adds this file (pushed by the owner before the window; local only until then) |
+| Checkout | `pilot/s1-release` @ its newest commit (four squashed S1 commits on `a83d575` plus the S1-8 report; pushed by the owner before the window; local only until then). **Never deploy or push `pilot/s1-int`**: same tree, but its history is not clean |
 | Images | **built from the release commit before the window** (not part of S1-7): `plasma-<service>:<SHA4>`, bundle `plasma-release-<short4>.tar.gz`, `<bytes>`, sha256 `<…>`; `/health` reports `build_sha` `<SHA4>`. Fill these four values from `scripts/compose-release.sh export` before the window |
 | Running today | Deploy 3: checkout `a83d575` (Deploy 3 runbook commit), images `169d45179bf41786e8f8e305a7379e48f19238f5`, schema `20261011_0001_r3_organization_record_events` (step 1 checks all three) |
 | Host | Hetzner 2 vCPU / 3.7 GiB, `/opt/plasma-console/plasmaos`, `HOST_PROFILE=4gb`, `PLASMA_NO_BUILD=1` |
@@ -43,7 +43,7 @@ the container is removed when it ends. Check `free -h` shows `available` ≥ ~60
 
 ```
 prod$ cd /opt/plasma-console/plasmaos
-prod$ COMMIT=<this runbook's commit on pilot/s1-int>
+prod$ COMMIT=<the newest commit of pilot/s1-release>
 prod$ SHA=<SHA4, full 40 characters>
 prod$ PREV_COMMIT=a83d575<full SHA from `git rev-parse HEAD` in step 1>
 prod$ PREV_SHA=169d45179bf41786e8f8e305a7379e48f19238f5
@@ -82,8 +82,8 @@ The dry run lists `4f09b8e…` tags under "release tags to remove", never `169d4
 ## 2. Check out the release (files only, nothing restarts)
 
 ```
-prod$ git fetch origin pilot/s1-int
-prod$ git checkout -B pilot/s1-int "$COMMIT"
+prod$ git fetch origin pilot/s1-release
+prod$ git checkout -B pilot/s1-release "$COMMIT"
 prod$ test "$(git rev-parse HEAD)" = "$COMMIT" && echo CHECKOUT_OK
 prod$ ls backend/scripts/ingest_award_ledger.py backend/scripts/validate_award_ledger.py backend/scripts/demo/seed_demo.py docs/ops/DEPLOY_4_RUNBOOK.md
 ```
@@ -523,16 +523,16 @@ step 4 (pre-stop gate first), then A2. Never `docker compose down -v`.
 
 ## Gate and rehearsal (evidence)
 
-**Gate** (e83e6ef, LF `git archive` export; details in docs/audits/s1/S1_7_REPORT.md):
+**Gate** (`pilot/s1-release` 4f8c019, the final S1 tree; LF `git archive` export; details in docs/audits/s1/S1_8_REPORT.md):
 
 | Group | Result |
 | --- | --- |
-| backend | **1,191 passed**, 1 skipped, 0 failed (11 batches, fresh process each) |
-| security | 117 of 118 passed; the 20 MB upload case (`large.pdf`, 413) needs more memory than the laptop's Docker VM had free; passed in the S1-6 gate, upload code unchanged since. **Re-run it before building the release images** |
+| backend | **1,193 passed**, 1 skipped, 0 failed (12 batches, fresh process each) |
+| security | **118 passed**, including the 20 MB upload case (413) |
 | analysis / connectors | 50 / 198 passed |
 | migrations / performance | pass |
 | config-dependencies | 24 passed, `pip check` clean, `npm audit --omit=dev` 0 |
-| frontend / browser | S1-6 gate (no frontend change since): 406/406 static tests, build, 214 browser cases |
+| frontend / browser | npm ci, typecheck, lint, **406/406** node tests, RTL audit, build; **214** browser cases passed (Windows) |
 
 **Rehearsal** (2026-10-12, a fresh copy of the production-shaped database at the Deploy 3 head, the release code in
 one-off capped containers; times include each container's start; the app cut-over itself (steps 6-11) was not
