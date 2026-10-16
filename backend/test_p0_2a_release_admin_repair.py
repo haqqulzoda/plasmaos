@@ -53,11 +53,14 @@ class ReleaseAdminRepairTests(unittest.TestCase):
         self.assertIn("resolveBackendApiBase", proxy)
         # R3: the token-gated invitation preview is public on purpose (organization name,
         # inviter name, masked e-mail); accepting an invitation still requires a session.
+        # P1: requesting an e-mail sign-in code is public (rate limited, account-independent answer);
+        # verifying it goes through Auth.js only.
         self.assertIn(
-            "PUBLIC_EXACT_PATHS = ['/api/v1/health/version', '/api/v1/invitations/preview']",
+            "PUBLIC_EXACT_PATHS = ['/api/v1/health/version', '/api/v1/invitations/preview', '/api/v1/auth/email/request-code']",
             network_proxy,
         )
         self.assertNotIn("'/api/v1/invitations/accept'", network_proxy)
+        self.assertNotIn("'/api/v1/auth/email/verify-code'", network_proxy)
         self.assertNotIn(
             "localhost:8000",
             api + dockerfile + next_config + auth_config + auth_route + proxy + backend_resolver,

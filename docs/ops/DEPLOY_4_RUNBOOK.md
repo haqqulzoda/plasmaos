@@ -10,7 +10,7 @@ previews on production** (after step 18).
 
 | | |
 | --- | --- |
-| Checkout | `pilot/s1-release` @ its newest commit (four squashed S1 commits on `a83d575` plus the S1-8 report; pushed by the owner before the window; local only until then). **Never deploy or push `pilot/s1-int`**: same tree, but its history is not clean |
+| Checkout | **With P1: `pilot/p1-pilot-readiness`** (on `pilot/s1-release`; changes in [P1_DEPLOY_NOTE.md](P1_DEPLOY_NOTE.md)). Without P1: `pilot/s1-release` @ its newest commit (four squashed S1 commits on `a83d575` plus the S1-8 report; pushed by the owner before the window; local only until then). **Never deploy or push `pilot/s1-int`**: same tree, but its history is not clean |
 | Images | **built from the release commit before the window** (not part of S1-7): `plasma-<service>:<SHA4>`, bundle `plasma-release-<short4>.tar.gz`, `<bytes>`, sha256 `<…>`; `/health` reports `build_sha` `<SHA4>`. Fill these four values from `scripts/compose-release.sh export` before the window |
 | Running today | Deploy 3: checkout `a83d575` (Deploy 3 runbook commit), images `169d45179bf41786e8f8e305a7379e48f19238f5`, schema `20261011_0001_r3_organization_record_events` (step 1 checks all three) |
 | Host | Hetzner 2 vCPU / 3.7 GiB, `/opt/plasma-console/plasmaos`, `HOST_PROFILE=4gb`, `PLASMA_NO_BUILD=1` |
@@ -154,6 +154,10 @@ Expect seven `Loaded image: plasma-<service>:<SHA4>…`, then `every service has
 `Use%` ≤ 85 %. **STOP** on `import incomplete` (repeat step 6).
 
 ## 8b. Pre-check: proposals not linked to any pursuit (read-only SQL)
+
+> **P1 (2026-10-16): when this window deploys `pilot/p1-pilot-readiness` (see [P1_DEPLOY_NOTE.md](P1_DEPLOY_NOTE.md)),
+> this step is informational, not a STOP**: My Tenders lists every proposal without a pursuit under "Earlier bid
+> drafts", so the redirect hides nothing. Run the SQL and keep the counts.
 
 This release redirects the old Bid Preparation list (`/bid-preparation`, `/dashboard/bid-preparation`) to My
 Tenders, which lists pursuits. A legacy proposal whose tender has no pursuit in any organization of the proposal's

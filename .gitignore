@@ -64,6 +64,8 @@ docs/audits/p1/*
 !docs/audits/p1/browser-all/
 docs/audits/p1/browser-all/*
 !docs/audits/p1/browser-all/results.json
+# P1 pilot readiness: report and screenshots
+!docs/audits/p1-pilot/
 !docs/audits/s14_2/
 docs/audits/s14_2/*
 !docs/audits/s14_2/design-comparison.png

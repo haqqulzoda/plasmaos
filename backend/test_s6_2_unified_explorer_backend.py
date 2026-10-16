@@ -257,11 +257,12 @@ def test_explorer_access_allows_approved_no_profile_but_not_pending_states(monke
 
     approved = user("approved")
     assert asyncio.run(require_explorer_access(approved, FakeDB(None))) is approved
+    # P1: an explore organization (company pending) sees the opportunities feed.
+    assert asyncio.run(require_explorer_access(approved, FakeDB("pending"))) is approved
     for account_state, profile_state in (
         ("pending", None),
         ("rejected", None),
         ("disabled", None),
-        ("approved", "pending"),
         ("approved", "rejected"),
         ("approved", "disabled"),
     ):

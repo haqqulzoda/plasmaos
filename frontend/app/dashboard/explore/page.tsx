@@ -42,6 +42,11 @@ type DemoStep = 'requirements' | 'gaps' | 'team' | 'eoi';
 const DEMO_STEPS: DemoStep[] = ['requirements', 'gaps', 'team', 'eoi'];
 const STATUS_TONE = { MET: 'success', PARTIAL: 'warning', GAP: 'danger' } as const;
 
+/** The walkthrough shows only the steps the exported run has data for. */
+function availableSteps(demo: Demo): DemoStep[] {
+    return DEMO_STEPS.filter((key) => key === 'eoi' ? Boolean(demo.steps.eoi?.excerpt) : (demo.steps[key]?.length ?? 0) > 0);
+}
+
 /**
  * P1 Explore view: an organization that has not started a pilot sees open opportunities, source
  * coverage and one guided demo analysis, with "Start a pilot" and "Book a call". Uploads, its own
@@ -171,7 +176,7 @@ function ExploreContent() {
                         label={t('demoSteps')}
                         value={step}
                         onChange={(value) => setStep(value as DemoStep)}
-                        options={DEMO_STEPS.map((key, index) => ({ value: key, label: `${index + 1}. ${t(`steps.${key}`)}` }))}
+                        options={availableSteps(demo).map((key, index) => ({ value: key, label: `${index + 1}. ${t(`steps.${key}`)}` }))}
                     />
                     <div className="explore-demo-step" role="region" aria-live="polite" aria-label={t(`steps.${step}`)}>
                         <p className="ds-muted">{t(`stepHelp.${step}`)}</p>
