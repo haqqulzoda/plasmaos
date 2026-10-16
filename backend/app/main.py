@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
 from app.api.endpoints.communications import notifications_router, broadcasts_router
-from app.api.endpoints import admin_award_ledger, admin_metrics, admin_panels, candidates, eoi, participation, proposal_evidence, team_scenarios, operations, admin, auth, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
+from app.api.endpoints import admin_award_ledger, admin_metrics, admin_panels, candidates, eoi, participation, proposal_evidence, team_scenarios, operations, admin, auth, explore, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
 from app.core.observability import init_error_tracking
@@ -119,6 +119,7 @@ app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
 app.include_router(audit.router, prefix="/audit", tags=["Audit"])
 app.include_router(hunter.router, prefix="/api/v1/hunter", tags=["Hunter"])
 app.include_router(explorer.router, prefix="/api/v1", tags=["Explorer"])
+app.include_router(explore.router, prefix="/api/v1/explore", tags=["Explore"])
 
 
 @app.get("/health")

@@ -41,6 +41,13 @@ def deterministic_uuid(label: str) -> UUID:
     return UUID(hashlib.md5(label.encode("utf-8"), usedforsecurity=False).hexdigest())
 
 
+# P1: organization-scoped work (pursuits, uploads, analyses, the library, EOIs, teams) needs a
+# pilot or paid organization. The company approval is the enforced form of that state (see
+# app.services.organization_access); explore and disabled organizations are refused here.
+def _full_access():
+    return CompanyProfile.approval_status == "approved"
+
+
 async def resolve_organization_context(
     db: AsyncSession,
     *,
@@ -50,9 +57,11 @@ async def resolve_organization_context(
     statement = (
         select(Organization, Membership)
         .join(Membership, Membership.organization_id == Organization.id)
+        .join(CompanyProfile, CompanyProfile.id == Organization.legacy_company_profile_id)
         .where(
             Membership.user_id == user_id,
             Membership.state == MembershipState.ACTIVE,
+            _full_access(),
         )
         .order_by(Organization.id)
     )
@@ -60,7 +69,7 @@ async def resolve_organization_context(
         statement = statement.where(Organization.id == organization_id)
     rows = (await db.execute(statement.limit(2))).all()
     if not rows:
-        raise OrganizationAccessDeniedError("active organization membership required")
+        raise OrganizationAccessDeniedError("active membership of a pilot or paid organization required")
     if organization_id is None and len(rows) > 1:
         raise OrganizationContextRequiredError(
             "explicit organization context required for a multi-organization user"
@@ -79,10 +88,12 @@ async def resolve_legacy_profile_context(
         await db.execute(
             select(Organization, Membership)
             .join(Membership, Membership.organization_id == Organization.id)
+            .join(CompanyProfile, CompanyProfile.id == Organization.legacy_company_profile_id)
             .where(
                 Organization.legacy_company_profile_id == company_profile_id,
                 Membership.user_id == user_id,
                 Membership.state == MembershipState.ACTIVE,
+                _full_access(),
             )
         )
     ).one_or_none()
@@ -97,6 +108,8 @@ async def ensure_profile_organization(
     profile: CompanyProfile,
 ) -> OrganizationContext:
     """Create the exact profile Organization and initial owner, idempotently."""
+    from app.services.organization_access import state_for_company_status
+
     organization_id = deterministic_uuid(f"plasma:w2:organization:{profile.id}")
     now = datetime.now(timezone.utc)
     await db.execute(
@@ -105,6 +118,9 @@ async def ensure_profile_organization(
             id=organization_id,
             legacy_company_profile_id=profile.id,
             display_name=profile.company_name,
+            # P1: a new organization starts in the state its company approval implies
+            # (self sign-up onboarding: pending, so explore; seeded and admin-made: pilot).
+            access_state=state_for_company_status(profile.approval_status),
             created_at=now,
             updated_at=now,
         )

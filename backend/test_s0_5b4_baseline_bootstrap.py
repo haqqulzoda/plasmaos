@@ -93,7 +93,7 @@ def test_bootstrap_has_no_create_all_call_or_orm_import() -> None:
 
 def test_repository_head_is_the_approved_single_head() -> None:
     module = _load_module()
-    assert module.repository_head() == "20261012_0002_s1_product_analytics"
+    assert module.repository_head() == "20261016_0002_p1_organization_access"
 
 
 def test_target_display_masks_password() -> None:

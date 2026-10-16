@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { signIn, signOut, useSession } from 'next-auth/react';
+import { useParams, useRouter } from 'next/navigation';
+import { signOut, useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { MailCheck } from 'lucide-react';
 
+import { SignInPanel } from '@/components/auth/SignInPanel';
 import { PlasmaLogo } from '@/components/brand/PlasmaLogo';
 import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
 import { LanguageSelector } from '@/components/i18n/LanguageSelector';
@@ -18,14 +19,16 @@ import { acceptInvitation, invitationErrorKey, previewInvitation, type Invitatio
 
 /**
  * Invitation landing page (R3 Task 1). The token only identifies the invitation; joining
- * happens at Google sign-in when the verified e-mail equals the invited address exactly.
+ * happens at sign-in (Google or an e-mail code, P1) when the verified e-mail equals the
+ * invited address exactly.
  */
 export default function InvitePage() {
     const t = useTranslations('auth.invite');
     const roles = useTranslations('settings.team.roles');
     const locale = useLocale() as CustomerSelectableLocale;
     const { token } = useParams<{ token: string }>();
-    const { status } = useSession();
+    const { status, update } = useSession();
+    const router = useRouter();
     const [preview, setPreview] = useState<InvitationPreview | null>(null);
     const [missing, setMissing] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -55,8 +58,12 @@ export default function InvitePage() {
             setBusy(false);
         }
     };
-    // Approval changes the account's authority, so a fresh sign-in opens the workspace.
-    const openWorkspace = () => signIn('google', { callbackUrl: '/dashboard' });
+    // The membership changes the session's company claims: refresh them, then open the workspace
+    // (the dashboard sends a revoked session back to sign-in).
+    const openWorkspace = async () => {
+        await update().catch(() => undefined);
+        router.push('/dashboard');
+    };
 
     const organization = preview?.organization_name || t('unknownOrganization');
     const role = preview ? roles(preview.role) : '';
@@ -67,8 +74,12 @@ export default function InvitePage() {
             <span className="ds-eyebrow"><MailCheck aria-hidden /> {t('eyebrow')}</span>
             {/* The preview answers only for a usable invitation: unknown, expired, revoked and accepted
                 links all read "not found" (a signed-in invitee may already have joined at sign-in). */}
-            {missing && !accepted ? <Alert tone="warning" title={t('notFound')}
-                action={status === 'authenticated' ? <ButtonLink href="/dashboard">{t('goToWorkspace')}</ButtonLink> : undefined} />
+            {missing && !accepted ? (status === 'authenticated'
+                // Signing in accepts an invitation for that exact address, after which the link no longer
+                // previews: say so instead of calling the link invalid.
+                ? <Alert tone="success" title={t('signedInNotFound')}
+                    action={<ButtonLink href="/dashboard">{t('goToWorkspace')}</ButtonLink>} />
+                : <Alert tone="warning" title={t('notFound')} />)
             : !preview ? <p role="status" className="ds-muted">{t('loading')}</p> : <>
                 <h1 id="invite-title"><BidiText>{t('title', { organization })}</BidiText></h1>
                 <p><BidiText>{preview.inviter_name
@@ -76,7 +87,7 @@ export default function InvitePage() {
                     : t('bodyNoInviter', { role })}</BidiText></p>
                 {accepted ? <>
                     <Alert tone="success" title={t('accepted')} />
-                    <Button onClick={openWorkspace}>{t('goToWorkspace')}</Button>
+                    <Button onClick={() => void openWorkspace()}>{t('goToWorkspace')}</Button>
                 </> : <>
                     <p className="ds-muted">{t('emailHint', { email: preview.email_hint })}</p>
                     <p><TechnicalText>{preview.email_hint}</TechnicalText></p>
@@ -85,7 +96,8 @@ export default function InvitePage() {
                         action={error === 'emailMismatch' ? <Button variant="secondary" onClick={() => signOut({ callbackUrl: returnUrl })}>{t('signOut')}</Button> : undefined} />}
                     {status === 'authenticated'
                         ? <Button loading={busy} onClick={() => void accept()}>{t('accept')}</Button>
-                        : <Button loading={status === 'loading'} onClick={() => signIn('google', { callbackUrl: returnUrl })}>{t('signIn')}</Button>}
+                        : status === 'loading' ? <p role="status" className="ds-muted">{t('loading')}</p>
+                        : <SignInPanel callbackUrl={returnUrl} googleLabel={t('signIn')} />}
                 </>}
             </>}
         </Surface>

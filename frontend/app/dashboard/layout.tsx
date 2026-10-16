@@ -27,13 +27,17 @@ export type AccessStatus = {
     access_allowed: boolean;
     state: string;
     rejection_or_disabled_reason?: string | null;
+    organization_access_state?: string | null;
 };
 
 const CONTROL_PATHS = new Set([
     '/dashboard/onboarding',
     '/dashboard/pending-approval',
+    '/dashboard/explore',
     '/dashboard/access-blocked',
 ]);
+// P1: an onboarded account whose organization has not started a pilot explores instead of waiting.
+const EXPLORE_PATH = '/dashboard/explore';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
     const common = useTranslations('common');
@@ -104,9 +108,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     return;
                 }
 
-                if (pathname !== '/dashboard/pending-approval') {
+                if (pathname !== EXPLORE_PATH) {
                     if (!cancelled) setWorkspaceAccessAllowed(false);
-                    router.replace('/dashboard/pending-approval');
+                    router.replace(EXPLORE_PATH);
                     return;
                 }
                 if (!cancelled) setWorkspaceAccessAllowed(false);
@@ -161,7 +165,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </NotificationProvider>
     ) : (
         <CustomerShell name={session?.user?.name} email={session?.user?.email}
-            company={companyName} canAdmin={isOperatorOrAdmin} onLogout={handleLogout}>
+            company={companyName} canAdmin={isOperatorOrAdmin} onLogout={handleLogout}
+            exploreOnly={pathname === EXPLORE_PATH}>
             {children}
         </CustomerShell>
     );

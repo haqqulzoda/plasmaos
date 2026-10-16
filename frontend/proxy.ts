@@ -7,7 +7,9 @@ import { PERSISTED_UI_LOCALE_HEADER } from '@/i18n/requestLocale';
 
 const PUBLIC_PATHS = ['/', '/api/auth', '/api/build', '/_next', '/favicon.ico'];
 // The invitation preview is token-gated and public; accepting requires a session (R3).
-const PUBLIC_EXACT_PATHS = ['/api/v1/health/version', '/api/v1/invitations/preview'];
+// P1: requesting an e-mail sign-in code happens before there is a session (rate limited by the
+// backend). Verification goes through Auth.js (/api/auth), never this route.
+const PUBLIC_EXACT_PATHS = ['/api/v1/health/version', '/api/v1/invitations/preview', '/api/v1/auth/email/request-code'];
 
 function shouldUseSecureCookies(): boolean {
   const authUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;

@@ -4,6 +4,7 @@ Plasma AI - Users Endpoints
 Protected endpoints for user operations.
 """
 
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -137,6 +138,10 @@ class AccessStatusResponse(BaseModel):
     rejection_or_disabled_reason: str | None = None
     company_name: str | None = None
     company_profile_id: UUID | None = None
+    # P1: explore | pilot | paid | disabled, and the plan's dates (null without an organization).
+    organization_access_state: str | None = None
+    plan_started_on: date | None = None
+    plan_ends_on: date | None = None
 
 
 # =============================================================================
@@ -210,6 +215,9 @@ async def get_access_status(
         state = "approved"
     elif profile is None:
         state = "onboarding_incomplete"
+    elif user_status == USER_APPROVAL_APPROVED and company_status == COMPANY_APPROVAL_PENDING:
+        # P1: a self sign-up organization explores until an admin starts its pilot.
+        state = "explore"
     elif user_status == USER_APPROVAL_APPROVED:
         state = "user_approved_company_pending"
     elif company_status == COMPANY_APPROVAL_APPROVED:
@@ -223,7 +231,15 @@ async def get_access_status(
     elif profile is not None and company_status in blocked_statuses:
         reason = profile.rejection_reason
 
+    try:
+        context = await organization_profile_context(db, user_id=current_user.id)
+    except Exception:  # an unusable explicit selection: the state above still answers
+        context = None
+    organization = context.organization if context is not None else None
     return AccessStatusResponse(
+        organization_access_state=organization.access_state if organization is not None else None,
+        plan_started_on=organization.plan_started_on if organization is not None else None,
+        plan_ends_on=organization.plan_ends_on if organization is not None else None,
         user_approval_status=user_status,
         company_approval_status=company_status,
         platform_role=current_user.platform_role,

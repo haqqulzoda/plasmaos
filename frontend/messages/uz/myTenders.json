@@ -110,5 +110,11 @@
     "filteredEmpty": "Mos tenderlar topilmadi",
     "filteredHelp": "Filtrlarni o‘zgartiring yoki boshqa tenderlarni ko‘ring.",
     "statusEmpty": "Bu holatda tenderlar yo‘q"
+  },
+  "legacyDrafts": {
+    "title": "Avval boshlangan ariza loyihalari ({count})",
+    "help": "«Ishdagi tenderlar» bo‘limi paydo bo‘lishidan oldin boshlangan ariza loyihalari. Davom ettirish uchun oching; tender ustida ishni boshlash uni yuqoridagi ro‘yxatga qo‘shadi.",
+    "deadline": "Muddat {date}",
+    "started": "Boshlangan {date}"
   }
 }

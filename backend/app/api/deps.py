@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access import (
     COMPANY_APPROVAL_APPROVED,
+    COMPANY_APPROVAL_PENDING,
     PLATFORM_ROLE_ADMIN,
     PLATFORM_ROLE_OPERATOR,
     USER_APPROVAL_APPROVED,
@@ -237,11 +238,28 @@ async def require_explorer_access(
 
     profile = await effective_company_profile(db, user_id=current_user.id)
     profile_approval = profile.approval_status if profile is not None else None
-    if profile_approval is not None and profile_approval != COMPANY_APPROVAL_APPROVED:
+    # P1: an explore organization (company pending) sees the opportunities feed too.
+    if profile_approval is not None and profile_approval not in {COMPANY_APPROVAL_APPROVED, COMPANY_APPROVAL_PENDING}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Approved pilot access required",
         )
+    return current_user
+
+
+async def require_explore_access(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """P1: an onboarded member of an explore, pilot or paid organization (not disabled)."""
+    _require_enabled_account(current_user)
+    if is_operator_user(current_user):
+        return current_user
+    if not is_approved_user(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User approval required")
+    profile = await effective_company_profile(db, user_id=current_user.id)
+    if profile is None or profile.approval_status not in {COMPANY_APPROVAL_APPROVED, COMPANY_APPROVAL_PENDING}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization access required")
     return current_user
 
 

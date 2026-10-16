@@ -1,0 +1,114 @@
+{
+  "label": "demo",
+  "tender": {
+    "title": "Lenders Technical Advisor of the ROGUN HPP (LTA)",
+    "client": "Project Management Group for Energy Facilities Construction under the President of the RT",
+    "country": "Tajikistan",
+    "source": "World Bank",
+    "reference": "OP00467875",
+    "notice_type": "Request for Expression of Interest",
+    "deadline": "2026-10-12",
+    "source_url": "https://projects.worldbank.org/en/projects-operations/procurement-detail/OP00467875"
+  },
+  "firm": {
+    "name": "Demo Consulting LLC",
+    "note": "Demo Consulting LLC is fictional: its references, partners and experts are invented for this walkthrough."
+  },
+  "metrics": {
+    "requirements": 8,
+    "met": 0,
+    "partial": 0,
+    "gaps": 8
+  },
+  "steps": {
+    "requirements": [
+      {
+        "text": "The combined construction/works value of the projects presented to demonstrate the specific experience criteria must be at least US$1 billion.",
+        "category": "FINANCIAL",
+        "status": "GAP",
+        "evidence": "The aggregate capital value of the works/construction of reference projects submitted under specific experience must reach or exceed 1 billion USD."
+      },
+      {
+        "text": "The Consultant must have at least 10 years of general experience providing lenders' technical advisory, independent engineer, owner's engineer, project-management, construction-supervision, technical due-diligence, or monitoring services for large and complex infrastructure projects.",
+        "category": "EXPERIENCE",
+        "status": "GAP",
+        "evidence": "The consultant must show a track record spanning a minimum of 10 years in technical advisory, engineering, or monitoring roles on large and complex infrastructure projects."
+      },
+      {
+        "text": "The Consultant must be a legally registered entity established and operational for at least 10 years, submitting a Certificate of Incorporation. For a joint venture, each member must demonstrate this requirement.",
+        "category": "LEGAL",
+        "status": "GAP",
+        "evidence": "Each joint venture partner must independently satisfy the 10-year legal incorporation and operational requirement and provide their Certificate of Incorporation."
+      },
+      {
+        "text": "Within the last 10 years, the Consultant must have successfully completed at least 2 assignments as lenders' technical advisor, independent engineer, or equivalent independent technical-monitoring advisor for projects financed by multilateral or bilateral development financiers (such as World Bank, AIIB, ADB, EIB, EBRD, IsDB), including at least 1 assignment relating to a large hydropower plant or dam project.",
+        "category": "EXPERIENCE",
+        "status": "GAP",
+        "evidence": "Requires 2 completed IFI/development financier technical advisory/monitoring assignments within 10 years, with a sub-requirement that at least 1 must specifically cover a large hydropower plant or dam."
+      },
+      {
+        "text": "Consultants may associate with other firms as a joint venture or sub-consultancy, clearly indicating the form in the EOI; in a joint venture, all partners are jointly and severally liable for the entire contract if selected.",
+        "category": "CONSORTIUM_RULES",
+        "status": "GAP",
+        "evidence": "Allows association by joint venture or sub-consultancy, mandating joint and several liability for JV partners."
+      },
+      {
+        "text": "Within the last 10 years, the Consultant must have successfully completed experience monitoring environmental, social, labor, resettlement, and OHS compliance on at least one large infrastructure project financed by an international financial institution.",
+        "category": "EXPERIENCE",
+        "status": "GAP",
+        "evidence": "Requires at least 1 completed assignment within the past 10 years covering E&S, labor, resettlement, and OHS compliance monitoring on an IFI-financed large infrastructure project."
+      },
+      {
+        "text": "The Consultant must demonstrate managerial and organizational capacity to mobilize and maintain a multidisciplinary international team, permanent site presence, specialist home-office support, and responsive inputs over a long-duration assignment, submitting an organogram and evidence of a quality management system (ISO 9001 or equivalent).",
+        "category": "TECHNICAL_CAPACITY",
+        "status": "GAP",
+        "evidence": "Bidders must submit an organogram and ISO 9001 (or equivalent) certification to prove organizational capacity for multidisciplinary mobilization and permanent site presence."
+      },
+      {
+        "text": "Within the last 10 years, the Consultant must have experience with FIDIC-based contracts and multi-contract project interfaces, including review of variations/change orders, claims, schedules, costs, milestone payments, testing, commissioning, and completion certification.",
+        "category": "EXPERIENCE",
+        "status": "GAP",
+        "evidence": "Requires verified experience handling FIDIC-based contracts and multi-contract interface tasks within the last 10 years."
+      }
+    ],
+    "gaps": [
+      {
+        "text": "The Consultant must demonstrate managerial and organizational capacity to mobilize and maintain a multidisciplinary international team, permanent site presence, specialist home-office support, and responsive inputs over a long-duration assignment, submitting an organogram and evidence of a quality management system (ISO 9001 or equivalent).",
+        "action": "No current company record proves or disproves this requirement."
+      },
+      {
+        "text": "The Consultant must have at least 10 years of general experience providing lenders' technical advisory, independent engineer, owner's engineer, project-management, construction-supervision, technical due-diligence, or monitoring services for large and complex infrastructure projects.",
+        "action": "No current company record proves or disproves this requirement."
+      },
+      {
+        "text": "The Consultant must be a legally registered entity established and operational for at least 10 years, submitting a Certificate of Incorporation. For a joint venture, each member must demonstrate this requirement.",
+        "action": "The issued document mentions a contributor but does not resolve lead/member eligibility."
+      },
+      {
+        "text": "Consultants may associate with other firms as a joint venture or sub-consultancy, clearly indicating the form in the EOI; in a joint venture, all partners are jointly and severally liable for the entire contract if selected.",
+        "action": "The cited rule is conditional or complex and requires a human interpretation."
+      },
+      {
+        "text": "Within the last 10 years, the Consultant must have successfully completed experience monitoring environmental, social, labor, resettlement, and OHS compliance on at least one large infrastructure project financed by an international financial institution.",
+        "action": "No current company record proves or disproves this requirement."
+      },
+      {
+        "text": "Within the last 10 years, the Consultant must have experience with FIDIC-based contracts and multi-contract project interfaces, including review of variations/change orders, claims, schedules, costs, milestone payments, testing, commissioning, and completion certification.",
+        "action": "No current company record proves or disproves this requirement."
+      },
+      {
+        "text": "Within the last 10 years, the Consultant must have successfully completed at least 2 assignments as lenders' technical advisor, independent engineer, or equivalent independent technical-monitoring advisor for projects financed by multilateral or bilateral development financiers (such as World Bank, AIIB, ADB, EIB, EBRD, IsDB), including at least 1 assignment relating to a large hydropower plant or dam project.",
+        "action": "The cited rule is conditional or complex and requires a human interpretation. Own experience: 6 recorded project reference(s) match this requirement: Construction supervision of a 500 kV transmission line, southern Uzbekistan (Transmission company PIU (ADB-financed), Uzbekistan, completed 2019); Owner's engineer for a 220 kV cross-border interconnection (National grid operator PIU (EBRD-financed),"
+      },
+      {
+        "text": "The combined construction/works value of the projects presented to demonstrate the specific experience criteria must be at least US$1 billion.",
+        "action": "No current company record proves or disproves this requirement."
+      }
+    ],
+    "team": [],
+    "eoi": {
+      "excerpt": "Subject: Expression of Interest — Lenders Technical Advisor of the ROGUN HPP (LTA) (Ref. OP00467875)\n\nDear Pulod Muhiddiniyon (Project Director),\n\nDemo Consulting LLC hereby expresses its interest in providing the consulting services for “Lenders Technical Advisor of the ROGUN HPP (LTA)”, reference OP00467875.\n\nWe submit this expression of interest in association with Dala Geo Survey LLP as joint-venture member.\n\nThe following pages describe our firm and our relevant experience, set out against the shortlisting criteria of the notice.",
+      "status_label": "Draft — not reviewed by your team"
+    }
+  }
+}

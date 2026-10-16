@@ -126,3 +126,53 @@ export async function confirmCvDraft(
 ): Promise<{ expert_id: string; expert_name: string; cv_version: CandidateCVVersion }> {
     return (await api.post(`/candidates/cv-drafts/${encodeURIComponent(draftId)}/confirm`, body, scoped(organizationId))).data;
 }
+
+// ---- P1: done-for-you onboarding (one workbook: references, experts, assignments) ----------------
+
+export type WorkbookKind = 'references' | 'experts' | 'assignments';
+export type WorkbookRow = {
+    kind: WorkbookKind; row: number; status: 'NEW' | 'DUPLICATE' | 'ERROR';
+    errors: string[]; duplicate: string | null; values: Record<string, unknown>;
+};
+export type WorkbookPreview = {
+    file_sha256: string; file_format: 'xlsx' | 'csv'; warnings: string[]; truncated: boolean;
+    counts: Record<WorkbookKind, { rows: number; new: number; duplicates: number; errors: number }>;
+    rows: WorkbookRow[];
+};
+export type WorkbookCommitResult = {
+    file_sha256: string; references_created: number; partner_firms_created: number; experts_created: number;
+    cv_versions_created: number; assignments_attached: number; skipped_duplicates: number; skipped_errors: number;
+};
+
+const multipart = (organizationId: string) => ({ headers: { 'X-Organization-ID': organizationId, 'Content-Type': 'multipart/form-data' } });
+
+/** Validate and preview the file on the server. Writes nothing. */
+export async function previewWorkbookImport(organizationId: string, file: File): Promise<WorkbookPreview> {
+    const form = new FormData();
+    form.append('file', file);
+    return (await api.post<WorkbookPreview>('/candidates/library-import/preview', form, multipart(organizationId))).data;
+}
+
+/** Import the new rows of exactly the previewed file (the server checks its SHA-256). */
+export async function commitWorkbookImport(organizationId: string, file: File, sha256: string): Promise<WorkbookCommitResult> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('expected_sha256', sha256);
+    return (await api.post<WorkbookCommitResult>('/candidates/library-import/commit', form, multipart(organizationId))).data;
+}
+
+/** Download the template (.xlsx with every sheet, or one .csv) through the authenticated API. */
+export async function downloadImportTemplate(format: 'xlsx' | 'csv', kind?: string): Promise<void> {
+    const response = await api.get<Blob>('/candidates/library-import/template', {
+        params: { format, kind: kind ?? 'references' }, responseType: 'blob',
+    });
+    const name = format === 'xlsx' ? 'plasma-library-import-template.xlsx' : `plasma-${kind ?? 'references'}-template.csv`;
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

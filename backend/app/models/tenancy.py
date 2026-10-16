@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -16,10 +17,12 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.access import ORG_ACCESS_EXPLORE, ORG_ACCESS_STATES, sql_string_values
 from app.models.base import (
     Base,
     MembershipRole,
@@ -43,6 +46,17 @@ class Organization(Base):
         unique=True,
     )
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # P1: explore | pilot | paid | disabled (see app.core.access), and the plan an admin records.
+    access_state: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=ORG_ACCESS_EXPLORE, server_default=text(f"'{ORG_ACCESS_EXPLORE}'")
+    )
+    access_state_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    access_state_changed_by_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    plan_started_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    plan_ends_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    success_criteria: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -59,6 +73,18 @@ class Organization(Base):
 
     __table_args__ = (
         Index("ix_organizations_legacy_profile", "legacy_company_profile_id", unique=True),
+        CheckConstraint(
+            f"access_state IN ({sql_string_values(ORG_ACCESS_STATES)})", name="ck_organizations_access_state"
+        ),
+        CheckConstraint(
+            "plan_ends_on IS NULL OR plan_started_on IS NULL OR plan_ends_on >= plan_started_on",
+            name="ck_organizations_plan_dates",
+        ),
+        CheckConstraint(
+            "success_criteria IS NULL OR char_length(success_criteria) <= 4000",
+            name="ck_organizations_success_criteria_length",
+        ),
+        Index("ix_organizations_access_state", "access_state"),
     )
 
 

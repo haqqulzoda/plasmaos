@@ -235,6 +235,8 @@ async def organization_panel(db: AsyncSession, *, limit: int = 500) -> list[dict
             select(
                 Organization.id, Organization.display_name, Organization.created_at,
                 CompanyProfile.approval_status, CompanyProfile.pilot_status, CompanyProfile.notes,
+                Organization.access_state, Organization.plan_started_on, Organization.plan_ends_on,
+                Organization.success_criteria, Organization.access_state_changed_at,
                 func.coalesce(members.c.members, 0), func.coalesce(pursuits.c.pursuits, 0),
                 pursuits.c.pursuit_activity, runs.c.run_activity,
             )
@@ -247,14 +249,19 @@ async def organization_panel(db: AsyncSession, *, limit: int = 500) -> list[dict
         )
     ).all()
     result = []
-    for (organization_id, name, created_at, approval, pilot, notes, member_count, pursuit_count,
-         pursuit_activity, run_activity) in rows:
+    for (organization_id, name, created_at, approval, pilot, notes, access_state, plan_started_on, plan_ends_on,
+         success_criteria, access_changed_at, member_count, pursuit_count, pursuit_activity, run_activity) in rows:
         activity = [value for value in (pursuit_activity, run_activity) if value is not None]
         result.append({
             "organization_id": organization_id,
             "display_name": name,
             "approval_status": approval,
             "pilot_status": pilot,
+            "access_state": access_state,
+            "plan_started_on": plan_started_on,
+            "plan_ends_on": plan_ends_on,
+            "success_criteria": success_criteria,
+            "access_state_changed_at": access_changed_at,
             "members_count": int(member_count),
             "pursuits_count": int(pursuit_count),
             "last_activity_at": max(activity) if activity else None,

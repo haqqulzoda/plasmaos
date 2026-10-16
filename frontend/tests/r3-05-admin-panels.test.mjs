@@ -59,6 +59,8 @@ test("operators see the three panels; Run now and Retry use the existing explici
   assert.doesNotMatch(runs, /failure_reason|original_quote|document_text/);
   const organizations = read("app/admin/organizations/page.tsx");
   assert.match(organizations, /api\.get<OrganizationPanelItem\[\]>\('\/admin\/panels\/organizations'\)/);
-  assert.doesNotMatch(organizations, /api\.(post|put|patch|delete)/);
+  // P1: the only write is the admin access editor (explore | pilot | paid | disabled and the plan).
+  assert.equal((organizations.match(/api\.(post|put|patch|delete)/g) || []).length, 1);
+  assert.match(organizations, /api\.put<OrganizationPanelItem>\(`\/admin\/panels\/organizations\/\$\{editing\.organization_id\}\/access`/);
   assert.match(read("app/admin/audit/page.tsx"), /'ANALYSIS_RUN_RETRIED'/);
 });

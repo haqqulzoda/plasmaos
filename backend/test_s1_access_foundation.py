@@ -131,7 +131,8 @@ class AccessFoundationTests(unittest.TestCase):
             normal = _user(email="new@example.com")
             _apply_email_bootstrap(normal, email=normal.email)
             self.assertEqual(normal.platform_role, PLATFORM_ROLE_PILOT_USER)
-            self.assertEqual(normal.approval_status, USER_APPROVAL_PENDING)
+            # P1: a verified e-mail approves the account (no manual user approval).
+            self.assertEqual(normal.approval_status, USER_APPROVAL_APPROVED)
 
             legacy_admin = _user(email="legacy-admin@example.com", is_admin=True)
             _apply_email_bootstrap(legacy_admin, email=legacy_admin.email)

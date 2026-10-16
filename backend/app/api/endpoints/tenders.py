@@ -6045,7 +6045,8 @@ async def _sync_uzex_tenders(
 @router.post("/refresh", response_model=SourceRefreshResponse)
 async def refresh_tenders(
     force: bool = Query(default=False),
-    current_user: User = Depends(require_approved_user),
+    # P1: every verified e-mail is an approved user now; writes keep the organization gate.
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> SourceRefreshResponse:
     """Request a customer-safe UzEx refresh."""
@@ -7649,13 +7650,14 @@ async def _request_source_refresh(
 async def request_source_refresh(
     source_system: str,
     force: bool = Query(default=False),
-    current_user: User = Depends(require_approved_user),
+    # P1: every verified e-mail is an approved user now; writes keep the organization gate.
+    current_user: User = Depends(require_approved_pilot_access),
     db: AsyncSession = Depends(get_db),
 ) -> SourceRefreshResponse:
     """
     Request a source refresh without exposing scraper tuning controls.
 
-    Approved users may request the default refresh. Operators and administrators
+    Members of approved (pilot or paid) organizations may request the default refresh. Operators and administrators
     may additionally bypass the cooldown with ``force=true``.
     """
     return await _request_source_refresh(

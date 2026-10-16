@@ -44,12 +44,21 @@ export type OrganizationPanelItem = {
     display_name: string | null;
     approval_status: string | null;
     pilot_status: string | null;
+    // P1: explore | pilot | paid | disabled and the recorded plan.
+    access_state: OrganizationAccessState;
+    plan_started_on: string | null;
+    plan_ends_on: string | null;
+    success_criteria: string | null;
+    access_state_changed_at: string | null;
     members_count: number;
     pursuits_count: number;
     last_activity_at: string | null;
     created_at: string;
     demo: boolean;
 };
+
+export const ORGANIZATION_ACCESS_STATES = ['explore', 'pilot', 'paid', 'disabled'] as const;
+export type OrganizationAccessState = (typeof ORGANIZATION_ACCESS_STATES)[number];
 
 export const RUN_KINDS = ['failed', 'stuck', 'long'] as const;
 export type RunKind = (typeof RUN_KINDS)[number];

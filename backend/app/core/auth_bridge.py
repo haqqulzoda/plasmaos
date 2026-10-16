@@ -49,3 +49,39 @@ async def verify_bridge_assertion(payload) -> dict:
     if not await consume_assertion(claims["jti"]):
         raise HTTPException(401, detail="Invalid authentication proof")
     return claims
+
+
+async def verify_email_code_assertion(assertion: str, *, email: str) -> dict:
+    """P1: prove that an e-mail code verification comes from the Auth.js server.
+
+    Same key, issuer, audience, 60-second lifetime and single-use ``jti`` as the Google
+    bridge, plus ``purpose: "email_code"`` (a Google assertion is never accepted here, nor
+    this one there: that one requires ``email_verified``). ``client_ip`` is the browser's
+    address as the Auth.js server saw it, used only for the per-address rate limit.
+    """
+    secret = settings.AUTH_BRIDGE_SECRET
+    if not secret or len(secret) < 32:
+        raise HTTPException(503, detail="Authentication temporarily unavailable")
+    try:
+        claims = jwt.decode(
+            assertion or "", secret, algorithms=["HS256"],
+            audience="plasma-backend", issuer="plasma-authjs",
+            options={"require": ["purpose", "email", "iat", "exp", "jti", "iss", "aud"]},
+        )
+        if not isinstance(claims["jti"], str):
+            raise ValueError("Invalid assertion")
+        UUID(claims["jti"])
+        client_ip = claims.get("client_ip")
+        if (claims["purpose"] != "email_code"
+                or "email_verified" in claims
+                or not isinstance(claims["email"], str)
+                or claims["email"].strip().lower() != (email or "").strip().lower()
+                or claims["exp"] - claims["iat"] > 60
+                or claims["iat"] < time.time() - 60
+                or (client_ip is not None and (not isinstance(client_ip, str) or len(client_ip) > 64))):
+            raise ValueError("Invalid assertion")
+    except (jwt.PyJWTError, ValueError, TypeError, KeyError):
+        raise HTTPException(401, detail="Invalid authentication proof") from None
+    if not await consume_assertion(claims["jti"]):
+        raise HTTPException(401, detail="Invalid authentication proof")
+    return claims

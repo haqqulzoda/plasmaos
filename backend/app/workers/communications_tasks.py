@@ -138,6 +138,28 @@ def send_emails():
     return asyncio.run(_send_emails())
 
 
+# ---- P1: alerts to the Plasma team ------------------------------------------------------------------
+
+
+async def _deliver_admin_alerts():
+    from app.services.admin_alerts import deliver_due_alerts
+    from app.services.email_notifications import send_due_emails
+
+    try:
+        async with AsyncSessionLocal() as db:
+            counts = await deliver_due_alerts(db)
+            if counts.get("SENT"):
+                await send_due_emails(db)  # the e-mail channel's rows, without waiting for the next tick
+            return counts
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.communications_tasks.deliver_admin_alerts")
+def deliver_admin_alerts():
+    return asyncio.run(_deliver_admin_alerts())
+
+
 async def _stage_digests():
     from app.services.email_notifications import stage_daily_digests
 

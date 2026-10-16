@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_operator
+from app.api.deps import require_admin, require_operator
 from app.db.session import get_db
-from app.models.tenancy import Membership
+from app.models.tenancy import Membership, Organization
 from app.models.user import User
 from app.services.admin_activity import (
     ACTION_ANALYSIS_RUN_RETRIED,
@@ -84,11 +85,27 @@ class OrganizationPanelItem(BaseModel):
     display_name: str | None = None
     approval_status: str | None = None
     pilot_status: str | None = None
+    # P1: explore | pilot | paid | disabled and the recorded plan.
+    access_state: str
+    plan_started_on: date | None = None
+    plan_ends_on: date | None = None
+    success_criteria: str | None = None
+    access_state_changed_at: datetime | None = None
     members_count: int
     pursuits_count: int
     last_activity_at: datetime | None = None
     created_at: datetime
     demo: bool
+
+
+class OrganizationAccessUpdate(BaseModel):
+    """Every field is required: the form always sends the whole plan (null clears a field)."""
+
+    access_state: Literal["explore", "pilot", "paid", "disabled"]
+    plan_started_on: date | None = None
+    plan_ends_on: date | None = None
+    success_criteria: str | None = Field(default=None, max_length=4000)
+    reason: str | None = Field(default=None, max_length=500)
 
 
 @router.get("/sources", response_model=list[SourcePanelItem])
@@ -140,3 +157,31 @@ async def retry_analysis_run_endpoint(
 @router.get("/organizations", response_model=list[OrganizationPanelItem])
 async def organizations_panel(db: AsyncSession = Depends(get_db)) -> list[OrganizationPanelItem]:
     return [OrganizationPanelItem(**row) for row in await organization_panel(db)]
+
+
+@router.put("/organizations/{organization_id}/access", response_model=OrganizationPanelItem)
+async def update_organization_access(
+    organization_id: UUID,
+    payload: OrganizationAccessUpdate,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationPanelItem:
+    """P1: set explore / pilot / paid / disabled and the plan (admins only; audited)."""
+    from app.services.organization_access import OrganizationAccessError, set_organization_access
+
+    organization = await db.get(Organization, organization_id, with_for_update=True)
+    if organization is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    try:
+        await set_organization_access(
+            db, organization=organization, state=payload.access_state, actor_user=current_user,
+            actor_label="admin/panels/organizations", reason=(payload.reason or "").strip() or None,
+            plan_started_on=payload.plan_started_on, plan_ends_on=payload.plan_ends_on,
+            success_criteria=payload.success_criteria,
+        )
+    except OrganizationAccessError as exc:
+        await db.rollback()
+        raise HTTPException(422, detail=str(exc)) from exc
+    await db.commit()
+    row = next(item for item in await organization_panel(db) if item["organization_id"] == organization_id)
+    return OrganizationPanelItem(**row)

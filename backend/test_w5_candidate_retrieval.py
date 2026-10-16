@@ -61,7 +61,7 @@ from test_w4_pursuit_analysis import W4_HEAD
 
 
 W5_HEAD = "20260928_0001_w5_candidate_retrieval"
-CURRENT_HEAD = "20261012_0002_s1_product_analytics"
+CURRENT_HEAD = "20261016_0002_p1_organization_access"
 
 
 def test_w5_semantics_are_separate_and_bounded() -> None:

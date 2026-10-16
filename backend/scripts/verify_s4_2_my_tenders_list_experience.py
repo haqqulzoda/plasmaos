@@ -26,7 +26,7 @@ from app.services.tender_engagements import save_tender_to_my_tenders
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261012_0002_s1_product_analytics"
+HEAD = "20261016_0002_p1_organization_access"
 STATUSES = tuple(TenderEngagementStatus)
 SOURCES = ("uzex", "world_bank", "adb", "giz", "ebrd")
 

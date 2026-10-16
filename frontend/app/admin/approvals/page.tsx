@@ -75,6 +75,7 @@ export default function AdminAccountsPageView() {
     <div className="admin-page accounts-page ds-container-data ds-stack">
       <header className="admin-page-header"><div><span className="ds-eyebrow">Identity operations</span><h1>Accounts &amp; approvals</h1><p className="ds-muted">Canonical lifecycle state, access decisions and immutable audit entry points.</p></div><Button variant="secondary" loading={loading} onClick={() => loadAccounts()} leadingIcon={<RefreshCw aria-hidden />}>Refresh</Button></header>
       <Alert tone="info" title="Account state is authoritative.">Every completed lifecycle transition changes the account security version. Existing sessions and credentials stop working immediately; the next privileged action requires fresh authentication.</Alert>
+      <Alert tone="info" title="No manual account approval.">A verified e-mail (Google or an e-mail code) approves an account at sign-in. Organizations still need approval, and disabling an account still ends its access immediately.</Alert>
       {!canManageAccounts && <Alert tone="warning" title="Read-only administrator view"><ShieldAlert aria-hidden /> Current effective-admin authority is required for actions that change account or company state.</Alert>}
       {error && <Alert tone="danger" title={error} />}
       {success && <Alert tone="success" title={success} />}

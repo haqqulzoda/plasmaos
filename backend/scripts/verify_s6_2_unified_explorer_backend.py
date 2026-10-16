@@ -31,7 +31,7 @@ from app.services.recommendations import (
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261012_0002_s1_product_analytics"
+HEAD = "20261016_0002_p1_organization_access"
 TENDER_COUNT = 10_000
 RECOMMENDATION_COUNT = 20_000
 

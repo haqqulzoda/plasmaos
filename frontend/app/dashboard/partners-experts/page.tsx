@@ -1,11 +1,12 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { FileSpreadsheet, RefreshCw } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { ExpertsTab, OwnExperienceTab, PartnerFirmsTab } from '@/components/library/LibraryTabs';
+import { WorkbookImportDialog } from '@/components/library/WorkbookImport';
 import { OrganizationContextPicker } from '@/components/pursuits/OrganizationContextPicker';
 import { Button } from '@/components/ui/Button';
 import { EmptyState, PageHeader, PageSkeleton, Surface } from '@/components/ui/Display';
@@ -28,6 +29,7 @@ function LibraryPage() {
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
+  const [importing, setImporting] = useState(false);
   const chooseOrganization = useCallback((value: string) => {
     setOrganizationId(value); setData(null); setFailed(false); setLoading(Boolean(value));
   }, []);
@@ -55,7 +57,9 @@ function LibraryPage() {
     : value === 'partners' ? <PartnerFirmsTab {...common} firms={firms} />
       : <ExpertsTab {...common} experts={data.library.experts} />;
   return <main className="customer-page candidate-library-page ds-container-content" data-library-page>
-    <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('description')} />
+    <PageHeader eyebrow={t('eyebrow')} title={t('title')} description={t('description')}
+      primaryAction={data ? <Button variant="secondary" leadingIcon={<FileSpreadsheet aria-hidden />} data-workbook-open
+        onClick={() => setImporting(true)}>{t('workbook.open')}</Button> : undefined} />
     <Surface className="pursuit-org-context">
       <OrganizationContextPicker value={organizationId} onChange={chooseOrganization} onOrganizations={setOrganizations} />
     </Surface>
@@ -67,6 +71,7 @@ function LibraryPage() {
       { value: 'partners', label: t('tabs.partners'), content: tab === 'partners' ? content('partners') : null },
       { value: 'experts', label: t('tabs.experts'), content: tab === 'experts' ? content('experts') : null },
     ]} />}
+    {importing && organizationId && <WorkbookImportDialog organizationId={organizationId} onClose={() => setImporting(false)} onFinished={reload} />}
   </main>;
 }
 

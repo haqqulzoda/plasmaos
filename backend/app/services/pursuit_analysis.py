@@ -948,7 +948,24 @@ async def _process_analysis_run(
             run.lease_owner = None
             _stage_analysis_costs(db, run, ai_calls)
             await _stage_run_outcome(db, run)
+            alerted = False
+            if is_terminal_analysis_failure(exc):
+                # P1: "Plasma has been notified" is true: one team alert per hour while the
+                # provider rejects the key or billing (every run fails until it is fixed).
+                from app.services.admin_alerts import stage_admin_alert
+
+                hour = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+                alerted = await stage_admin_alert(
+                    db, kind="ANALYSIS_PROVIDER_ERROR", dedupe_key=f"admin-alert:provider:{failure_code}:{hour}",
+                    payload={"code": failure_code, "status": getattr(exc, "status_code", None),
+                             "analysis_run_id": str(run.id), "organization_id": str(run.organization_id),
+                             "at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+                )
             await db.commit()
+            if alerted:
+                from app.services.admin_alerts import kick_admin_alerts
+
+                kick_admin_alerts()
         raise
 
 

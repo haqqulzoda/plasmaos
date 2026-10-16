@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -399,6 +399,92 @@ async def upload_cv_endpoint(
     if draft.expert_id is not None:
         expert_name = await db.scalar(select(Expert.display_name).where(Expert.id == draft.expert_id))
     return _cv_draft_response(draft, display, expert_name)
+
+
+# ---- P1: done-for-you onboarding: import references and experts from the template ----------------------
+
+IMPORT_XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+async def _read_import_upload(file: UploadFile) -> bytes:
+    from app.services.library_import import MAX_UPLOAD_BYTES
+
+    chunks, total = [], 0
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(413,
+                                detail={"code": "IMPORT_FILE", "message": "the file is larger than 2 MB"})
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+@router.get("/library-import/template")
+async def library_import_template(
+    format: str = "xlsx", kind: str = "references",
+) -> Response:
+    """The import template: .xlsx (all sheets and the instructions) or one .csv per sheet."""
+    from app.services import library_import
+
+    if format == "xlsx":
+        content, media, name = library_import.build_template_xlsx(), IMPORT_XLSX_TYPE, "plasma-library-import-template.xlsx"
+    elif format == "csv" and kind in library_import.KINDS:
+        content, media, name = library_import.build_template_csv(kind), "text/csv; charset=utf-8", f"plasma-{kind}-template.csv"
+    else:
+        raise HTTPException(422, detail="format must be xlsx, or csv with kind references|experts|assignments")
+    return Response(content=content, media_type=media, headers={
+        "Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+    })
+
+
+@router.post("/library-import/preview")
+async def library_import_preview(
+    file: UploadFile = File(...),
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Validate the file and show every row (new, duplicate, error). Writes nothing."""
+    from app.services import library_import
+
+    context = await _context(db, current_user, x_organization_id)
+    content = await _read_import_upload(file)
+    try:
+        result = await library_import.preview(
+            db, organization_id=context.organization.id, filename=file.filename or "", content=content,
+        )
+    except library_import.ImportFileError as exc:
+        raise HTTPException(422, detail={"code": "IMPORT_FILE", "message": str(exc)}) from exc
+    return library_import.preview_payload(result)
+
+
+@router.post("/library-import/commit")
+async def library_import_commit(
+    file: UploadFile = File(...),
+    expected_sha256: str = Form(..., min_length=64, max_length=64),
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Import the previewed file's new rows in one transaction (errors and duplicates are skipped)."""
+    from dataclasses import asdict
+
+    from app.services import library_import
+
+    context = await _context(db, current_user, x_organization_id)
+    content = await _read_import_upload(file)
+    try:
+        result = await library_import.commit(
+            db, organization_id=context.organization.id, actor_user_id=current_user.id,
+            filename=file.filename or "", content=content, expected_sha256=expected_sha256,
+        )
+    except library_import.ImportFileError as exc:
+        await db.rollback()
+        raise HTTPException(422, detail={"code": "IMPORT_FILE", "message": str(exc)}) from exc
+    await db.commit()
+    return asdict(result)
 
 
 @router.get("/cv-drafts", response_model=list[CVDraftResponse])

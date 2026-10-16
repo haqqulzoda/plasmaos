@@ -962,6 +962,42 @@
       "unverifiedNote": "Saqlangan rezyume versiyasi kimdir asl hujjatlarni tekshirmaguncha «Tasdiqlanmagan» deb belgilanadi.",
       "confirm": "Tasdiqlash va rezyume versiyasini saqlash",
       "saveFailed": "Rezyume versiyasini saqlab bo‘lmadi"
+    },
+    "workbook": {
+      "open": "Shablondan import",
+      "title": "Referenslar va ekspertlarni import qilish",
+      "description": "Firmangiz referenslari, hamkor firmalar referenslari, ekspertlar va ularning topshiriqlari uchun bitta Excel kitobi.",
+      "step1": "Shablonni yuklab oling va to‘ldiring (yoki Plasma jamoasidan siz uchun to‘ldirishni so‘rang).",
+      "step2": "Faylni yuklang: har bir qator tekshiriladi va quyida ko‘rsatiladi. Hali hech narsa saqlanmaydi.",
+      "step3": "Import: yangi qatorlar birgalikda saqlanadi. Takrorlar va xatoli qatorlar o‘tkazib yuboriladi.",
+      "templateXlsx": "Shablon (.xlsx)",
+      "templateCsv": {
+        "references": "Referenslar (.csv)",
+        "experts": "Ekspertlar (.csv)",
+        "assignments": "Topshiriqlar (.csv)"
+      },
+      "choose": ".xlsx yoki .csv faylni tanlang",
+      "checking": "Fayl tekshirilmoqda…",
+      "previewFailed": "Faylni tekshirib bo‘lmadi.",
+      "commitFailed": "Import muvaffaqiyatsiz; hech narsa saqlanmadi.",
+      "templateFailed": "Shablonni yuklab bo‘lmadi.",
+      "kinds": {
+        "references": "Referenslar",
+        "experts": "Ekspertlar",
+        "assignments": "Ekspert topshiriqlari"
+      },
+      "counts": "Yangi: {new} · allaqachon bor: {duplicates} · xatolar: {errors}",
+      "errorsTitle": "Xatoli qatorlar: {count}",
+      "errorsHelp": "Ular o‘tkazib yuboriladi. Ularni ham import qilish uchun faylda tuzating va qayta yuklang.",
+      "sheet": "Varaq",
+      "status": {
+        "NEW": "Yangi",
+        "DUPLICATE": "Allaqachon bor",
+        "ERROR": "Xato"
+      },
+      "commit": "{count} ta yangi qatorni import qilish",
+      "done": "Import yakunlandi",
+      "result": "Referenslar: {references} (yangi hamkor firmalar: {firms}). Ekspertlar: {experts} (topshiriqlar: {assignments}). O‘tkazib yuborildi: {duplicates} ta allaqachon bor, {errors} ta xatoli."
     }
   },
   "proposal": {

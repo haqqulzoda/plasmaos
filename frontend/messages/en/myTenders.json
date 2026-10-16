@@ -110,5 +110,11 @@
     "filteredEmpty": "No matching tenders",
     "filteredHelp": "Adjust your filters or explore more tenders.",
     "statusEmpty": "No tenders in this status"
+  },
+  "legacyDrafts": {
+    "title": "Earlier bid drafts ({count})",
+    "help": "Bid drafts started before Pursuits listed your work. Open one to continue it; starting a pursuit for its tender adds it to the list above.",
+    "deadline": "Deadline {date}",
+    "started": "Started {date}"
   }
 }

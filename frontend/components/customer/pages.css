@@ -155,6 +155,46 @@
   inline-size: 20px;
   block-size: 20px;
 }
+/* P1: Google or an e-mail code */
+.auth-methods,
+.auth-code-form {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-caption);
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  border-block-start: 1px solid var(--ds-border);
+}
+.auth-code-sent strong {
+  display: block;
+  color: var(--ds-text);
+  overflow-wrap: anywhere;
+}
+.auth-code-input {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3em;
+  font-size: var(--ds-heading-md);
+  text-align: center;
+}
+.auth-code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.auth-code-actions .ds-button,
+.invite-card .auth-code-actions .ds-button {
+  inline-size: auto;
+}
 .auth-privacy,
 .auth-footer {
   font-size: var(--ds-caption);
@@ -4204,4 +4244,172 @@
 }
 .auth-error-code {
   font-size: var(--ds-body-secondary);
+}
+
+/* P1: Explore view (organizations without a pilot) */
+.explore-page {
+  display: grid;
+  gap: var(--ds-space-8);
+  max-inline-size: 72rem;
+}
+.explore-hero h1 {
+  font-size: var(--ds-heading-lg);
+  font-weight: 650;
+}
+.explore-hero .ds-eyebrow svg,
+.explore-section h2 svg,
+.explore-cta h2 svg {
+  inline-size: 18px;
+  block-size: 18px;
+  vertical-align: -3px;
+}
+.explore-cta {
+  display: grid;
+  gap: var(--ds-space-6);
+  padding: var(--ds-space-6);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+}
+.explore-cta h2,
+.explore-section h2 {
+  font-size: var(--ds-heading-md);
+  font-weight: 650;
+}
+.explore-pilot-list {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin-block-start: var(--ds-space-3);
+}
+.explore-pilot-list li {
+  display: flex;
+  gap: var(--ds-space-2);
+  align-items: flex-start;
+}
+.explore-pilot-list svg {
+  flex: none;
+  inline-size: 18px;
+  color: var(--ds-success);
+}
+.explore-cta-actions {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+.explore-section {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+.explore-opportunities {
+  display: grid;
+  gap: var(--ds-space-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
+}
+.explore-opportunities li {
+  display: grid;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-4);
+  border-radius: 8px;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.explore-opportunity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  font-size: var(--ds-caption);
+}
+.explore-opportunity-meta a svg {
+  inline-size: 12px;
+  block-size: 12px;
+}
+.explore-demo-notice {
+  display: grid;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-4);
+}
+.explore-demo-metrics {
+  font-variant-numeric: tabular-nums;
+}
+.explore-demo-step {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+.explore-demo-list {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+.explore-demo-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--ds-space-3);
+  align-items: start;
+}
+.explore-demo-list li > svg {
+  inline-size: 18px;
+}
+.explore-demo-eoi {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+  white-space: pre-line;
+}
+@media (max-width: 760px) {
+  .explore-cta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* P1: workbook import (done-for-you onboarding) */
+.library-workbook-steps {
+  display: grid;
+  gap: var(--ds-space-1);
+  padding-inline-start: var(--ds-space-5);
+  list-style: decimal;
+}
+.library-workbook-counts {
+  display: grid;
+  gap: var(--ds-space-2);
+  grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+}
+.library-workbook-counts > div {
+  padding: var(--ds-space-3);
+  border-radius: 8px;
+}
+.library-workbook-counts dt {
+  font-weight: 600;
+}
+.library-import-errors {
+  margin-block-start: var(--ds-space-1);
+  color: var(--ds-danger);
+  font-size: var(--ds-caption);
+}
+
+/* P1: earlier bid drafts (proposals without a pursuit) on My Tenders */
+.legacy-bid-drafts {
+  padding: var(--ds-space-4);
+}
+.legacy-bid-drafts summary {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  cursor: pointer;
+  font-weight: 600;
+}
+.legacy-bid-drafts summary svg {
+  inline-size: 18px;
+}
+.legacy-bid-drafts ul {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin-block-start: var(--ds-space-3);
+}
+.legacy-bid-drafts li a {
+  color: var(--ds-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.legacy-bid-drafts li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
 }

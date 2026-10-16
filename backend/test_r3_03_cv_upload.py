@@ -38,7 +38,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 PREVIOUS = "20261008_0001_r3_pending_invitations"
 REVISION = "20261009_0001_r3_cv_library_drafts"
-HEAD = "20261012_0002_s1_product_analytics"
+HEAD = "20261016_0002_p1_organization_access"
 
 CV_TEXT = (
     "[[PAGE 1]]\n"

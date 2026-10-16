@@ -70,6 +70,8 @@ from app.models.email import EmailDelivery, EmailNotificationPreference  # noqa:
 from app.models.organization_records import OrganizationRecordEvent  # noqa: F401,E402
 from app.models.award_ledger import AwardNoticeSnapshot, AwardOutcome  # noqa: F401,E402
 from app.models.product_analytics import AICallCost, ProductEvent  # noqa: F401,E402
+from app.models.auth_sessions import AuthRefreshToken, EmailSignInChallenge  # noqa: F401,E402
+from app.models.admin_alerts import AdminAlert  # noqa: F401,E402
 
 
 # ============================================================================

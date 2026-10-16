@@ -22,6 +22,8 @@ from app.db.session import get_db
 from app.models.all_models import SubscriptionTier, User
 from app.models.company import CompanyProfile
 from app.models.product_analytics import ProductEvent
+from app.models.audit import AdminActivityEvent
+from app.models.auth_sessions import AuthRefreshToken
 
 BRIDGE_SECRET = "synthetic-release-bridge-secret-32-characters"
 SENTINEL = "SECRET_SENTINEL AUTH_TOKEN_SENTINEL CUSTOMER_TEXT_SENTINEL"
@@ -98,6 +100,8 @@ class IdentityDB:
         self.flush = AsyncMock()
     async def execute(self, query):
         self.reads.append(str(query))
+        if not hasattr(query, "column_descriptions"):  # P1: the admin-alert insert ... RETURNING id
+            return QueryResult([uuid4()])
         entity = query.column_descriptions[0].get("entity")
         if entity is User: return QueryResult([self.user] if self.user else [])
         if entity is CompanyProfile: return QueryResult([SimpleNamespace(id=uuid4(), user_id=self.user.id, approval_status="approved", pilot_status="active")])
@@ -127,9 +131,12 @@ def test_valid_verified_login_preserves_account_policy(kind):
     with patch.object(settings, "AUTH_BRIDGE_SECRET", BRIDGE_SECRET), patch.object(auth_bridge, "consume_assertion", AsyncMock(return_value=True)):
         result = asyncio.run(auth.google_auth_bridge(proof_payload(), Response(), db))
     assert result.access_token
-    assert result.approval_status == ("pending" if kind == "new" else "approved")
+    # P1: a verified e-mail approves a new account; every sign-in starts one refresh-token family.
+    assert result.approval_status == "approved" and result.refresh_token
     assert result.platform_role == (kind if kind in {"operator", "admin"} else "pilot_user")
-    account_writes = [value for value in db.writes if not isinstance(value, ProductEvent)]
+    assert [type(value) for value in db.writes].count(AuthRefreshToken) == 1
+    account_writes = [value for value in db.writes
+                      if not isinstance(value, (ProductEvent, AuthRefreshToken, AdminActivityEvent))]
     assert len(account_writes) == (1 if kind == "new" else 0)
     events = [value for value in db.writes if isinstance(value, ProductEvent)]
     assert [event.event_name for event in events] == ["sign_in"]

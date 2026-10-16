@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.access import (
     PLATFORM_ROLE_PILOT_USER,
     PLATFORM_ROLES,
-    USER_APPROVAL_PENDING,
+    USER_APPROVAL_APPROVED,
     USER_RESTORABLE_APPROVAL_STATUSES,
     USER_APPROVAL_STATUSES,
     sql_string_values,
@@ -22,7 +22,7 @@ from app.models.base import Base, SubscriptionTier
 
 class User(Base):
     """
-    Users authenticated via Google OAuth 2.0.
+    Users authenticated via Google OAuth 2.0 or an e-mail one-time code (P1).
     """
 
     __tablename__ = "users"
@@ -71,8 +71,9 @@ class User(Base):
 
     approval_status: Mapped[str] = mapped_column(
         String(20),
-        default=USER_APPROVAL_PENDING,
-        server_default=text(f"'{USER_APPROVAL_PENDING}'"),
+        # P1: a verified e-mail approves the account (Google or an e-mail code).
+        default=USER_APPROVAL_APPROVED,
+        server_default=text(f"'{USER_APPROVAL_APPROVED}'"),
         nullable=False,
     )
     platform_role: Mapped[str] = mapped_column(

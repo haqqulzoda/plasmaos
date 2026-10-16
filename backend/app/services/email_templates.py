@@ -16,12 +16,16 @@ LOCALES = ("en", "ru", "uz", "ar")
 STRINGS: dict[str, dict[str, str]] = {
     "en": {
         "brand": "Plasma",
+        "code_subject": "Your Plasma sign-in code",
+        "code_body": "Your sign-in code is {code}",
+        "code_note": "Enter it on the Plasma sign-in page. It expires in {minutes} minutes and works once.",
+        "footer_code": "You receive this e-mail because someone asked to sign in to Plasma with this address. If it was not you, ignore it: no one can sign in without this code.",
         "footer": "You receive this e-mail because of your Plasma account. Change e-mail notifications in Settings: {settings_url}",
         "footer_invite": "You receive this e-mail because someone invited this address to Plasma. If you did not expect it, ignore it.",
         "invite_subject": "{inviter} invited you to join {organization} on Plasma",
         "invite_body": "{inviter} invited you to join {organization} on Plasma as {role}.",
         "invite_action": "Accept the invitation: {url}",
-        "invite_note": "Sign in with Google using this e-mail address. The invitation expires on {expires}.",
+        "invite_note": "Sign in with this e-mail address, with Google or a one-time e-mail code. The invitation expires on {expires}.",
         "role_OWNER": "an owner", "role_MEMBER": "a member",
         "analysis_completed_subject": "Your analysis is ready",
         "analysis_completed_body": "The analysis you started has finished. Open the pursuit to review requirements and gaps.",
@@ -39,12 +43,16 @@ STRINGS: dict[str, dict[str, str]] = {
     },
     "ru": {
         "brand": "Plasma",
+        "code_subject": "Ваш код для входа в Plasma",
+        "code_body": "Ваш код для входа: {code}",
+        "code_note": "Введите его на странице входа в Plasma. Код действует {minutes} минут и только один раз.",
+        "footer_code": "Вы получили это письмо, потому что кто-то запросил вход в Plasma с этим адресом. Если это были не вы, просто проигнорируйте его: без этого кода войти нельзя.",
         "footer": "Вы получили это письмо, потому что у вас есть аккаунт Plasma. Настроить уведомления по e-mail можно в Настройках: {settings_url}",
         "footer_invite": "Вы получили это письмо, потому что этот адрес пригласили в Plasma. Если вы его не ждали, просто проигнорируйте.",
         "invite_subject": "{inviter} приглашает вас в {organization} на Plasma",
         "invite_body": "{inviter} приглашает вас присоединиться к {organization} на Plasma в роли «{role}».",
         "invite_action": "Принять приглашение: {url}",
-        "invite_note": "Войдите через Google с этим адресом e-mail. Приглашение действует до {expires}.",
+        "invite_note": "Войдите с этим адресом e-mail — через Google или по одноразовому коду из письма. Приглашение действует до {expires}.",
         "role_OWNER": "владелец", "role_MEMBER": "участник",
         "analysis_completed_subject": "Ваш анализ готов",
         "analysis_completed_body": "Запущенный вами анализ завершён. Откройте тендер, чтобы проверить требования и пробелы.",
@@ -62,12 +70,16 @@ STRINGS: dict[str, dict[str, str]] = {
     },
     "uz": {
         "brand": "Plasma",
+        "code_subject": "Plasma’ga kirish kodingiz",
+        "code_body": "Kirish kodingiz: {code}",
+        "code_note": "Uni Plasma’ning kirish sahifasida kiriting. Kod {minutes} daqiqa amal qiladi va bir marta ishlaydi.",
+        "footer_code": "Bu xat kimdir ushbu manzil bilan Plasma’ga kirishni so‘ragani uchun yuborildi. Agar bu siz bo‘lmasangiz, e’tibor bermang: bu kodsiz hech kim kira olmaydi.",
         "footer": "Bu xat Plasma hisobingiz sababli yuborildi. E-mail bildirishnomalarini Sozlamalarda o‘zgartiring: {settings_url}",
         "footer_invite": "Bu xat ushbu manzil Plasma’ga taklif qilingani uchun yuborildi. Agar kutmagan bo‘lsangiz, e’tibor bermang.",
         "invite_subject": "{inviter} sizni Plasma’dagi {organization}ga taklif qildi",
         "invite_body": "{inviter} sizni Plasma’dagi {organization}ga «{role}» sifatida qo‘shilishga taklif qildi.",
         "invite_action": "Taklifni qabul qilish: {url}",
-        "invite_note": "Google orqali aynan shu e-mail manzili bilan kiring. Taklif {expires} gacha amal qiladi.",
+        "invite_note": "Aynan shu e-mail manzili bilan kiring: Google orqali yoki bir martalik e-mail kodi bilan. Taklif {expires} gacha amal qiladi.",
         "role_OWNER": "ega", "role_MEMBER": "a’zo",
         "analysis_completed_subject": "Tahlilingiz tayyor",
         "analysis_completed_body": "Siz boshlagan tahlil yakunlandi. Talablar va kamchiliklarni ko‘rish uchun tenderni oching.",
@@ -85,12 +97,16 @@ STRINGS: dict[str, dict[str, str]] = {
     },
     "ar": {
         "brand": "Plasma",
+        "code_subject": "رمز الدخول إلى Plasma",
+        "code_body": "رمز الدخول الخاص بك: {code}",
+        "code_note": "أدخله في صفحة تسجيل الدخول إلى Plasma. تنتهي صلاحيته بعد {minutes} دقائق ويُستخدم مرة واحدة.",
+        "footer_code": "تصلك هذه الرسالة لأن أحدهم طلب تسجيل الدخول إلى Plasma بهذا العنوان. إن لم تكن أنت فتجاهلها: لا يمكن لأحد الدخول دون هذا الرمز.",
         "footer": "تصلك هذه الرسالة بسبب حسابك في Plasma. غيّر إشعارات البريد الإلكتروني من الإعدادات: {settings_url}",
         "footer_invite": "تصلك هذه الرسالة لأن أحدهم دعا هذا العنوان إلى Plasma. إن لم تكن تتوقعها فتجاهلها.",
         "invite_subject": "دعاك {inviter} للانضمام إلى {organization} على Plasma",
         "invite_body": "دعاك {inviter} للانضمام إلى {organization} على Plasma بدور {role}.",
         "invite_action": "اقبل الدعوة: {url}",
-        "invite_note": "سجّل الدخول عبر Google بعنوان البريد هذا. تنتهي الدعوة في {expires}.",
+        "invite_note": "سجّل الدخول بعنوان البريد هذا، عبر Google أو برمز بريد لمرة واحدة. تنتهي الدعوة في {expires}.",
         "role_OWNER": "مالك", "role_MEMBER": "عضو",
         "analysis_completed_subject": "تحليلك جاهز",
         "analysis_completed_body": "اكتمل التحليل الذي بدأته. افتح الفرصة لمراجعة المتطلبات والفجوات.",
@@ -167,6 +183,19 @@ def render_email(kind: str, locale: str, context: dict[str, Any], *, app_url: st
             (_t(locale, "invite_note", expires=context.get("expires_on", "")), None),
         ]
         return _compose(locale, _t(locale, "invite_subject", **values), lines, _t(locale, "footer_invite"))
+    if kind == "SIGN_IN_CODE":
+        # P1: the code is the only value; no link (a link would invite phishing look-alikes).
+        minutes = context.get("expires_minutes", 10)
+        lines = [
+            (_t(locale, "code_body", code=context["code"]), None),
+            (_t(locale, "code_note", minutes=minutes), None),
+        ]
+        return _compose(locale, _t(locale, "code_subject"), lines, _t(locale, "footer_code"))
+    if kind == "ADMIN_ALERT":
+        # P1: to the Plasma team only (PLASMA_ADMIN_EMAILS), English, plain facts.
+        lines = [(str(line), None) for line in (context.get("lines") or [])]
+        footer_admin = "You receive this e-mail because your address is in PLASMA_ADMIN_EMAILS."
+        return _compose("en", str(context.get("subject") or "Plasma alert"), lines, footer_admin)
     if kind in {"ANALYSIS_COMPLETED", "ANALYSIS_FAILED"}:
         link = _url(app_url, f"/dashboard/pursuits/{context['pursuit_id']}?tab=requirements")
         prefix = "analysis_completed" if kind == "ANALYSIS_COMPLETED" else "analysis_failed"

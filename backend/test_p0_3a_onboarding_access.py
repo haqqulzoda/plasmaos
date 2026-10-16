@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from frontend_contracts import literal_call, translated
+from frontend_contracts import literal_call, translated, catalog_message
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
@@ -64,7 +64,8 @@ class AccessStatusTests(IsolatedAsyncioTestCase):
         self.assertFalse(pending.access_allowed)
 
         user_approved = await self.access(make_user("approved"), make_company())
-        self.assertEqual(user_approved.state, "user_approved_company_pending")
+        # P1: a self sign-up organization (company pending) explores instead of waiting.
+        self.assertEqual(user_approved.state, "explore")
 
         company_approved = await self.access(make_user(), make_company("approved"))
         self.assertEqual(company_approved.state, "company_approved_user_pending")
@@ -133,6 +134,7 @@ class AdminCompanyApprovalTests(IsolatedAsyncioTestCase):
         db = SimpleNamespace(
             commit=AsyncMock(),
             refresh=AsyncMock(),
+            scalar=AsyncMock(return_value=None),  # P1: no organization row to move to pilot here
         )
         activity = AsyncMock()
         with (
@@ -158,6 +160,7 @@ class OnboardingFrontendTests(TestCase):
     def test_pending_and_session_refresh_ux_is_present(self):
         onboarding = (FRONTEND / "app/dashboard/onboarding/page.tsx").read_text()
         pending = (FRONTEND / "app/dashboard/pending-approval/page.tsx").read_text()
+        explore = (FRONTEND / "app/dashboard/explore/page.tsx").read_text()
         layout = (FRONTEND / "app/dashboard/layout.tsx").read_text()
         auth = (FRONTEND / "auth.ts").read_text()
 
@@ -165,10 +168,15 @@ class OnboardingFrontendTests(TestCase):
         self.assertEqual(translated(onboarding, "onboarding", "submittedTitle"), "Company profile submitted")
         self.assertIn("setSubmitted(true)", onboarding)
         literal_call(onboarding, "api.post", "/users/me/company/onboarding")
-        literal_call(onboarding, "router.replace", "/dashboard/pending-approval")
-        self.assertEqual(translated(pending, "auth", "refreshStatus"), "Refresh approval status")
-        self.assertEqual(translated(pending, "auth", "accessApproved"), "Access approved")
-        self.assertIn("You do not need to submit the form again", translated(pending, "auth", "pendingHelp"))
+        # P1: no waiting page; an organization without a pilot explores (old links redirect).
+        literal_call(onboarding, "router.replace", "/dashboard/explore")
+        literal_call(pending, "router.replace", "/dashboard/explore")
+        self.assertIn("useTranslations('auth.explore')", explore)
+        self.assertIn("t('startPilot')", explore)
+        self.assertIn("t('bookCall')", explore)
+        self.assertEqual(catalog_message("auth", "explore.startPilot"), "Start a pilot")
+        self.assertEqual(catalog_message("auth", "explore.bookCall"), "Book a call")
+        self.assertIn("const EXPLORE_PATH = '/dashboard/explore';", layout)
         self.assertIn("'/users/me/access-status'", layout)
         self.assertIn("await validateAndRotateBackendSession", auth)
         self.assertIn("await update()", onboarding)

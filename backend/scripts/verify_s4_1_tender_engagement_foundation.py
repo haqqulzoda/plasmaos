@@ -35,7 +35,7 @@ from app.services.tender_engagements import (
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261012_0002_s1_product_analytics"
+HEAD = "20261016_0002_p1_organization_access"
 PREVIOUS_HEAD = "20260828_0002_s3_4_admin_audit_hardening"
 PRESERVED_TABLES = (
     "users",

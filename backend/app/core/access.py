@@ -47,6 +47,18 @@ COMPANY_PILOT_STATUSES = (
     COMPANY_PILOT_PAUSED,
 )
 
+# P1: organization access state. Explore: the opportunities feed, coverage and one guided
+# demo analysis; no uploads, no own analyses, no award ledger. Pilot and paid: full access.
+# The legacy company approval stays the enforced gate and is kept in step with the state
+# (pilot/paid = approved, explore = pending, disabled = disabled) by
+# app.services.organization_access.
+ORG_ACCESS_EXPLORE = "explore"
+ORG_ACCESS_PILOT = "pilot"
+ORG_ACCESS_PAID = "paid"
+ORG_ACCESS_DISABLED = "disabled"
+ORG_ACCESS_STATES = (ORG_ACCESS_EXPLORE, ORG_ACCESS_PILOT, ORG_ACCESS_PAID, ORG_ACCESS_DISABLED)
+ORG_FULL_ACCESS_STATES = (ORG_ACCESS_PILOT, ORG_ACCESS_PAID)
+
 COMPANY_APPROVAL_PENDING = USER_APPROVAL_PENDING
 COMPANY_APPROVAL_APPROVED = USER_APPROVAL_APPROVED
 COMPANY_APPROVAL_REJECTED = USER_APPROVAL_REJECTED

@@ -95,3 +95,12 @@
 .admin-bar { display: block; block-size: 8px; border-radius: 4px; background: var(--ds-accent); min-inline-size: 2px; }
 .admin-bar-track { display: block; inline-size: 100%; min-inline-size: 80px; background: var(--ds-border); border-radius: 4px; }
 @media (max-width: 767px) { .admin-ledger-filters { flex-direction: column; align-items: stretch; } }
+
+/* P1: organization access editor */
+.admin-org-criteria {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-inline-size: 22rem;
+}

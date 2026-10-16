@@ -87,6 +87,14 @@ class Settings(BaseSettings):
     SMTP_FROM: str | None = None
     SMTP_TLS: str = "starttls"
     SMTP_TIMEOUT_SECONDS: int = 20
+    # P1: alerts to the Plasma team (new self sign-up, pilot requests). Telegram when the chat id
+    # is set (bot token: ADMIN_ALERT_TELEGRAM_BOT_TOKEN, else TELEGRAM_BOT_TOKEN); otherwise
+    # e-mail to PLASMA_ADMIN_EMAILS through the SMTP channel.
+    ADMIN_ALERT_TELEGRAM_CHAT_ID: str | None = None
+    ADMIN_ALERT_TELEGRAM_BOT_TOKEN: str | None = None
+    # P1: the Explore view's "Book a call" link (a scheduling page); unset: the button sends a
+    # call request to the team instead.
+    PUBLIC_BOOK_CALL_URL: str | None = None
 
     @model_validator(mode="after")
     def validate_release(self):

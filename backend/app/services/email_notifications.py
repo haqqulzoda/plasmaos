@@ -333,6 +333,12 @@ def build_message(delivery: EmailDelivery, *, link_base: str) -> EmailMessage:
         if not delivery.secret_ciphertext:
             raise ValueError("invitation link is no longer available")
         context["invite_url"] = f"{link_base}/invite/{open_secret(delivery.secret_ciphertext)}"
+    if delivery.kind == "SIGN_IN_CODE":
+        # A code is useless after its 10 minutes: never send a stale one (the delivery FAILs).
+        expires_at = datetime.fromisoformat(str(context.get("expires_at")))
+        if not delivery.secret_ciphertext or expires_at <= datetime.now(timezone.utc):
+            raise ValueError("sign-in code is no longer valid")
+        context["code"] = open_secret(delivery.secret_ciphertext)
     rendered = render_email(delivery.kind, delivery.locale, context, app_url=link_base)
     sender = (settings.SMTP_FROM or "").strip()
     domain = sender.rsplit("@", 1)[-1].strip(">") or "plasma.local"

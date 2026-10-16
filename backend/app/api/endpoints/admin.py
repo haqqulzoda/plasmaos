@@ -82,6 +82,8 @@ from app.services.tender_sources.uzex_scope import (
     uzex_small_scale_tender_condition,
 )
 
+from app.services.organization_access import sync_access_from_company  # noqa: E402
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -979,6 +981,8 @@ async def approve_company(
     profile.rejected_at = None
     profile.rejection_reason = None
     bump_auth_version(target_user)
+    # P1: the organization's access state follows (approved -> pilot unless already paid).
+    await sync_access_from_company(db, profile=profile, actor_user=current_user)
     await _commit_company_audit(
         db=db,
         actor=current_user,
@@ -1011,6 +1015,8 @@ async def reject_company(
     profile.rejected_at = _utcnow()
     profile.rejection_reason = _clean_reason(payload.reason)
     bump_auth_version(target_user)
+    # P1: the organization's access state follows (approved -> pilot unless already paid).
+    await sync_access_from_company(db, profile=profile, actor_user=current_user)
     await _commit_company_audit(
         db=db,
         actor=current_user,
@@ -1042,6 +1048,8 @@ async def disable_company(
     profile.approval_status = COMPANY_APPROVAL_DISABLED
     profile.rejection_reason = _clean_reason(payload.reason)
     bump_auth_version(target_user)
+    # P1: the organization's access state follows (approved -> pilot unless already paid).
+    await sync_access_from_company(db, profile=profile, actor_user=current_user)
     await _commit_company_audit(
         db=db,
         actor=current_user,

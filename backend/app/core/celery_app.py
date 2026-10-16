@@ -83,6 +83,11 @@ celery_app.conf.update(
             "task": "app.workers.communications_tasks.send_emails",
             "schedule": timedelta(seconds=30),
         },
+        # P1: new sign-up and pilot-request alerts to the team (Telegram, else e-mail).
+        "deliver-admin-alerts": {
+            "task": "app.workers.communications_tasks.deliver_admin_alerts",
+            "schedule": timedelta(seconds=30),
+        },
         # 08:00 Asia/Tashkent (UTC+5, no daylight saving) = 03:00 UTC.
         "stage-daily-opportunity-digests": {
             "task": "app.workers.communications_tasks.stage_daily_digests",

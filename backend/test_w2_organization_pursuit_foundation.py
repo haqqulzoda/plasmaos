@@ -26,7 +26,7 @@ from scripts import test_s0_5b4_baseline as support
 
 W1_HEAD = "20260912_0001_s10_5_communications"
 W2_HEAD = "20260925_0002_w2_organization_pursuit"
-CURRENT_HEAD = "20261012_0002_s1_product_analytics"
+CURRENT_HEAD = "20261016_0002_p1_organization_access"
 
 
 def deterministic_uuid(label: str) -> UUID:

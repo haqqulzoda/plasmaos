@@ -962,6 +962,42 @@
       "unverifiedNote": "The saved CV version is marked Unverified until someone checks the original documents.",
       "confirm": "Confirm and save CV version",
       "saveFailed": "The CV version could not be saved"
+    },
+    "workbook": {
+      "open": "Import from template",
+      "title": "Import references and experts",
+      "description": "One workbook for your firm's project references, partner firms' references, experts and their assignments.",
+      "step1": "Download the template and fill it in (or ask the Plasma team to fill it for you).",
+      "step2": "Upload the file: every row is checked and shown below. Nothing is saved yet.",
+      "step3": "Import: the new rows are saved together. Duplicates and rows with errors are skipped.",
+      "templateXlsx": "Template (.xlsx)",
+      "templateCsv": {
+        "references": "References (.csv)",
+        "experts": "Experts (.csv)",
+        "assignments": "Assignments (.csv)"
+      },
+      "choose": "Choose .xlsx or .csv file",
+      "checking": "Checking the file…",
+      "previewFailed": "The file could not be checked.",
+      "commitFailed": "The import failed; nothing was saved.",
+      "templateFailed": "The template could not be downloaded.",
+      "kinds": {
+        "references": "References",
+        "experts": "Experts",
+        "assignments": "Expert assignments"
+      },
+      "counts": "New: {new} · already there: {duplicates} · errors: {errors}",
+      "errorsTitle": "Rows with errors: {count}",
+      "errorsHelp": "They will be skipped. Fix them in the file and upload it again to import them too.",
+      "sheet": "Sheet",
+      "status": {
+        "NEW": "New",
+        "DUPLICATE": "Already there",
+        "ERROR": "Error"
+      },
+      "commit": "Import {count} new rows",
+      "done": "Import finished",
+      "result": "References: {references} (new partner firms: {firms}). Experts: {experts} (assignments: {assignments}). Skipped: {duplicates} already there, {errors} with errors."
     }
   },
   "proposal": {

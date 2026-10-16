@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import {
+import { Compass,
   Bookmark,
   Building2,
   LayoutDashboard,
@@ -47,6 +47,7 @@ export function CustomerShell({
   refresh,
   search,
   notifications,
+  exploreOnly = false,
 }: {
   children: ReactNode;
   name?: string | null;
@@ -57,13 +58,23 @@ export function CustomerShell({
   refresh?: ReactNode;
   search?: ReactNode;
   notifications?: ReactNode;
+  /** P1: an organization without a pilot sees only the Explore view (no upload, no workspace links). */
+  exploreOnly?: boolean;
 }) {
   const t = useTranslations('navigation');
   const path = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const activeKey = activeNavigationKey(path);
   const active = navigation.find((item) => item.nameKey === activeKey);
-  const nav = (
+  const nav = exploreOnly ? (
+    <nav className="shell-navigation" aria-label={t('navigationLabel')}>
+      <Link className="shell-nav-link" prefetch={false} href="/dashboard/explore" aria-current="page"
+        onClick={() => setMobileOpen(false)}>
+        <Compass aria-hidden />
+        <span>{t('explore')}</span>
+      </Link>
+    </nav>
+  ) : (
     <nav className="shell-navigation" aria-label={t('navigationLabel')}>
       {navigation.map(({ nameKey, href, Icon }) => (
         <Link
@@ -134,15 +145,15 @@ export function CustomerShell({
             </span>
             {path !== '/dashboard' && (
               <span className="shell-context">
-                {active ? t(active.nameKey) : t('commandCenter')}
+                {exploreOnly ? t('explore') : active ? t(active.nameKey) : t('commandCenter')}
               </span>
             )}
           </div>
           <div className="shell-actions">
-            <Link className="shell-upload-action ds-button ds-button-primary ds-button-sm" href="/dashboard/uploaded-tenders/upload" prefetch={false}>
+            {!exploreOnly && <Link className="shell-upload-action ds-button ds-button-primary ds-button-sm" href="/dashboard/uploaded-tenders/upload" prefetch={false}>
               <Upload aria-hidden />
               <span>{t('uploadTender')}</span>
-            </Link>
+            </Link>}
             <OrganizationSwitcher />
             {search}
             {refresh}

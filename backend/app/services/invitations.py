@@ -468,7 +468,7 @@ async def _accept(
         target_resource_id=str(invitation.id),
         previous_state=before,
         new_state=user_role_snapshot(user, credentials_invalidated=approved_now),
-        reason="Verified Google e-mail matched an open organization invitation exactly.",
+        reason="Verified e-mail matched an open organization invitation exactly.",
         metadata={
             "organization_id": str(invitation.organization_id),
             "membership_id": str(membership.id),
@@ -481,7 +481,7 @@ async def _accept(
 
 
 async def accept_open_invitations_for_sign_in(
-    db: AsyncSession, *, user: User, verified_email: str
+    db: AsyncSession, *, user: User, verified_email: str, actor_label: str = "auth/google"
 ) -> list[Membership]:
     """Bind every open, unexpired invitation for this exact verified e-mail."""
     if is_disabled_account(user) or is_rejected_account(user):
@@ -504,7 +504,7 @@ async def accept_open_invitations_for_sign_in(
     accepted: list[Membership] = []
     for invitation_id, organization_id in rows:
         membership = await _accept(
-            db, invitation_id=invitation_id, organization_id=organization_id, user=user, actor_label="auth/google"
+            db, invitation_id=invitation_id, organization_id=organization_id, user=user, actor_label=actor_label
         )
         if membership is not None:
             accepted.append(membership)

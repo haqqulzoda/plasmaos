@@ -13,15 +13,18 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 
 
-EMAIL_KINDS = ("TEAM_INVITATION", "ANALYSIS_COMPLETED", "ANALYSIS_FAILED", "EOI_DRAFT_READY", "DAILY_DIGEST")
-EMAIL_CATEGORIES = ("TEAM", "ANALYSIS", "EOI", "DIGEST")
+EMAIL_KINDS = (
+    "TEAM_INVITATION", "ANALYSIS_COMPLETED", "ANALYSIS_FAILED", "EOI_DRAFT_READY", "DAILY_DIGEST", "SIGN_IN_CODE",
+    "ADMIN_ALERT",
+)
+EMAIL_CATEGORIES = ("TEAM", "ANALYSIS", "EOI", "DIGEST", "AUTH", "ADMIN")
 EMAIL_STATES = ("PENDING", "SENDING", "SENT", "FAILED", "BOUNCED")
 
 
 class EmailDelivery(Base):
     """One idempotent e-mail. The body is rendered at send time from kind, locale and
     ids; nothing private is stored. ``secret_ciphertext`` holds an encrypted one-time
-    link token (invitations) only until the delivery is terminal."""
+    link token (invitations) or sign-in code only until the delivery is terminal."""
 
     __tablename__ = "email_deliveries"
 
@@ -51,10 +54,12 @@ class EmailDelivery(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('TEAM_INVITATION','ANALYSIS_COMPLETED','ANALYSIS_FAILED','EOI_DRAFT_READY','DAILY_DIGEST')",
+            f"kind IN ({','.join(repr(kind) for kind in EMAIL_KINDS)})",
             name="ck_email_delivery_kind",
         ),
-        CheckConstraint("category IN ('TEAM','ANALYSIS','EOI','DIGEST')", name="ck_email_delivery_category"),
+        CheckConstraint(
+            f"category IN ({','.join(repr(category) for category in EMAIL_CATEGORIES)})", name="ck_email_delivery_category"
+        ),
         CheckConstraint("state IN ('PENDING','SENDING','SENT','FAILED','BOUNCED')", name="ck_email_delivery_state"),
         CheckConstraint("locale IN ('en','ru','uz','ar')", name="ck_email_delivery_locale"),
         CheckConstraint(

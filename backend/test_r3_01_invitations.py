@@ -36,7 +36,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 PREVIOUS_HEAD = "20261005_0001_d2_05_eoi_drafts"
 REVISION = "20261008_0001_r3_pending_invitations"
-HEAD = "20261012_0002_s1_product_analytics"
+HEAD = "20261016_0002_p1_organization_access"
 
 
 # ---- pure rules -----------------------------------------------------------------------------------
@@ -286,14 +286,16 @@ async def _sign_in_binding(sessions, ids, org_a, org_b, monkeypatch, database) -
         assert invitation.accepted_at is not None and invitation.accepted_membership_id == membership.id
         assert invitation.accepted_user_id == invitee.id
         owner_user_id = await db.scalar(select(User.id).where(User.id == ids["user_a"]))
-        assert invitee.approved_by_user_id == owner_user_id and invitee.auth_version == 1
+        # P1: the account was approved at sign-up (verified e-mail), so joining changes no authority.
+        assert invitee.approval_status == "approved" and invitee.approved_by_user_id is None and invitee.auth_version == 0
+        assert owner_user_id is not None
         event = await db.scalar(
             select(AdminActivityEvent).where(AdminActivityEvent.action == "ORGANIZATION_INVITATION_ACCEPTED")
         )
         assert event.target_user_id == invitee.id and event.actor_type == "SYSTEM" and event.source == "EMAIL_INVITATION"
         assert event.metadata_json["membership_id"] == str(membership.id)
-        assert event.metadata_json["user_approved_by_invitation"] is True
-        assert event.previous_state["approval_status"] == "pending" and event.new_state["approval_status"] == "approved"
+        assert event.metadata_json["user_approved_by_invitation"] is False
+        assert event.previous_state["approval_status"] == "approved" and event.new_state["approval_status"] == "approved"
         lifecycle = await db.scalar(
             select(MembershipLifecycleEvent).where(MembershipLifecycleEvent.membership_id == membership.id)
         )
@@ -324,10 +326,10 @@ async def _sign_in_binding(sessions, ids, org_a, org_b, monkeypatch, database) -
             select(func.count(AdminActivityEvent.id)).where(AdminActivityEvent.action == "ORGANIZATION_INVITATION_ACCEPTED")
         ) == 1
 
-    # Same domain is not an invitation; expired and revoked invitations take the normal pending path.
+    # Same domain is not an invitation; expired and revoked invitations take the normal path (onboarding).
     for email in ("someone@example.org", "late@example.org", "gone@example.org"):
         result = await _sign_in(sessions, monkeypatch, email)
-        assert result.approval_status == "pending" and result.onboarding_required is True, email
+        assert result.approval_status == "approved" and result.onboarding_required is True, email
         async with sessions() as db:
             user = await db.scalar(select(User).where(User.email == email))
             assert await db.scalar(select(func.count(Membership.id)).where(Membership.user_id == user.id)) == 0
@@ -386,7 +388,7 @@ async def _sign_in_binding(sessions, ids, org_a, org_b, monkeypatch, database) -
     finally:
         await connection.close()
     result = await _sign_in(sessions, monkeypatch, "linked@example.org")
-    assert result.approval_status == "pending" and result.onboarding_required is True
+    assert result.approval_status == "approved" and result.onboarding_required is True
     async with sessions() as db:
         linked = await db.scalar(select(PendingInvitation).where(PendingInvitation.email == "linked@example.org"))
         assert linked.accepted_at is None and service.invitation_status(linked, now=datetime.now(timezone.utc)) == "OPEN"

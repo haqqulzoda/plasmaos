@@ -3,7 +3,8 @@
 One counter per (scope, client, window): ``plasma:ratelimit:<scope>:<client>:<window index>``,
 expiring with its window. If Redis cannot be reached the request is allowed and a warning is
 logged: the limit is defence in depth (the tokens it guards are 256-bit random), and Redis
-being down already fails /health/ready.
+being down already fails /health/ready. ``fail_closed=True`` (P1 e-mail sign-in codes, which are
+only 6 digits) refuses instead: the caller gets a retry delay.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ def _redis() -> Any:
 
 async def hit(
     scope: str, identifier: str, *, limit: int, window_seconds: int, client: Any = None, now: float | None = None,
+    fail_closed: bool = False,
 ) -> int | None:
     """Count one request. Returns the seconds until the window resets when over ``limit``, else None."""
     moment = time.time() if now is None else now
@@ -42,9 +44,9 @@ async def hit(
         count = await redis.incr(key)
         if count == 1:
             await redis.expire(key, window_seconds + 5)
-    except Exception:  # noqa: BLE001 - fail open, see the module docstring
-        logger.warning("rate_limit_unavailable scope=%s", scope)
-        return None
+    except Exception:  # noqa: BLE001 - fail open unless asked otherwise, see the module docstring
+        logger.warning("rate_limit_unavailable scope=%s fail_closed=%s", scope, fail_closed)
+        return 30 if fail_closed else None
     if count > limit:
         return max(1, int((window + 1) * window_seconds - moment))
     return None

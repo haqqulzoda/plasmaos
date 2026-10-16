@@ -1,5 +1,6 @@
 "use client";
 
+import { LegacyBidDrafts } from "@/components/tenders/LegacyBidDrafts";
 import {
   FormEvent,
   Suspense,
@@ -494,6 +495,7 @@ function MyTendersContent() {
         }))}
       />
       {!STATUS_FILTERS.some(value => value === status) && content}
+      <LegacyBidDrafts />
     </div>
   );
 }
