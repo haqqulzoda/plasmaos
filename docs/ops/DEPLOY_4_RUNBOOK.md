@@ -1,26 +1,29 @@
-# Deploy 4 runbook: production a83d575 / images 169d451 → pilot/s1-release, images <SHA4>
+# Deploy 4 runbook: production a83d575 / images 169d451 → pilot/p1-pilot-readiness, images <SHA4>
 
 For the owner, copy-paste on the production host. Every step has the command, what you must
 see, and a **STOP** condition. Same rules as Deploys 1-3: a short clean cut-over (the app is
 stopped while the schema moves), every feature proven on production afterwards, problems fixed
 forward first, two rollbacks, the **pre-stop gate** before every app stop
-(docs/ops/RUNBOOK_TEMPLATE.md). New in this window: the **award ledger is filled on production**
-(all procurement categories, four countries, step 15), and an owner section to **create Loom
-previews on production** (after step 18).
+(docs/ops/RUNBOOK_TEMPLATE.md). New in this window: **S1** (award ledger filled on production, product
+analytics, Loom previews) and **P1** (e-mail code sign-in, 30-day sessions, no manual user approval,
+organization access explore | pilot | paid | disabled, pilot setup, library import). Do the e-mail/DNS and
+Gemini work in **"Before the window"** a day ahead.
 
 | | |
 | --- | --- |
-| Checkout | **With P1: `pilot/p1-pilot-readiness`** (on `pilot/s1-release`; changes in [P1_DEPLOY_NOTE.md](P1_DEPLOY_NOTE.md)). Without P1: `pilot/s1-release` @ its newest commit (four squashed S1 commits on `a83d575` plus the S1-8 report; pushed by the owner before the window; local only until then). **Never deploy or push `pilot/s1-int`**: same tree, but its history is not clean |
-| Images | **built from the release commit before the window** (not part of S1-7): `plasma-<service>:<SHA4>`, bundle `plasma-release-<short4>.tar.gz`, `<bytes>`, sha256 `<…>`; `/health` reports `build_sha` `<SHA4>`. Fill these four values from `scripts/compose-release.sh export` before the window |
+| Checkout | `pilot/p1-pilot-readiness` @ its newest commit (= `pilot/s1-release` + P1; pushed by the owner before the window; local only until then). **Never deploy or push `pilot/s1-int`**: its history is not clean |
+| Images | **built from the release commit before the window**: `plasma-<service>:<SHA4>`, bundle `plasma-release-<short4>.tar.gz`, `<bytes>`, sha256 `<…>`; `/health` reports `build_sha` `<SHA4>`. Fill these four values from `scripts/compose-release.sh export` |
 | Running today | Deploy 3: checkout `a83d575` (Deploy 3 runbook commit), images `169d45179bf41786e8f8e305a7379e48f19238f5`, schema `20261011_0001_r3_organization_record_events` (step 1 checks all three) |
 | Host | Hetzner 2 vCPU / 3.7 GiB, `/opt/plasma-console/plasmaos`, `HOST_PROFILE=4gb`, `PLASMA_NO_BUILD=1` |
-| Migrations | two, both additive (the Deploy 3 build runs on the new schema: Rollback A): `20261012_0001_s1_award_ledger` (award ledger: `award_notice_snapshots`, `award_outcomes`, append-only), `20261012_0002_s1_product_analytics` (`product_events`, `ai_call_costs`, append-only) (step 10) |
-| New variables | `AI_PRICE_TABLE_JSON` (optional, default: the table in `backend/app/core/ai_pricing.py`, step 16). Nothing else |
-| New in the release | **S1 award ledger**: World Bank contract-award notices for Uzbekistan, Kazakhstan, Kyrgyz Republic and Tajikistan, all procurement groups, every bidder with its verbatim status and reason, append-only; read-time firm-name normalization (legal forms in abbreviations and in words, Latin and Cyrillic); notice-country validation against the World Bank Projects API; `/admin/award-ledger` (operators; CSV, market sizing and firm exports for admins). **S1 product analytics**: server-side product events, the AI cost ledger (one row per provider call, estimated USD), `/admin/metrics` (admins). **S1 outreach**: prospect previews (`seed_demo.py --prospect-file` / `--from-ledger`, "<Firm> — Plasma preview", exclusive, archivable), coverage strip on Opportunities, legacy URL redirects, EOI versions marked "Draft — not reviewed by your team" when seeded. `analysis_smoke.py --live` auto-picks an open REOI with a notice of at least 5,000 characters |
-| Gate | `<SHA4>`, from an LF export (end of this file) |
+| Migrations | **four, in order** (step 10), all additive for the schema (the Deploy 3 build runs on the new schema: Rollback A): `20261012_0001_s1_award_ledger` (award ledger, append-only) → `20261012_0002_s1_product_analytics` (product events, AI cost ledger, append-only) → `20261016_0001_p1_email_sign_in` (sign-in challenges, refresh tokens; **every pending user approved**) → `20261016_0002_p1_organization_access` (organization access state, plan, admin alerts; **backfilled from the company approval**) |
+| New tables | `award_notice_snapshots`, `award_outcomes`, `product_events`, `ai_call_costs`, `email_sign_in_challenges`, `auth_refresh_tokens`, `admin_alerts` |
+| Data changes | P1 migration 1: every `pending` user → `approved` (one `USER_APPROVED` audit event each, actor SYSTEM, source `P1_MIGRATION`); a disabled user who was pending before the disable is restored as approved. P1 migration 2: `organizations.access_state` from the company approval (approved → `pilot`, pending → `explore`, rejected/disabled → `disabled`). Nothing else changes |
+| New variables | **required**: `SMTP_HOST`, `SMTP_PORT`, `SMTP_TLS`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `PUBLIC_APP_URL`, and a **production `GEMINI_API_KEY`** separate from development; **optional**: `ADMIN_ALERT_TELEGRAM_CHAT_ID`, `ADMIN_ALERT_TELEGRAM_BOT_TOKEN`, `PUBLIC_BOOK_CALL_URL`, `AI_PRICE_TABLE_JSON` (step 16). The sign-in code key is **derived from `SECRET_KEY`** (no new variable; step 7) |
+| New in the release | **S1**: award ledger (World Bank contract awards, Uzbekistan, Kazakhstan, Kyrgyz Republic, Tajikistan, all groups, verbatim, append-only; read-time firm normalization; notice validation; `/admin/award-ledger`); product analytics and AI cost ledger (`/admin/metrics`); prospect/Loom previews (`seed_demo.py --from-ledger`, replay mode); coverage strip; legacy redirects. **P1**: sign-in with a 6-digit e-mail code next to Google; sessions of about 30 days (rotating refresh tokens, 90-day cap); no manual user approval (the organization gate decides access, now enforced on every organization-scoped route); Explore for organizations not yet in a pilot (feed, coverage, guided demo, "Start a pilot", "Book a call"); admin organization access editor and team alerts (Telegram or e-mail); `pilot_setup.py`; library import from a template; "Earlier bid drafts" under My Tenders |
+| Gate | `8ef9613` plus this commit (the merged runbook and two test fixtures), from an LF export (end of this file) |
 | **Not touched** | **`db`, `redis` and `clamav` keep their containers** (never `up`, `down`, `restart` or `rollback` them here) |
-| Downtime | step 9 → step 11: **~75 s** expected (rehearsal: two migrations 5 s on a copy of the production-shaped database; Deploy 3 measured image switch 8 s, start to `/health/ready` 48 s, stop ~12 s) |
-| Window | ~30 min to step 11 plus the transfer (step 6); ingestion and validation ~5 min (step 15); then ~45 min of checks |
+| Downtime | step 9 → step 11: **~75 s** expected (rehearsal: four migrations 6 s on a copy of the production-shaped database; Deploy 3 measured image switch 8 s, start to `/health/ready` 48 s, stop ~12 s) |
+| Window | ~30 min to step 11 plus the transfer (step 6); sign-in test and pilot setup ~10 min (steps 12b, 19); ingestion and validation ~5 min (step 15); then ~45 min of checks |
 
 **Rule for this whole window: every `up` names its services and has `--no-deps`.** Never run
 `up` without a service list, `compose-release.sh rollback`, `docker compose up`, `down` or
@@ -32,10 +35,48 @@ on the owner's PC (Git Bash). `<prod>`, `<APP_DOMAIN>`, `<API_DOMAIN>` as before
 APP services (the only ones this runbook recreates):
 `celery_worker worker_heavy worker_private_documents worker_pursuit_analysis celery_beat backend frontend`
 
-**One-off containers.** Ingestion, validation and the Loom previews run in **one-off backend
-containers** (`scripts/compose-release.sh run --rm --no-deps -T backend …`), never via `exec` into
-`plasma_backend`, as the demo seed in Deploy 2: their peak counts against their own container, and
-the container is removed when it ends. Check `free -h` shows `available` ≥ ~600Mi before each.
+**One-off containers.** Ingestion, validation, the sign-in test, pilot setup and the Loom previews run in
+**one-off backend containers** (`scripts/compose-release.sh run --rm --no-deps -T backend …`), never via
+`exec` into `plasma_backend`: their peak counts against their own container, and the container is removed
+when it ends. Check `free -h` shows `available` ≥ ~600Mi before each.
+
+---
+
+## Before the window (a day ahead): e-mail provider, DNS, production Gemini key
+
+**E-mail.** Sign-in codes, invitations and admin alerts go out over SMTP from **`no-reply@plasmaos.uz`**. Any
+transactional provider works; two that need no extra code:
+
+| | Postmark (recommended: transactional only, fast delivery) | Amazon SES (eu-central-1) |
+| --- | --- | --- |
+| `SMTP_HOST` | `smtp.postmarkapp.com` | `email-smtp.eu-central-1.amazonaws.com` |
+| `SMTP_PORT` / `SMTP_TLS` | `587` / `starttls` | `587` / `starttls` |
+| `SMTP_USER` / `SMTP_PASSWORD` | the Server API token (both fields) | the SES SMTP credentials (IAM, not the AWS keys) |
+| Before going live | approve the account (Postmark reviews new accounts) | leave the SES sandbox (request production access) |
+
+DNS records in the plasmaos.uz zone (copy the exact values from the provider's domain page; do not retype):
+
+| Purpose | Name | Type | Value |
+| --- | --- | --- | --- |
+| **SPF** (root) | `plasmaos.uz` | TXT | `v=spf1 include:spf.mtasv.net ~all` (Postmark) **or** `v=spf1 include:amazonses.com ~all` (SES). **Only one SPF record may exist**: if the root already has `v=spf1 …` (e.g. `include:_spf.google.com`), add the `include:` to it instead of creating a second one |
+| **DKIM** | Postmark: `<date>pm._domainkey.plasmaos.uz` · SES: three `<token>._domainkey.plasmaos.uz` | Postmark: TXT · SES: CNAME | Postmark: the `k=rsa; p=…` key from the Sender Signature / Domain page · SES: `<token>.dkim.amazonses.com` for each token (Easy DKIM) |
+| **Return-Path / MAIL FROM** | Postmark: `pm-bounces.plasmaos.uz` · SES: `bounce.plasmaos.uz` | Postmark: CNAME `pm.mtasv.net` · SES: MX `10 feedback-smtp.eu-central-1.amazonses.com` and TXT `v=spf1 include:amazonses.com ~all` | as on the provider page |
+| **DMARC** | `_dmarc.plasmaos.uz` | TXT | `v=DMARC1; p=none; rua=mailto:dmarc@plasmaos.uz; fo=1; adkim=r; aspf=r` (reports only); after two weeks of clean reports `p=quarantine`, later `p=reject` |
+
+`dmarc@plasmaos.uz` must exist (or use the provider's DMARC reporting address). **Go/no-go**: the provider shows
+SPF, DKIM and Return-Path **verified**. Without it the window can still run, but e-mail sign-in, invitations and
+alerts are not proven until step 12b passes.
+
+**Production Gemini key.** Use a key from a Google Cloud project / billing account **separate from development**
+(the development key returned HTTP 402, billing, from 2026-10-16: every analysis failed). Prove it before the
+window (one tiny call, a fraction of a cent):
+```
+laptop$ curl -s -o /dev/null -w '%{http_code}\n' -H "x-goog-api-key: <PRODUCTION_GEMINI_KEY>" -H 'Content-Type: application/json' \
+          -d '{"contents":[{"parts":[{"text":"Reply OK"}]}]}' \
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
+```
+Expect `200`. **No-go for the window** on `402` (billing), `403` (key or API not enabled) or `429` (quota): every
+analysis, the live smoke (step 13) and the Loom previews would fail.
 
 ---
 
@@ -43,7 +84,7 @@ the container is removed when it ends. Check `free -h` shows `available` ≥ ~60
 
 ```
 prod$ cd /opt/plasma-console/plasmaos
-prod$ COMMIT=<the newest commit of pilot/s1-release>
+prod$ COMMIT=<the newest commit of pilot/p1-pilot-readiness>
 prod$ SHA=<SHA4, full 40 characters>
 prod$ PREV_COMMIT=a83d575<full SHA from `git rev-parse HEAD` in step 1>
 prod$ PREV_SHA=169d45179bf41786e8f8e305a7379e48f19238f5
@@ -82,12 +123,13 @@ The dry run lists `4f09b8e…` tags under "release tags to remove", never `169d4
 ## 2. Check out the release (files only, nothing restarts)
 
 ```
-prod$ git fetch origin pilot/s1-release
-prod$ git checkout -B pilot/s1-release "$COMMIT"
+prod$ git fetch origin pilot/p1-pilot-readiness
+prod$ git checkout -B pilot/p1-pilot-readiness "$COMMIT"
 prod$ test "$(git rev-parse HEAD)" = "$COMMIT" && echo CHECKOUT_OK
-prod$ ls backend/scripts/ingest_award_ledger.py backend/scripts/validate_award_ledger.py backend/scripts/demo/seed_demo.py docs/ops/DEPLOY_4_RUNBOOK.md
+prod$ ls backend/scripts/ingest_award_ledger.py backend/scripts/validate_award_ledger.py backend/scripts/demo/seed_demo.py \
+         backend/scripts/pilot_setup.py backend/scripts/send_test_sign_in_code.py docs/ops/DEPLOY_4_RUNBOOK.md
 ```
-Expect `CHECKOUT_OK` and the four paths. **STOP** otherwise (`git checkout -B pilot/week1 "$PREV_COMMIT"`).
+Expect `CHECKOUT_OK` and the six paths. **STOP** otherwise (`git checkout -B pilot/week1 "$PREV_COMMIT"`).
 
 ## 3. Record Celery Beat memory (read-only)
 ```
@@ -126,13 +168,35 @@ prod$ sha256sum /opt/plasma-console/plasma-release-<short4>.tar.gz
 ```
 Expect `<sha256>`. **STOP** if it differs (copy again).
 
-## 7. `.env`: keep a copy (no new required variable)
+## 7. `.env`: keep a copy, add the P1 variables, the production Gemini key
+
 ```
 prod$ cp -p .env .env.pre-deploy4 && chmod 600 .env.pre-deploy4 && cmp .env .env.pre-deploy4 && echo ENV_SAVED
+prod$ grep -c '^SECRET_KEY=.' .env; grep -c '^PLASMA_ADMIN_EMAILS=.' .env; grep -c '^GEMINI_API_KEY=' .env
+prod$ cat >> .env <<'EOF'
+# --- Deploy 4 (P1) ---
+# E-mail sign-in codes, invitations and admin alerts (provider from "Before the window")
+SMTP_HOST=<provider host>
+SMTP_PORT=587
+SMTP_TLS=starttls
+SMTP_USER=<token or SMTP user>
+SMTP_PASSWORD=<token or SMTP password>
+SMTP_FROM=Plasma <no-reply@plasmaos.uz>
+PUBLIC_APP_URL=https://<APP_DOMAIN>
+# Team alerts (new self sign-ups, pilot and call requests, AI provider failures): Telegram if set, else e-mail to PLASMA_ADMIN_EMAILS
+ADMIN_ALERT_TELEGRAM_CHAT_ID=<chat id, e.g. -100…; optional>
+# ADMIN_ALERT_TELEGRAM_BOT_TOKEN=<only if the alert bot differs from TELEGRAM_BOT_TOKEN>
+# Explore "Book a call" (https scheduling link; optional, else the button sends a request)
+PUBLIC_BOOK_CALL_URL=<https://cal.example/plasma; optional>
+EOF
+prod$ sed -i 's|^GEMINI_API_KEY=.*|GEMINI_API_KEY=<PRODUCTION_GEMINI_KEY>|' .env && grep -c '^GEMINI_API_KEY=.' .env
+prod$ chmod 600 .env
 prod$ scripts/compose-release.sh config --quiet && echo CONFIG_OK
 prod$ scripts/compose-release.sh config | grep -E -- '--concurrency=|mem_limit' | sort | uniq -c
 ```
-Expect `ENV_SAVED`, `CONFIG_OK`, and exactly the Deploy 3 lines:
+Expect `ENV_SAVED`; `1`, `1`, `1` (an existing `SECRET_KEY`, `PLASMA_ADMIN_EMAILS` and a `GEMINI_API_KEY` line
+to replace; if the last is `0`, append `GEMINI_API_KEY=<PRODUCTION_GEMINI_KEY>` instead of the `sed`); `1` after
+the `sed`; `CONFIG_OK`, and exactly the Deploy 3 lines:
 ```
       3       - --concurrency=1
       1       - --concurrency=2
@@ -143,7 +207,16 @@ Expect `ENV_SAVED`, `CONFIG_OK`, and exactly the Deploy 3 lines:
       1     mem_limit: "536870912"
       1     mem_limit: "805306368"
 ```
-**STOP** on different numbers. `AI_PRICE_TABLE_JSON` is **not** set in this window (step 16 decides).
+**STOP** on different numbers.
+
+- **Sign-in code key: no new variable.** The code HMAC, the per-address/IP limiter keys and the sealed copy of
+  each code in the e-mail outbox are all derived from **`SECRET_KEY`**. Do **not** change `SECRET_KEY` in this
+  window: rotating it later invalidates every open code (users just request a new one) and every session.
+- `PLASMA_ADMIN_EMAILS` must list the people who receive e-mail alerts (set since Deploy 1).
+- Telegram chat id: add the bot to the team group, send one message, then
+  `curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | grep -o '"chat":{"id":-[0-9]*'`.
+- `AI_PRICE_TABLE_JSON` stays **unset** in this window (step 16 decides).
+- The frontend needs nothing new (`AUTH_SECRET`, `AUTH_BRIDGE_SECRET` and `BACKEND_INTERNAL_URL` as before).
 
 ## 8. Import the images
 ```
@@ -153,17 +226,13 @@ prod$ rm /opt/plasma-console/plasma-release-<short4>.tar.gz && df -h /
 Expect seven `Loaded image: plasma-<service>:<SHA4>…`, then `every service has plasma-<service>:<SHA4>…`;
 `Use%` ≤ 85 %. **STOP** on `import incomplete` (repeat step 6).
 
-## 8b. Pre-check: proposals not linked to any pursuit (read-only SQL)
+## 8b. Proposals not linked to any pursuit (read-only SQL; informational)
 
-> **P1 (2026-10-16): when this window deploys `pilot/p1-pilot-readiness` (see [P1_DEPLOY_NOTE.md](P1_DEPLOY_NOTE.md)),
-> this step is informational, not a STOP**: My Tenders lists every proposal without a pursuit under "Earlier bid
-> drafts", so the redirect hides nothing. Run the SQL and keep the counts.
-
-This release redirects the old Bid Preparation list (`/bid-preparation`, `/dashboard/bid-preparation`) to My
-Tenders, which lists pursuits. A legacy proposal whose tender has no pursuit in any organization of the proposal's
-user would then only open by its direct link. Count them before stopping anything:
+The old Bid Preparation list (`/bid-preparation`, `/dashboard/bid-preparation`) redirects to My Tenders. P1
+lists every proposal whose tender has no pursuit in the user's organizations under **My Tenders → "Earlier bid
+drafts (N)"**, each opening its bid page, so the redirect hides nothing. Keep the counts for the step 17 check:
 ```
-prod$ docker exec -i plasma_db psql -U plasma -d plasma_ai -v ON_ERROR_STOP=1 <<'SQL'
+prod$ docker exec -i plasma_db psql -U plasma -d plasma_ai -v ON_ERROR_STOP=1 <<'SQL' | tee $HOME/deploy4-unlinked.txt
 with unlinked as (
   select p.id, p.user_id from proposals p
   where not exists (
@@ -180,10 +249,8 @@ left join organizations o on o.id = m.organization_id
 group by 1 order by 2 desc;
 SQL
 ```
-Expect `TOTAL | 0 | 0`. **STOP if `unlinked_proposals` > 0**: the redirect would hide those proposals from the
-list. Send the per-organization rows; the owner decides (create pursuits for them first, accept that they open
-only by link, or postpone). Nothing has changed yet; resume at step 9 after the decision. (Local rehearsal data:
-116 of 122 proposals unlinked across 4 organizations, so expect this STOP unless production differs.)
+No STOP. The TOTAL row is the number of drafts the "Earlier bid drafts" lists show across organizations
+(rehearsal: 116 proposals across 4 organizations).
 
 ## 9. Pre-stop gate, then stop the app (db, redis and ClamAV keep running)
 
@@ -195,6 +262,17 @@ prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostCo
 Expect `DNS_OK`, `"ready":true`, `DBREDIS_UNCHANGED`. **STOP, do not stop anything** without `DNS_OK`:
 `docker restart plasma_db plasma_redis plasma_clamav; then restart app services`
 (`for s in $APPS; do docker restart plasma_$s; done`), wait for `/health/ready`, gate again.
+
+Counts before the migrations (kept for the step 10 and 12 checks):
+```
+prod$ docker exec -i plasma_db psql -U plasma -d plasma_ai -At <<'SQL' | tee $HOME/deploy4-before-counts.txt
+select 'users', approval_status, count(*) from users group by 2 order by 2;
+select 'users_disabled_pre_pending', '', count(*) from users where approval_status = 'disabled' and pre_disabled_approval_status = 'pending';
+select 'company_profiles', approval_status, count(*) from company_profiles group by 2 order by 2;
+select 'organizations', '', count(*) from organizations;
+SQL
+```
+Then stop the app:
 ```
 prod$ date -u +%T
 prod$ scripts/compose-release.sh stop $APPS
@@ -203,24 +281,49 @@ prod$ docker ps --format '{{.Names}}' | sort
 Expect seven `Stopped`, then only `plasma_clamav`, `plasma_db`, `plasma_redis`.
 Abort without deploying: `prod$ for s in $APPS; do docker start plasma_$s; done`.
 
-## 10. Switch images, migrate
+## 10. Switch images, migrate (four migrations, in order)
 
 ```
 prod$ scripts/compose-release.sh use "$SHA"
 prod$ scripts/compose-release.sh run --rm --no-deps backend alembic upgrade head
 prod$ scripts/compose-release.sh run --rm --no-deps backend alembic current
 ```
-Expect (rehearsal on a copy of the production-shaped database: 5 s for the two migrations):
+Expect (rehearsal on a copy of the production-shaped database: 6 s for the four migrations):
 ```
 images switched to <SHA4>; nothing was restarted
 INFO  [alembic.runtime.migration] Running upgrade 20261011_0001_r3_organization_record_events -> 20261012_0001_s1_award_ledger, Sprint 1: award ledger v0 (public award notices and one row per bidder).
 INFO  [alembic.runtime.migration] Running upgrade 20261012_0001_s1_award_ledger -> 20261012_0002_s1_product_analytics, Sprint 1: server-side product events and the AI cost ledger.
-20261012_0002_s1_product_analytics (head)
+INFO  [alembic.runtime.migration] Running upgrade 20261012_0002_s1_product_analytics -> 20261016_0001_p1_email_sign_in, P1: e-mail one-time-code sign-in, rotating refresh tokens, no manual user approval.
+INFO  [alembic.runtime.migration] Running upgrade 20261016_0001_p1_email_sign_in -> 20261016_0002_p1_organization_access, P1: organization access state (explore | pilot | paid | disabled), the plan, admin alerts.
+20261016_0002_p1_organization_access (head)
 ```
-What they do: `award_notice_snapshots` (one row per notice version, raw text kept) and
-`award_outcomes` (one row per bidder per notice version); `product_events` and `ai_call_costs`.
-All four tables are append-only (a trigger rejects UPDATE/DELETE). No existing table changes.
-**STOP → Rollback A2** if the upgrade fails (each migration is one transaction).
+What they do, in order:
+1. `20261012_0001_s1_award_ledger`: `award_notice_snapshots` (one row per notice version, raw text kept) and
+   `award_outcomes` (one row per bidder per notice version), append-only (a trigger rejects UPDATE/DELETE).
+2. `20261012_0002_s1_product_analytics`: `product_events` and `ai_call_costs`, append-only.
+3. `20261016_0001_p1_email_sign_in`: `email_sign_in_challenges` and `auth_refresh_tokens`; two more e-mail
+   outbox values (kind `SIGN_IN_CODE`, category `AUTH`). **The user-approval migration**: every `pending` user
+   becomes `approved` with one `USER_APPROVED` audit event (actor SYSTEM, source `P1_MIGRATION`); a disabled
+   user who was pending before the disable will be restored as approved; new users default to `approved`.
+4. `20261016_0002_p1_organization_access`: six columns on `organizations` (`access_state`, its change time and
+   author, plan start/end, success criteria), `admin_alerts`, one more e-mail kind (`ADMIN_ALERT`). Backfill:
+   company approved → `pilot`, pending → `explore`, rejected/disabled → `disabled`.
+
+**STOP → Rollback A2** if an upgrade fails (each migration is one transaction; the ones before it stay applied,
+which the Deploy 3 build tolerates).
+
+**After-check of the user-approval migration** (expected counts from step 9's `before-counts`):
+```
+prod$ docker exec -i plasma_db psql -U plasma -d plasma_ai -At <<'SQL'
+select 'users', approval_status, count(*) from users group by 2 order by 2;
+select 'audit_p1', '', count(*) from admin_activity_events where action = 'USER_APPROVED' and source = 'P1_MIGRATION';
+select 'organizations', access_state, count(*) from organizations group by 2 order by 2;
+SQL
+```
+Expect: `users | pending | …` **absent** (0); `approved` = before approved + before pending; `rejected` and
+`disabled` unchanged; `audit_p1` = before pending + `users_disabled_pre_pending`; organizations: `pilot` = companies
+approved before, `explore` = pending, `disabled` = rejected + disabled, total = the before count. Rehearsal (copy of
+the production-shaped database): before: users approved 15, pending 1, disabled-and-was-pending 0, company profiles approved 7, organizations 7; after: users approved 16, pending 0, audit events 1, organizations pilot 7. **STOP → Rollback A** on a count that does not add up.
 
 ## 11. Start the release
 
@@ -234,14 +337,48 @@ prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostCo
 Expect `"build_sha":"<SHA4>"`, `FRONTEND_OK`, ClamAV `healthy` with its old start time,
 `DBREDIS_UNCHANGED`. **STOP → Rollback A** if `/health/ready` is not OK after 5 minutes.
 
-## 12. Smoke and Beat memory
+## 12. Smoke, Beat memory, organization access
 
 ```
 prod$ scripts/ops/smoke.sh --target production --expect-sha "$SHA" --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
 prod$ scripts/compose-release.sh exec -T worker_pursuit_analysis python scripts/analysis_smoke.py
 prod$ scripts/ops/beat_memory.sh --target production --baseline "$BEAT_RSS_KB"
+prod$ docker exec -i plasma_db psql -U plasma -d plasma_ai -c "select access_state, count(*) from organizations group by 1" -c "select count(*) as pending_users from users where approval_status='pending'"
 ```
-Expect `Result: N ok, M warning(s), 0 failure(s)`, `analysis smoke: OK`, Beat `growth=…%` exit 0.
+Expect `Result: N ok, M warning(s), 0 failure(s)`, `analysis smoke: OK`, Beat `growth=…%` exit 0;
+`access_state` as in step 10's after-check and `pending_users` **0**.
+
+### What changes for users the moment the release is up (the organization gate)
+
+- **Sign-in**: the page offers "Continue with Google" and "Work e-mail → E-mail me a code". Existing sessions keep
+  working and get a refresh token at their next sign-in; from then on a user stays signed in about 30 days (90-day
+  cap). Admins and operators keep signing in with Google only (they never get a code).
+- **No user approval any more**: a verified e-mail (Google or code) is enough to sign in; the pending page is gone.
+  Access is decided per **organization** (`organizations.access_state`), enforced by the backend on every
+  organization-scoped route (pursuits, uploads, analyses, library, EOI, award data):
+  - **pilot** / **paid** (every company that was approved): the full workspace, as today.
+  - **explore** (every company that was pending, and every new self sign-up after onboarding): the Explore view
+    only (opportunities feed, coverage strip, one guided demo analysis, "Start a pilot", "Book a call"); uploads,
+    analyses, library, EOI and the award ledger answer 404/403. Each new self sign-up and each pilot/call request
+    sends a team alert (Telegram if `ADMIN_ALERT_TELEGRAM_CHAT_ID`, else e-mail to `PLASMA_ADMIN_EMAILS`).
+  - **disabled** (companies rejected or disabled): no workspace.
+- **Admins** change an organization's state, plan dates and success criteria at **Admin → Organizations**
+  (audited `ORGANIZATION_ACCESS_CHANGED`); approving a company there moves it to `pilot`.
+- **Invited members** (R3 invitations, `pilot_setup.py`) join the inviting organization at their first sign-in, by
+  Google or e-mail code, and never see Explore or onboarding.
+
+## 12b. Prove e-mail sign-in end to end (one-off container)
+
+```
+prod$ $RUN python scripts/send_test_sign_in_code.py --to <a non-admin mailbox you can read> --confirm SEND_TEST_CODE
+```
+Expect `challenge … delivery=STAGED expires_at=…` then `outbox run {…}; this delivery: state=SENT error=None`
+(rehearsal against a local mail catcher: 8 s, `state=SENT error=None`, the message arrived). Open the message: subject "Your Plasma sign-in code", the
+6-digit code in the body, and in the headers (Gmail: ⋮ → Show original) **`spf=pass`, `dkim=pass`, `dmarc=pass`**.
+`NOT SENT: SMTP_HOST / SMTP_FROM are not configured` → step 7's block is missing; `state=PENDING error=SMTP_AUTH`
+→ wrong credentials (fix `.env`, recreate the APP services after the pre-stop gate, re-run). Admin/operator
+addresses never get a code: for them use `--direct` (a sample with a code that does not work). Not a rollback
+reason: sign-in with Google keeps working; fix forward.
 
 ## 13. Live analysis smoke
 
@@ -249,10 +386,12 @@ Expect `Result: N ok, M warning(s), 0 failure(s)`, `analysis smoke: OK`, Beat `g
 prod$ export ANALYSIS_SMOKE_TOKEN="$($RUN python scripts/smoke_account.py token | tail -n 1)"
 prod$ python3 -I -S backend/scripts/analysis_smoke.py --live --api-base http://127.0.0.1:8000/api/v1 --org-id "$SMOKE_ORG_ID" --org-name "Plasma Smoke Test" --max-latency 300
 ```
-New: the auto-pick takes the first open World Bank REOI whose official notice has at least 5,000
+The auto-pick takes the first open World Bank REOI whose official notice has at least 5,000
 characters; if none, it fails asking for `--tender-id`. Expect `"status": "COMPLETED"`,
-`"quality_state": "READY_FOR_REVIEW"`, `live analysis smoke: OK`. The run now also writes one
-`ai_call_costs` row per provider call (step 16 reads them).
+`"quality_state": "READY_FOR_REVIEW"`, `live analysis smoke: OK`. The run writes one `ai_call_costs` row per
+provider call (step 16 reads them). `FAILED` with a provider HTTP 402/403 means the production Gemini key
+("Before the window") is not working: fix the key/billing, nothing else (the team also gets an AI-provider alert,
+at most once an hour).
 
 ## 14. EOI smoke (same token)
 ```
@@ -274,24 +413,24 @@ old one). It writes nothing else and contacts no one.
 prod$ free -h
 prod$ time $RUN python scripts/ingest_award_ledger.py --confirm INGEST_AWARD_LEDGER | tee $HOME/deploy4-ingest.json
 ```
-Expect (rehearsal 2026-10-12: 94 s, 53 pages, peak ~80 MiB) a JSON summary with `notices_seen` ≈
-3,329, `snapshots_created` = `notices_seen` (first run), `rows_inserted` ≈ 11,283, `notices_undated` 0,
-`truncated_passes` `[]`, and `rows_by_country_group` matching the table below. Then the counts per country × group:
+Expect (rehearsal 2026-10-20: 96 s, peak ~80 MiB) a JSON summary with `notices_seen` ≈ 3,326,
+`snapshots_created` = `notices_seen` (first run), `rows_inserted` ≈ 11,236, `notices_undated` 0, `truncated_passes`
+`[]`, and `rows_by_country_group` matching the table below. Then the counts per country × group:
 ```
 prod$ docker exec plasma_db psql -U plasma -d plasma_ai -c "select country, procurement_group, count(distinct notice_id) as notices, count(*) as bidder_rows from award_outcomes group by 1,2 order by 1,2"
 ```
-Expected (rehearsal 2026-10-12, window from 2024-10-12; production differs by the notices published
-or dropped out of the window since):
+Expected (rehearsal 2026-10-20; production differs by the notices published or dropped out of the 24-month
+window since):
 
 | Country | Consultant Services | Goods | Works | Non-consulting Services | Total |
 | --- | --- | --- | --- | --- | --- |
-| Uzbekistan | 245 / 475 | 292 / 821 | 571 / 2,989 | 412 / 1,602 | **1,520 / 5,887** |
-| Kazakhstan | 40 / 40 | 25 / 29 | 20 / 57 | 6 / 8 | **91 / 134** |
-| Kyrgyz Republic | 283 / 1,019 | 571 / 1,654 | 128 / 656 | 15 / 40 | **997 / 3,369** |
-| Tajikistan | 233 / 478 | 274 / 789 | 185 / 572 | 26 / 54 | **718 / 1,893** |
-| **All** | 801 / 2,012 | 1,162 / 3,293 | 904 / 4,274 | 459 / 1,704 | **3,326 / 11,283** |
+| Uzbekistan | 247 / 483 | 290 / 819 | 571 / 2,954 | 413 / 1,603 | **1,521 / 5,859** |
+| Kazakhstan | 40 / 40 | 25 / 29 | 19 / 56 | 6 / 8 | **90 / 133** |
+| Kyrgyz Republic | 287 / 1,024 | 572 / 1,657 | 127 / 638 | 15 / 40 | **1,001 / 3,359** |
+| Tajikistan | 227 / 472 | 266 / 768 | 191 / 590 | 27 / 55 | **711 / 1,885** |
+| **All** | 801 / 2,019 | 1,153 / 3,273 | 908 / 4,238 | 461 / 1,706 | **3,323 / 11,236** |
 
-Each cell: notices / bidder rows. (A notice can be counted in two cells only if the World Bank re-publishes it under another group; none did in the rehearsal.)
+Each cell: notices / bidder rows.
 
 **STOP** (do not go on to step 16; nothing needs undoing, the app is unaffected) if a country has
 no rows, a cell is 0 where the table has more than 20, or the total is more than 10 % off.
@@ -304,18 +443,13 @@ per project, cached in `projects` for 30 days):
 prod$ time $RUN python scripts/ingest_award_ledger.py --confirm INGEST_AWARD_LEDGER | tail -n 5
 prod$ time $RUN python scripts/validate_award_ledger.py --confirm VALIDATE_AWARD_LEDGER | tee $HOME/deploy4-validate.json
 ```
-Expect the second ingest to report `snapshots_created` 0 and `snapshots_unchanged` = `notices_seen`,
-`rows_inserted` 0 (rehearsal: 82 s), and the validation (rehearsal: 68 s, ~80 MiB) to report
-`"projects": {"projects": 82, "fetched": …, "cached": …, "failed": 6, "invalid": 0}` (failed = the
-Projects API has no record yet; a second run counts the cached ones) and
-`"by_flag": {"FOREIGN_BIDDER_SECTION": 9, "DUPLICATE_AWARD_NOTICE": 20, "PROJECT_NOT_RESOLVABLE": 15}`. Flagged notices stay in the ledger;
-`PROJECT_COUNTRY_MISMATCH`, `FOREIGN_BIDDER_SECTION` and `DUPLICATE_AWARD_NOTICE` notices are left
-out of market sizing, the target lists and the Loom previews' references; `PROJECT_NOT_RESOLVABLE`
-ones are kept (the Projects API does not return a few new projects). Rehearsal: 9
-`FOREIGN_BIDDER_SECTION` (award sections of other countries published on Uzbek, Tajik and Kyrgyz
-packages), 20 `DUPLICATE_AWARD_NOTICE` (every award of the notice published again in another notice), 0 mismatches, 15
-unresolvable notices on 4 new projects. **STOP** (and send the JSON) if `PROJECT_COUNTRY_MISMATCH`
-appears or a count is more than double the rehearsal's.
+Expect the second ingest to report `snapshots_created` 0 (or a handful of re-published notices) and
+`rows_inserted` 0 or a few (rehearsal: 77 s, 0 created, 3,326 unchanged), and the validation (rehearsal: 58 s; 83 projects; FOREIGN_BIDDER_SECTION 9, DUPLICATE_AWARD_NOTICE 20, PROJECT_NOT_RESOLVABLE 15) to report the
+projects resolved and `by_flag` with `FOREIGN_BIDDER_SECTION`, `DUPLICATE_AWARD_NOTICE` and `PROJECT_NOT_RESOLVABLE`
+counts near the rehearsal's. Flagged notices stay in the ledger; `PROJECT_COUNTRY_MISMATCH`, `FOREIGN_BIDDER_SECTION`
+and `DUPLICATE_AWARD_NOTICE` notices are left out of market sizing, the target lists and the Loom previews'
+references; `PROJECT_NOT_RESOLVABLE` ones are kept (the Projects API does not return a few new projects).
+**STOP** (and send the JSON) if `PROJECT_COUNTRY_MISMATCH` appears or a count is more than double the rehearsal's.
 
 Check in the browser (an operator account): **Admin → Award ledger** shows the four countries with
 totals per status; filter Uzbekistan + Consultant Services; a row opens its World Bank notice.
@@ -353,13 +487,14 @@ Task for the owner, before relying on the totals in **Admin → Metrics**:
 3. Check: `docker exec plasma_db psql -U plasma -d plasma_ai -c "select model_name, price_table_version, count(*), sum(estimated_cost_usd) from ai_call_costs group by 1,2"`
    lists the step 13 smoke calls with the expected version.
 
-## 17. S1 feature check (owner, browser, `https://<APP_DOMAIN>`)
+## 17. Feature check (owner, browser, `https://<APP_DOMAIN>`)
 
+S1:
 1. **Admin → Metrics** (admin): weekly active organizations, funnel, median/p90 analysis time and
    cost per analysis (the step 13 run is there; demo organizations are excluded unless asked for).
 2. **Admin → Award ledger** (step 15) and its CSV download; market sizing `.md`/`.csv` downloads (admin).
 3. **Opportunities**: the coverage strip above the list (sources and countries covered).
-4. Legacy URLs redirect (e.g. the old bid-preparation list → Pursuits; the vault → Company & Experience).
+4. Legacy URLs redirect (e.g. the old bid-preparation list → My Tenders; the vault → Company & Experience).
 5. Deploy 3's R3 feature check (shared profile, invitations, CV draft, admin panels) still passes.
 6. **Admin data is closed to members.** Sign in as a **non-admin member** (an approved pilot user who is not
    admin or operator, e.g. `plasmatest0@gmail.com`) in a private window and open `https://<APP_DOMAIN>/admin/award-ledger`
@@ -371,7 +506,21 @@ Task for the owner, before relying on the totals in **Admin → Metrics**:
    prod$ for p in award-ledger/summary award-ledger/outcomes award-ledger/outcomes.csv award-ledger/firms.csv award-ledger/market-sizing.csv award-ledger/market-sizing.md metrics; do printf '%s ' "$p"; curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $T" "http://127.0.0.1:8000/api/v1/admin/$p"; done; unset T
    ```
    Expect seven `403`. **STOP and roll back (A)** on any `200`: member access to admin data is a release blocker.
-   Rehearsal (local, non-admin pilot user): seven `403`; the pages redirected to `/dashboard`.
+   Rehearsal (local, non-admin pilot user): seven `403`; the member's own pursuits `200`; a member of an `explore` organization gets `404` on `/pursuits` and `200` on `/explore/overview`.
+
+P1:
+7. **Sign-in page** shows "Continue with Google" and "Work e-mail → E-mail me a code".
+8. **E-mail code, new address** (a personal mailbox, not an admin): the code arrives within a minute; signing in
+   opens onboarding; after the company form the **Explore** view opens (feed, coverage, guided demo, "Start a pilot",
+   "Book a call"). The team receives a **new sign-up alert** (Telegram, else e-mail). "Start a pilot" sends a second.
+9. **Same address with Google** (if it is a Google account) reaches the **same** user (Admin → Accounts: one row).
+10. **Wrong code** five times → "This code has expired or was used up"; a new code works.
+11. **Admin → Organizations**: the test organization shows `explore`; "Access" → `pilot` with dates → the user's next
+    page load opens the full workspace. Set it back to `disabled` (or archive it) afterwards.
+12. **My Tenders** of a user from step 8b's counts: "Earlier bid drafts (N)" lists their drafts.
+13. **Import** (Partners & Experts → Import from template): preview a filled template, import, check the library.
+14. **Explore enforcement**: as the step 8 test user (state `explore`), open `/dashboard/pursuits`: the shell shows only
+    Explore; the API refuses pursuits and uploads (403/404).
 
 ## 18. Done, and the 24-hour check
 
@@ -384,12 +533,38 @@ prod$ scripts/ops/disk_report.sh --threshold 85; free -h; tail -n 4 .release-his
 prod$ docker inspect -f '{{.Name}} oom={{.State.OOMKilled}} restarts={{.RestartCount}}' $(docker ps -q) | sort
 prod$ scripts/ops/smoke.sh --target production --expect-sha "$SHA" --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
 prod$ scripts/ops/beat_memory.sh --target production --baseline "$BEAT_RSS_KB"
+prod$ docker exec -i plasma_db psql -U plasma -d plasma_ai -c "select kind, state, count(*) from email_deliveries where created_at > now() - interval '1 day' group by 1,2" -c "select kind, state, count(*) from admin_alerts where created_at > now() - interval '1 day' group by 1,2"
 ```
-Expect `oom=false restarts=0`, smoke `0 failure(s)`, Beat exit 0. Then delete
-`/var/backups/plasma/$SET.*` and `.env.pre-deploy4`.
+Expect `oom=false restarts=0`, smoke `0 failure(s)`, Beat exit 0, e-mail deliveries `SENT` (no growing `PENDING`/
+`FAILED`), alerts delivered. Then delete `/var/backups/plasma/$SET.*` and `.env.pre-deploy4`.
 
 The ledger is **not** refreshed by Beat in this release. To add newer notices later, re-run the
-step 15 ingest and validation (idempotent; ~94 min).
+step 15 ingest and validation (idempotent; about 2–3 minutes each).
+
+## 19. Pilot setup for the first two pilot firms (one-off container)
+
+For each firm (placeholders: `<Firm A>`, `<Firm B>`; the exact organization name as the firm writes it):
+```
+prod$ $RUN python scripts/pilot_setup.py --target production --firm "<Firm A exact name>" \
+        --owner <owner@firm-a> [--owner <second owner>] --member <user@firm-a> [--member …] \
+        --start <YYYY-MM-DD> --months 3 --country Uzbekistan \
+        --success-criteria "<what success means for this pilot>" --dry-run
+prod$ $RUN python scripts/pilot_setup.py --target production --firm "<Firm A exact name>" \
+        --owner <owner@firm-a> --member <user@firm-a> --start <YYYY-MM-DD> --months 3 --country Uzbekistan \
+        --success-criteria "<…>" --confirm PILOT_SETUP --send-invitations
+prod$ $RUN python scripts/pilot_setup.py --target production --firm "<Firm A exact name>" --list
+```
+Then the same three commands for `<Firm B>` (`--country Kyrgyz Republic` if it is Kyrgyz). Expect the dry run to
+print the organization it will create (state `pilot`, plan start/end, criteria) and the invitations; the write to
+print the invitation links (and e-mail them with `--send-invitations`); `--list` to show the organization, plan
+and invitations (rehearsal: dry run 7 s, write 6 s with the invitation e-mails queued and sent by the next outbox run, `--list` 4 s, a re-run `ALREADY_INVITED`). It refuses preview/demo names and any existing organization it did not
+create. Each invitation binds at that address's first sign-in, by Google or by e-mail code; the invited owner lands
+in the firm's workspace (no onboarding, no Explore). Re-running adds new addresses only; `--resend` renews open
+invitations. Plan, dates and success criteria stay editable at **Admin → Organizations**.
+
+**Done-for-you onboarding**: fill `docs/ops/p1/plasma-library-import-template.xlsx` with the firm's references and
+experts (see `plasma-library-import-sample.xlsx`), then in the firm's workspace (signed in as its owner, or as an
+admin added as a member) Partners & Experts → Import from template.
 
 ---
 
@@ -435,8 +610,7 @@ prod$ $RUN python scripts/demo/seed_demo.py --target production --from-ledger "K
 Shows the firm's bid countries, the pool (`open`, `replay`, `global`), the candidates with their scope
 tier (0 = own bid country, 1 = rest of Central Asia, 2 = outside) and closing date for a replay, the pick
 reason, and `replay` when the pick is a closed notice; or the "no Central Asian World Bank REOI is open …"
-message. Local data 2026-10-13: one open Central Asian REOI (3,766 characters, a regional CQS on infection
-prevention), 21 closed within 120 days.
+message.
 
 **2a. Create, best of 3 (Central Asia, open first, then replay):**
 ```
@@ -456,12 +630,10 @@ prod$ $RUN python scripts/demo/seed_demo.py --target production --from-ledger "K
 ```
 Expect a JSON summary (2a, 2c, 2d: plus the candidates table on stderr) with `organization_id`,
 `pursuit_id`, `label` (`pv<yyyymmdd>-<n>`), `eoi_draft_status` `NOT_REVIEWED_BY_TEAM`,
-`archived_other_previews`, and `replay` / `kept.status` (`open` or `closed <date>`). Rehearsal: 69 s for
-one pinned preview; 120-199 s for best of 3
-with inline analysis (on production the worker analyses; allow ~1-3 min per candidate). If a run
-stops on the analysis wait, finish that candidate with `--resume <label> --tender-external
-world_bank:<its OP id> --candidates 1` (the label is printed per candidate), then archive the
-candidates you do not keep (step 4).
+`archived_other_previews`, and `replay` / `kept.status` (`open` or `closed <date>`). Allow ~1-3 min per
+candidate (the worker analyses). If a run stops on the analysis wait, finish that candidate with `--resume
+<label> --tender-external world_bank:<its OP id> --candidates 1` (the label is printed per candidate), then
+archive the candidates you do not keep (step 4).
 
 **3. Record.** Sign in as `plasmatest0@gmail.com` (private window), pick "<Firm> — Plasma preview":
 Partners & Experts → own experience (each reference says "From public records, unverified" with
@@ -486,11 +658,12 @@ the records stay (nothing is deleted). The last list must show every preview `ar
 ClamAV, db and redis are not part of any rollback. **Default: fix forward.** Roll back only if the
 API/frontend do not come up (step 11), sign-in, Explorer, tender details, the workspace or analysis
 fail (steps 12-14) and cannot be fixed within an hour, a container keeps restarting, or data looks
-wrong. A failed or partial ingest (step 15) is **not** a reason to roll back: the app does not read
-the ledger outside the admin pages and the previews; re-run it. Every rollback starts with the
-pre-stop gate (step 9's three commands).
+wrong. A failed or partial ingest (step 15), a failing test code (step 12b: Google sign-in still works) or a
+Gemini key problem are **not** reasons to roll back: fix forward. Every rollback starts with the pre-stop gate
+(step 9's three commands).
 
-**A. Deploy 3 images on the new schema (first choice).** The two migrations only add tables.
+**A. Deploy 3 images on the new schema (first choice).** All four migrations only add tables and columns (and
+change data the Deploy 3 build reads the same way: approved users, an ignored `access_state`).
 ```
 prod$ $RUN python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
 prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
@@ -499,9 +672,11 @@ prod$ until curl -fsS http://127.0.0.1:8000/health/ready >/dev/null; do sleep 3;
 prod$ scripts/ops/smoke.sh --target production --expect-sha "$PREV_SHA" --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
 ```
 Expect `build_sha` `169d4517…` and smoke with one expected failure: `database schema is not at the
-Alembic head: … Can't locate revision identified by '20261012_0002_s1_product_analytics'`. Remnants
-while on A: the ledger, product events and AI cost rows stay, unused; preview organizations stay
-(archive them first if you can).
+Alembic head: … Can't locate revision identified by '20261016_0002_p1_organization_access'`. Remnants while on A:
+the ledger, product events, AI cost rows, sign-in challenges, refresh tokens and alerts stay, unused; **users the
+migration approved stay approved** (by design; the old build then lets them sign in with Google, and the company
+approval still gates the workspace); e-mail sign-in and Explore disappear with the new images; preview organizations
+stay (archive them first if you can).
 
 **A2. Exact return to Deploy 3 (old images, checkout, `.env`).**
 ```
@@ -513,11 +688,12 @@ prod$ cp -p .env.pre-deploy4 .env && echo ENV_RESTORED
 prod$ scripts/compose-release.sh up "$PREV_SHA" --no-deps $APPS
 prod$ scripts/ops/smoke.sh --target production --expect-sha "$PREV_SHA" --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
 ```
-Expect `DNS_OK` (STOP without it), `CHECKOUT_OK`, `ENV_RESTORED`, `build_sha` `169d4517…`, the same
-single expected smoke failure.
+Expect `DNS_OK` (STOP without it), `CHECKOUT_OK`, `ENV_RESTORED` (the previous Gemini key and no SMTP come back),
+`build_sha` `169d4517…`, the same single expected smoke failure.
 
-**B. Schema rollback (not needed; only while `:latest` is still the new image).** Drops the four
-S1 tables, **including the ingested ledger and the AI cost rows**:
+**B. Schema rollback (not needed; only while `:latest` is still the new image).** Drops the P1 and S1 tables and
+columns, **including the ingested ledger, the AI cost rows, sign-in challenges, refresh tokens and alerts**; the
+approvals made by the P1 migration stay (an approved account is not made pending again):
 `prod$ scripts/compose-release.sh run --rm --no-deps backend alembic downgrade 20261011_0001_r3_organization_record_events`
 
 **C. Database restore** (loses everything since step 4): Deploy 1 Rollback C with `$SET` from
@@ -527,31 +703,41 @@ step 4 (pre-stop gate first), then A2. Never `docker compose down -v`.
 
 ## Gate and rehearsal (evidence)
 
-**Gate** (`pilot/s1-release` 4f8c019, the final S1 tree; LF `git archive` export; details in docs/audits/s1/S1_8_REPORT.md):
+**Gate** (`8ef9613` = the release before this runbook commit; LF `git archive` export; backend groups in 700 MB
+one-off containers on `plasma_db`'s loopback with a disposable database and Redis, the local staging stack stopped
+for memory; frontend and browser groups on Windows):
 
 | Group | Result |
 | --- | --- |
-| backend | **1,193 passed**, 1 skipped, 0 failed (12 batches, fresh process each) |
-| security | **118 passed**, including the 20 MB upload case (413) |
+| backend (12 batches, a fresh process each) | **1,207 passed**, 1 skipped, **1 failed**: `test_s1_prospect_seed.py::test_prospect_preview_end_to_end`, a test fixture whose "open" tender had a fixed deadline of 2026-10-20 (the seed checks deadlines against the database clock). Fixed in this commit (open fixture deadlines one year ahead, with the matching demo date); the five affected files re-run: **26 passed** |
+| security | **118 passed** (incl. the 20 MB upload case) |
 | analysis / connectors | 50 / 198 passed |
-| migrations / performance | pass |
-| config-dependencies | 24 passed, `pip check` clean, `npm audit --omit=dev` 0 |
-| frontend / browser | npm ci, typecheck, lint, **406/406** node tests, RTL audit, build; **214** browser cases passed (Windows) |
+| migrations | heads, current, check, schema preflight: **PASS** (head `20261016_0002_p1_organization_access`) |
+| performance | **PASS** |
+| config-dependencies | 24 passed, `pip check` clean; `npm audit --omit=dev` 0 |
+| frontend | npm ci, typecheck, lint, **406/406** node tests, RTL audit, production build: **PASS** |
+| browser (`release-hardening-browser.py`) | **214 passed, 0 failed** (the fixture ports 8114/8124 and 3114 sat in Windows-reserved ranges that day, so a temporary copy used 8314/8324 and 3314; nothing else changed). P1's new screens are covered by node tests and the P1 E2E screenshots, not by browser cases |
 
-**Rehearsal** (2026-10-12, a fresh copy of the production-shaped database at the Deploy 3 head, the release code in
-one-off capped containers; times include each container's start; the app cut-over itself (steps 6-11) was not
-rehearsed: it needs the release images and would stop the shared local stack, and Deploy 3 proved it):
+**Rehearsal** (2026-10-20, a fresh copy of the production-shaped database at the Deploy 3 head, the release code in
+one-off capped containers, Mailpit as the mail catcher; times include each container's start; the app cut-over
+itself (steps 6-11) was not rehearsed: it needs the release images and would stop the shared local stack, and
+Deploy 3 proved it):
 
 | Step | Result |
 | --- | --- |
-| copy of the database (265 MB) | 42 s |
-| two migrations | **5 s**; output exactly as in step 10; `20261012_0002_s1_product_analytics (head)` |
-| first ingest (step 15) | **94 s**, 53 pages, 3,329 notices, 11,283 bidder rows, peak ~80 MiB |
-| second ingest | 82 s, 0 created, 3,329 unchanged |
-| validation | 68 s; 82 projects; `FOREIGN_BIDDER_SECTION` 9, `DUPLICATE_AWARD_NOTICE` 20, `PROJECT_NOT_RESOLVABLE` 15 |
-| Loom plan, Central Asia | 8 s, `REFUSED` (no Central Asian REOI qualified that day) |
-| Loom plan, `--allow-global` | 8 s |
-| Loom pinned preview (`--candidates 1`) | 69 s (inline analysis), peak ~150 MiB |
-| list / archive / list | 5 / 5 / 6 s; `archived: true`, demo user revoked, records kept |
-| Loom best of 3 (five firms, `--allow-global`) | 120-199 s each, USD 0.10-0.21 each at the default prices |
+| copy of the database | 64 s |
+| step 8b SQL | 1 s; `TOTAL 116 \| 4` (116 proposals without a pursuit across 4 organizations: what "Earlier bid drafts" lists) |
+| step 9 counts | users approved 15, pending 1, disabled-and-was-pending 0; company profiles approved 7; organizations 7 |
+| four migrations (step 10) | **6 s**; output exactly as in step 10; `20261016_0002_p1_organization_access (head)` |
+| user-approval after-check | users approved **16**, pending **0**; `USER_APPROVED`/`P1_MIGRATION` audit events **1**; organizations `pilot` **7** (all companies were approved) |
+| send_test_sign_in_code.py (step 12b) | 8 s; `delivery=STAGED`, then `outbox run {'leased': 1, 'SENT': 1, …}; this delivery: state=SENT error=None`; the catcher received "Your Plasma sign-in code" |
+| pilot_setup.py, firm A (step 19) | dry run 7 s; write with `--send-invitations` 6 s (state `pilot`, plan 2026-11-01 → 2027-02-01, two invitations, e-mails queued); `--list` 4 s (two OPEN invitations); re-run 5 s (`ALREADY_INVITED`, nothing duplicated) |
+| pilot_setup.py, firm B | 7 s; one owner invitation |
+| e-mail outbox run (what Beat does) | 3 s; `{'leased': 3, 'SENT': 3, …}`: the three invitation e-mails arrived in the catcher |
+| one-off API on the migrated copy | ready in 20 s |
+| admin data as a non-admin member (step 17.6) | seven **403**; the member's own pursuits **200** |
+| an organization set to `explore` (as an admin would) | its member: `/pursuits` **404**, `/explore/overview` **200** |
+| first ingest (step 15) | **96 s**, 54 pages, 3,326 notices, 11,236 bidder rows, 0 undated, no truncated pass |
+| second ingest | 77 s, 0 created, 3,326 unchanged, 0 rows |
+| validation | 58 s; 83 projects (57 fetched, 20 cached, 6 not returned); `FOREIGN_BIDDER_SECTION` 9, `DUPLICATE_AWARD_NOTICE` 20, `PROJECT_NOT_RESOLVABLE` 15 |
 

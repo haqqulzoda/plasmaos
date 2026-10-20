@@ -131,16 +131,16 @@ async def _seed_tenders(sessions) -> dict[str, UUID]:
     body = "\n".join((EXPERIENCE, SUBMISSION, DUTY))
     rows = {
         "water_home": _tender(21, title="Design of water supply and sanitation systems", country="Uzbekistan", body=body,
-                              deadline=datetime(2026, 10, 25, tzinfo=timezone.utc)),
+                              deadline=datetime(2027, 10, 25, tzinfo=timezone.utc)),
         "water_abroad": _tender(22, title="Design of water supply and sanitation systems", country="Kazakhstan", body=body,
-                                deadline=datetime(2026, 11, 25, tzinfo=timezone.utc)),
+                                deadline=datetime(2027, 11, 25, tzinfo=timezone.utc)),
         "irrigation": _tender(23, title="Irrigation scheme rehabilitation supervision", country="Kazakhstan", body=body),
         "energy": _tender(24, title="Detailed design of substations", country="Uzbekistan", body=body),
         "water_ifb": _tender(25, title="Water supply and sanitation design services", country="Uzbekistan", body=body,
                              notice_type="Invitation for Bids"),
         # two of the firm's services in the title (feasibility, design) outrank the home country
         "feasibility": _tender(26, title="Feasibility study and detailed design of water supply", country="Kazakhstan", body=body,
-                               deadline=datetime(2026, 10, 20, tzinfo=timezone.utc)),
+                               deadline=datetime(2027, 10, 20, tzinfo=timezone.utc)),
         # "water" is a whole word: Ports/Waterways is no match
         "waterways": _tender(27, title="Port community system", country="Uzbekistan", body=body, sector="Ports/Waterways"),
         # the project-sector field counts with the notice text, after every title match

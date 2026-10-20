@@ -75,6 +75,8 @@ def test_demo_content_matches_the_brief() -> None:
 
 # ---- disposable database -------------------------------------------------------------------------
 
+# Open-tender deadlines are a year ahead of the fixed demo date: the seed checks "deadline not passed"
+# against the database clock, so a deadline in the near future would expire with time (D4b, 2026-10-20).
 def _tender(number: int, *, title: str, country: str, body: str, **values) -> Tender:
     base = dict(
         source_system="world_bank", external_id=f"OP0099{number:04d}", canonical_source_key=f"world_bank:OP0099{number:04d}",
@@ -82,7 +84,7 @@ def _tender(number: int, *, title: str, country: str, body: str, **values) -> Te
         description=body + "\n" + "Further information is available at the address below. " * 40,  # notice >= 2,000 chars
         notice_type="Request for Expression of Interest", procurement_category="Consultant Services",
         buyer="Ministry of Energy", country=country, publication_date=datetime(2026, 9, 20, tzinfo=timezone.utc),
-        deadline=datetime(2026, 10, 30, 17, 0, tzinfo=timezone.utc), budget=0, currency="USD",
+        deadline=datetime(2027, 10, 30, 17, 0, tzinfo=timezone.utc), budget=0, currency="USD",
         status=TenderStatus.OPEN, category="Other", source_metadata_json=None,
     )
     base.update(values)
@@ -94,7 +96,7 @@ async def _seed_tenders(sessions) -> dict[str, UUID]:
     rows = {
         "energy": _tender(1, title="Detailed design of substations for grid reinforcement", country="Mongolia", body=body),
         "water": _tender(2, title="Feasibility study for urban water supply", country="Uzbekistan", body=body,
-                         deadline=datetime(2026, 11, 20, tzinfo=timezone.utc)),
+                         deadline=datetime(2027, 11, 20, tzinfo=timezone.utc)),
         "goods": _tender(3, title="Supply of substation transformers", country="Uzbekistan", body=body, procurement_category="Goods"),
         "early": _tender(4, title="Transmission line design", country="Kazakhstan", body=body,
                          deadline=datetime(2026, 10, 5, tzinfo=timezone.utc)),
@@ -210,8 +212,8 @@ async def _flow(sessions) -> None:
         assert (await db.scalar(text("SELECT count(*) FROM organizations")), await db.scalar(text("SELECT count(*) FROM users"))) == before
     # The demo date moves the floor: only tenders closing >= demo date + 7 days are candidates.
     with pytest.raises(DemoSeedError, match="found 1 open firm-level"):
-        await seed_demo.plan(sessions, Options(target="local", dry_run=True, demo_date=date(2026, 11, 10)), today=TODAY)
-    pinned = await seed_demo.plan(sessions, Options(target="local", dry_run=True, demo_date=date(2026, 11, 10),
+        await seed_demo.plan(sessions, Options(target="local", dry_run=True, demo_date=date(2027, 11, 10)), today=TODAY)
+    pinned = await seed_demo.plan(sessions, Options(target="local", dry_run=True, demo_date=date(2027, 11, 10),
                                                     externals=("world_bank:OP00990001",)), today=TODAY)
     assert pinned["pursuit_b_tender"]["tender_id"] == str(tenders["energy"])  # a pinned tender has no demo-date floor
     assert pinned["pursuit_a_tender"]["tender_id"] == str(tenders["water"])
