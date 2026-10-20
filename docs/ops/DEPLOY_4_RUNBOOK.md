@@ -45,26 +45,29 @@ when it ends. Check `free -h` shows `available` ≥ ~600Mi before each.
 ## Before the window (a day ahead): e-mail provider, DNS, production Gemini key
 
 **E-mail.** Sign-in codes, invitations and admin alerts go out over SMTP from **`no-reply@plasmaos.uz`**. Any
-transactional provider works; two that need no extra code:
+transactional provider works; three that need no extra code:
 
-| | Postmark (recommended: transactional only, fast delivery) | Amazon SES (eu-central-1) |
-| --- | --- | --- |
-| `SMTP_HOST` | `smtp.postmarkapp.com` | `email-smtp.eu-central-1.amazonaws.com` |
-| `SMTP_PORT` / `SMTP_TLS` | `587` / `starttls` | `587` / `starttls` |
-| `SMTP_USER` / `SMTP_PASSWORD` | the Server API token (both fields) | the SES SMTP credentials (IAM, not the AWS keys) |
-| Before going live | approve the account (Postmark reviews new accounts) | leave the SES sandbox (request production access) |
+| | Resend | Postmark (transactional only, fast delivery) | Amazon SES (eu-central-1) |
+| --- | --- | --- | --- |
+| `SMTP_HOST` | `smtp.resend.com` | `smtp.postmarkapp.com` | `email-smtp.eu-central-1.amazonaws.com` |
+| `SMTP_PORT` / `SMTP_TLS` | `587` / `starttls` | `587` / `starttls` | `587` / `starttls` |
+| `SMTP_USER` / `SMTP_PASSWORD` | `resend` / the Resend **API key** (`re_…`, sending access) | the Server API token (both fields) | the SES SMTP credentials (IAM, not the AWS keys) |
+| Before going live | add and verify the domain `plasmaos.uz` in the Resend dashboard | approve the account (Postmark reviews new accounts) | leave the SES sandbox (request production access) |
 
 DNS records in the plasmaos.uz zone (copy the exact values from the provider's domain page; do not retype):
 
 | Purpose | Name | Type | Value |
 | --- | --- | --- | --- |
-| **SPF** (root) | `plasmaos.uz` | TXT | `v=spf1 include:spf.mtasv.net ~all` (Postmark) **or** `v=spf1 include:amazonses.com ~all` (SES). **Only one SPF record may exist**: if the root already has `v=spf1 …` (e.g. `include:_spf.google.com`), add the `include:` to it instead of creating a second one |
-| **DKIM** | Postmark: `<date>pm._domainkey.plasmaos.uz` · SES: three `<token>._domainkey.plasmaos.uz` | Postmark: TXT · SES: CNAME | Postmark: the `k=rsa; p=…` key from the Sender Signature / Domain page · SES: `<token>.dkim.amazonses.com` for each token (Easy DKIM) |
-| **Return-Path / MAIL FROM** | Postmark: `pm-bounces.plasmaos.uz` · SES: `bounce.plasmaos.uz` | Postmark: CNAME `pm.mtasv.net` · SES: MX `10 feedback-smtp.eu-central-1.amazonses.com` and TXT `v=spf1 include:amazonses.com ~all` | as on the provider page |
-| **DMARC** | `_dmarc.plasmaos.uz` | TXT | `v=DMARC1; p=none; rua=mailto:dmarc@plasmaos.uz; fo=1; adkim=r; aspf=r` (reports only); after two weeks of clean reports `p=quarantine`, later `p=reject` |
+| **Resend: DKIM** | `resend._domainkey.plasmaos.uz` | TXT | the `p=…` public key shown in the Resend dashboard (Domains → plasmaos.uz) |
+| **Resend: bounce MX** | `send.plasmaos.uz` | MX | the host and priority shown in the Resend dashboard |
+| **Resend: SPF** | `send.plasmaos.uz` | TXT | the `v=spf1 include:…` value shown in the Resend dashboard (on the `send` subdomain, so an existing root SPF record stays as it is) |
+| **SPF** (root; Postmark or SES only) | `plasmaos.uz` | TXT | `v=spf1 include:spf.mtasv.net ~all` (Postmark) **or** `v=spf1 include:amazonses.com ~all` (SES). **Only one SPF record may exist**: if the root already has `v=spf1 …` (e.g. `include:_spf.google.com`), add the `include:` to it instead of creating a second one |
+| **DKIM** (Postmark or SES) | Postmark: `<date>pm._domainkey.plasmaos.uz` · SES: three `<token>._domainkey.plasmaos.uz` | Postmark: TXT · SES: CNAME | Postmark: the `k=rsa; p=…` key from the Sender Signature / Domain page · SES: `<token>.dkim.amazonses.com` for each token (Easy DKIM) |
+| **Return-Path / MAIL FROM** (Postmark or SES; Resend uses the `send` records above) | Postmark: `pm-bounces.plasmaos.uz` · SES: `bounce.plasmaos.uz` | Postmark: CNAME `pm.mtasv.net` · SES: MX `10 feedback-smtp.eu-central-1.amazonses.com` and TXT `v=spf1 include:amazonses.com ~all` | as on the provider page |
+| **DMARC** (every provider) | `_dmarc.plasmaos.uz` | TXT | `v=DMARC1; p=none; rua=mailto:dmarc@plasmaos.uz; fo=1; adkim=r; aspf=r` (reports only); after two weeks of clean reports `p=quarantine`, later `p=reject` |
 
 `dmarc@plasmaos.uz` must exist (or use the provider's DMARC reporting address). **Go/no-go**: the provider shows
-SPF, DKIM and Return-Path **verified**. Without it the window can still run, but e-mail sign-in, invitations and
+SPF, DKIM and Return-Path (Resend: DKIM, MX and SPF of the domain) **verified**. Without it the window can still run, but e-mail sign-in, invitations and
 alerts are not proven until step 12b passes.
 
 **Production Gemini key.** Use a key from a Google Cloud project / billing account **separate from development**
@@ -176,11 +179,11 @@ prod$ grep -c '^SECRET_KEY=.' .env; grep -c '^PLASMA_ADMIN_EMAILS=.' .env; grep 
 prod$ cat >> .env <<'EOF'
 # --- Deploy 4 (P1) ---
 # E-mail sign-in codes, invitations and admin alerts (provider from "Before the window")
-SMTP_HOST=<provider host>
+SMTP_HOST=<provider host, e.g. smtp.resend.com>
 SMTP_PORT=587
 SMTP_TLS=starttls
-SMTP_USER=<token or SMTP user>
-SMTP_PASSWORD=<token or SMTP password>
+SMTP_USER=<resend | token | SMTP user>
+SMTP_PASSWORD=<Resend API key | token | SMTP password>
 SMTP_FROM=Plasma <no-reply@plasmaos.uz>
 PUBLIC_APP_URL=https://<APP_DOMAIN>
 # Team alerts (new self sign-ups, pilot and call requests, AI provider failures): Telegram if set, else e-mail to PLASMA_ADMIN_EMAILS
