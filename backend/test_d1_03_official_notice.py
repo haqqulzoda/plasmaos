@@ -355,6 +355,13 @@ def _document_statements(statements: list[str], kinds: tuple[str, ...] = ("SELEC
     ]
 
 
+# Open tenders' deadlines are relative to today: a fixed date turns them into past
+# deadlines once the calendar passes it.
+OPEN_DEADLINE = (datetime.now(timezone.utc) + timedelta(days=60)).replace(hour=9, minute=30, second=0, microsecond=0)
+MOVED_DEADLINE = OPEN_DEADLINE + timedelta(days=1)
+W2_DEADLINE = OPEN_DEADLINE.replace(hour=0, minute=0) + timedelta(days=30)
+
+
 def _long_notice(topic: str, sentences: int = 12) -> str:
     body = "".join(
         f"<p>{topic}: firm experience item {n} must be demonstrated with a reference letter.</p>"
@@ -370,7 +377,7 @@ def _normalized(source: str, external_id: str, description: str | None, **overri
         title=f"{source} tender {external_id}", description=description, budget=1000.0,
         currency="USD", country="Mongolia", buyer="Ministry", notice_type="REOI",
         publication_date=datetime(2026, 9, 15, tzinfo=timezone.utc),
-        deadline=datetime(2026, 12, 1, 9, 30, tzinfo=timezone.utc),
+        deadline=OPEN_DEADLINE,
         status=TenderStatus.OPEN, category="Other",
         # Connectors always send their raw payload; NULL metadata reads as "changed"
         # on every refresh (existing behaviour, unrelated to notices).
@@ -510,7 +517,7 @@ def test_refresh_hook_is_set_wise_idempotent_race_safe_and_excluded_from_acquisi
                     assert f"Reference: {external_id}" in row["parsed_text"]
                     # D1-05b: the published wall time with its source basis, never "UTC".
                     label = {"world_bank": "local time", "uzex": "Asia/Tashkent time", "giz": "local time"}[tender["source_system"]]
-                    assert f"Deadline: 2026-12-01 09:30 {label} (as published)" in row["parsed_text"]
+                    assert f"Deadline: {OPEN_DEADLINE:%Y-%m-%d %H:%M} {label} (as published)" in row["parsed_text"]
                 assert "&amp;" not in rows[tenders["N-GIZ"]["id"]]["parsed_text"]
                 wb_text = rows[tenders["N-WB"]["id"]]["parsed_text"]
                 assert "\n- Shortlisting criteria A\n- Criteria B" in wb_text  # structure restored from raw HTML
@@ -559,15 +566,15 @@ def test_refresh_hook_is_set_wise_idempotent_race_safe_and_excluded_from_acquisi
                 async with sessions() as db:
                     await persist_tender_batch(db, [
                         _normalized("uzex", "N-UZ", "Plain uzex notice. " * 30,
-                                    deadline=datetime(2026, 12, 2, 9, 30, tzinfo=timezone.utc)),
+                                    deadline=MOVED_DEADLINE),
                     ])
                     await db.commit()
-                assert "Deadline: 2026-12-02 09:30 Asia/Tashkent time (as published)" in (await _notice_rows(connection))[tenders["N-UZ"]["id"]]["parsed_text"]
+                assert f"Deadline: {MOVED_DEADLINE:%Y-%m-%d %H:%M} Asia/Tashkent time (as published)" in (await _notice_rows(connection))[tenders["N-UZ"]["id"]]["parsed_text"]
                 # A budget-only change is not part of the notice: no notice write.
                 statements.clear()
                 async with sessions() as db:
                     await persist_tender_batch(db, [_normalized("uzex", "N-UZ", "Plain uzex notice. " * 30,
-                                                                deadline=datetime(2026, 12, 2, 9, 30, tzinfo=timezone.utc),
+                                                                deadline=MOVED_DEADLINE,
                                                                 budget=2222.0)])
                     await db.commit()
                 assert _document_statements(statements, ("INSERT", "UPDATE", "DELETE")) == []
@@ -825,7 +832,7 @@ def test_pack_candidate_seals_the_notice_and_sealed_packs_stay_immutable(monkeyp
                         source_system="world_bank", external_id="WB-W2-1",
                         source_url="https://example.invalid/w2-source", title="W2 Source Tender",
                         description=clean_notice_html(original_html), budget=125000.0, currency="USD",
-                        deadline=datetime(2026, 12, 31, tzinfo=timezone.utc), status=TenderStatus.OPEN,
+                        deadline=W2_DEADLINE, status=TenderStatus.OPEN,
                         category="Services", notice_type="Request for Expression of Interest",
                         buyer="Ministry of Energy, Mongolia", country="Mongolia",
                         source_metadata_json={"contact_name": "Procurement Contact", "teamleadname": "Literal Leader",
@@ -860,7 +867,7 @@ def test_pack_candidate_seals_the_notice_and_sealed_packs_stay_immutable(monkeyp
                             source_system="world_bank", external_id="WB-W2-1",
                             source_url="https://example.invalid/w2-source", title="W2 Source Tender",
                             description=clean_notice_html(original_html), budget=125000.0, currency="USD",
-                            deadline=datetime(2026, 12, 31, tzinfo=timezone.utc), status=TenderStatus.OPEN,
+                            deadline=W2_DEADLINE, status=TenderStatus.OPEN,
                             category="Services", notice_type="Request for Expression of Interest",
                             buyer="Ministry of Energy, Mongolia", country="Mongolia",
                             source_metadata_json={"contact_name": "Procurement Contact", "teamleadname": "Literal Leader",
@@ -920,7 +927,7 @@ def test_pack_candidate_seals_the_notice_and_sealed_packs_stay_immutable(monkeyp
                         source_system="world_bank", external_id="WB-W2-1",
                         source_url="https://example.invalid/w2-source", title="W2 Source Tender",
                         description=clean_notice_html(amended_html), budget=125000.0, currency="USD",
-                        deadline=datetime(2026, 12, 31, tzinfo=timezone.utc), status=TenderStatus.OPEN,
+                        deadline=W2_DEADLINE, status=TenderStatus.OPEN,
                         category="Services", notice_type="Request for Expression of Interest",
                         buyer="Ministry of Energy, Mongolia", country="Mongolia",
                         source_metadata_json={"notice_text": amended_html},
