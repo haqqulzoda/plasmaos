@@ -3,6 +3,8 @@
  * Import-free for the node test runner.
  */
 
+import type { BillingSummary } from './billing';
+
 export type PlanCode = 'explore' | 'pilot' | 'pursuit_desk' | 'agent' | 'enterprise' | 'per_tender';
 export type PlanNoticeLevel = 'none' | 'near_limit' | 'limit_reached';
 
@@ -35,6 +37,8 @@ export type PlanStatus = {
     competitor_intelligence: boolean;
   };
   intelligence: string;
+  /** B1: the payment status, an open invoice and the annual offer. */
+  billing?: BillingSummary | null;
 };
 
 export const PLAN_CODES: PlanCode[] = ['explore', 'pilot', 'pursuit_desk', 'agent', 'enterprise', 'per_tender'];

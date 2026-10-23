@@ -18,7 +18,7 @@ from app.core.plans import CATALOG, INTELLIGENCE_FULL, INTELLIGENCE_NONE, INTELL
 from app.services.organization_access import plan_for_state
 from app.services.plans import notice_for, plan_period
 
-HEAD = "20261024_0001_p3_plans_limits"
+HEAD = "20261025_0001_b1_billing"
 P2_HEAD = "20261023_0001_p2_partner_finder"
 
 

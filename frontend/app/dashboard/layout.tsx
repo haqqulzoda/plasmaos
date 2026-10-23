@@ -40,7 +40,10 @@ const CONTROL_PATHS = new Set([
 const EXPLORE_PATH = '/dashboard/explore';
 // P3: an explore organization opens the pursuit of its free monthly tender check (requirements only).
 const EXPLORE_CHECK_PREFIX = '/dashboard/pursuits/';
-const exploreOnlyPath = (path: string) => path === EXPLORE_PATH || path.startsWith(EXPLORE_CHECK_PREFIX);
+// B1: an explore organization buys its pilot here (plan and billing, checkout, payment confirmation).
+const BILLING_PREFIX = '/dashboard/billing';
+const exploreOnlyPath = (path: string) => path === EXPLORE_PATH || path.startsWith(EXPLORE_CHECK_PREFIX)
+    || path.startsWith(BILLING_PREFIX);
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
     const common = useTranslations('common');
@@ -112,7 +115,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 }
 
                 const exploreCheck = access.organization_access_state === 'explore' && pathname.startsWith(EXPLORE_CHECK_PREFIX);
-                if (pathname !== EXPLORE_PATH && !exploreCheck) {
+                if (pathname !== EXPLORE_PATH && !exploreCheck && !pathname.startsWith(BILLING_PREFIX)) {
                     if (!cancelled) setWorkspaceAccessAllowed(false);
                     router.replace(EXPLORE_PATH);
                     return;

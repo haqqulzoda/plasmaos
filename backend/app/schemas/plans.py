@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.billing import BillingSummary
+
 Notice = Literal["none", "near_limit", "limit_reached"]
 
 
@@ -47,6 +49,7 @@ class PlanStatusResponse(BaseModel):
     users: PlanUsers
     features: PlanFeatures
     intelligence: str
+    billing: BillingSummary | None = None  # B1: payment status, an open invoice, the annual offer
 
 
 class PlanGrantCreate(BaseModel):

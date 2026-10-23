@@ -151,10 +151,12 @@ async def get_organization_plan(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> PlanStatusResponse:
     """P3: the organization's plan, this period's usage and limits, and what the plan includes."""
+    from app.services.billing import billing_summary
     from app.services.plans import plan_status
 
     context = await _context(db, current_user, x_organization_id)
-    return PlanStatusResponse(**await plan_status(db, context.organization))
+    return PlanStatusResponse(**await plan_status(db, context.organization),
+                              billing=await billing_summary(db, context.organization))
 
 
 @router.get("/{organization_id}/members", response_model=list[MembershipResponse])

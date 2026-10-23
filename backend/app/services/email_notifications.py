@@ -327,7 +327,9 @@ def classify_smtp_error(exc: Exception) -> SendOutcome:
     return SendOutcome("FAILED", "RENDER_ERROR")
 
 
-def build_message(delivery: EmailDelivery, *, link_base: str) -> EmailMessage:
+def build_message(
+    delivery: EmailDelivery, *, link_base: str, attachments: list[tuple[str, bytes, str]] | None = None,
+) -> EmailMessage:
     context = dict(delivery.payload or {})
     if delivery.kind == "TEAM_INVITATION":
         if not delivery.secret_ciphertext:
@@ -352,7 +354,24 @@ def build_message(delivery: EmailDelivery, *, link_base: str) -> EmailMessage:
     message["X-Plasma-Delivery"] = str(delivery.id)
     message.set_content(rendered.text)
     message.add_alternative(rendered.html, subtype="html")
+    for filename, content, mime in attachments or []:
+        maintype, _, subtype = mime.partition("/")
+        message.add_attachment(content, maintype=maintype, subtype=subtype, filename=filename)
     return message
+
+
+async def attachments_for(db: AsyncSession, delivery: EmailDelivery) -> list[tuple[str, bytes, str]]:
+    """B1: the invoice PDF, rendered at send time from the stored invoice (nothing stored in the outbox)."""
+    if delivery.kind != "BILLING_INVOICE":
+        return []
+    from app.models.billing import BillingInvoice, BillingOrder
+    from app.services.billing_invoice_pdf import render_invoice_pdf
+
+    invoice = await db.get(BillingInvoice, UUID(str((delivery.payload or {}).get("invoice_id"))))
+    if invoice is None:
+        raise ValueError("invoice is no longer available")
+    order = await db.get(BillingOrder, invoice.order_id)
+    return [(f"{invoice.number}.pdf", render_invoice_pdf(invoice, order), "application/pdf")]
 
 
 async def _lease_due(db: AsyncSession, *, limit: int, now: datetime) -> list[UUID]:
@@ -399,7 +418,7 @@ async def send_due_emails(
         if delivery is None or delivery.state != "SENDING":
             continue
         try:
-            message = build_message(delivery, link_base=link_base)
+            message = build_message(delivery, link_base=link_base, attachments=await attachments_for(db, delivery))
             await asyncio.to_thread(transport.send, message)
             outcome = SendOutcome("SENT")
         except Exception as exc:  # classified below; never logged with content

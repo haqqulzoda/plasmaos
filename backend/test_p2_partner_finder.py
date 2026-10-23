@@ -31,7 +31,7 @@ from app.services.partner_finder import (
     rank_firms,
 )
 
-HEAD = "20261024_0001_p3_plans_limits"
+HEAD = "20261025_0001_b1_billing"
 P1_HEAD = "20261016_0002_p1_organization_access"
 SUGGESTION_KEYS = {
     "rank", "firm_key", "firm_name", "firm_country", "presence", "presence_matches_gap", "match_strength",

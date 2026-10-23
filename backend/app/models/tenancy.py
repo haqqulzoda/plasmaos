@@ -62,6 +62,9 @@ class Organization(Base):
     plan: Mapped[str] = mapped_column(String(20), nullable=False, default="explore", server_default=text("'explore'"))
     pursuit_limit_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     introduction_limit_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # B1: the payment state of the current plan (app.models.billing.BILLING_STATUSES); NULL: not bought
+    # in the app (set by an admin, or Explore).
+    billing_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -97,6 +100,10 @@ class Organization(Base):
             "(pursuit_limit_override IS NULL OR pursuit_limit_override >= 0) AND "
             "(introduction_limit_override IS NULL OR introduction_limit_override >= 0)",
             name="ck_organizations_plan_overrides",
+        ),
+        CheckConstraint(
+            "billing_status IS NULL OR billing_status IN ('paid','awaiting_payment','suspended','refunded','canceled')",
+            name="ck_organizations_billing_status",
         ),
     )
 

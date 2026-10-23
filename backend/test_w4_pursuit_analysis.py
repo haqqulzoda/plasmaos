@@ -64,7 +64,7 @@ from test_w3_private_document_foundation import W3_HEAD, _docx_bytes, _pdf_bytes
 
 
 W4_HEAD = "20260927_0001_w4_pursuit_analysis"
-CURRENT_HEAD = "20261024_0001_p3_plans_limits"
+CURRENT_HEAD = "20261025_0001_b1_billing"
 
 
 def test_w4_gemini_schema_uses_sdk_compatible_explicit_dictionary() -> None:

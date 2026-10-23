@@ -88,6 +88,11 @@ celery_app.conf.update(
             "task": "app.workers.communications_tasks.deliver_admin_alerts",
             "schedule": timedelta(seconds=30),
         },
+        # B1: bank transfer reminders (days 3 and 6) and the day-10 return to Explore; idempotent.
+        "run-billing-schedule": {
+            "task": "app.workers.communications_tasks.run_billing_schedule",
+            "schedule": crontab(minute=15),
+        },
         # 08:00 Asia/Tashkent (UTC+5, no daylight saving) = 03:00 UTC.
         "stage-daily-opportunity-digests": {
             "task": "app.workers.communications_tasks.stage_daily_digests",

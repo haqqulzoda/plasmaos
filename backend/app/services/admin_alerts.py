@@ -99,6 +99,8 @@ def render_alert(alert: AdminAlert) -> tuple[str, list[str]]:
             else "They will be blocked at the limit: offer an upgrade or extra pursuits.",
             f"At {when}.",
         ]
+    if alert.kind == "BILLING":
+        return _render_billing(data, when)
     if alert.kind == "PARTNER_REQUEST":
         organization = data.get("organization_name") or "An organization"
         tender = " ".join(filter(None, [str(data.get("tender_reference") or ""), str(data.get("tender_title") or "")]))
@@ -129,6 +131,40 @@ def render_alert(alert: AdminAlert) -> tuple[str, list[str]]:
         lines.append(f"Message: {data['message']}")
     label = "upgrade" if data.get("request") == "upgrade" else kind
     return (f"Plasma {label} request: {data.get('organization_name') or data.get('email')}", lines)
+
+
+BILLING_PRODUCTS = {"pilot": "Pilot", "pursuit_desk": "Pursuit Desk", "extra_pursuit": "an extra pursuit"}
+BILLING_EVENTS = {
+    "activated": "{organization} bought {product} ({method}): active now",
+    "bank_transfer_paid": "{organization} paid invoice {invoice} by bank transfer",
+    "suspended": "{organization}: invoice {invoice} unpaid on day 10, back to Explore",
+    "refunded": "{organization}: {product} refunded",
+    "partially_refunded": "{organization}: {product} partially refunded",
+    "renewed": "{organization}: {product} renewed",
+    "credit_already_used": "{organization}: the pilot credit was already used, check this order",
+    "paid_after_close": "{organization} paid an order that was closed, check it",
+    "subscription_canceled": "{organization} canceled the {product} subscription (active to the period end)",
+    "subscription_revoked": "{organization}: {product} subscription ended, back to Explore",
+    "subscription_active": "{organization}: {product} subscription active",
+    "subscription_uncanceled": "{organization}: {product} subscription resumed",
+}
+
+
+def _render_billing(data: dict[str, Any], when: str) -> tuple[str, list[str]]:
+    organization = data.get("organization_name") or "An organization"
+    product = BILLING_PRODUCTS.get(str(data.get("product")), str(data.get("product")))
+    method = "card" if data.get("method") == "card" else "bank transfer"
+    template = BILLING_EVENTS.get(str(data.get("event")), "{organization}: billing event {event}")
+    headline = template.format(organization=organization, product=product, method=method,
+                               invoice=data.get("invoice_number") or "", event=data.get("event"))
+    amount = int(data.get("amount_cents") or 0) / 100
+    lines = [headline + ".", f"Amount USD {amount:,.2f}" + (
+        f" (pilot credit USD {int(data['credit_cents']) / 100:,.2f})" if data.get("credit_cents") else "") + ".",
+        f"Plan now: {data.get('plan')}, billing status: {data.get('billing_status') or 'none'}.",
+        f"At {when}. Billing console: /admin/billing"]
+    if data.get("event") == "activated" and data.get("product") != "extra_pursuit":
+        lines.insert(2, "An onboarding task is open in /admin/billing: book the kickoff.")
+    return f"Plasma billing: {headline}", lines
 
 
 @dataclass(frozen=True)

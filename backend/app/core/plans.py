@@ -84,3 +84,69 @@ NEAR_LIMIT_SHARE = 0.8
 
 def plan_for(code: str | None) -> Plan:
     return CATALOG.get(code or PLAN_EXPLORE, CATALOG[PLAN_EXPLORE])
+
+
+# B1: prices and what can be bought in the app. One table for the gates above and for billing.
+# Amounts are USD cents; invoices to Uzbek residents show UZS at the CBU rate of the issue date.
+CURRENCY = "USD"
+
+BILLING_FREE = "free"
+BILLING_ONE_TIME = "one_time"
+BILLING_ANNUAL = "annual"
+BILLING_CONTACT = "contact"  # "Talk to us": quoted and invoiced by the team
+
+
+@dataclass(frozen=True)
+class Price:
+    plan: str
+    amount_cents: int  # the list price for the term (pilot: 3 months; annual plans: a year)
+    billing: str
+    monthly_cents: int | None = None
+    from_price: bool = False  # Enterprise: "from"
+
+
+PRICES: dict[str, Price] = {
+    PLAN_EXPLORE: Price(PLAN_EXPLORE, 0, BILLING_FREE),
+    PLAN_PILOT: Price(PLAN_PILOT, 90_000, BILLING_ONE_TIME, monthly_cents=30_000),
+    PLAN_PURSUIT_DESK: Price(PLAN_PURSUIT_DESK, 600_000, BILLING_ANNUAL),
+    PLAN_AGENT: Price(PLAN_AGENT, 1_800_000, BILLING_CONTACT),
+    PLAN_ENTERPRISE: Price(PLAN_ENTERPRISE, 3_600_000, BILLING_CONTACT, from_price=True),
+    PLAN_PER_TENDER: Price(PLAN_PER_TENDER, 40_000, BILLING_CONTACT),
+}
+
+PRODUCT_PILOT = "pilot"
+PRODUCT_PURSUIT_DESK = "pursuit_desk"
+PRODUCT_EXTRA_PURSUIT = "extra_pursuit"
+PRODUCTS_FOR_SALE = (PRODUCT_PILOT, PRODUCT_PURSUIT_DESK, PRODUCT_EXTRA_PURSUIT)
+
+
+@dataclass(frozen=True)
+class Product:
+    """A checkout product (/billing/start?plan=<code>)."""
+
+    code: str
+    plan: str | None  # the plan a payment activates; None: an add-on
+    amount_cents: int
+    billing: str
+    term_months: int | None
+    extra_pursuits: int = 0
+
+
+PRODUCTS: dict[str, Product] = {
+    PRODUCT_PILOT: Product(PRODUCT_PILOT, PLAN_PILOT, PRICES[PLAN_PILOT].amount_cents, BILLING_ONE_TIME, 3),
+    PRODUCT_PURSUIT_DESK: Product(
+        PRODUCT_PURSUIT_DESK, PLAN_PURSUIT_DESK, PRICES[PLAN_PURSUIT_DESK].amount_cents, BILLING_ANNUAL, 12
+    ),
+    PRODUCT_EXTRA_PURSUIT: Product(PRODUCT_EXTRA_PURSUIT, None, 20_000, BILLING_ONE_TIME, None, extra_pursuits=1),
+}
+
+# A paid pilot is credited once, to the first annual invoice (a one-time $900 off Pursuit Desk).
+PILOT_CREDIT_CENTS = PRICES[PLAN_PILOT].amount_cents
+PILOT_GUARANTEE_DAYS = 30  # full refund within 30 days of the pilot payment
+ANNUAL_OFFER_DAY = 75  # the in-app Pursuit Desk offer from the pilot's 75th day
+BANK_TRANSFER_REMINDER_DAYS = (3, 6)
+BANK_TRANSFER_SUSPEND_DAY = 10  # unpaid on day 10: back to Explore
+
+
+def product_for(code: str | None) -> Product | None:
+    return PRODUCTS.get(code or "")

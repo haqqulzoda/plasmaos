@@ -26,7 +26,7 @@ from app.services.admin_survivability import (
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261024_0001_p3_plans_limits"
+HEAD = "20261025_0001_b1_billing"
 
 
 async def seed_user(connection, label: str, state: str, role: str, is_admin: bool) -> UUID:

@@ -36,7 +36,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 PREVIOUS_HEAD = "20261005_0001_d2_05_eoi_drafts"
 REVISION = "20261008_0001_r3_pending_invitations"
-HEAD = "20261024_0001_p3_plans_limits"
+HEAD = "20261025_0001_b1_billing"
 
 
 # ---- pure rules -----------------------------------------------------------------------------------

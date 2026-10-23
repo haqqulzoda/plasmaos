@@ -133,6 +133,8 @@ async def set_organization_access(
     pursuit_limit_override: int | None | object = _UNSET,
     introduction_limit_override: int | None | object = _UNSET,
     now: datetime | None = None,
+    source: str = SOURCE_ADMIN_API,
+    actor_type: str | None = None,
 ) -> Organization:
     """Change the state and/or plan, sync the company approval, audit. The caller commits."""
     from app.core.plans import ACCESS_STATE_FOR_PLAN, PLANS
@@ -189,8 +191,9 @@ async def set_organization_access(
     if after != before:
         target_user = await db.get(User, profile.user_id) if profile is not None else None
         await record_admin_audit_event(
-            db, action=ACTION_ORGANIZATION_ACCESS_CHANGED, outcome=OUTCOME_SUCCESS, source=SOURCE_ADMIN_API,
-            actor_user=actor_user, actor_type=ACTOR_USER if actor_user is not None else ACTOR_SERVER_COMMAND,
+            db, action=ACTION_ORGANIZATION_ACCESS_CHANGED, outcome=OUTCOME_SUCCESS, source=source,
+            actor_user=actor_user,
+            actor_type=ACTOR_USER if actor_user is not None else (actor_type or ACTOR_SERVER_COMMAND),
             actor_label=None if actor_user is not None else actor_label,
             target_user=target_user, target_email=None if target_user is not None else "organization@plasma.invalid",
             target_resource_type="ORGANIZATION", target_resource_id=str(organization.id),

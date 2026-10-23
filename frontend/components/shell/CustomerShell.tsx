@@ -12,6 +12,7 @@ import { Compass,
   Menu,
   UserCircle,
   ChevronDown,
+  CreditCard,
   ShieldCheck,
   Bell,
   Upload,
@@ -68,10 +69,16 @@ export function CustomerShell({
   const active = navigation.find((item) => item.nameKey === activeKey);
   const nav = exploreOnly ? (
     <nav className="shell-navigation" aria-label={t('navigationLabel')}>
-      <Link className="shell-nav-link" prefetch={false} href="/dashboard/explore" aria-current="page"
+      <Link className="shell-nav-link" prefetch={false} href="/dashboard/explore"
+        aria-current={path.startsWith('/dashboard/billing') ? undefined : 'page'}
         onClick={() => setMobileOpen(false)}>
         <Compass aria-hidden />
         <span>{t('explore')}</span>
+      </Link>
+      <Link className="shell-nav-link" prefetch={false} href="/dashboard/billing"
+        aria-current={path.startsWith('/dashboard/billing') ? 'page' : undefined} onClick={() => setMobileOpen(false)}>
+        <CreditCard aria-hidden />
+        <span>{t('billing')}</span>
       </Link>
     </nav>
   ) : (
@@ -188,6 +195,14 @@ export function CustomerShell({
                 prefetch={false}
               >
                 {t('companyExperience')}
+              </Link>
+              <Link
+                role="menuitem"
+                className="ds-button ds-button-ghost"
+                href="/dashboard/billing"
+                prefetch={false}
+              >
+                {t('billing')}
               </Link>
               {canAdmin && (
                 <Link

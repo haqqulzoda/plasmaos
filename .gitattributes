@@ -9,3 +9,6 @@ deploy/caddy/Caddyfile text eol=lf
 deploy/clamav/*.sh text eol=lf
 deploy/systemd/* text eol=lf
 deploy/compose/* text eol=lf
+# B1: the accepted terms text is hashed; keep the same bytes on every checkout.
+backend/app/legal/*.md text eol=lf
+docs/legal/*.md text eol=lf

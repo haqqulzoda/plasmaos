@@ -40,6 +40,26 @@ STRINGS: dict[str, dict[str, str]] = {
         "digest_item": "{title} — {country}, deadline {deadline}",
         "digest_no_deadline": "no deadline published",
         "open_opportunities": "See all opportunities: {url}",
+        # B1: billing.
+        "billing_footer": "You receive this e-mail because your organization bought a Plasma plan. Questions: hq@plasmaos.uz",
+        "product_pilot": "Pilot",
+        "product_pursuit_desk": "Pursuit Desk",
+        "product_extra_pursuit": "extra pursuit",
+        "invoice_subject": "Invoice {number} from Plasma",
+        "invoice_body": "Your {product} is active now. Invoice {number} is attached: {amount}, payable by bank transfer by {due}.",
+        "invoice_reference": "Use {number} as the payment reference. If it is unpaid on {due}, your organization returns to the free Explore plan until the payment arrives.",
+        "invoice_pilot_note": "The pilot payment is credited to your first annual invoice.",
+        "open_billing": "Billing in Plasma: {url}",
+        "reminder_subject": "Reminder: invoice {number} is due on {due}",
+        "reminder_body": "Invoice {number} ({amount}) is not paid yet. {days} days left: pay by {due} to keep your plan.",
+        "suspended_subject": "Your Plasma plan is paused: invoice {number} is unpaid",
+        "suspended_body": "Invoice {number} was not paid within 10 days, so your organization is back on the free Explore plan. Your data is kept: pay the invoice and your plan comes back.",
+        "welcome_subject": "Welcome to Plasma {plan}",
+        "welcome_body": "Your {plan} is active from {start} to {end}.",
+        "welcome_kickoff": "Book your kickoff call: {url}",
+        "welcome_next": "Next: open a tender in Plasma and start its analysis. Our team will contact you to plan the first pursuits.",
+        "welcome_awaiting": "The invoice comes in a separate e-mail; your plan is already active.",
+        "open_dashboard": "Open Plasma: {url}",
     },
     "ru": {
         "brand": "Plasma",
@@ -67,6 +87,26 @@ STRINGS: dict[str, dict[str, str]] = {
         "digest_item": "{title} — {country}, срок {deadline}",
         "digest_no_deadline": "срок не опубликован",
         "open_opportunities": "Все возможности: {url}",
+        # B1: billing.
+        "billing_footer": "Вы получили это письмо, потому что ваша организация оплатила тариф Plasma. Вопросы: hq@plasmaos.uz",
+        "product_pilot": "Пилот",
+        "product_pursuit_desk": "Pursuit Desk",
+        "product_extra_pursuit": "дополнительный тендер",
+        "invoice_subject": "Счёт {number} от Plasma",
+        "invoice_body": "Ваш тариф «{product}» уже активен. Счёт {number} во вложении: {amount}, оплата банковским переводом до {due}.",
+        "invoice_reference": "Укажите {number} в назначении платежа. Если счёт не оплачен к {due}, организация вернётся на бесплатный тариф Explore до поступления оплаты.",
+        "invoice_pilot_note": "Оплата пилота засчитывается в первый годовой счёт.",
+        "open_billing": "Оплата в Plasma: {url}",
+        "reminder_subject": "Напоминание: счёт {number} нужно оплатить до {due}",
+        "reminder_body": "Счёт {number} ({amount}) ещё не оплачен. Осталось дней: {days}. Оплатите до {due}, чтобы сохранить тариф.",
+        "suspended_subject": "Тариф Plasma приостановлен: счёт {number} не оплачен",
+        "suspended_body": "Счёт {number} не был оплачен в течение 10 дней, поэтому организация вернулась на бесплатный тариф Explore. Данные сохранены: оплатите счёт, и тариф вернётся.",
+        "welcome_subject": "Добро пожаловать в Plasma: {plan}",
+        "welcome_body": "Ваш тариф «{plan}» действует с {start} по {end}.",
+        "welcome_kickoff": "Запишитесь на стартовый звонок: {url}",
+        "welcome_next": "Дальше: откройте тендер в Plasma и запустите анализ. Наша команда свяжется с вами, чтобы спланировать первые тендеры.",
+        "welcome_awaiting": "Счёт придёт отдельным письмом; тариф уже активен.",
+        "open_dashboard": "Открыть Plasma: {url}",
     },
     "uz": {
         "brand": "Plasma",
@@ -94,6 +134,26 @@ STRINGS: dict[str, dict[str, str]] = {
         "digest_item": "{title} — {country}, muddat {deadline}",
         "digest_no_deadline": "muddat e’lon qilinmagan",
         "open_opportunities": "Barcha imkoniyatlar: {url}",
+        # B1: billing.
+        "billing_footer": "Bu xat tashkilotingiz Plasma tarifini sotib olgani uchun yuborildi. Savollar: hq@plasmaos.uz",
+        "product_pilot": "Pilot",
+        "product_pursuit_desk": "Pursuit Desk",
+        "product_extra_pursuit": "qo‘shimcha tender",
+        "invoice_subject": "Plasma’dan {number} hisob-fakturasi",
+        "invoice_body": "«{product}» tarifingiz faol. {number} hisob-fakturasi ilova qilingan: {amount}, {due} gacha bank o‘tkazmasi orqali to‘lanadi.",
+        "invoice_reference": "To‘lov maqsadida {number} ni ko‘rsating. {due} gacha to‘lanmasa, tashkilotingiz to‘lov kelguncha bepul Explore tarifiga qaytadi.",
+        "invoice_pilot_note": "Pilot uchun to‘lov birinchi yillik hisob-fakturaga hisoblanadi.",
+        "open_billing": "Plasma’da to‘lovlar: {url}",
+        "reminder_subject": "Eslatma: {number} hisob-fakturasi {due} gacha to‘lanishi kerak",
+        "reminder_body": "{number} hisob-fakturasi ({amount}) hali to‘lanmagan. {days} kun qoldi: tarifni saqlash uchun {due} gacha to‘lang.",
+        "suspended_subject": "Plasma tarifingiz to‘xtatildi: {number} hisob-fakturasi to‘lanmagan",
+        "suspended_body": "{number} hisob-fakturasi 10 kun ichida to‘lanmadi, shuning uchun tashkilotingiz bepul Explore tarifiga qaytdi. Ma’lumotlaringiz saqlangan: hisob-fakturani to‘lang va tarif qaytadi.",
+        "welcome_subject": "Plasma {plan} tarifiga xush kelibsiz",
+        "welcome_body": "«{plan}» tarifingiz {start} dan {end} gacha faol.",
+        "welcome_kickoff": "Boshlang‘ich qo‘ng‘iroqqa yoziling: {url}",
+        "welcome_next": "Keyingi qadam: Plasma’da tenderni oching va tahlilni boshlang. Jamoamiz birinchi tenderlarni rejalashtirish uchun siz bilan bog‘lanadi.",
+        "welcome_awaiting": "Hisob-faktura alohida xatda keladi; tarifingiz allaqachon faol.",
+        "open_dashboard": "Plasma’ni ochish: {url}",
     },
     "ar": {
         "brand": "Plasma",
@@ -121,6 +181,26 @@ STRINGS: dict[str, dict[str, str]] = {
         "digest_item": "{title} — {country}، الموعد النهائي {deadline}",
         "digest_no_deadline": "لا يوجد موعد نهائي منشور",
         "open_opportunities": "جميع الفرص: {url}",
+        # B1: billing.
+        "billing_footer": "تصلك هذه الرسالة لأن مؤسستك اشترت خطة في Plasma. للاستفسارات: hq@plasmaos.uz",
+        "product_pilot": "التجربة",
+        "product_pursuit_desk": "مكتب المناقصات",
+        "product_extra_pursuit": "مناقصة إضافية",
+        "invoice_subject": "الفاتورة {number} من Plasma",
+        "invoice_body": "خطتك ({product}) مفعّلة الآن. الفاتورة {number} مرفقة: {amount}، تُدفع بتحويل بنكي قبل {due}.",
+        "invoice_reference": "اذكر {number} مرجعًا للدفع. إن لم تُدفع حتى {due} تعود مؤسستك إلى خطة الاستكشاف المجانية حتى وصول الدفعة.",
+        "invoice_pilot_note": "يُحتسب مبلغ التجربة من أول فاتورة سنوية.",
+        "open_billing": "الفوترة في Plasma: {url}",
+        "reminder_subject": "تذكير: الفاتورة {number} مستحقة في {due}",
+        "reminder_body": "الفاتورة {number} ({amount}) لم تُدفع بعد. متبقٍ {days} أيام: ادفع قبل {due} للحفاظ على خطتك.",
+        "suspended_subject": "تم إيقاف خطتك في Plasma مؤقتًا: الفاتورة {number} غير مدفوعة",
+        "suspended_body": "لم تُدفع الفاتورة {number} خلال 10 أيام، لذا عادت مؤسستك إلى خطة الاستكشاف المجانية. بياناتك محفوظة: ادفع الفاتورة وتعود خطتك.",
+        "welcome_subject": "مرحبًا بك في Plasma: {plan}",
+        "welcome_body": "خطتك ({plan}) مفعّلة من {start} إلى {end}.",
+        "welcome_kickoff": "احجز مكالمة البدء: {url}",
+        "welcome_next": "التالي: افتح مناقصة في Plasma وابدأ تحليلها. سيتواصل فريقنا معك لتخطيط أولى المناقصات.",
+        "welcome_awaiting": "تصلك الفاتورة في رسالة منفصلة؛ خطتك مفعّلة بالفعل.",
+        "open_dashboard": "افتح Plasma: {url}",
     },
 }
 
@@ -222,4 +302,50 @@ def render_email(kind: str, locale: str, context: dict[str, Any], *, app_url: st
         explorer = _url(app_url, "/dashboard/tenders")
         lines.append((_t(locale, "open_opportunities", url=explorer), explorer))
         return _compose(locale, _t(locale, "digest_subject", count=total), lines, footer)
+    if kind in BILLING_KINDS:
+        return _render_billing(kind, locale, context, app_url=app_url)
     raise ValueError(f"unknown e-mail kind {kind}")
+
+
+BILLING_KINDS = {"BILLING_INVOICE", "BILLING_REMINDER", "BILLING_WELCOME", "BILLING_SUSPENDED"}
+
+
+def _amount(context: dict[str, Any]) -> str:
+    if context.get("currency") == "UZS" and context.get("total_uzs"):
+        return f"UZS {context['total_uzs']}"
+    return f"USD {context.get('total_usd')}"
+
+
+def _render_billing(kind: str, locale: str, context: dict[str, Any], *, app_url: str) -> RenderedEmail:
+    """B1: transactional billing e-mails (no preference switch: they are about the customer's payment)."""
+    footer = _t(locale, "billing_footer")
+    billing = _url(app_url, "/dashboard/billing")
+    product = _t(locale, f"product_{context.get('product') or 'pilot'}")
+    values = {"number": context.get("number", ""), "due": context.get("due_on", ""), "amount": _amount(context)}
+    if kind == "BILLING_WELCOME":
+        plan = _t(locale, f"product_{context.get('plan') or 'pilot'}")
+        lines: list[tuple[str, str | None]] = [
+            (_t(locale, "welcome_body", plan=plan, start=context.get("starts_on", ""), end=context.get("ends_on", "")), None),
+        ]
+        if context.get("kickoff_url"):
+            lines.append((_t(locale, "welcome_kickoff", url=context["kickoff_url"]), str(context["kickoff_url"])))
+        lines.append((_t(locale, "welcome_next"), None))
+        if context.get("awaiting_payment"):
+            lines.append((_t(locale, "welcome_awaiting"), None))
+        dashboard = _url(app_url, "/dashboard")
+        lines.append((_t(locale, "open_dashboard", url=dashboard), dashboard))
+        return _compose(locale, _t(locale, "welcome_subject", plan=plan), lines, footer)
+    if kind == "BILLING_INVOICE":
+        lines = [(_t(locale, "invoice_body", product=product, **values), None),
+                 (_t(locale, "invoice_reference", **values), None)]
+        if context.get("pilot"):
+            lines.append((_t(locale, "invoice_pilot_note"), None))
+        lines.append((_t(locale, "open_billing", url=billing), billing))
+        return _compose(locale, _t(locale, "invoice_subject", **values), lines, footer)
+    if kind == "BILLING_REMINDER":
+        lines = [(_t(locale, "reminder_body", days=context.get("days_left", ""), **values), None),
+                 (_t(locale, "invoice_reference", **values), None),
+                 (_t(locale, "open_billing", url=billing), billing)]
+        return _compose(locale, _t(locale, "reminder_subject", **values), lines, footer)
+    lines = [(_t(locale, "suspended_body", **values), None), (_t(locale, "open_billing", url=billing), billing)]
+    return _compose(locale, _t(locale, "suspended_subject", **values), lines, footer)

@@ -7,6 +7,7 @@ import {
   BarChart3,
   Building2,
   ClipboardList,
+  CreditCard,
   Handshake,
   LayoutDashboard,
   Landmark,
@@ -33,6 +34,8 @@ const navigation = [
   // Sprint 1: public award ledger (operators) and product metrics (administrators).
   { name: 'Award ledger', href: '/admin/award-ledger', Icon: Landmark },
   { name: 'Partner requests', href: '/admin/partner-requests', Icon: Handshake },
+  // B1: customers, orders, invoices, payments, onboarding; mark paid, refunds, overrides.
+  { name: 'Billing', href: '/admin/billing', Icon: CreditCard },
   { name: 'Metrics', href: '/admin/metrics', Icon: BarChart3, adminOnly: true },
   { name: 'Broadcasts', href: '/admin/broadcasts', Icon: Megaphone, adminOnly: true },
   {

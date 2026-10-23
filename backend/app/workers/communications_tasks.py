@@ -160,6 +160,26 @@ def deliver_admin_alerts():
     return asyncio.run(_deliver_admin_alerts())
 
 
+async def _run_billing_schedule():
+    from app.services.admin_alerts import deliver_due_alerts
+    from app.services.billing import run_billing_schedule
+
+    try:
+        async with AsyncSessionLocal() as db:
+            counts = await run_billing_schedule(db)
+            await db.commit()
+            if counts.get("suspended"):
+                await deliver_due_alerts(db)
+            return counts
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.communications_tasks.run_billing_schedule")
+def run_billing_schedule_task():
+    return asyncio.run(_run_billing_schedule())
+
+
 async def _stage_digests():
     from app.services.email_notifications import stage_daily_digests
 

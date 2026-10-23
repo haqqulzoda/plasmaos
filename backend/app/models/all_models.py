@@ -74,6 +74,10 @@ from app.models.auth_sessions import AuthRefreshToken, EmailSignInChallenge  # n
 from app.models.admin_alerts import AdminAlert  # noqa: F401,E402
 from app.models.partner_finder import PartnerRequest, PartnerRequestEvent, TeamScenarioProspectiveMember  # noqa: F401,E402
 from app.models.plans import OrganizationPlanGrant, OrganizationPursuitUsage  # noqa: F401,E402
+from app.models.billing import (  # noqa: F401,E402
+    BillingCustomer, BillingEvent, BillingInvoice, BillingOrder, BillingPayment, FxRate, InvoiceCounter,
+    OnboardingTask, PilotCreditRedemption, TermsAcceptance,
+)
 
 
 # ============================================================================

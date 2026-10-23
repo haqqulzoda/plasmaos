@@ -22,6 +22,10 @@ const ACTIONS = [
     'PARTNER_REQUEST_CREATED', 'PARTNER_REQUEST_STATUS_CHANGED',
     // P3: extra pursuits or introductions granted for a plan period.
     'ORGANIZATION_PLAN_GRANTED',
+    // B1: billing (customers, terms, orders, invoices, payments, activation, refunds, onboarding).
+    'BILLING_CUSTOMER_UPDATED', 'BILLING_TERMS_ACCEPTED', 'BILLING_ORDER_CREATED', 'BILLING_INVOICE_ISSUED',
+    'BILLING_PAYMENT_RECORDED', 'BILLING_PLAN_ACTIVATED', 'BILLING_REFUND_RECORDED', 'BILLING_PLAN_SUSPENDED',
+    'BILLING_STATUS_CHANGED', 'BILLING_CREDIT_APPLIED', 'BILLING_ONBOARDING_COMPLETED',
 ];
 
 type AuditEvent = {

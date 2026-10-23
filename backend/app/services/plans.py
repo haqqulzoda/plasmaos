@@ -324,10 +324,14 @@ async def check_seat_available(db: AsyncSession, organization_id: UUID) -> None:
 
 async def add_grant(
     db: AsyncSession, *, organization: Organization, kind: str, quantity: int, reason: str, actor_user,
+    actor_label: str | None = None, source: str | None = None, today: date | None = None,
 ) -> OrganizationPlanGrant:
-    """Extra pursuits or introductions for the current period; audited. The caller commits."""
+    """Extra pursuits or introductions for the current period; audited. The caller commits.
+
+    ``actor_user`` None (B1: a purchased extra pursuit) records a SYSTEM actor with ``actor_label``."""
     from app.services.admin_activity import (
-        ACTION_ORGANIZATION_PLAN_GRANTED, ACTOR_USER, OUTCOME_SUCCESS, SOURCE_ADMIN_API, record_admin_audit_event,
+        ACTION_ORGANIZATION_PLAN_GRANTED, ACTOR_SYSTEM, ACTOR_USER, OUTCOME_SUCCESS, SOURCE_ADMIN_API,
+        record_admin_audit_event,
     )
     from app.models.company import CompanyProfile
     from app.models.user import User
@@ -337,18 +341,19 @@ async def add_grant(
     reason = " ".join((reason or "").split())
     if len(reason) < 3:
         raise ValueError("a reason is required")
-    period = plan_period(organization, datetime.now(timezone.utc).date())
+    period = plan_period(organization, today or datetime.now(timezone.utc).date())
     grant = OrganizationPlanGrant(
         organization_id=organization.id, kind=kind, quantity=quantity, period_start=period.start,
-        reason=reason[:1000], granted_by_user_id=actor_user.id,
+        reason=reason[:1000], granted_by_user_id=actor_user.id if actor_user is not None else None,
     )
     db.add(grant)
     await db.flush()
     profile = await db.get(CompanyProfile, organization.legacy_company_profile_id)
     target = await db.get(User, profile.user_id) if profile is not None else None
     await record_admin_audit_event(
-        db, action=ACTION_ORGANIZATION_PLAN_GRANTED, outcome=OUTCOME_SUCCESS, source=SOURCE_ADMIN_API,
-        actor_user=actor_user, actor_type=ACTOR_USER, target_user=target,
+        db, action=ACTION_ORGANIZATION_PLAN_GRANTED, outcome=OUTCOME_SUCCESS, source=source or SOURCE_ADMIN_API,
+        actor_user=actor_user, actor_type=ACTOR_USER if actor_user is not None else ACTOR_SYSTEM,
+        actor_label=None if actor_user is not None else (actor_label or "billing"), target_user=target,
         target_email=None if target is not None else "organization@plasma.invalid",
         target_resource_type="ORGANIZATION", target_resource_id=str(organization.id),
         new_state={"kind": kind, "quantity": quantity, "period_start": str(period.start), "plan": organization.plan},

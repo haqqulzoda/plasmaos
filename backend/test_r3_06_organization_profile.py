@@ -45,7 +45,7 @@ from scripts import test_s0_5b4_baseline as support
 from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
-HEAD = "20261024_0001_p3_plans_limits"
+HEAD = "20261025_0001_b1_billing"
 PREVIOUS = "20261010_0001_r3_email_notifications"
 
 

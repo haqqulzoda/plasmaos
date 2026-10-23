@@ -95,11 +95,34 @@ class Settings(BaseSettings):
     # P1: the Explore view's "Book a call" link (a scheduling page); unset: the button sends a
     # call request to the team instead.
     PUBLIC_BOOK_CALL_URL: str | None = None
+    # B1: billing. Card payments through Polar: the sandbox (https://sandbox-api.polar.sh) unless
+    # POLAR_ENV=production, which only a production/release ENVIRONMENT accepts. POLAR_PRODUCT_IDS is
+    # JSON: {"pilot": "<uuid>", "pursuit_desk": "<uuid>", "extra_pursuit": "<uuid>"}. Card checkout is
+    # offered when the token and the product ids are set; webhooks need POLAR_WEBHOOK_SECRET.
+    POLAR_ACCESS_TOKEN: str | None = None
+    POLAR_WEBHOOK_SECRET: str | None = None
+    POLAR_ENV: str = "sandbox"
+    POLAR_PRODUCT_IDS: str | None = None
+    # Bank transfer invoices: the seller, and the bank details per currency (lines separated by " | ").
+    # Bank transfer is offered when the details for the invoice's currency are set.
+    INVOICE_SELLER_NAME: str = "Plasma AI Solutions"
+    INVOICE_SELLER_ADDRESS: str = "Tashkent, Uzbekistan"
+    INVOICE_SELLER_TIN: str | None = None
+    INVOICE_SELLER_EMAIL: str = "hq@plasmaos.uz"
+    INVOICE_SELLER_PHONE: str = "+998 94 877 87 83"
+    INVOICE_BANK_DETAILS_UZS: str | None = None
+    INVOICE_BANK_DETAILS_USD: str | None = None
+    # The kickoff booking link in the welcome e-mail; unset: PUBLIC_BOOK_CALL_URL.
+    BILLING_KICKOFF_URL: str | None = None
 
     @model_validator(mode="after")
     def validate_release(self):
         if self.ENVIRONMENT not in {"development", "test", "production", "release"}:
             raise ValueError("Unsupported environment")
+        if self.POLAR_ENV not in {"sandbox", "production"}:
+            raise ValueError("POLAR_ENV must be sandbox or production")
+        if self.POLAR_ENV == "production" and self.ENVIRONMENT not in {"production", "release"}:
+            raise ValueError("Polar production keys are refused outside a production environment")
         if self.ENVIRONMENT in {"production", "release"}:
             dangerous = self.AUTO_CREATE_TABLES or self.DEMO_OCR_BYPASS or self.PLASMA_ENABLE_PSEUDO_LOCALE or any(
                 os.getenv(name, "").lower() in {"1", "true", "yes", "on"}

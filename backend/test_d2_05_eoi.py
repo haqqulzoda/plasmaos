@@ -71,7 +71,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
 D2_01_HEAD = "20261004_0001_d2_01_own_experience"
-HEAD = "20261024_0001_p3_plans_limits"
+HEAD = "20261025_0001_b1_billing"
 PRICE_WORDS = re.compile(r"\bprice|\bpricing|\bfee\b|\bfees\b|remuneration|financial proposal|цен[аыу]|стоимость услуг|вознагражд", re.I)
 
 

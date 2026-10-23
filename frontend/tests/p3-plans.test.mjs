@@ -48,7 +48,10 @@ test("every locale carries the plan notice, limit and explore check strings", ()
 test("the notice, the explore check and the gates are wired", () => {
   const notice = read("components/plans/PlanNotice.tsx");
   assert.match(notice, /api\.get<PlanStatus>\('\/organizations\/plan'/);
-  assert.match(notice, /request: explore \? 'pilot' : 'upgrade'/);
+  // B1: at the limit, Explore opens the pilot checkout; paid plans add a pursuit (or ask the team to upgrade).
+  assert.match(notice, /checkoutHref\('pilot'\)/);
+  assert.match(notice, /checkoutHref\('extra_pursuit'\)/);
+  assert.match(notice, /request: 'upgrade'/);
   assert.match(read("app/dashboard/page.tsx"), /<PlanNotice \/>/);
   const workspace = read("app/dashboard/pursuits/[pursuitId]/page.tsx");
   assert.match(workspace, /<PlanNotice headers=\{headers\} onPlan=\{setPlan\} \/>/);

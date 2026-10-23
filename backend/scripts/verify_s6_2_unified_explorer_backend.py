@@ -31,7 +31,7 @@ from app.services.recommendations import (
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261024_0001_p3_plans_limits"
+HEAD = "20261025_0001_b1_billing"
 TENDER_COUNT = 10_000
 RECOMMENDATION_COUNT = 20_000
 

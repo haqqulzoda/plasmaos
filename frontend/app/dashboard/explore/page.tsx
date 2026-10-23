@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { CalendarClock, CheckCircle2, ExternalLink, FileText, Rocket, Search, Sparkles, Users } from 'lucide-react';
@@ -141,8 +142,9 @@ function ExploreContent() {
                             value={message} onChange={(event) => setMessage(event.target.value)} />
                         {error && <Alert tone="danger" title={error} />}
                         <div className="ds-row">
-                            <Button size="lg" loading={sending === 'pilot'} disabled={sending !== null}
-                                leadingIcon={<Rocket aria-hidden />} onClick={() => void sendRequest('pilot')}>{t('startPilot')}</Button>
+                            {/* B1: the pilot is bought and starts at once (card or bank transfer). */}
+                            <Link className="ds-button ds-button-primary ds-button-lg" href="/dashboard/billing/start?plan=pilot"
+                                prefetch={false} data-explore-buy-pilot><Rocket aria-hidden /> {t('startPilot')}</Link>
                             {overview?.book_call_url ? (
                                 <a className="ds-button ds-button-secondary ds-button-lg" href={overview.book_call_url} target="_blank"
                                     rel="noopener noreferrer"><CalendarClock aria-hidden /> {t('bookCall')}</a>
