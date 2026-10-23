@@ -9,6 +9,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.schemas.partner_finder import ProspectiveMemberResponse
+
 
 class TeamScenarioCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=300)
@@ -173,6 +175,11 @@ class TeamScenarioResponse(BaseModel):
     revisions: list[TeamScenarioRevisionResponse] = Field(default_factory=list)
     created_by_membership_id: UUID
     created_at: datetime
+    # P2: accepted introductions added as prospective JV members, "not yet confirmed". They
+    # never change a sealed assessment; prospective_covered_gap_count is the latest revision's
+    # covered count plus the open Gaps they would close.
+    prospective_members: list[ProspectiveMemberResponse] = Field(default_factory=list)
+    prospective_covered_gap_count: int | None = None
 
 
 class ProposalHandoffResponse(BaseModel):

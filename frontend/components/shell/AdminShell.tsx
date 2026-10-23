@@ -7,6 +7,7 @@ import {
   BarChart3,
   Building2,
   ClipboardList,
+  Handshake,
   LayoutDashboard,
   Landmark,
   Satellite,
@@ -31,6 +32,7 @@ const navigation = [
   { name: 'Organizations', href: '/admin/organizations', Icon: Building2 },
   // Sprint 1: public award ledger (operators) and product metrics (administrators).
   { name: 'Award ledger', href: '/admin/award-ledger', Icon: Landmark },
+  { name: 'Partner requests', href: '/admin/partner-requests', Icon: Handshake },
   { name: 'Metrics', href: '/admin/metrics', Icon: BarChart3, adminOnly: true },
   { name: 'Broadcasts', href: '/admin/broadcasts', Icon: Megaphone, adminOnly: true },
   {

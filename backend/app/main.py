@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
 from app.api.endpoints.communications import notifications_router, broadcasts_router
-from app.api.endpoints import admin_award_ledger, admin_metrics, admin_panels, candidates, eoi, participation, proposal_evidence, team_scenarios, operations, admin, auth, explore, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
+from app.api.endpoints import admin_award_ledger, admin_metrics, admin_panels, candidates, eoi, participation, partner_finder, proposal_evidence, team_scenarios, operations, admin, auth, explore, explorer, hunter, meta, my_tenders, organizations, proposals, pursuits, tenders, users, vault
 from app.api.routers import audit
 from app.core.config import settings
 from app.core.observability import init_error_tracking
@@ -100,6 +100,7 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(admin_panels.router, prefix="/api/v1/admin/panels", tags=["Admin"])
 app.include_router(admin_award_ledger.router, prefix="/api/v1/admin/award-ledger", tags=["Admin"])
 app.include_router(admin_metrics.router, prefix="/api/v1/admin/metrics", tags=["Admin"])
+app.include_router(partner_finder.admin_router, prefix="/api/v1/admin/partner-requests", tags=["Admin"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(tenders.router, prefix="/api/v1/tenders", tags=["Tenders"])
 app.include_router(proposals.router, prefix="/api/v1/proposals", tags=["Proposals"])
@@ -112,6 +113,7 @@ app.include_router(eoi.router, prefix="/api/v1/pursuits", tags=["Expression of I
 app.include_router(candidates.router, prefix="/api/v1/candidates", tags=["Candidate Library"])
 app.include_router(participation.router, prefix="/api/v1/pursuits", tags=["Candidate Participation"])
 app.include_router(team_scenarios.router, prefix="/api/v1/pursuits", tags=["Team Scenarios"])
+app.include_router(partner_finder.router, prefix="/api/v1/pursuits", tags=["Partner Finder"])
 app.include_router(proposal_evidence.router, prefix="/api/v1/pursuits", tags=["Proposal Evidence"])
 app.include_router(meta.router, prefix="/api/v1/meta", tags=["Meta"])
 app.include_router(vault.router, prefix="/api/v1", tags=["Vault"])

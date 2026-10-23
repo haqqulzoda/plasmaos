@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Building2, History, Search, UserRoundSearch, UsersRound } from 'lucide-react';
+import { AlertTriangle, Building2, Handshake, History, Search, UserRoundSearch, UsersRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { BidiText } from '@/components/i18n/BidiText';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, Input, Select } from '@/components/ui/Forms';
-import { EmptyState, StatusBadge, Surface } from '@/components/ui/Display';
+import { Badge, EmptyState, StatusBadge, Surface } from '@/components/ui/Display';
+import { PursuitPartnerFinder, requestTone } from '@/components/pursuits/PursuitPartnerFinder';
 import { api } from '@/lib/api';
 import type {
   CandidateAvailabilityStatus,
@@ -20,6 +21,7 @@ import type {
   CandidateReviewDecision,
   CandidateSearchRun,
   ParticipationConfirmationSource,
+  PartnerRequest,
   PursuitAnalysis,
   PursuitGap,
   ScenarioDecision,
@@ -412,8 +414,58 @@ function ScenarioDecisionForm({ scenario, revision, pursuitId, headers, refresh 
   </div>;
 }
 
-function ScenarioCard({ scenario, records, pursuitId, headers, refresh }: {
-  scenario: TeamScenario; records: CandidateParticipationRecord[]; pursuitId: string;
+function ProspectiveMembers({ scenario, partnerRequests, pursuitId, headers, refresh }: {
+  scenario: TeamScenario; partnerRequests: PartnerRequest[]; pursuitId: string;
+  headers: Props['headers']; refresh: () => Promise<void>;
+}) {
+  const t = useTranslations('pursuits.team.scenarios.prospective');
+  const finder = useTranslations('pursuits.team.partnerFinder');
+  const members = scenario.prospective_members || [];
+  const added = new Set(members.map((member) => member.partner_request_id));
+  const ready = partnerRequests.filter((request) => request.kind === 'INTRODUCTION'
+    && ['ACCEPTED', 'INTRODUCED'].includes(request.status) && !added.has(request.request_id));
+  const [choice, setChoice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const base = `/pursuits/${encodeURIComponent(pursuitId)}/team-scenarios/${scenario.scenario_id}/prospective-members`;
+  const run = async (action: () => Promise<unknown>) => {
+    setBusy(true); setError(false);
+    try { await action(); setChoice(''); await refresh(); }
+    catch { setError(true); }
+    finally { setBusy(false); }
+  };
+  if (!members.length && !ready.length) return null;
+  return <section className="scenario-prospective" aria-label={t('title')}>
+    <h5><Handshake aria-hidden />{t('title')}</h5>
+    <p className="ds-muted ds-text-small">{t('help')}</p>
+    {members.map((member) => {
+      const closing = member.targets.filter((target) => member.would_close_gap_ids.includes(target.gap_id));
+      return <article key={member.prospective_member_id}>
+        <div className="scenario-prospective-head">
+          <strong><BidiText>{member.display_name}</BidiText></strong>
+          <Badge tone="warning">{t('notConfirmed')}</Badge>
+          <StatusBadge tone={requestTone(member.request_status)}>{finder(`status.${member.request_status}`)}</StatusBadge>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => void run(() => api.delete(`${base}/${member.prospective_member_id}`, { headers }))}>{t('remove')}</Button>
+        </div>
+        {closing.length
+          ? <ul>{closing.map((target) => <li key={target.gap_id}>{t('wouldClose')}: <BidiText>{target.gap_summary}</BidiText></li>)}</ul>
+          : <p className="ds-muted ds-text-small">{t('noOpenGap')}</p>}
+        <p className="ds-muted ds-text-small">{finder('sourceLabel')}</p>
+      </article>;
+    })}
+    {ready.length > 0 && <div className="scenario-prospective-add">
+      <Select label={t('addLabel')} value={choice} onChange={(event) => setChoice(event.target.value)}>
+        <option value="">{t('choose')}</option>
+        {ready.map((request) => <option key={request.request_id} value={request.request_id}>{request.firm_name} · {finder(`status.${request.status}`)}</option>)}
+      </Select>
+      <Button size="sm" disabled={!choice} loading={busy} onClick={() => void run(() => api.post(base, { partner_request_id: choice }, { headers }))}>{t('add')}</Button>
+    </div>}
+    {error && <p className="pursuit-upload-error" role="alert">{t('failed')}</p>}
+  </section>;
+}
+
+function ScenarioCard({ scenario, records, partnerRequests, pursuitId, headers, refresh }: {
+  scenario: TeamScenario; records: CandidateParticipationRecord[]; partnerRequests: PartnerRequest[]; pursuitId: string;
   headers: Props['headers']; refresh: () => Promise<void>;
 }) {
   const t = useTranslations('pursuits.team.scenarios');
@@ -435,6 +487,8 @@ function ScenarioCard({ scenario, records, pursuitId, headers, refresh }: {
   if (!revision) return null;
   const partners = revision.participants.filter((item) => item.participant_type === 'PARTNER_FIRM');
   const experts = revision.participants.filter((item) => item.participant_type === 'EXPERT');
+  const prospective = scenario.prospective_members || [];
+  const closers = (gapId: string) => prospective.filter((member) => member.would_close_gap_ids.includes(gapId)).map((member) => member.display_name);
   return <Surface className="team-scenario-card" variant="raised">
     <header><div><span className="ds-eyebrow">{t('revision', { version: revision.version_number })}</span><h4><BidiText>{scenario.title}</BidiText></h4></div><StatusBadge tone={stateTone(revision.current_assessment_state)}>{t(`assessments.${revision.current_assessment_state}`)}</StatusBadge></header>
     <p className="scenario-lead"><strong>{t('leadOrganization')}</strong> · {t('yourOrganization')}</p>
@@ -445,21 +499,23 @@ function ScenarioCard({ scenario, records, pursuitId, headers, refresh }: {
       <div><dt>{t('participants')}</dt><dd>{revision.participant_count}</dd></div>
       <div><dt>{t('confirmed')}</dt><dd>{revision.confirmed_participant_count}</dd></div>
       <div><dt>{t('issues')}</dt><dd>{revision.issue_count}</dd></div>
+      {prospective.length > 0 && scenario.prospective_covered_gap_count != null && <div><dt>{t('prospective.withProspective')}</dt><dd>{scenario.prospective_covered_gap_count} / {revision.gap_count}</dd></div>}
     </dl>
     <div className="scenario-participant-columns">
       <section><h5>{t('partnerFirms')}</h5>{partners.length ? partners.map((participant) => <article key={participant.participant_id}><strong><BidiText>{participant.display_name}</BidiText></strong><ul>{participant.contributions.map((item) => <li key={item.contribution_id}><BidiText>{item.proposed_contribution}</BidiText> · {t(`windows.${item.assignment_window_result}`)}</li>)}</ul></article>) : <p className="ds-muted">{t('none')}</p>}</section>
       <section><h5>{t('experts')}</h5>{experts.length ? experts.map((participant) => <article key={participant.participant_id}><strong><BidiText>{participant.display_name}</BidiText></strong><ul>{participant.contributions.map((item) => <li key={item.contribution_id}><BidiText>{item.proposed_contribution}</BidiText> · {item.availability_effort_percent ? `${item.availability_effort_percent}%` : t('unknownEffort')}</li>)}</ul></article>) : <p className="ds-muted">{t('none')}</p>}</section>
     </div>
-    <details className="scenario-details"><summary>{t('gapAssessments')}</summary><ul>{revision.gap_assessments.map((item, index) => <li key={item.gap_assessment_id}><StatusBadge tone={stateTone(item.state)}>{t(`gapStates.${item.state}`)}</StatusBadge> {t('teamNeed', { number: index + 1 })}{item.is_blocking ? ` · ${t('blocking')}` : ''}</li>)}</ul></details>
+    <details className="scenario-details"><summary>{t('gapAssessments')}</summary><ul>{revision.gap_assessments.map((item, index) => <li key={item.gap_assessment_id}><StatusBadge tone={stateTone(item.state)}>{t(`gapStates.${item.state}`)}</StatusBadge> {t('teamNeed', { number: index + 1 })}{item.is_blocking ? ` · ${t('blocking')}` : ''}{item.state !== 'COVERED' && closers(item.gap_id).length > 0 && <span className="scenario-would-close"> · {t('prospective.closedBy', { names: closers(item.gap_id).join(', ') })}</span>}</li>)}</ul></details>
     <details className="scenario-details"><summary>{t('issueList')} ({revision.issues.length})</summary>{revision.issues.length ? <ul>{revision.issues.map((item) => <li key={item.issue_id}><StatusBadge tone={item.severity === 'BLOCKING' ? 'danger' : 'warning'}>{t(`severities.${item.severity}`)}</StatusBadge> {t(`issueCodes.${item.issue_code}`)}</li>)}</ul> : <p className="ds-muted">{t('noIssues')}</p>}</details>
     <details className="scenario-details"><summary>{t('decisionHistory')} ({revision.decisions.length})</summary>{revision.decisions.length ? <ol>{revision.decisions.map((item) => <li key={item.decision_id}>{t(`decisions.${item.decision}`)} · <BidiText>{item.reason}</BidiText> · {displayDate(item.created_at)}</li>)}</ol> : <p className="ds-muted">{t('noDecisions')}</p>}</details>
+    <ProspectiveMembers {...{ scenario, partnerRequests, pursuitId, headers, refresh }} />
     <details className="scenario-revise"><summary>{t('createRevision')}</summary><ScenarioSelection records={records} {...{ selected, setSelected }} />{error && <p className="pursuit-upload-error" role="alert">{t('revisionFailed')}</p>}<Button size="sm" loading={revising} onClick={() => void revise()}>{t('sealRevision')}</Button></details>
     <ScenarioDecisionForm {...{ scenario, revision, pursuitId, headers, refresh }} />
   </Surface>;
 }
 
-function ScenarioWorkspace({ scenarios, records, pursuitId, headers, refresh }: {
-  scenarios: TeamScenario[]; records: CandidateParticipationRecord[]; pursuitId: string;
+function ScenarioWorkspace({ scenarios, records, partnerRequests, pursuitId, headers, refresh }: {
+  scenarios: TeamScenario[]; records: CandidateParticipationRecord[]; partnerRequests: PartnerRequest[]; pursuitId: string;
   headers: Props['headers']; refresh: () => Promise<void>;
 }) {
   const t = useTranslations('pursuits.team.scenarios');
@@ -481,7 +537,7 @@ function ScenarioWorkspace({ scenarios, records, pursuitId, headers, refresh }: 
     <header><div><span className="ds-eyebrow">{t('eyebrow')}</span><h3 id="team-scenarios-title">{t('title')}</h3><p>{t('help')}</p></div></header>
     <Surface className="scenario-create"><Input label={t('scenarioName')} value={title} onChange={(event) => setTitle(event.target.value)} /><ScenarioSelection records={records} {...{ selected, setSelected }} />{error && <p className="pursuit-upload-error" role="alert">{t('createFailed')}</p>}<Button size="sm" loading={busy} disabled={!title.trim()} onClick={() => void create()}>{t('create')}</Button></Surface>
     {scenarios.length > 1 && <div className="scenario-comparison"><h4>{t('comparison')}</h4><div className="scenario-table-wrap"><table><thead><tr><th>{t('scenario')}</th><th>{t('assessment')}</th><th>{t('unresolved')}</th><th>{t('partnerFirms')}</th><th>{t('experts')}</th><th>{t('confirmed')}</th><th>{t('stale')}</th><th>{t('blockingIssues')}</th></tr></thead><tbody>{scenarios.map((scenario) => { const revision = scenario.latest_revision; return <tr key={scenario.scenario_id}><th><BidiText>{scenario.title}</BidiText></th><td>{revision ? t(`assessments.${revision.current_assessment_state}`) : t('none')}</td><td>{revision?.unresolved_gap_count ?? 0}</td><td>{revision?.participants.filter((item) => item.participant_type === 'PARTNER_FIRM').length ?? 0}</td><td>{revision?.participants.filter((item) => item.participant_type === 'EXPERT').length ?? 0}</td><td>{revision?.confirmed_participant_count ?? 0}</td><td>{revision?.scenario_current ? t('current') : t('yes')}</td><td>{revision?.blocking_issue_count ?? 0}</td></tr>; })}</tbody></table></div></div>}
-    <div className="team-scenario-list">{scenarios.length ? scenarios.map((scenario) => <ScenarioCard key={`${scenario.scenario_id}:${scenario.latest_revision?.revision_id ?? 'none'}`} {...{ scenario, records, pursuitId, headers, refresh }} />) : <p className="ds-muted">{t('empty')}</p>}</div>
+    <div className="team-scenario-list">{scenarios.length ? scenarios.map((scenario) => <ScenarioCard key={`${scenario.scenario_id}:${scenario.latest_revision?.revision_id ?? 'none'}`} {...{ scenario, records, partnerRequests, pursuitId, headers, refresh }} />) : <p className="ds-muted">{t('empty')}</p>}</div>
   </section>;
 }
 
@@ -493,23 +549,26 @@ export function PursuitTeam({ pursuitId, headers, onScenariosChange }: Props) {
   const [participation, setParticipation] = useState<CandidateParticipationRecord[]>([]);
   const [scenarios, setScenarios] = useState<TeamScenario[]>([]);
   const [hasLibrary, setHasLibrary] = useState(false);
+  const [partnerRequests, setPartnerRequests] = useState<PartnerRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
-      const [analysisResponse, runsResponse, libraryResponse, participationResponse, scenariosResponse] = await Promise.all([
+      const [analysisResponse, runsResponse, libraryResponse, participationResponse, scenariosResponse, requestsResponse] = await Promise.all([
         api.get<PursuitAnalysis | null>(`/pursuits/${encodeURIComponent(pursuitId)}/analysis-runs/latest`, { headers }),
         api.get<CandidateSearchRun[]>(`/pursuits/${encodeURIComponent(pursuitId)}/candidate-search-runs`, { headers }),
         api.get<CandidateLibrary>('/candidates', { headers }),
         api.get<CandidateParticipationRecord[]>(`/pursuits/${encodeURIComponent(pursuitId)}/participation-records`, { headers }),
         api.get<TeamScenario[]>(`/pursuits/${encodeURIComponent(pursuitId)}/team-scenarios`, { headers }),
+        api.get<PartnerRequest[]>(`/pursuits/${encodeURIComponent(pursuitId)}/partner-requests`, { headers }),
       ]);
       setAnalysis(analysisResponse.data);
       setRuns(runsResponse.data);
       setHasLibrary(Boolean(libraryResponse.data.firms.length || libraryResponse.data.experts.length));
       setParticipation(participationResponse.data);
       setScenarios(scenariosResponse.data);
+      setPartnerRequests(requestsResponse.data);
       onScenariosChange?.(scenariosResponse.data);
       setError(null);
     } catch { setError(t('loadFailed')); }
@@ -546,6 +605,7 @@ export function PursuitTeam({ pursuitId, headers, onScenariosChange }: Props) {
   return <div className="pursuit-team">
     <div className="candidate-team-intro"><p>{t('help')}</p>{hasLibrary && <Link href="/dashboard/partners-experts" className="ds-button ds-button-secondary ds-button-sm">{t('openLibrary')}</Link>}</div>
     {error && <p className="pursuit-upload-error" role="alert">{error}</p>}
+    <PursuitPartnerFinder pursuitId={pursuitId} headers={headers} />
     {!eligible.length && <EmptyState icon={<UserRoundSearch aria-hidden />} title={t('noTeamNeeds')} description={t('noTeamNeedsHelp')} />}
     <section className="candidate-team-column" aria-labelledby="candidate-partners"><header><Building2 aria-hidden /><div><h3 id="candidate-partners">{t('partners')}</h3><p>{t('partnersHelp')}</p></div></header>
       {partners.length ? partners.map((gap) => <GapCandidates key={gap.gap_id} {...{ gap, analysis, participationByMatch, pursuitId, headers, startSearch }} run={latestByGap.get(gap.gap_id)} searching={searching === gap.gap_id} refresh={load} />) : <p className="ds-muted">{t('noPartnerGaps')}</p>}
@@ -553,6 +613,6 @@ export function PursuitTeam({ pursuitId, headers, onScenariosChange }: Props) {
     <section className="candidate-team-column" aria-labelledby="candidate-experts"><header><UserRoundSearch aria-hidden /><div><h3 id="candidate-experts">{t('experts')}</h3><p>{t('expertsHelp')}</p></div></header>
       {experts.length ? experts.map((gap) => <GapCandidates key={gap.gap_id} {...{ gap, analysis, participationByMatch, pursuitId, headers, startSearch }} run={latestByGap.get(gap.gap_id)} searching={searching === gap.gap_id} refresh={load} />) : <p className="ds-muted">{t('noExpertGaps')}</p>}
     </section>
-    {participation.length > 0 ? <ScenarioWorkspace {...{ scenarios, records: participation, pursuitId, headers }} refresh={load} /> : eligible.length > 0 ? <EmptyState icon={<UsersRound aria-hidden />} title={t('scenarios.notReadyTitle')} description={t('scenarios.notReadyHelp')} /> : null}
+    {participation.length > 0 || scenarios.length > 0 || partnerRequests.some((request) => ['ACCEPTED', 'INTRODUCED'].includes(request.status)) ? <ScenarioWorkspace {...{ scenarios, records: participation, partnerRequests, pursuitId, headers }} refresh={load} /> : eligible.length > 0 ? <EmptyState icon={<UsersRound aria-hidden />} title={t('scenarios.notReadyTitle')} description={t('scenarios.notReadyHelp')} /> : null}
   </div>;
 }

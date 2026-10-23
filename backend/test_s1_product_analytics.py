@@ -47,7 +47,7 @@ from test_d2_01_own_experience import SUBSTATION, _fact
 from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
-HEAD = "20261016_0002_p1_organization_access"
+HEAD = "20261023_0001_p2_partner_finder"
 
 
 # ---- units --------------------------------------------------------------------------------------------

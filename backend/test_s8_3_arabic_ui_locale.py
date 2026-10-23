@@ -67,7 +67,7 @@ def test_sprint_8_3_adds_no_migration_and_keeps_the_s8_2_single_head() -> None:
     config = Config()
     config.set_main_option("script_location", str(ROOT / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20261016_0002_p1_organization_access"]
+    assert script.get_heads() == ["20261023_0001_p2_partner_finder"]
     assert not list((ROOT / "alembic/versions").glob("*s8_3*"))
 
 

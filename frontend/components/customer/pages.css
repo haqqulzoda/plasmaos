@@ -4413,3 +4413,183 @@
   justify-content: space-between;
   gap: var(--ds-space-2);
 }
+
+/* P2 partner finder: firms from public award records, introduction requests, prospective JV members. */
+.partner-finder,
+.partner-suggestions,
+.partner-gap-card,
+.partner-suggestion-card,
+.partner-request-form,
+.scenario-prospective {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.partner-finder > header,
+.partner-gap-card > header,
+.partner-suggestion-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-4);
+}
+
+.partner-finder > header {
+  justify-content: flex-start;
+}
+
+.partner-finder > header > svg,
+.partner-gap-card > header > svg {
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  color: var(--ds-text-muted);
+}
+
+.partner-finder > header p,
+.partner-gap-card h4,
+.partner-suggestion-card h4,
+.partner-gap-card p,
+.partner-suggestion-card p {
+  margin: 0;
+}
+
+.partner-gap-card {
+  padding: var(--ds-space-5);
+  background: var(--ds-background-subtle);
+}
+
+.partner-suggestion-card {
+  padding: var(--ds-space-4) var(--ds-space-5);
+}
+
+.partner-suggestion-badges,
+.partner-request-actions,
+.scenario-prospective-head,
+.partner-request-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.partner-suggestion-badges {
+  justify-content: flex-end;
+}
+
+.partner-award-list,
+.partner-expert-list,
+.partner-request-list ul,
+.scenario-prospective ul {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding-inline-start: var(--ds-space-5);
+}
+
+.partner-award-list > li,
+.partner-expert-list > li {
+  display: grid;
+  gap: var(--ds-space-1);
+  overflow-wrap: anywhere;
+}
+
+.partner-award-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+}
+
+.partner-award-list a > svg {
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+}
+
+.partner-expert-list > li {
+  justify-items: start;
+}
+
+.partner-jv-note {
+  margin: 0;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-inline-start: 3px solid var(--ds-border-subtle);
+  background: var(--ds-background-subtle);
+}
+
+.partner-request-list {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.partner-request-list h4 {
+  margin: 0;
+}
+
+.partner-request-list ul {
+  padding-inline-start: 0;
+  list-style: none;
+}
+
+.partner-request-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-3);
+}
+
+.partner-request-list li > div {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.scenario-prospective {
+  padding: var(--ds-space-4);
+  border: 1px dashed var(--ds-border-subtle);
+  border-radius: var(--ds-radius-sm);
+}
+
+.scenario-prospective h5 {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin: 0;
+}
+
+.scenario-prospective h5 > svg {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+.scenario-prospective p {
+  margin: 0;
+}
+
+.scenario-prospective article {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.scenario-prospective-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--ds-space-3);
+}
+
+.scenario-prospective-add > label {
+  flex: 1 1 240px;
+}
+
+.scenario-would-close {
+  color: var(--ds-text-muted);
+}
+
+@media (max-width: 639px) {
+  .partner-suggestion-card > header {
+    flex-direction: column;
+  }
+
+  .partner-suggestion-badges {
+    justify-content: flex-start;
+  }
+}

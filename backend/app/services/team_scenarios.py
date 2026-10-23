@@ -28,6 +28,7 @@ from app.models.team_scenarios import (
 )
 from app.models.tenancy import Membership
 from app.schemas.participation import CandidateParticipationResponse
+from app.schemas.partner_finder import ProspectiveMemberResponse
 from app.schemas.team_scenarios import (
     ProposalHandoffResponse,
     ScenarioContributionResponse,
@@ -720,16 +721,31 @@ async def _project_scenarios(
             created_at=revision.created_at,
         )
 
+    from app.services.partner_finder import prospective_members
+
+    prospective = await prospective_members(db, organization_id=organization_id, scenario_ids=scenario_ids)
     result: list[TeamScenarioResponse] = []
     for scenario in scenarios:
         revision_responses = [revision_response(item) for item in revisions_by_scenario[scenario.id]]
+        latest = revision_responses[-1] if revision_responses else None
+        open_gaps = {
+            item.gap_id for item in (latest.gap_assessments if latest else [])
+            if item.is_current_stage and item.state != "COVERED"
+        }
+        members = []
+        for member in prospective.get(scenario.id, []):
+            would_close = sorted({target["gap_id"] for target in member["targets"]} & open_gaps, key=str)
+            members.append(ProspectiveMemberResponse(**member, would_close_gap_ids=would_close))
+        closable = {gap_id for member in members for gap_id in member.would_close_gap_ids}
         result.append(TeamScenarioResponse(
             scenario_id=scenario.id, organization_id=scenario.organization_id,
             pursuit_id=scenario.pursuit_id, lead_organization_id=scenario.organization_id,
             title=scenario.title, archived_at=scenario.archived_at,
-            latest_revision=revision_responses[-1] if revision_responses else None,
+            latest_revision=latest,
             revisions=revision_responses, created_by_membership_id=scenario.created_by_membership_id,
             created_at=scenario.created_at,
+            prospective_members=members,
+            prospective_covered_gap_count=(latest.covered_gap_count + len(closable)) if latest else None,
         ))
     return result
 

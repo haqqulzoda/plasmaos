@@ -646,7 +646,85 @@
         "EXPERT_DOUBLE_COUNT": "Expert effort exceeds available capacity",
         "UNRESOLVED_GAP": "Gap remains unresolved",
         "UNREVIEWED_GAP": "Kamchilikni ko‘rib chiqish tugallanmagan"
+      },
+      "prospective": {
+        "title": "Ehtimoliy QK aʼzolari",
+        "help": "Tanishtirishga rozi boʻlgan hamkorlar. Ular hali tasdiqlanmagan va baholashda dalil sifatida hisoblanmaydi.",
+        "notConfirmed": "Hali tasdiqlanmagan",
+        "remove": "Olib tashlash",
+        "wouldClose": "Yopadi",
+        "noOpenGap": "Bu tahrirdagi hech bir ochiq kamchilik uning soʻrovlariga mos kelmaydi.",
+        "addLabel": "Rozi boʻlgan hamkorni qoʻshish",
+        "choose": "Hamkorni tanlang",
+        "add": "Ehtimoliy aʼzo sifatida qoʻshish",
+        "failed": "Ssenariyni yangilab boʻlmadi. Qayta urinib koʻring.",
+        "withProspective": "Ehtimoliy aʼzolar bilan",
+        "closedBy": "tasdiqlansa yopadi: {names}"
       }
+    },
+    "partnerFinder": {
+      "eyebrow": "Hamkor qidirish",
+      "title": "Kamchilikni hamkor bilan yoping",
+      "help": "Firmangiz oʻzi tasdiqlay olmaydigan har bir talab uchun Plasma rivojlanish banklarining shunga oʻxshash shartnomalarini yutgan firmalarni taklif qiladi. Plasmaʼdan tanishtirishni soʻrang: jamoa firma bilan siz uchun bogʻlanadi.",
+      "noGaps": "Bu tahlilda hamkor firma yoki ekspert kerak boʻlgan ochiq talab yoʻq.",
+      "basis": {
+        "PARTNER_FIRM_RULE": "Buni qoʻshma korxona hamkori yopishi mumkin",
+        "LOCAL_PRESENCE": "Mahalliy vakolat kerak",
+        "EXPERIENCE": "Firmangiz yolgʻiz koʻrsata olmaydigan tajriba",
+        "EXPERT": "Asosiy ekspert kerak"
+      },
+      "needs": {
+        "LOCAL": "mahalliy firma kerak",
+        "FOREIGN": "xalqaro firma kerak"
+      },
+      "keywords": "Topshiriq soʻzlari:",
+      "suggestFirms": "Firmalarni taklif qilish",
+      "loadFailed": "Takliflarni yuklab boʻlmadi. Qayta urinib koʻring.",
+      "jvRuleCheck": "Tenderning qoʻshma korxona qoidalarini tekshiring: hamkorning tajribasi faqat tender aʼzolarga tajribani birlashtirishga ruxsat bergan joyda hisoblanadi.",
+      "noSuggestions": "Shartnoma yutuqlari yozuvlarida oʻxshash shartnoma yutgan firma topilmadi (tekshirilgan ochiq yutuqlar: {count}).",
+      "rankingNote": "Tartib: topshiriq va soha boʻyicha moslik, ushbu tenderning xarid toifasi va mamlakati, oʻxshash yutuqlarning yangiligi va soni (tekshirilgan ochiq yutuqlar: {count}). Faqat yutilgan shartnomalar; yakka konsultantlar va davlat idoralari chiqarib tashlangan.",
+      "sourceLabel": "Ochiq shartnoma yutuqlari yozuvlaridan, tasdiqlanmagan",
+      "presence": {
+        "LOCAL": "Mahalliy firma",
+        "FOREIGN": "Xorijiy firma"
+      },
+      "strength": {
+        "STRONG": "Kuchli moslik",
+        "MODERATE": "Qisman moslik"
+      },
+      "similarAwards": "{count, plural, one {# ta oʻxshash yutuq} other {# ta oʻxshash yutuq}}",
+      "latestAward": "oxirgisi {year}",
+      "sameCountry": "oʻsha mamlakat",
+      "sameCategory": "oʻsha xarid toifasi",
+      "matchedOn": "Moslik:",
+      "jointVenture": "qoʻshma korxona",
+      "notice": "Eʼlon {id}",
+      "requestIntroduction": "Tanishtirishni soʻrash",
+      "requestHelp": "Plasma jamoasi firma bilan siz uchun bogʻlanadi. Firmaga avtomatik ravishda hech narsa yuborilmaydi.",
+      "note": "Plasma jamoasi uchun izoh (ixtiyoriy)",
+      "sendRequest": "Soʻrov yuborish",
+      "cancel": "Bekor qilish",
+      "requestFailed": "Soʻrovni yuborib boʻlmadi. Qayta urinib koʻring.",
+      "requestedHelp": "Tanishtirish bilan Plasma jamoasi shugʻullanadi.",
+      "status": {
+        "REQUESTED": "Soʻralgan",
+        "CONTACTED": "Firma bilan bogʻlanildi",
+        "ACCEPTED": "Firma rozi boʻldi",
+        "DECLINED": "Rad etildi",
+        "INTRODUCED": "Tanishtirildi"
+      },
+      "loadingExperts": "Mos ekspertlar qidirilmoqda…",
+      "noExperts": "Kutubxonangizda yoki Plasma tarmogʻida bu lavozimga mos ekspert hozircha yoʻq.",
+      "expertScope": {
+        "ORGANIZATION_PRIVATE": "Kutubxonangiz",
+        "NETWORK_SHARED": "Plasma tarmogʻi"
+      },
+      "askSourcing": "Plasmaʼdan ekspert topishni soʻrash",
+      "sourcingHelp": "Kerakli profilni yozing. Plasma jamoasi oʻz tarmogʻidan qidiradi va sizga javob beradi.",
+      "sourcingRequested": "Plasma bu lavozim uchun ekspert qidirmoqda.",
+      "yourRequests": "Plasmaʼga soʻrovlaringiz",
+      "expertSourcing": "Ekspert qidirish",
+      "teamMessage": "Plasma jamoasi"
     }
   },
   "library": {

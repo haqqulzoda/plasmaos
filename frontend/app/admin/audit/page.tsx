@@ -18,6 +18,8 @@ const ACTIONS = [
     // P1: e-mail code sign-in, session reuse detection, organization access state.
     'EMAIL_SIGN_IN_CODE_REQUESTED', 'EMAIL_SIGN_IN_SUCCEEDED', 'EMAIL_SIGN_IN_FAILED', 'EMAIL_SIGN_IN_CODE_LOCKED',
     'REFRESH_REUSE_DETECTED', 'ORGANIZATION_ACCESS_CHANGED',
+    // P2: partner introduction and expert sourcing requests.
+    'PARTNER_REQUEST_CREATED', 'PARTNER_REQUEST_STATUS_CHANGED',
 ];
 
 type AuditEvent = {

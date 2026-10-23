@@ -104,3 +104,34 @@
   overflow: hidden;
   max-inline-size: 22rem;
 }
+
+/* P2 partner requests queue. */
+.admin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  max-inline-size: 280px;
+}
+
+.admin-partner-cell {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-partner-cell a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+}
+
+.admin-partner-cell a > svg {
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+}
+
+.admin-partner-status {
+  min-inline-size: 8.5rem;
+  white-space: nowrap;
+}

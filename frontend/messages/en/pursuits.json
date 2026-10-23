@@ -646,7 +646,85 @@
         "EXPERT_DOUBLE_COUNT": "Expert effort exceeds available capacity",
         "UNRESOLVED_GAP": "Gap remains unresolved",
         "UNREVIEWED_GAP": "Gap review is incomplete"
+      },
+      "prospective": {
+        "title": "Prospective JV members",
+        "help": "Partners who accepted an introduction. They are not yet confirmed and do not count as evidence in the assessment.",
+        "notConfirmed": "Not yet confirmed",
+        "remove": "Remove",
+        "wouldClose": "Would close",
+        "noOpenGap": "No open gap in this revision matches its requests.",
+        "addLabel": "Add a partner who accepted",
+        "choose": "Choose a partner",
+        "add": "Add as prospective member",
+        "failed": "The scenario could not be updated. Try again.",
+        "withProspective": "With prospective members",
+        "closedBy": "would close if confirmed: {names}"
       }
+    },
+    "partnerFinder": {
+      "eyebrow": "Partner finder",
+      "title": "Close a gap with a partner",
+      "help": "For each requirement your firm cannot evidence alone, Plasma suggests firms that won similar development-bank contracts. Ask Plasma for an introduction: the team contacts the firm for you.",
+      "noGaps": "No open requirement in this analysis needs a partner firm or an expert.",
+      "basis": {
+        "PARTNER_FIRM_RULE": "A joint-venture partner may cover this",
+        "LOCAL_PRESENCE": "Local presence needed",
+        "EXPERIENCE": "Experience your firm cannot show alone",
+        "EXPERT": "Key expert needed"
+      },
+      "needs": {
+        "LOCAL": "needs a local firm",
+        "FOREIGN": "needs an international firm"
+      },
+      "keywords": "Assignment words:",
+      "suggestFirms": "Suggest firms",
+      "loadFailed": "Suggestions could not be loaded. Try again.",
+      "jvRuleCheck": "Check the notice's joint-venture rules: a partner's experience counts only where the notice lets members combine experience.",
+      "noSuggestions": "No firm in the award records won a similar contract ({count} public awards checked).",
+      "rankingNote": "Ranked by assignment and sector match, the procurement category and country of this tender, how recent and how many the similar awards are ({count} public awards checked). Awards only; individual consultants and public bodies are left out.",
+      "sourceLabel": "From public award records, unverified",
+      "presence": {
+        "LOCAL": "Local firm",
+        "FOREIGN": "Foreign firm"
+      },
+      "strength": {
+        "STRONG": "Strong match",
+        "MODERATE": "Partial match"
+      },
+      "similarAwards": "{count, plural, one {# similar award} other {# similar awards}}",
+      "latestAward": "latest {year}",
+      "sameCountry": "same country",
+      "sameCategory": "same procurement category",
+      "matchedOn": "Matched on:",
+      "jointVenture": "joint venture",
+      "notice": "Notice {id}",
+      "requestIntroduction": "Request introduction",
+      "requestHelp": "The Plasma team contacts the firm for you. Nothing is sent to the firm automatically.",
+      "note": "Note for the Plasma team (optional)",
+      "sendRequest": "Send request",
+      "cancel": "Cancel",
+      "requestFailed": "The request could not be sent. Try again.",
+      "requestedHelp": "The Plasma team handles the introduction.",
+      "status": {
+        "REQUESTED": "Requested",
+        "CONTACTED": "Firm contacted",
+        "ACCEPTED": "Firm accepted",
+        "DECLINED": "Declined",
+        "INTRODUCED": "Introduced"
+      },
+      "loadingExperts": "Looking for matching experts…",
+      "noExperts": "No expert in your library or the Plasma network matches this position yet.",
+      "expertScope": {
+        "ORGANIZATION_PRIVATE": "Your library",
+        "NETWORK_SHARED": "Plasma network"
+      },
+      "askSourcing": "Ask Plasma to source an expert",
+      "sourcingHelp": "Describe the profile you need. The Plasma team searches its network and comes back to you.",
+      "sourcingRequested": "Plasma is sourcing an expert for this position.",
+      "yourRequests": "Your requests to Plasma",
+      "expertSourcing": "Expert sourcing",
+      "teamMessage": "Plasma team"
     }
   },
   "library": {

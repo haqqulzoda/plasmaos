@@ -25,7 +25,7 @@ from app.services.bid_preparation import (
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261016_0002_p1_organization_access"
+HEAD = "20261023_0001_p2_partner_finder"
 
 
 async def seed_user(

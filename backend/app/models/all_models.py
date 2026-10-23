@@ -72,6 +72,7 @@ from app.models.award_ledger import AwardNoticeSnapshot, AwardOutcome  # noqa: F
 from app.models.product_analytics import AICallCost, ProductEvent  # noqa: F401,E402
 from app.models.auth_sessions import AuthRefreshToken, EmailSignInChallenge  # noqa: F401,E402
 from app.models.admin_alerts import AdminAlert  # noqa: F401,E402
+from app.models.partner_finder import PartnerRequest, PartnerRequestEvent, TeamScenarioProspectiveMember  # noqa: F401,E402
 
 
 # ============================================================================

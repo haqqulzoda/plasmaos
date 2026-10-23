@@ -1,4 +1,5 @@
-"""P1: alert the Plasma team on every new self sign-up and every pilot or call request.
+"""P1: alert the Plasma team on every new self sign-up and every pilot or call request
+(P2: and every partner introduction or expert sourcing request).
 
 ``stage_admin_alert`` inserts one idempotent row in the caller's transaction. A Beat task
 (and a kick right after the request commits) delivers due rows: Telegram when
@@ -87,6 +88,24 @@ def render_alert(alert: AdminAlert) -> tuple[str, list[str]]:
             "Every analysis fails until the key, billing or quota is fixed (GEMINI_API_KEY on the host).",
             f"Example run: {data.get('analysis_run_id')}. Repeats at most once an hour while it lasts.",
         ])
+    if alert.kind == "PARTNER_REQUEST":
+        organization = data.get("organization_name") or "An organization"
+        tender = " ".join(filter(None, [str(data.get("tender_reference") or ""), str(data.get("tender_title") or "")]))
+        if data.get("kind") == "EXPERT_SOURCING":
+            subject = f"Plasma expert sourcing request: {organization}"
+            first = f"{organization} asked Plasma to source a key expert."
+        else:
+            firm = f"{data.get('firm_name')} ({data.get('firm_country')})" if data.get("firm_country") else str(data.get("firm_name"))
+            subject = f"Plasma partner introduction request: {organization} -> {data.get('firm_name')}"
+            first = f"{organization} asked for an introduction to {firm}."
+        lines = [first, f"Requested by {data.get('requester_email')} at {when}."]
+        if tender:
+            lines.append(f"Tender: {tender}")
+        lines.append(f"Gap: {data.get('gap_summary')}")
+        if data.get("note"):
+            lines.append(f"Note: {data['note']}")
+        lines.append("Work it on /admin/partner-requests. Nothing has been sent to the firm.")
+        return subject, lines
     kind = "a call" if data.get("request") == "call" else "a pilot"
     lines = [
         f"{data.get('name') or data.get('email')} <{data.get('email')}> asked for {kind}.",

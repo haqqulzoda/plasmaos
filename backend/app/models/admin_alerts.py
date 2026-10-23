@@ -17,7 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
 
-ADMIN_ALERT_KINDS = ("NEW_SIGNUP", "PILOT_REQUEST", "ANALYSIS_PROVIDER_ERROR")
+ADMIN_ALERT_KINDS = ("NEW_SIGNUP", "PILOT_REQUEST", "ANALYSIS_PROVIDER_ERROR", "PARTNER_REQUEST")
 ADMIN_ALERT_STATES = ("PENDING", "SENT", "FAILED")
 ADMIN_ALERT_CHANNELS = ("TELEGRAM", "EMAIL")
 
@@ -40,7 +40,7 @@ class AdminAlert(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (
-        CheckConstraint("kind IN ('NEW_SIGNUP','PILOT_REQUEST','ANALYSIS_PROVIDER_ERROR')", name="ck_admin_alert_kind"),
+        CheckConstraint("kind IN ('NEW_SIGNUP','PILOT_REQUEST','ANALYSIS_PROVIDER_ERROR','PARTNER_REQUEST')", name="ck_admin_alert_kind"),
         CheckConstraint("state IN ('PENDING','SENT','FAILED')", name="ck_admin_alert_state"),
         CheckConstraint("channel IS NULL OR channel IN ('TELEGRAM','EMAIL')", name="ck_admin_alert_channel"),
         CheckConstraint("(state = 'SENT') = (sent_at IS NOT NULL)", name="ck_admin_alert_sent"),
