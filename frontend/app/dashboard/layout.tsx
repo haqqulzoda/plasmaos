@@ -38,6 +38,9 @@ const CONTROL_PATHS = new Set([
 ]);
 // P1: an onboarded account whose organization has not started a pilot explores instead of waiting.
 const EXPLORE_PATH = '/dashboard/explore';
+// P3: an explore organization opens the pursuit of its free monthly tender check (requirements only).
+const EXPLORE_CHECK_PREFIX = '/dashboard/pursuits/';
+const exploreOnlyPath = (path: string) => path === EXPLORE_PATH || path.startsWith(EXPLORE_CHECK_PREFIX);
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
     const common = useTranslations('common');
@@ -108,7 +111,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     return;
                 }
 
-                if (pathname !== EXPLORE_PATH) {
+                const exploreCheck = access.organization_access_state === 'explore' && pathname.startsWith(EXPLORE_CHECK_PREFIX);
+                if (pathname !== EXPLORE_PATH && !exploreCheck) {
                     if (!cancelled) setWorkspaceAccessAllowed(false);
                     router.replace(EXPLORE_PATH);
                     return;
@@ -166,7 +170,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     ) : (
         <CustomerShell name={session?.user?.name} email={session?.user?.email}
             company={companyName} canAdmin={isOperatorOrAdmin} onLogout={handleLogout}
-            exploreOnly={pathname === EXPLORE_PATH}>
+            exploreOnly={exploreOnlyPath(pathname)}>
             {children}
         </CustomerShell>
     );

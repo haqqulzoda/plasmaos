@@ -7,6 +7,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.plan_gates import enforce_feature
+from app.core.plans import FEATURE_OWN_EVIDENCE, FEATURE_PARTNER_SEARCH
 from app.api.deps import get_current_user, require_approved_user, require_operator
 from app.core.security import authenticated_dependency
 from app.db.session import get_db
@@ -23,6 +25,7 @@ from app.schemas.partner_finder import (
 )
 from app.services import partner_finder as service
 from app.services.admin_alerts import kick_admin_alerts
+from app.services.plans import PlanError
 from app.services.organization_context import (
     OrganizationAccessDeniedError,
     OrganizationContextRequiredError,
@@ -33,13 +36,14 @@ router = APIRouter(dependencies=[authenticated_dependency(), Depends(require_app
 admin_router = APIRouter(dependencies=[Depends(require_operator)])
 
 
-async def _context(db: AsyncSession, user: User, organization_id: UUID | None):
+async def _context(db: AsyncSession, user: User, organization_id: UUID | None, feature: str = FEATURE_PARTNER_SEARCH):
     try:
-        return await resolve_organization_context(db, user_id=user.id, organization_id=organization_id)
+        context = await resolve_organization_context(db, user_id=user.id, organization_id=organization_id)
     except OrganizationContextRequiredError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except OrganizationAccessDeniedError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pursuit not found") from exc
+    return await enforce_feature(db, context, feature)
 
 
 def _raise(exc: service.PartnerFinderError) -> None:
@@ -136,6 +140,9 @@ async def request_introduction(
         )
     except service.PartnerFinderError as exc:
         _raise(exc)
+    except PlanError as exc:  # P3: the plan's introductions are used up
+        await db.rollback()
+        raise HTTPException(exc.status_code, detail=exc.detail()) from exc
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     if created:
         kick_admin_alerts()
@@ -149,7 +156,7 @@ async def add_prospective_member(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Add a partner who accepted an introduction as a prospective JV member ("not yet confirmed")."""
-    context = await _context(db, current_user, x_organization_id)
+    context = await _context(db, current_user, x_organization_id, feature=FEATURE_OWN_EVIDENCE)
     try:
         await service.add_prospective_member(
             db, organization_id=context.organization.id, pursuit_id=pursuit_id, scenario_id=scenario_id,
@@ -160,8 +167,8 @@ async def add_prospective_member(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.delete(
-    "/{pursuit_id}/team-scenarios/{scenario_id}/prospective-members/{member_id}",
+@router.post(
+    "/{pursuit_id}/team-scenarios/{scenario_id}/prospective-members/{member_id}/remove",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def remove_prospective_member(
@@ -169,7 +176,7 @@ async def remove_prospective_member(
     x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> Response:
-    context = await _context(db, current_user, x_organization_id)
+    context = await _context(db, current_user, x_organization_id, feature=FEATURE_OWN_EVIDENCE)
     try:
         await service.remove_prospective_member(
             db, organization_id=context.organization.id, pursuit_id=pursuit_id, scenario_id=scenario_id,

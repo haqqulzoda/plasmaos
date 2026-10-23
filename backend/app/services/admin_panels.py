@@ -268,4 +268,61 @@ async def organization_panel(db: AsyncSession, *, limit: int = 500) -> list[dict
             "created_at": created_at,
             "demo": (notes or "").startswith(DEMO_PROFILE_MARKER),
         })
+    # P3: plan and this period's usage, one organization at a time (admin page; bounded by ``limit``).
+    from app.services.plans import plan_status
+
+    organizations = {row.id: row for row in (await db.scalars(
+        select(Organization).where(Organization.id.in_([item["organization_id"] for item in result]))
+    )).all()} if result else {}
+    for item in result:
+        organization = organizations[item["organization_id"]]
+        status = await plan_status(db, organization)
+        item.update({
+            "plan": status["plan"], "pursuit_limit_override": organization.pursuit_limit_override,
+            "introduction_limit_override": organization.introduction_limit_override,
+            "period_start": status["period_start"], "period_end": status["period_end"],
+            "pursuits_used": status["pursuits"]["used"], "pursuit_limit": status["pursuits"]["limit"],
+            "pursuit_notice": status["pursuits"]["notice"],
+            "introductions_used": status["introductions"]["used"],
+            "introduction_limit": status["introductions"]["limit"],
+            "users_used": status["users"]["used"], "user_limit": status["users"]["limit"],
+        })
     return result
+
+
+PLAN_AUDIT_ACTIONS = ("ORGANIZATION_ACCESS_CHANGED", "ORGANIZATION_PLAN_GRANTED")
+
+
+async def organization_plan_detail(db: AsyncSession, organization: Organization) -> dict[str, Any]:
+    """P3: plan status, the grants and the plan's audit events (newest first) for the admin page."""
+    from app.models.audit import AdminActivityEvent
+    from app.models.plans import OrganizationPlanGrant
+    from app.models.user import User
+    from app.services.plans import plan_status
+
+    grants = (await db.execute(
+        select(OrganizationPlanGrant, User.email)
+        .outerjoin(User, User.id == OrganizationPlanGrant.granted_by_user_id)
+        .where(OrganizationPlanGrant.organization_id == organization.id)
+        .order_by(OrganizationPlanGrant.created_at.desc(), OrganizationPlanGrant.id).limit(100)
+    )).all()
+    events = (await db.scalars(
+        select(AdminActivityEvent).where(
+            AdminActivityEvent.target_resource_type == "ORGANIZATION",
+            AdminActivityEvent.target_resource_id == str(organization.id),
+            AdminActivityEvent.action.in_(PLAN_AUDIT_ACTIONS),
+        ).order_by(AdminActivityEvent.created_at.desc(), AdminActivityEvent.id).limit(50)
+    )).all()
+    return {
+        "status": await plan_status(db, organization),
+        "success_criteria": organization.success_criteria,
+        "grants": [{
+            "grant_id": grant.id, "kind": grant.kind, "quantity": grant.quantity, "period_start": grant.period_start,
+            "reason": grant.reason, "granted_by_email": email, "created_at": grant.created_at,
+        } for grant, email in grants],
+        "audit_events": [{
+            "event_id": event.id, "action": event.action, "actor_email": event.actor_email_snapshot,
+            "previous_state": event.previous_state, "new_state": event.new_state, "reason": event.reason,
+            "created_at": event.created_at,
+        } for event in events],
+    }

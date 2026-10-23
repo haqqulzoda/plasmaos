@@ -88,6 +88,17 @@ def render_alert(alert: AdminAlert) -> tuple[str, list[str]]:
             "Every analysis fails until the key, billing or quota is fixed (GEMINI_API_KEY on the host).",
             f"Example run: {data.get('analysis_run_id')}. Repeats at most once an hour while it lasts.",
         ])
+    if alert.kind == "PLAN_USAGE":
+        organization = data.get("organization_name") or "An organization"
+        reached = str(data.get("threshold")) == "100"
+        subject = f"Plasma plan {'limit reached' if reached else 'at 80%'}: {organization}"
+        return subject, [
+            f"{organization} has used {data.get('used')} of {data.get('limit')} pursuits on the {data.get('plan')} plan "
+            f"(period {data.get('period_start')} to {data.get('period_end') or 'open'}).",
+            "New pursuits are blocked until an upgrade or extra pursuits (admin: /admin/organizations)." if reached
+            else "They will be blocked at the limit: offer an upgrade or extra pursuits.",
+            f"At {when}.",
+        ]
     if alert.kind == "PARTNER_REQUEST":
         organization = data.get("organization_name") or "An organization"
         tender = " ".join(filter(None, [str(data.get("tender_reference") or ""), str(data.get("tender_title") or "")]))
@@ -106,7 +117,7 @@ def render_alert(alert: AdminAlert) -> tuple[str, list[str]]:
             lines.append(f"Note: {data['note']}")
         lines.append("Work it on /admin/partner-requests. Nothing has been sent to the firm.")
         return subject, lines
-    kind = "a call" if data.get("request") == "call" else "a pilot"
+    kind = {"call": "a call", "upgrade": "an upgrade or more pursuits"}.get(str(data.get("request")), "a pilot")
     lines = [
         f"{data.get('name') or data.get('email')} <{data.get('email')}> asked for {kind}.",
         f"Organization: {data.get('organization_name') or '(not set up yet)'}",
@@ -116,7 +127,8 @@ def render_alert(alert: AdminAlert) -> tuple[str, list[str]]:
         lines.append(f"Phone: {data['phone']}")
     if data.get("message"):
         lines.append(f"Message: {data['message']}")
-    return (f"Plasma {kind} request: {data.get('organization_name') or data.get('email')}", lines)
+    label = "upgrade" if data.get("request") == "upgrade" else kind
+    return (f"Plasma {label} request: {data.get('organization_name') or data.get('email')}", lines)
 
 
 @dataclass(frozen=True)

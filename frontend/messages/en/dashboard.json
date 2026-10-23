@@ -139,5 +139,30 @@
   "pursuitNoDeadline": "No deadline recorded",
   "openWorkspace": "Open workspace",
   "pursuitsEmpty": "No pursuits yet",
-  "pursuitsEmptyHelp": "Open a tender's workspace to start working on it."
+  "pursuitsEmptyHelp": "Open a tender's workspace to start working on it.",
+  "plan": {
+    "names": {
+      "explore": "Explore",
+      "pilot": "Pilot",
+      "pursuit_desk": "Pursuit Desk",
+      "agent": "Agent",
+      "enterprise": "Enterprise",
+      "per_tender": "Per-tender review"
+    },
+    "periods": {
+      "calendar_month": "this month",
+      "plan_term": "in this pilot",
+      "plan_year": "this plan year",
+      "lifetime": "in total"
+    },
+    "nearTitle": "{used} of {limit} pursuits used {period}",
+    "nearHelp": "At {limit}, new tenders can't be analysed on the {plan} plan until you upgrade or add pursuits. Re-analysing a tender you already pursue never counts.",
+    "reachedTitle": "All {limit} pursuits used {period}",
+    "reachedHelp": "New tenders can't be analysed until you upgrade or add pursuits. Tenders you already pursue can still be re-analysed after an amendment.",
+    "exploreReachedTitle": "This month's free tender check is used",
+    "exploreReachedHelp": "Explore includes one tender check a month (requirements only). A pilot gives you 6 pursuits with your company records, EOI drafts and partner search.",
+    "upgrade": "Upgrade or add pursuits",
+    "startPilot": "Start a pilot",
+    "requested": "Request sent. Our team replies within one business day."
+  }
 }

@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -57,6 +58,10 @@ class Organization(Base):
     plan_started_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     plan_ends_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     success_criteria: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # P3: the plan (app.core.plans) drives access_state; overrides persist across plan periods.
+    plan: Mapped[str] = mapped_column(String(20), nullable=False, default="explore", server_default=text("'explore'"))
+    pursuit_limit_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    introduction_limit_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -85,6 +90,14 @@ class Organization(Base):
             name="ck_organizations_success_criteria_length",
         ),
         Index("ix_organizations_access_state", "access_state"),
+        CheckConstraint(
+            "plan IN ('explore','pilot','pursuit_desk','agent','enterprise','per_tender')", name="ck_organizations_plan"
+        ),
+        CheckConstraint(
+            "(pursuit_limit_override IS NULL OR pursuit_limit_override >= 0) AND "
+            "(introduction_limit_override IS NULL OR introduction_limit_override >= 0)",
+            name="ck_organizations_plan_overrides",
+        ),
     )
 
 

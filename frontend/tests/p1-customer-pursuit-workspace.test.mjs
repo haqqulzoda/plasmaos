@@ -42,7 +42,8 @@ test('P1 team and proposal progressively disclose actions in customer language',
   const team = read('components/pursuits/PursuitTeam.tsx');
   const proposal = read('components/pursuits/PursuitProposal.tsx');
   const english = JSON.parse(read('messages/en/pursuits.json'));
-  assert.match(team, /participation\.length > 0 \? <ScenarioWorkspace/);
+  // P2: an accepted partner (prospective JV member) also opens the scenario workspace.
+  assert.match(team, /participation\.length > 0( \|\| [^?\n]+)? \? <ScenarioWorkspace/);
   assert.match(team, /noTeamNeeds/);
   assert.doesNotMatch(team, /<BidiText>\{item\.gap_id\}<\/BidiText>/);
   assert.match(proposal, /evidenceManifest/);

@@ -26,7 +26,7 @@ from app.services.tender_engagements import (
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
-HEAD = "20261023_0001_p2_partner_finder"
+HEAD = "20261024_0001_p3_plans_limits"
 
 
 def source(relative: str) -> str:

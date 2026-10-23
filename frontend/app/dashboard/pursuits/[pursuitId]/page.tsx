@@ -48,6 +48,8 @@ import type {
   TeamScenario,
 } from '@/types/pursuit';
 import { customerProcessingState } from '@/types/pursuit';
+import { PlanNotice } from '@/components/plans/PlanNotice';
+import { planTabs, type PlanStatus } from '@/lib/plans';
 
 const ACTIVE_STATES = new Set(['UPLOADING', 'QUEUED', 'CHECKING', 'EXTRACTING']);
 // The header shows where the pursuit stands; document processing states live in Documents & Evidence.
@@ -90,6 +92,9 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
   const search = useSearchParams();
   const initialTab = search.get('tab');
   const [activeTab, setActiveTab] = useState<WorkspaceTab>(isWorkspaceTab(initialTab) ? initialTab : 'overview');
+  // P3: the plan decides the tabs (Explore checks requirements only).
+  const [plan, setPlan] = useState<PlanStatus | null>(null);
+  const visibleTabs = useMemo(() => planTabs(WORKSPACE_TABS, plan), [plan]);
   const [organizationId, setOrganizationId] = useState(search.get('organization_id') || '');
   const [pursuit, setPursuit] = useState<Pursuit | null>(null);
   const [documents, setDocuments] = useState<PrivateDocument[]>([]);
@@ -130,11 +135,11 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
   const onTabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const current = WORKSPACE_TABS.indexOf(activeTab);
+    const current = visibleTabs.indexOf(activeTab);
     const rtl = window.getComputedStyle(event.currentTarget).direction === 'rtl';
     const delta = event.key === 'ArrowRight' ? (rtl ? -1 : 1) : event.key === 'ArrowLeft' ? (rtl ? 1 : -1) : 0;
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? WORKSPACE_TABS.length - 1 : (current + delta + WORKSPACE_TABS.length) % WORKSPACE_TABS.length;
-    selectTab(WORKSPACE_TABS[next] || 'overview', true);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? visibleTabs.length - 1 : (current + delta + visibleTabs.length) % visibleTabs.length;
+    selectTab(visibleTabs[next] || 'overview', true);
   };
 
   useEffect(() => {
@@ -156,7 +161,9 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
         api.get<{ items: PrivateDocument[] }>(`/pursuits/${encodeURIComponent(pursuitId)}/documents`, { headers }),
         api.get<PursuitContext>(`/pursuits/${encodeURIComponent(pursuitId)}/context`, { headers }),
         api.get<PursuitAnalysis | null>(`/pursuits/${encodeURIComponent(pursuitId)}/analysis-runs/latest`, { headers }),
-        api.get<TeamScenario[]>(`/pursuits/${encodeURIComponent(pursuitId)}/team-scenarios`, { headers }),
+        // P3: no team on Explore or without company records: no scenarios to read.
+        api.get<TeamScenario[]>(`/pursuits/${encodeURIComponent(pursuitId)}/team-scenarios`, { headers })
+          .catch(() => ({ data: [] as TeamScenario[] })),
       ]);
       setPursuit(pursuitResponse.data);
       setDocuments(documentResponse.data.items);
@@ -394,9 +401,11 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
     {search.get('duplicates') === '1' && <p className="pursuit-advisory" role="status">{t('upload.duplicateWarning')}</p>}
     {actionError && <p className="pursuit-upload-error" role="alert">{actionError}</p>}
 
+    <PlanNotice headers={headers} onPlan={setPlan} />
+
     <nav className="pursuit-workspace-nav" aria-label={t('workspace.navigationLabel')}>
       <div role="tablist" aria-orientation="horizontal" onKeyDown={onTabKeyDown}>
-        {WORKSPACE_TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const Icon = tab === 'overview' ? LayoutDashboard : tab === 'requirements' ? ClipboardList : tab === 'eoi' ? FileSignature : tab === 'team' ? UsersRound : tab === 'documents' ? FolderOpen : PackageCheck;
           return <button
             key={tab} id={`pursuit-tab-${tab}`} type="button" role="tab"
@@ -474,17 +483,17 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
       <PursuitRequirements pursuitId={pursuitId} headers={headers} initialReviewableAnalysis={lastReviewableAnalysis} onAnalysisChange={handleAnalysisChange} />
     </section>}
 
-    {activeTab === 'eoi' && <section id="pursuit-panel-eoi" role="tabpanel" aria-labelledby="pursuit-tab-eoi" className="pursuit-workspace-panel">
+    {activeTab === 'eoi' && visibleTabs.includes('eoi') && <section id="pursuit-panel-eoi" role="tabpanel" aria-labelledby="pursuit-tab-eoi" className="pursuit-workspace-panel">
       <div className="pursuit-panel-heading"><div><span className="ds-eyebrow">{t('workspace.eoiEyebrow')}</span><h2 id="pursuit-eoi-title">{t('workspace.eoi')}</h2><p>{t('workspace.eoiHelp')}</p></div></div>
       <PursuitEoi pursuitId={pursuitId} headers={headers} runId={eoiRunId(analysis, lastReviewableAnalysis)} onOpenRequirements={() => selectTab('requirements')} />
     </section>}
 
-    {activeTab === 'team' && <section id="pursuit-panel-team" role="tabpanel" aria-labelledby="pursuit-tab-team" className="pursuit-workspace-panel">
+    {activeTab === 'team' && visibleTabs.includes('team') && <section id="pursuit-panel-team" role="tabpanel" aria-labelledby="pursuit-tab-team" className="pursuit-workspace-panel">
       <div className="pursuit-panel-heading"><div><span className="ds-eyebrow">{t('workspace.teamEyebrow')}</span><h2 id="pursuit-team-title">{t('workspace.team')}</h2><p>{t('workspace.teamHelp')}</p></div></div>
       <PursuitTeam pursuitId={pursuitId} headers={headers} onScenariosChange={setScenarios} />
     </section>}
 
-    {activeTab === 'documents' && <section id="pursuit-panel-documents" role="tabpanel" aria-labelledby="pursuit-tab-documents" className="pursuit-workspace-panel">
+    {activeTab === 'documents' && visibleTabs.includes('documents') && <section id="pursuit-panel-documents" role="tabpanel" aria-labelledby="pursuit-tab-documents" className="pursuit-workspace-panel">
       <div className="pursuit-panel-heading"><div><span className="ds-eyebrow">{t('workspace.documentsEyebrow')}</span><h2 id="pursuit-documents-title">{t('workspace.documents')}</h2><p>{t('workspace.documentsHelp')}</p></div></div>
       <section className="pursuit-document-group" aria-labelledby="official-documents-title"><header><div><h3 id="official-documents-title">{t('documents.official')}</h3><p>{t('documents.officialHelp')}</p></div></header>
         {documentCandidateLoading ? <p className="ds-muted">{t('documents.loading')}</p> : documentCandidate?.source_documents.length ? <div className="private-document-list">{documentCandidate.source_documents.map((document) => <Surface className="private-document-row" key={document.tender_document_id}>
@@ -518,7 +527,7 @@ function PursuitWorkspace({ pursuitId }: { pursuitId: string }) {
       </section>
     </section>}
 
-    {activeTab === 'proposal' && <section id="pursuit-panel-proposal" role="tabpanel" aria-labelledby="pursuit-tab-proposal" className="pursuit-workspace-panel">
+    {activeTab === 'proposal' && visibleTabs.includes('proposal') && <section id="pursuit-panel-proposal" role="tabpanel" aria-labelledby="pursuit-tab-proposal" className="pursuit-workspace-panel">
       <div className="pursuit-panel-heading"><div><span className="ds-eyebrow">{t('workspace.proposalEyebrow')}</span><h2 id="pursuit-proposal-title">{t('workspace.proposal')}</h2><p>{t('workspace.proposalHelp')}</p></div></div>
       <PursuitProposal pursuitId={pursuitId} headers={headers} />
     </section>}

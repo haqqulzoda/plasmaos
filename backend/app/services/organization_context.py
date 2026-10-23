@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import case, select
+from sqlalchemy import and_, case, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,7 +53,15 @@ async def resolve_organization_context(
     *,
     user_id: UUID,
     organization_id: UUID | None = None,
+    allow_explore: bool = False,
 ) -> OrganizationContext:
+    """``allow_explore`` (P3) admits explore organizations too, for the routes of the free monthly
+    tender check only (open a pursuit, start and read its analysis) and their team; plan gates
+    and the pursuit counter apply on top. Every other route keeps the pilot-or-paid default."""
+    access = (
+        or_(_full_access(), and_(CompanyProfile.approval_status == "pending", Organization.access_state == "explore"))
+        if allow_explore else _full_access()
+    )
     statement = (
         select(Organization, Membership)
         .join(Membership, Membership.organization_id == Organization.id)
@@ -61,7 +69,7 @@ async def resolve_organization_context(
         .where(
             Membership.user_id == user_id,
             Membership.state == MembershipState.ACTIVE,
-            _full_access(),
+            access,
         )
         .order_by(Organization.id)
     )
@@ -108,7 +116,7 @@ async def ensure_profile_organization(
     profile: CompanyProfile,
 ) -> OrganizationContext:
     """Create the exact profile Organization and initial owner, idempotently."""
-    from app.services.organization_access import state_for_company_status
+    from app.services.organization_access import plan_for_state, state_for_company_status
 
     organization_id = deterministic_uuid(f"plasma:w2:organization:{profile.id}")
     now = datetime.now(timezone.utc)
@@ -121,6 +129,7 @@ async def ensure_profile_organization(
             # P1: a new organization starts in the state its company approval implies
             # (self sign-up onboarding: pending, so explore; seeded and admin-made: pilot).
             access_state=state_for_company_status(profile.approval_status),
+            plan=plan_for_state(state_for_company_status(profile.approval_status), None),
             created_at=now,
             updated_at=now,
         )

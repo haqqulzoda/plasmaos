@@ -45,7 +45,7 @@ from test_p1_01_email_sign_in import FakeRedis
 
 PREVIOUS_HEAD = "20261016_0001_p1_email_sign_in"
 REVISION = "20261016_0002_p1_organization_access"
-HEAD = "20261023_0001_p2_partner_finder"
+HEAD = "20261024_0001_p3_plans_limits"
 
 
 # ---- pure rules -----------------------------------------------------------------------------------

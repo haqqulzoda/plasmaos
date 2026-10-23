@@ -20,7 +20,7 @@ if str(BACKEND_DIR) not in sys.path:
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261023_0001_p2_partner_finder"
+HEAD = "20261024_0001_p3_plans_limits"
 PARENT = "20260901_0001_sr2_3_connector_metrics"
 
 

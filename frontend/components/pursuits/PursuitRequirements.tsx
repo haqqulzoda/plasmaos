@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Forms';
 import { EmptyState, StatusBadge, Surface } from '@/components/ui/Display';
 import { Alert } from '@/components/ui/Feedback';
+import { PLAN_STATUS_EVENT, planErrorCode } from '@/lib/plans';
 import { api } from '@/lib/api';
 import { requestFailure } from '@/lib/libraryApi';
 import { analysisLanguageForLocale, initialPackSelection, type AnalysisLanguage } from '@/lib/packSelection';
@@ -276,7 +277,15 @@ export function PursuitRequirements({ pursuitId, headers, initialReviewableAnaly
         source_document_ids: [...selectedSource], private_version_ids: [...selectedPrivate],
       }, { headers });
       await load(false);
-    } catch { setError(t('startFailed')); }
+      window.dispatchEvent(new Event(PLAN_STATUS_EVENT));
+    } catch (failure) {
+      // P3: the plan's pursuits are used (402): say so, and let the notice above offer the upgrade.
+      if (planErrorCode(failure) === 'PLAN_PURSUIT_LIMIT') {
+        const plan = (failure as { response?: { data?: { detail?: { plan?: string } } } }).response?.data?.detail?.plan;
+        setError(t(plan === 'explore' ? 'planExploreLimit' : 'planLimit'));
+        window.dispatchEvent(new Event(PLAN_STATUS_EVENT));
+      } else setError(t('startFailed'));
+    }
     finally { setBusy(false); }
   };
 

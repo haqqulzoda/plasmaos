@@ -139,5 +139,30 @@
   "pursuitNoDeadline": "Muddat koʻrsatilmagan",
   "openWorkspace": "Ish maydonini ochish",
   "pursuitsEmpty": "Hozircha ishdagi tenderlar yoʻq",
-  "pursuitsEmptyHelp": "Ishni boshlash uchun tenderning ish maydonini oching."
+  "pursuitsEmptyHelp": "Ishni boshlash uchun tenderning ish maydonini oching.",
+  "plan": {
+    "names": {
+      "explore": "Explore",
+      "pilot": "Pilot",
+      "pursuit_desk": "Pursuit Desk",
+      "agent": "Agent",
+      "enterprise": "Enterprise",
+      "per_tender": "Bitta tender tahlili"
+    },
+    "periods": {
+      "calendar_month": "shu oyda",
+      "plan_term": "pilot davomida",
+      "plan_year": "tarif yilida",
+      "lifetime": "jami"
+    },
+    "nearTitle": "{limit} ta tenderdan {used} tasi {period} ishlatildi",
+    "nearHelp": "{limit} taga yetganda, tarifni oshirmaguningizcha yoki tender qoʻshmaguningizcha {plan} tarifida yangi tenderlarni tahlil qilib boʻlmaydi. Allaqachon ishlayotgan tenderni qayta tahlil qilish hisoblanmaydi.",
+    "reachedTitle": "{period} barcha {limit} ta tender ishlatildi",
+    "reachedHelp": "Tarifni oshirmaguningizcha yoki tender qoʻshmaguningizcha yangi tenderlarni tahlil qilib boʻlmaydi. Ishlayotgan tenderlaringizni oʻzgarishdan keyin qayta tahlil qilish mumkin.",
+    "exploreReachedTitle": "Shu oydagi bepul tender tekshiruvi ishlatildi",
+    "exploreReachedHelp": "Explore oyiga bitta tender tekshiruvini (faqat talablar) oʻz ichiga oladi. Pilot kompaniya maʼlumotlaringiz, EOI qoralamalari va hamkor qidirish bilan 6 ta tender beradi.",
+    "upgrade": "Tarifni oshirish yoki tender qoʻshish",
+    "startPilot": "Pilotni boshlash",
+    "requested": "Soʻrov yuborildi. Jamoamiz bir ish kuni ichida javob beradi."
+  }
 }

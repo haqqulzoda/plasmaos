@@ -11,7 +11,7 @@ const LOCALES = ["en", "ru", "uz", "ar"];
 const finder = read("components/pursuits/PursuitPartnerFinder.tsx");
 const team = read("components/pursuits/PursuitTeam.tsx");
 const admin = read("app/admin/partner-requests/page.tsx");
-const types = read("types/pursuit.ts");
+const types = read("types/partnerFinder.ts");
 
 test("every locale carries the partner finder and prospective-member strings", () => {
   const english = JSON.parse(read("messages/en/pursuits.json")).team;
@@ -35,7 +35,7 @@ test("suggestions show public award facts with the unverified label and never co
   }
   assert.match(finder, /award\.notice_url/);
   assert.match(finder, /rel="noopener noreferrer"/);
-  const partnerTypes = types.slice(types.indexOf("// P2 partner finder"), types.indexOf("export type ProposalEvidenceItemCategory"));
+  const partnerTypes = types;
   assert.ok(partnerTypes.includes("export type PartnerSuggestion = {"));
   assert.doesNotMatch(partnerTypes, /^\s*\w*(email|phone|contact|address|website)\w*\??:/im);
   assert.doesNotMatch(finder, /mailto:|tel:/);

@@ -5907,6 +5907,20 @@ async def get_tender_competitors(
     The response is derived only from whitelisted public historical source
     metadata. It does not confirm participation in the current tender.
     """
+    # P3: competitor intelligence is on the Agent and Enterprise plans (operators see it everywhere).
+    from app.api.deps import is_operator_user
+    from app.core.plans import FEATURE_COMPETITOR_INTELLIGENCE
+    from app.services.organization_context import organization_profile_context
+    from app.services.plans import PlanFeatureError, require_feature
+
+    if not is_operator_user(current_user):
+        profile_context = await organization_profile_context(db, user_id=current_user.id)
+        try:
+            await require_feature(
+                db, profile_context.organization if profile_context else None, FEATURE_COMPETITOR_INTELLIGENCE,
+            )
+        except PlanFeatureError as exc:
+            raise HTTPException(exc.status_code, detail=exc.detail()) from exc
     target_result = await db.execute(
         select(Tender)
         .options(

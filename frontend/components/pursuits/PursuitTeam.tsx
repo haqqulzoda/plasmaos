@@ -11,6 +11,7 @@ import { Checkbox, Input, Select } from '@/components/ui/Forms';
 import { Badge, EmptyState, StatusBadge, Surface } from '@/components/ui/Display';
 import { PursuitPartnerFinder, requestTone } from '@/components/pursuits/PursuitPartnerFinder';
 import { api } from '@/lib/api';
+import type { PartnerRequest } from '@/types/partnerFinder';
 import type {
   CandidateAvailabilityStatus,
   CandidateInterestStatus,
@@ -21,7 +22,6 @@ import type {
   CandidateReviewDecision,
   CandidateSearchRun,
   ParticipationConfirmationSource,
-  PartnerRequest,
   PursuitAnalysis,
   PursuitGap,
   ScenarioDecision,
@@ -445,7 +445,7 @@ function ProspectiveMembers({ scenario, partnerRequests, pursuitId, headers, ref
           <strong><BidiText>{member.display_name}</BidiText></strong>
           <Badge tone="warning">{t('notConfirmed')}</Badge>
           <StatusBadge tone={requestTone(member.request_status)}>{finder(`status.${member.request_status}`)}</StatusBadge>
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => void run(() => api.delete(`${base}/${member.prospective_member_id}`, { headers }))}>{t('remove')}</Button>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => void run(() => api.post(`${base}/${member.prospective_member_id}/remove`, undefined, { headers }))}>{t('remove')}</Button>
         </div>
         {closing.length
           ? <ul>{closing.map((target) => <li key={target.gap_id}>{t('wouldClose')}: <BidiText>{target.gap_summary}</BidiText></li>)}</ul>

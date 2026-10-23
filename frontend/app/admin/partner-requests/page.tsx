@@ -11,7 +11,7 @@ import { Select, Textarea } from '@/components/ui/Forms';
 import { Dialog } from '@/components/ui/Overlay';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/adminPanels';
-import type { PartnerRequest, PartnerRequestStatus } from '@/types/pursuit';
+import type { PartnerRequest, PartnerRequestStatus } from '@/types/partnerFinder';
 
 type AdminPartnerRequest = PartnerRequest & {
     organization_id: string | null;

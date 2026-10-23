@@ -26,7 +26,7 @@ MIGRATION_PATH = (
     BACKEND_DIR
     / "alembic/versions/20260826_0001_s1_1_project_foundation.py"
 )
-HEAD = "20261023_0001_p2_partner_finder"
+HEAD = "20261024_0001_p3_plans_limits"
 
 
 def _load_migration():
@@ -150,7 +150,8 @@ def test_migration_is_the_single_head_after_sprint_zero_b3() -> None:
     script = ScriptDirectory.from_config(config)
     assert script.get_heads() == [HEAD]
     # D1-03 -> D2-01 -> D2-05 follow P0 on one chain.
-    assert script.get_revision(HEAD).down_revision == "20261016_0002_p1_organization_access"
+    assert script.get_revision(HEAD).down_revision == "20261023_0001_p2_partner_finder"
+    assert script.get_revision("20261023_0001_p2_partner_finder").down_revision == "20261016_0002_p1_organization_access"
     assert script.get_revision("20261016_0002_p1_organization_access").down_revision == "20261016_0001_p1_email_sign_in"
     assert script.get_revision("20261016_0001_p1_email_sign_in").down_revision == "20261012_0002_s1_product_analytics"
     assert script.get_revision("20261012_0002_s1_product_analytics").down_revision == "20261012_0001_s1_award_ledger"

@@ -446,6 +446,10 @@ async def create_analysis_run(
         "items": [{key: _json_value(value) for key, value in item.items() if key != "analyzed_text"} for item in sealed_items],
     }
     selected_sha = _sha(selection_payload)
+    # P3: a pursuit counts against the plan once, when its first analysis starts (locks the organization).
+    from app.services.plans import admit_pursuit, record_pursuit
+
+    counts = await admit_pursuit(db, organization_id=organization_id, pursuit_id=pursuit_id)
     pack = AnalysisPack(
         organization_id=organization_id, pursuit_id=pursuit_id, requested_by_membership_id=membership_id,
         schema_version=PACK_SCHEMA_VERSION, candidate_sha256=candidate.candidate_sha256,
@@ -469,6 +473,8 @@ async def create_analysis_run(
     )
     db.add(run)
     await db.flush()
+    if counts:
+        await record_pursuit(db, organization_id=organization_id, pursuit_id=pursuit_id, analysis_run_id=run.id)
     profile_id, snapshot, metadata_only, file_backed = await _company_snapshot(db, organization_id)
     captured_at = datetime.now(timezone.utc)
     db.add(

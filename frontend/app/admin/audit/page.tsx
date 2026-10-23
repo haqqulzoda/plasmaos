@@ -20,6 +20,8 @@ const ACTIONS = [
     'REFRESH_REUSE_DETECTED', 'ORGANIZATION_ACCESS_CHANGED',
     // P2: partner introduction and expert sourcing requests.
     'PARTNER_REQUEST_CREATED', 'PARTNER_REQUEST_STATUS_CHANGED',
+    // P3: extra pursuits or introductions granted for a plan period.
+    'ORGANIZATION_PLAN_GRANTED',
 ];
 
 type AuditEvent = {

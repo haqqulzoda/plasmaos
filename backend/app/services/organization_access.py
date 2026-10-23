@@ -84,10 +84,16 @@ class AccessSnapshot:
     plan_started_on: date | None
     plan_ends_on: date | None
     success_criteria: str | None
+    plan: str = "explore"
+    pursuit_limit_override: int | None = None
+    introduction_limit_override: int | None = None
 
     def as_audit(self) -> dict:
         return {
             "access_state": self.access_state,
+            "plan": self.plan,
+            "pursuit_limit_override": self.pursuit_limit_override,
+            "introduction_limit_override": self.introduction_limit_override,
             "plan_started_on": self.plan_started_on.isoformat() if self.plan_started_on else None,
             "plan_ends_on": self.plan_ends_on.isoformat() if self.plan_ends_on else None,
             "success_criteria_set": bool(self.success_criteria),
@@ -97,7 +103,19 @@ class AccessSnapshot:
 def snapshot(organization: Organization) -> AccessSnapshot:
     return AccessSnapshot(
         organization.access_state, organization.plan_started_on, organization.plan_ends_on, organization.success_criteria,
+        organization.plan, organization.pursuit_limit_override, organization.introduction_limit_override,
     )
+
+
+def plan_for_state(state: str, current_plan: str | None) -> str:
+    """P3: the plan an access state implies when only the state is set (legacy approve, pilot setup)."""
+    if state == ORG_ACCESS_EXPLORE:
+        return "explore"
+    if state == ORG_ACCESS_PILOT:
+        return "pilot"
+    if state == ORG_ACCESS_PAID:
+        return current_plan if current_plan in {"pursuit_desk", "agent", "enterprise", "per_tender"} else "pursuit_desk"
+    return current_plan or "explore"  # disabled keeps the plan it had
 
 
 async def set_organization_access(
@@ -111,17 +129,35 @@ async def set_organization_access(
     plan_started_on: date | None | object = _UNSET,
     plan_ends_on: date | None | object = _UNSET,
     success_criteria: str | None | object = _UNSET,
+    plan: str | None = None,
+    pursuit_limit_override: int | None | object = _UNSET,
+    introduction_limit_override: int | None | object = _UNSET,
     now: datetime | None = None,
 ) -> Organization:
     """Change the state and/or plan, sync the company approval, audit. The caller commits."""
+    from app.core.plans import ACCESS_STATE_FOR_PLAN, PLANS
+
+    if plan is not None:
+        if plan not in PLANS:
+            raise OrganizationAccessError(f"plan must be one of {', '.join(PLANS)}")
+        if state != ORG_ACCESS_DISABLED:
+            state = ACCESS_STATE_FOR_PLAN[plan]
     if state not in ORG_ACCESS_STATES:
         raise OrganizationAccessError(f"access_state must be one of {', '.join(ORG_ACCESS_STATES)}")
+    for value in (pursuit_limit_override, introduction_limit_override):
+        if value is not _UNSET and value is not None and (not isinstance(value, int) or value < 0 or value > 100000):
+            raise OrganizationAccessError("limit overrides must be whole numbers from 0")
     moment = now or datetime.now(timezone.utc)
     before = snapshot(organization)
     if plan_started_on is not _UNSET:
         organization.plan_started_on = plan_started_on  # type: ignore[assignment]
     if plan_ends_on is not _UNSET:
         organization.plan_ends_on = plan_ends_on  # type: ignore[assignment]
+    organization.plan = plan if plan is not None else plan_for_state(state, organization.plan)
+    if pursuit_limit_override is not _UNSET:
+        organization.pursuit_limit_override = pursuit_limit_override  # type: ignore[assignment]
+    if introduction_limit_override is not _UNSET:
+        organization.introduction_limit_override = introduction_limit_override  # type: ignore[assignment]
     if success_criteria is not _UNSET:
         text = (success_criteria or "").strip() if isinstance(success_criteria, str) or success_criteria is None else None
         if text is not None and len(text) > MAX_SUCCESS_CRITERIA:
@@ -173,6 +209,7 @@ async def sync_access_from_company(db: AsyncSession, *, profile: CompanyProfile,
     wanted = state_for_company_status(profile.approval_status, organization.access_state)
     if wanted != organization.access_state:
         organization.access_state = wanted
+        organization.plan = plan_for_state(wanted, organization.plan)
         organization.access_state_changed_at = datetime.now(timezone.utc)
         organization.access_state_changed_by_user_id = actor_user.id if actor_user is not None else None
         await db.flush()

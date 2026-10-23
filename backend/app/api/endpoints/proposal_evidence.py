@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.plan_gates import enforce_feature
+from app.core.plans import FEATURE_OWN_EVIDENCE
 from app.api.deps import get_current_user, require_approved_user
 from app.core.security import authenticated_dependency
 from app.db.session import get_db
@@ -38,13 +40,14 @@ from app.services.proposal_evidence import (
 router = APIRouter(dependencies=[authenticated_dependency(), Depends(require_approved_user)])
 
 
-async def _context(db: AsyncSession, user: User, organization_id: UUID | None):
+async def _context(db: AsyncSession, user: User, organization_id: UUID | None, feature: str = FEATURE_OWN_EVIDENCE):
     try:
-        return await resolve_organization_context(db, user_id=user.id, organization_id=organization_id)
+        context = await resolve_organization_context(db, user_id=user.id, organization_id=organization_id)
     except OrganizationContextRequiredError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except OrganizationAccessDeniedError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Proposal workspace not found") from exc
+    return await enforce_feature(db, context, feature)
 
 
 def _domain_error(exc: Exception) -> None:

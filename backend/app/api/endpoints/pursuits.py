@@ -59,6 +59,7 @@ from app.services.pursuit_analysis import (
     create_analysis_run,
     get_analysis_run,
 )
+from app.services.plans import PlanError
 from app.services.organization_context import OrganizationAccessDeniedError, OrganizationContextRequiredError, resolve_organization_context
 from app.services.private_documents import (
     build_analysis_pack_candidate,
@@ -90,9 +91,11 @@ class _ProcessingRollup:
     failed_count: int
 
 
-async def _context(db: AsyncSession, user: User, organization_id: UUID | None):
+async def _context(db: AsyncSession, user: User, organization_id: UUID | None, *, allow_explore: bool = False):
     try:
-        return await resolve_organization_context(db, user_id=user.id, organization_id=organization_id)
+        return await resolve_organization_context(
+            db, user_id=user.id, organization_id=organization_id, allow_explore=allow_explore,
+        )
     except OrganizationContextRequiredError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except OrganizationAccessDeniedError as exc:
@@ -316,7 +319,7 @@ async def list_pursuits(
     offset: int = Query(default=0, ge=0), limit: int = Query(default=25, ge=1, le=100),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> PursuitListResponse:
-    context = await _context(db, current_user, x_organization_id)
+    context = await _context(db, current_user, x_organization_id, allow_explore=True)
     owner_membership = aliased(Membership)
     owner_user = aliased(User)
     statement = (
@@ -485,7 +488,7 @@ async def create_source_pursuit(
     Idempotent per (organization, tender): 201 when this call created the pursuit (one
     CREATE lifecycle event), 200 when it already existed (no event, stage untouched).
     """
-    context = await _context(db, current_user, x_organization_id)
+    context = await _context(db, current_user, x_organization_id, allow_explore=True)
     try:
         result = await get_or_create_source_pursuit(
             db, organization_id=context.organization.id, actor_user_id=current_user.id,
@@ -510,7 +513,7 @@ async def get_pursuit(
     x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> PursuitResponse:
-    context = await _context(db, current_user, x_organization_id)
+    context = await _context(db, current_user, x_organization_id, allow_explore=True)
     row = await _pursuit_detail_row(db, context.organization.id, pursuit_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pursuit not found")
@@ -536,7 +539,7 @@ async def get_private_documents(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PrivateDocumentListResponse:
-    context = await _context(db, current_user, x_organization_id)
+    context = await _context(db, current_user, x_organization_id, allow_explore=True)
     try:
         rows = await list_private_documents(
             db, organization_id=context.organization.id, pursuit_id=pursuit_id
@@ -580,7 +583,7 @@ async def get_analysis_pack_candidate(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AnalysisPackCandidateResponse:
-    organization_context = await _context(db, current_user, x_organization_id)
+    organization_context = await _context(db, current_user, x_organization_id, allow_explore=True)
     try:
         return await build_analysis_pack_candidate(
             db,
@@ -609,7 +612,7 @@ async def start_pursuit_analysis(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PursuitAnalysisStartResponse:
-    context = await _context(db, current_user, x_organization_id)
+    context = await _context(db, current_user, x_organization_id, allow_explore=True)
     try:
         response = await create_analysis_run(
             db,
@@ -620,6 +623,9 @@ async def start_pursuit_analysis(
         )
     except (AnalysisAdmissionError, AnalysisNotFoundError) as exc:
         raise _analysis_error(exc) from exc
+    except PlanError as exc:  # P3: the plan's pursuits are used up
+        await db.rollback()
+        raise HTTPException(exc.status_code, detail=exc.detail()) from exc
     dispatch_run_ids([response.analysis_run_id])
     return response
 
@@ -631,7 +637,7 @@ async def latest_pursuit_analysis(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PursuitAnalysisResponse | None:
-    context = await _context(db, current_user, x_organization_id)
+    context = await _context(db, current_user, x_organization_id, allow_explore=True)
     return await get_analysis_run(
         db, organization_id=context.organization.id, pursuit_id=pursuit_id, include_company_evidence=True,
     )
@@ -645,7 +651,7 @@ async def pursuit_analysis_run(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PursuitAnalysisResponse:
-    context = await _context(db, current_user, x_organization_id)
+    context = await _context(db, current_user, x_organization_id, allow_explore=True)
     response = await get_analysis_run(
         db, organization_id=context.organization.id, pursuit_id=pursuit_id, run_id=run_id,
         include_company_evidence=True,
@@ -949,7 +955,7 @@ async def get_pursuit_context(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PursuitContextResponse:
-    organization_context = await _context(db, current_user, x_organization_id)
+    organization_context = await _context(db, current_user, x_organization_id, allow_explore=True)
     try:
         context, suggestions = await get_context(
             db, organization_id=organization_context.organization.id, pursuit_id=pursuit_id

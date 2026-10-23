@@ -758,6 +758,10 @@ async def create_request(
     existing = await db.scalar(select(PartnerRequest).where(*existing_filter))
     if existing is not None:
         return _request_view(existing, (await _events(db, [existing.id]))[existing.id]), False
+    # P3: a new request uses one introduction of the plan period (raises at the quota).
+    from app.services.plans import check_introduction_allowed
+
+    await check_introduction_allowed(db, organization_id)
 
     now = datetime.now(timezone.utc)
     row = PartnerRequest(

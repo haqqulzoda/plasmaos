@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { CalendarClock, CheckCircle2, ExternalLink, FileText, Rocket, Search, Sparkles, Users } from 'lucide-react';
 
@@ -15,6 +16,8 @@ import { SegmentedControl } from '@/components/ui/Navigation';
 import { formatDate } from '@/i18n/formatters';
 import type { CustomerSelectableLocale } from '@/i18n/locales';
 import { api } from '@/lib/api';
+import { PlanNotice } from '@/components/plans/PlanNotice';
+import type { PlanStatus } from '@/lib/plans';
 
 type Overview = { organization_name?: string | null; book_call_url?: string | null; demo_available: boolean };
 type Opportunity = {
@@ -67,6 +70,11 @@ function ExploreContent() {
     const [sending, setSending] = useState<'pilot' | 'call' | null>(null);
     const [sent, setSent] = useState<'pilot' | 'call' | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // P3: one free tender check a calendar month (requirements only).
+    const router = useRouter();
+    const [plan, setPlan] = useState<PlanStatus | null>(null);
+    const [checking, setChecking] = useState<string | null>(null);
+    const [checkError, setCheckError] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -75,8 +83,23 @@ function ExploreContent() {
             .then((r) => { if (!cancelled) setOpportunities(r.data.items); })
             .catch(() => { if (!cancelled) setOpportunities([]); });
         api.get<Demo>('/explore/demo-analysis').then((r) => { if (!cancelled) setDemo(r.data); }).catch(() => undefined);
+        api.get<PlanStatus>('/organizations/plan').then((r) => { if (!cancelled) setPlan(r.data); }).catch(() => undefined);
         return () => { cancelled = true; };
     }, []);
+
+    const checkTender = useCallback(async (tenderId: string) => {
+        setChecking(tenderId);
+        setCheckError(false);
+        try {
+            const response = await api.post<{ pursuit_id: string }>('/pursuits/source', { tender_id: tenderId });
+            router.push(`/dashboard/pursuits/${encodeURIComponent(response.data.pursuit_id)}?tab=requirements`);
+        } catch {
+            setCheckError(true);
+            setChecking(null);
+        }
+    }, [router]);
+    const checkLeft = plan ? (plan.pursuits.remaining ?? 1) > 0 : false;
+    const nextCheck = plan?.period_end ? new Date(Date.parse(`${plan.period_end}T00:00:00Z`) + 86400000).toISOString().slice(0, 10) : null;
 
     const sendRequest = useCallback(async (kind: 'pilot' | 'call') => {
         setSending(kind);
@@ -137,6 +160,11 @@ function ExploreContent() {
             <section className="explore-section" aria-labelledby="explore-opportunities-title">
                 <h2 id="explore-opportunities-title"><Search aria-hidden /> {t('opportunitiesTitle')}</h2>
                 <p className="ds-muted">{t('opportunitiesHelp')}</p>
+                {plan && <PlanNotice />}
+                {plan && checkLeft && <p className="explore-check-status" data-explore-check="available">{t('checkAvailable')}</p>}
+                {plan && !checkLeft && nextCheck && <p className="explore-check-status ds-muted" data-explore-check="used">
+                    {t('checkUsed', { date: formatDate(nextCheck, locale) })}</p>}
+                {checkError && <p className="pursuit-upload-error" role="alert">{t('checkFailed')}</p>}
                 {opportunities === null ? <p role="status" className="ds-muted">{t('loading')}</p>
                 : opportunities.length === 0 ? <p className="ds-muted">{t('noOpportunities')}</p>
                 : <ul className="explore-opportunities">
@@ -151,6 +179,8 @@ function ExploreContent() {
                                 {tender.source_url && <a href={tender.source_url} target="_blank" rel="noopener noreferrer">
                                     {t('officialNotice')} <ExternalLink aria-hidden /></a>}
                             </span>
+                            {plan && checkLeft && <Button size="sm" variant="secondary" loading={checking === tender.id}
+                                disabled={Boolean(checking)} onClick={() => void checkTender(tender.id)}>{t('checkButton')}</Button>}
                         </li>
                     ))}
                 </ul>}

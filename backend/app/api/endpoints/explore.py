@@ -39,7 +39,7 @@ class ExploreOverview(BaseModel):
 
 
 class ExploreRequest(BaseModel):
-    request: Literal["pilot", "call"]
+    request: Literal["pilot", "call", "upgrade"]  # P3: "upgrade" = upgrade or more pursuits
     message: str | None = Field(default=None, max_length=1000)
     phone: str | None = Field(default=None, max_length=40)
 

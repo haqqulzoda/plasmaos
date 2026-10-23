@@ -4593,3 +4593,54 @@
     justify-content: flex-start;
   }
 }
+
+/* P3 plans: the in-app notice at 80% and 100% of a plan's pursuits, the Explore check, introductions. */
+.plan-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4) var(--ds-space-5);
+  border: 1px solid var(--ds-border-subtle);
+  border-inline-start-width: 4px;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-background-subtle);
+}
+
+.plan-notice-near {
+  border-inline-start-color: var(--ds-warning);
+}
+
+.plan-notice-reached {
+  border-inline-start-color: var(--ds-danger);
+}
+
+.plan-notice > svg {
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  margin-block-start: 2px;
+}
+
+.plan-notice > div {
+  display: grid;
+  flex: 1;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.plan-notice p,
+.explore-check-status,
+.partner-allowance {
+  margin: 0;
+}
+
+.plan-notice-sent {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-font-size-sm);
+}
+
+@media (max-width: 639px) {
+  .plan-notice {
+    flex-wrap: wrap;
+  }
+}

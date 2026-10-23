@@ -135,3 +135,57 @@
   min-inline-size: 8.5rem;
   white-space: nowrap;
 }
+
+/* P3 plans on the organizations page. */
+.admin-plan-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+  white-space: nowrap;
+}
+
+.admin-plan-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--ds-space-3);
+  margin: 0;
+}
+
+.admin-plan-summary dt {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-font-size-sm);
+}
+
+.admin-plan-summary dd {
+  margin: 0;
+}
+
+.admin-plan-grant {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.admin-plan-grant-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr;
+  gap: var(--ds-space-3);
+}
+
+.admin-plan-detail h3 {
+  margin: 0 0 var(--ds-space-2);
+  font-size: var(--ds-font-size-md, 1rem);
+}
+
+.admin-plan-list {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding-inline-start: var(--ds-space-5);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) {
+  .admin-plan-grant-row {
+    grid-template-columns: 1fr;
+  }
+}

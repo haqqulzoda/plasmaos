@@ -51,6 +51,7 @@ from app.services.invitations import (
     revoke_email_invitation,
 )
 from app.services.memberships import LastOwnerError, MembershipError, MembershipNotFoundError, MembershipPermissionError, activate_invitation, change_membership_role, invite_member, revoke_membership
+from app.schemas.plans import PlanStatusResponse
 from app.services.organization_context import OrganizationAccessDeniedError, OrganizationContextRequiredError, resolve_organization_context
 
 
@@ -105,8 +106,11 @@ def _invitation_http_error(exc: Exception) -> HTTPException:
 
 
 async def _context(db: AsyncSession, user: User, organization_id: UUID | None):
+    # P3: team management is open to explore organizations too (two users on Explore).
     try:
-        return await resolve_organization_context(db, user_id=user.id, organization_id=organization_id)
+        return await resolve_organization_context(
+            db, user_id=user.id, organization_id=organization_id, allow_explore=True,
+        )
     except OrganizationContextRequiredError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except OrganizationAccessDeniedError as exc:
@@ -139,6 +143,18 @@ async def get_organization_context(
         display_name=context.organization.display_name, membership_id=context.membership.id,
         membership_role=context.membership.role, membership_state=context.membership.state,
     )
+
+
+@router.get("/plan", response_model=PlanStatusResponse)
+async def get_organization_plan(
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> PlanStatusResponse:
+    """P3: the organization's plan, this period's usage and limits, and what the plan includes."""
+    from app.services.plans import plan_status
+
+    context = await _context(db, current_user, x_organization_id)
+    return PlanStatusResponse(**await plan_status(db, context.organization))
 
 
 @router.get("/{organization_id}/members", response_model=list[MembershipResponse])
@@ -196,6 +212,7 @@ async def create_invitation(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> MembershipResponse:
     context = await _context(db, current_user, organization_id)
+    await _require_seat(db, organization_id)
     try:
         membership = await invite_member(db, organization_id=organization_id, actor_membership_id=context.membership.id, user_id=payload.user_id)
     except MembershipPermissionError as exc:
@@ -256,6 +273,16 @@ async def revoke_member(
 # ---- R3 Task 1: invitations by e-mail ------------------------------------------------------------
 
 
+async def _require_seat(db: AsyncSession, organization_id: UUID) -> None:
+    """P3: the plan's user limit (Explore: 2 users, members and open invitations together)."""
+    from app.services.plans import PlanUserLimitError, check_seat_available
+
+    try:
+        await check_seat_available(db, organization_id)
+    except PlanUserLimitError as exc:
+        raise HTTPException(exc.status_code, detail=exc.detail()) from exc
+
+
 async def _require_owner_context(db: AsyncSession, user: User, organization_id: UUID):
     context = await _context(db, user, organization_id)
     if context.membership.role.value != "OWNER":
@@ -280,6 +307,7 @@ async def create_email_invitation_endpoint(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> EmailInvitationResponse:
     context = await _require_owner_context(db, current_user, organization_id)
+    await _require_seat(db, organization_id)
     try:
         issued = await create_email_invitation(
             db, organization_id=organization_id, actor_membership_id=context.membership.id,

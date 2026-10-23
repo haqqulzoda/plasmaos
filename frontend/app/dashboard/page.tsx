@@ -1,5 +1,6 @@
 "use client";
 
+import { PlanNotice } from "@/components/plans/PlanNotice";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
@@ -448,6 +449,7 @@ export default function DashboardPage() {
           </div>
         }
       />
+      <PlanNotice />
 
       {state.failures.length > 0 && (
         <Alert

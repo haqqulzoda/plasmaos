@@ -399,7 +399,9 @@
         "later": "Apply after award; not needed for this submission.",
         "settled": "Marked supported or not applicable by a reviewer."
       }
-    }
+    },
+    "planLimit": "Your plan's pursuits for this period are used. Upgrade or add pursuits to analyse a new tender.",
+    "planExploreLimit": "This month's free tender check is used. Start a pilot, or check another tender next month."
   },
   "team": {
     "loading": "Loading candidate records…",
@@ -724,7 +726,11 @@
       "sourcingRequested": "Plasma is sourcing an expert for this position.",
       "yourRequests": "Your requests to Plasma",
       "expertSourcing": "Expert sourcing",
-      "teamMessage": "Plasma team"
+      "teamMessage": "Plasma team",
+      "introductionLimit": "Your plan's introductions for this period are used. Upgrade, or ask Plasma to add introductions.",
+      "introductionsUsed": "Introductions by our team: {used} of {limit} used this period.",
+      "introductionsUnlimited": "Introductions by our team: unlimited on your plan (fair use).",
+      "notOnPlan": "Partner and expert search is not part of your plan. Upgrade to search the Plasma network and public award records."
     }
   },
   "library": {

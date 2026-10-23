@@ -55,7 +55,25 @@ export type OrganizationPanelItem = {
     last_activity_at: string | null;
     created_at: string;
     demo: boolean;
+    // P3: plan, overrides and this period's usage.
+    plan: string;
+    pursuit_limit_override: number | null;
+    introduction_limit_override: number | null;
+    period_start: string | null;
+    period_end: string | null;
+    pursuits_used: number;
+    pursuit_limit: number | null;
+    pursuit_notice: 'none' | 'near_limit' | 'limit_reached';
+    introductions_used: number;
+    introduction_limit: number | null;
+    users_used: number;
+    user_limit: number | null;
 };
+
+/** "3 / 24", "3 / unlimited". */
+export function usageLabel(used: number, limit: number | null): string {
+    return `${used} / ${limit === null ? 'unlimited' : limit}`;
+}
 
 export const ORGANIZATION_ACCESS_STATES = ['explore', 'pilot', 'paid', 'disabled'] as const;
 export type OrganizationAccessState = (typeof ORGANIZATION_ACCESS_STATES)[number];

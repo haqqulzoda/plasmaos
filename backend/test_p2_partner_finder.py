@@ -31,7 +31,7 @@ from app.services.partner_finder import (
     rank_firms,
 )
 
-HEAD = "20261023_0001_p2_partner_finder"
+HEAD = "20261024_0001_p3_plans_limits"
 P1_HEAD = "20261016_0002_p1_organization_access"
 SUGGESTION_KEYS = {
     "rank", "firm_key", "firm_name", "firm_country", "presence", "presence_matches_gap", "match_strength",
@@ -382,6 +382,8 @@ def test_postgres_suggestions_requests_queue_isolation_and_scenarios(monkeypatch
                 await connection.execute(
                     "UPDATE tenders SET title=$2, country='Uzbekistan', procurement_category='Consultant Services' "
                     "WHERE id=$1", ids["tender"], TENDER_TITLE)
+                # P3: introductions are unlimited on Enterprise, so this flow tests P2, not the quota.
+                await connection.execute("UPDATE organizations SET plan='enterprise' WHERE id=$1", organization_a)
                 ids["operator"] = uuid4()
                 await connection.execute(
                     "INSERT INTO users(id,google_id,email,name,subscription_tier,is_admin,approval_status,platform_role,"

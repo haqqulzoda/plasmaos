@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge, StatusBadge, Surface } from '@/components/ui/Display';
 import { Textarea } from '@/components/ui/Forms';
 import { api } from '@/lib/api';
+import { PLAN_STATUS_EVENT, planErrorCode, type PlanStatus } from '@/lib/plans';
 import type {
   ExpertSuggestions,
   PartnerFinderOverview,
@@ -19,7 +20,7 @@ import type {
   PartnerSuggestion,
   PartnerSuggestions,
   PublicAward,
-} from '@/types/pursuit';
+} from '@/types/partnerFinder';
 
 type Props = {
   pursuitId: string;
@@ -48,17 +49,21 @@ function RequestForm({ kind, label, help, onSubmit }: {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<'failed' | 'quota' | null>(null);
   if (!open) return <Button size="sm" variant={kind === 'INTRODUCTION' ? 'primary' : 'secondary'} leadingIcon={<Handshake aria-hidden />} onClick={() => setOpen(true)}>{label}</Button>;
   const submit = async () => {
-    setBusy(true); setError(false);
+    setBusy(true); setError(null);
     try { await onSubmit(note.trim()); setOpen(false); setNote(''); }
-    catch { setError(true); }
+    catch (failure) {
+      // P3: the plan's introductions are used (402).
+      setError(planErrorCode(failure) === 'PLAN_INTRODUCTION_LIMIT' ? 'quota' : 'failed');
+      window.dispatchEvent(new Event(PLAN_STATUS_EVENT));
+    }
     finally { setBusy(false); }
   };
   return <div className="partner-request-form">
     <Textarea label={t('note')} helper={help} rows={2} maxLength={2000} value={note} onChange={(event) => setNote(event.target.value)} />
-    {error && <p className="pursuit-upload-error" role="alert">{t('requestFailed')}</p>}
+    {error && <p className="pursuit-upload-error" role="alert">{t(error === 'quota' ? 'introductionLimit' : 'requestFailed')}</p>}
     <div className="partner-request-actions">
       <Button size="sm" loading={busy} onClick={() => void submit()}>{t('sendRequest')}</Button>
       <Button size="sm" variant="secondary" disabled={busy} onClick={() => setOpen(false)}>{t('cancel')}</Button>
@@ -121,6 +126,7 @@ function FirmSuggestions({ gap, analysisRunId, pursuitId, headers, refresh }: {
       analysis_run_id: analysisRunId, gap_id: gap.gap_id, kind: 'INTRODUCTION', firm_key: suggestion.firm_key, note: note || null,
     }, { headers });
     await Promise.all([load(), refresh()]);
+    window.dispatchEvent(new Event(PLAN_STATUS_EVENT));
   };
   if (!result) return <div className="partner-finder-actions">
     <Button size="sm" loading={loading} leadingIcon={<Search aria-hidden />} onClick={() => void load()}>{t('suggestFirms')}</Button>
@@ -159,6 +165,7 @@ function ExpertOptions({ gap, analysisRunId, pursuitId, headers, refresh }: {
       analysis_run_id: analysisRunId, gap_id: gap.gap_id, kind: 'EXPERT_SOURCING', note: note || null,
     }, { headers });
     await Promise.all([load(), refresh()]);
+    window.dispatchEvent(new Event(PLAN_STATUS_EVENT));
   };
   return <div className="partner-suggestions">
     {loading && !result && <p className="ds-muted">{t('loadingExperts')}</p>}
@@ -202,6 +209,28 @@ function GapCard({ gap, analysisRunId, pursuitId, headers, refresh }: {
   </Surface>;
 }
 
+/** P3: the plan's introductions this period ("Introductions: 1 of 2 used"). */
+function IntroductionAllowance({ headers }: { headers: Props['headers'] }) {
+  const t = useTranslations('pursuits.team.partnerFinder');
+  const [plan, setPlan] = useState<PlanStatus | null>(null);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    const refresh = () => setVersion((value) => value + 1);
+    window.addEventListener(PLAN_STATUS_EVENT, refresh);
+    return () => window.removeEventListener(PLAN_STATUS_EVENT, refresh);
+  }, []);
+  useEffect(() => {
+    let active = true;
+    api.get<PlanStatus>('/organizations/plan', { headers }).then((response) => { if (active) setPlan(response.data); }, () => undefined);
+    return () => { active = false; };
+  }, [headers, version]);
+  if (!plan) return null;
+  const { used, limit } = plan.introductions;
+  return <p className="partner-allowance ds-text-small" data-introductions-used={used}>
+    {limit === null ? t('introductionsUnlimited') : t('introductionsUsed', { used, limit })}
+  </p>;
+}
+
 function RequestList({ requests }: { requests: PartnerRequest[] }) {
   const t = useTranslations('pursuits.team.partnerFinder');
   if (!requests.length) return null;
@@ -225,16 +254,19 @@ function RequestList({ requests }: { requests: PartnerRequest[] }) {
 export function PursuitPartnerFinder({ pursuitId, headers }: Props) {
   const t = useTranslations('pursuits.team.partnerFinder');
   const [overview, setOverview] = useState<PartnerFinderOverview | null>(null);
-  const [error, setError] = useState(false);
+  // P3: 'plan' when the organization's plan has no partner search (403 PLAN_FEATURE).
+  const [error, setError] = useState<false | 'failed' | 'plan'>(false);
+  const failed = (failure: unknown) => setError(planErrorCode(failure) === 'PLAN_FEATURE' ? 'plan' : 'failed');
   const load = useCallback(() => api.get<PartnerFinderOverview>(
     `/pursuits/${encodeURIComponent(pursuitId)}/partner-finder`, { headers },
-  ).then((response) => { setOverview(response.data); setError(false); }, () => setError(true)), [headers, pursuitId]);
+  ).then((response) => { setOverview(response.data); setError(false); }, failed), [headers, pursuitId]);
   useEffect(() => {
     let active = true;
     api.get<PartnerFinderOverview>(`/pursuits/${encodeURIComponent(pursuitId)}/partner-finder`, { headers })
-      .then((response) => { if (active) { setOverview(response.data); setError(false); } }, () => { if (active) setError(true); });
+      .then((response) => { if (active) { setOverview(response.data); setError(false); } }, (failure) => { if (active) failed(failure); });
     return () => { active = false; };
   }, [headers, pursuitId]);
+  if (error === 'plan') return <p className="ds-muted partner-not-on-plan">{t('notOnPlan')}</p>;
   if (error) return <p className="pursuit-upload-error" role="alert">{t('loadFailed')}</p>;
   if (!overview?.analysis_run_id) return null;
   const analysisRunId = overview.analysis_run_id;
@@ -250,6 +282,7 @@ export function PursuitPartnerFinder({ pursuitId, headers }: Props) {
     {overview.gaps.length
       ? overview.gaps.map((gap) => <GapCard key={gap.gap_id} {...{ gap, analysisRunId, pursuitId, headers }} refresh={load} />)
       : <p className="ds-muted">{t('noGaps')}</p>}
+    <IntroductionAllowance headers={headers} />
     <RequestList requests={overview.requests} />
   </section>;
 }

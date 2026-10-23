@@ -21,6 +21,7 @@ from app.services.admin_activity import (
     SOURCE_ADMIN_API,
     record_admin_audit_event,
 )
+from app.schemas.plans import OrganizationPlanDetail, PlanGrantCreate
 from app.services.admin_panels import (
     RUN_KINDS,
     AdminPanelError,
@@ -96,12 +97,31 @@ class OrganizationPanelItem(BaseModel):
     last_activity_at: datetime | None = None
     created_at: datetime
     demo: bool
+    # P3: the plan and this period's usage.
+    plan: str = "explore"
+    pursuit_limit_override: int | None = None
+    introduction_limit_override: int | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    pursuits_used: int = 0
+    pursuit_limit: int | None = None
+    pursuit_notice: str = "none"
+    introductions_used: int = 0
+    introduction_limit: int | None = None
+    users_used: int = 0
+    user_limit: int | None = None
 
 
 class OrganizationAccessUpdate(BaseModel):
-    """Every field is required: the form always sends the whole plan (null clears a field)."""
+    """Every field is required: the form always sends the whole plan (null clears a field).
+
+    P3: ``plan`` sets the access state (explore, pilot, or paid for the paid plans) unless
+    ``access_state`` is disabled; the overrides persist across plan periods."""
 
     access_state: Literal["explore", "pilot", "paid", "disabled"]
+    plan: Literal["explore", "pilot", "pursuit_desk", "agent", "enterprise", "per_tender"] | None = None
+    pursuit_limit_override: int | None = Field(default=None, ge=0, le=100000)
+    introduction_limit_override: int | None = Field(default=None, ge=0, le=100000)
     plan_started_on: date | None = None
     plan_ends_on: date | None = None
     success_criteria: str | None = Field(default=None, max_length=4000)
@@ -177,7 +197,9 @@ async def update_organization_access(
             db, organization=organization, state=payload.access_state, actor_user=current_user,
             actor_label="admin/panels/organizations", reason=(payload.reason or "").strip() or None,
             plan_started_on=payload.plan_started_on, plan_ends_on=payload.plan_ends_on,
-            success_criteria=payload.success_criteria,
+            success_criteria=payload.success_criteria, plan=payload.plan,
+            pursuit_limit_override=payload.pursuit_limit_override,
+            introduction_limit_override=payload.introduction_limit_override,
         )
     except OrganizationAccessError as exc:
         await db.rollback()
@@ -185,3 +207,37 @@ async def update_organization_access(
     await db.commit()
     row = next(item for item in await organization_panel(db) if item["organization_id"] == organization_id)
     return OrganizationPanelItem(**row)
+
+
+@router.get("/organizations/{organization_id}/plan", response_model=OrganizationPlanDetail)
+async def organization_plan_detail(organization_id: UUID, db: AsyncSession = Depends(get_db)) -> OrganizationPlanDetail:
+    """P3: plan, usage, grants and the plan's audit trail for one organization."""
+    from app.services.admin_panels import organization_plan_detail as detail
+
+    organization = await db.get(Organization, organization_id)
+    if organization is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    return OrganizationPlanDetail(**await detail(db, organization))
+
+
+@router.post("/organizations/{organization_id}/plan-grants", response_model=OrganizationPlanDetail,
+             status_code=status.HTTP_201_CREATED)
+async def grant_organization_allowance(
+    organization_id: UUID, payload: PlanGrantCreate,
+    current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
+) -> OrganizationPlanDetail:
+    """P3: extra pursuits or introductions for the current plan period (admins only; audited)."""
+    from app.services.admin_panels import organization_plan_detail as detail
+    from app.services.plans import add_grant
+
+    organization = await db.get(Organization, organization_id, with_for_update=True)
+    if organization is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    try:
+        await add_grant(db, organization=organization, kind=payload.kind, quantity=payload.quantity,
+                        reason=payload.reason, actor_user=current_user)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(422, detail=str(exc)) from exc
+    await db.commit()
+    return OrganizationPlanDetail(**await detail(db, organization))
