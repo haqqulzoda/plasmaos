@@ -2,7 +2,7 @@
 
 Branch `pilot/b1-billing` on `pilot/p3-plans-limits` (worktree `D:\projects\plasmaos-b1`). Local only: nothing
 pushed or deployed. One additive migration (`20261025_0001_b1_billing`). Deploy note:
-[`docs/ops/DEPLOY_5_B1_BILLING_NOTE.md`](../../ops/DEPLOY_5_B1_BILLING_NOTE.md).
+[`docs/ops/DEPLOY_5_RUNBOOK.md`](../../ops/DEPLOY_5_RUNBOOK.md) (RC-5; the B1 note is merged into it).
 
 **Polar sandbox (25 Oct):** the token, the three products, the checkout request and the pilot-credit discount were
 checked against the real sandbox (§9); a webhook from Polar to this app has not been received yet (the endpoint
@@ -281,3 +281,19 @@ and, after an admin "canceled", its end. All 7 B1 tests pass; P3, P2, R3-04 and 
 known Windows CRLF-hash test); frontend 419/419, `tsc`, ESLint and the token audit clean. Screens 01–08 were
 re-captured with the approved terms (03: the terms step with its tables; 06: the invoice with the 7-day due date,
 the day-10 rule and the credit window), and `emails-sample.md` shows the welcome e-mail with the terms PDF attached.
+
+## 13. RC-5 (release for Deploy 5, 25 Oct)
+
+| Item | Done |
+| --- | --- |
+| Manage subscription / cancel renewal | Card customers: "Manage subscription" opens Polar's customer portal (`POST /billing/portal`, a customer session by the organization's external id; the sandbox accepted the request shape). Bank-transfer Pursuit Desk: "Cancel renewal" records the request (audited `BILLING_CANCEL_REQUESTED`, team alert); Admin → Billing shows "cancel requested" and "Confirm cancellation" (audited `BILLING_CANCEL_CONFIRMED`, status canceled, no renewal invoice, the plan ends on its renewal date) |
+| Per-tender review | Partner search included (P3 gate fixed: terms §1). Not self-serve: an admin creates a one-use checkout link (`billing_offers`, token hash only, 14 days, bound to the organization, used once) or issues the invoice with the signed order form recorded as the terms acceptance (`accepted_via = signed`). Each purchase adds one pursuit to the per-tender plan |
+| Proforma | PDF title "Payment invoice (proforma) PL-…", footer "The official electronic invoice is issued after payment."; e-mail subject and body likewise (4 languages) |
+| ref / utm_* | `/billing/start` is a route handler: keeps `plan`, `offer`, `ref`, `utm_*`, stores `ref`/`utm_*` in a 30-day cookie; the checkout sends them; stored on `billing_orders.attribution` (cleaned: six keys, 200 characters); a signed-out buyer returns to the same checkout after sign-in |
+| Pilot end dates | Every Pilot ends on its end date (bought, `pilot_setup.py` or admin-set). `scripts/deploy5_pilot_end_dates.py` lists pilots (flags those that would end at the first run) and sets start + 3 months on `pilot_setup.py` pilots |
+| Webhook / POLAR_ENV | Route tested public and signature-gated (403 without or with a forged signature, 405 on GET); `POLAR_ENV=production` refused outside production and without token, secret and product ids; the API base follows the switch both ways |
+| Bank details | UZS invoices from Aloqa Bank (MFO 00401, beneficiary Plasma AI Solutions); `INVOICE_USD_ENABLED=false`: non-residents see card only |
+| Polar discount codes | The checkout now accepts a team code (the owner's one-use 100% live-test code) unless the app applies the pilot credit itself |
+| Sandbox | Four products checked (pilot, Pursuit Desk yearly, extra pursuit, per-tender) |
+
+Release notes: [`docs/ops/DEPLOY_5_RUNBOOK.md`](../../ops/DEPLOY_5_RUNBOOK.md) (gate, rehearsal, images).
