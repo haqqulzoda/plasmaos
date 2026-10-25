@@ -1,6 +1,6 @@
 """B1: billing. Customers, terms acceptances, orders, invoices (PL-YYYY-NNN), payments, the webhook
 inbox, the one-time pilot credit, CBU rates, onboarding tasks; organizations.billing_status; the
-BILLING e-mail kinds and category and the BILLING team alert.
+BILLING e-mail kinds and category and the BILLING team alert; one-use offers for admin-sold products (RC-5).
 
 Additive; no backfill (plans set by admins keep billing_status NULL). Downgrade drops the tables,
 the column, and the e-mails and alerts of the new kinds.
@@ -77,8 +77,11 @@ def upgrade() -> None:
         sa.Column("text_sha256", sa.String(length=64), nullable=False),
         sa.Column("ip_address", sa.String(length=64), nullable=True),
         sa.Column("user_agent", sa.String(length=300), nullable=True),
+        sa.Column("accepted_via", sa.String(length=20), server_default=sa.text("'online'"), nullable=False),
+        sa.Column("note", sa.Text(), nullable=True),
         sa.Column("accepted_at", sa.DateTime(timezone=True), server_default=_now(), nullable=False),
         sa.CheckConstraint("text_sha256 ~ '^[0-9a-f]{64}$'", name="ck_terms_acceptance_hash"),
+        sa.CheckConstraint("accepted_via IN ('online','signed')", name="ck_terms_acceptance_via"),
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
@@ -110,9 +113,17 @@ def upgrade() -> None:
         sa.Column("paid_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("refunded_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("refund_note", sa.Text(), nullable=True),
+        sa.Column("attribution", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("cancel_requested_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("cancel_requested_by_user_id", UUID, nullable=True),
+        sa.Column("cancel_confirmed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("cancel_confirmed_by_user_id", UUID, nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=_now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=_now(), nullable=False),
-        sa.CheckConstraint("product IN ('pilot','pursuit_desk','extra_pursuit')", name="ck_billing_order_product"),
+        sa.CheckConstraint(
+            "product IN ('pilot','pursuit_desk','extra_pursuit','per_tender')", name="ck_billing_order_product"
+        ),
+        sa.CheckConstraint("attribution IS NULL OR jsonb_typeof(attribution) = 'object'", name="ck_billing_order_attribution"),
         sa.CheckConstraint("method IN ('card','bank_transfer')", name="ck_billing_order_method"),
         sa.CheckConstraint(
             "status IN ('pending','awaiting_payment','paid','lapsed','refunded','canceled')", name="ck_billing_order_status"
@@ -127,6 +138,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["terms_acceptance_id"], ["terms_acceptances.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["renewal_of_order_id"], ["billing_orders.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["cancel_requested_by_user_id"], ["users.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["cancel_confirmed_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("provider_checkout_id"),
     )
@@ -283,6 +296,29 @@ def upgrade() -> None:
     )
     op.create_index("ix_onboarding_tasks_status", "billing_onboarding_tasks", ["status", "created_at"])
 
+    op.create_table(
+        "billing_offers",
+        sa.Column("id", UUID, nullable=False),
+        sa.Column("organization_id", UUID, nullable=False),
+        sa.Column("product", sa.String(length=20), nullable=False),
+        sa.Column("token_sha256", sa.String(length=64), nullable=False),
+        sa.Column("note", sa.Text(), nullable=True),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("order_id", UUID, nullable=True),
+        sa.Column("created_by_user_id", UUID, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=_now(), nullable=False),
+        sa.CheckConstraint(
+            "product IN ('pilot','pursuit_desk','extra_pursuit','per_tender')", name="ck_billing_offer_product"
+        ),
+        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["order_id"], ["billing_orders.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("token_sha256"),
+        sa.UniqueConstraint("order_id"),
+    )
+    op.create_index("ix_billing_offers_organization", "billing_offers", ["organization_id", "created_at"])
+
     op.drop_constraint("ck_admin_alert_kind", "admin_alerts", type_="check")
     op.create_check_constraint("ck_admin_alert_kind", "admin_alerts", f"kind IN ({NEW_ALERT_KINDS})")
     op.drop_constraint("ck_email_delivery_kind", "email_deliveries", type_="check")
@@ -304,6 +340,8 @@ def downgrade() -> None:
     op.execute("DELETE FROM admin_alerts WHERE kind = 'BILLING'")
     op.drop_constraint("ck_admin_alert_kind", "admin_alerts", type_="check")
     op.create_check_constraint("ck_admin_alert_kind", "admin_alerts", f"kind IN ({OLD_ALERT_KINDS})")
+    op.drop_index("ix_billing_offers_organization", table_name="billing_offers")
+    op.drop_table("billing_offers")
     op.drop_index("ix_onboarding_tasks_status", table_name="billing_onboarding_tasks")
     op.drop_table("billing_onboarding_tasks")
     op.drop_table("billing_fx_rates")

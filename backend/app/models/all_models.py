@@ -76,7 +76,7 @@ from app.models.partner_finder import PartnerRequest, PartnerRequestEvent, TeamS
 from app.models.plans import OrganizationPlanGrant, OrganizationPursuitUsage  # noqa: F401,E402
 from app.models.billing import (  # noqa: F401,E402
     BillingCustomer, BillingEvent, BillingInvoice, BillingOrder, BillingPayment, FxRate, InvoiceCounter,
-    OnboardingTask, PilotCreditRedemption, TermsAcceptance,
+    OnboardingTask, PilotCreditRedemption, TermsAcceptance, BillingOffer,
 )
 
 

@@ -4,7 +4,10 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { BILLING_ERROR_CODES, billingErrorCode, billingErrorKey, parseMarkdown, productFrom } from "../lib/billing.ts";
+import {
+  ATTRIBUTION_COOKIE, BILLING_ERROR_CODES, attributionFrom, billingErrorCode, billingErrorKey, parseMarkdown, productFrom,
+  resolveAttribution,
+} from "../lib/billing.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const read = (path) => readFileSync(join(ROOT, path), "utf8");
@@ -13,6 +16,19 @@ const json = (path) => JSON.parse(read(path));
 test("checkout accepts only the products sold in the app", () => {
   assert.deepEqual(["pilot", "pursuit_desk", "extra_pursuit"].map(productFrom), ["pilot", "pursuit_desk", "extra_pursuit"]);
   for (const value of ["agent", "enterprise", "", null, undefined, "pilot "]) assert.equal(productFrom(value), null);
+  // RC-5: the per-tender review only through the team's one-use link.
+  assert.equal(productFrom("per_tender"), null);
+  assert.equal(productFrom("per_tender", "tok"), "per_tender");
+});
+
+test("ref and utm_* reach the order: from the URL, else from the cookie /billing/start set", () => {
+  const params = new URLSearchParams("plan=pilot&ref=landing&utm_source=linkedin&utm_medium=&other=x");
+  assert.deepEqual(attributionFrom(params), { ref: "landing", utm_source: "linkedin" });
+  assert.equal(attributionFrom(new URLSearchParams("plan=pilot")), null);
+  const cookie = `a=1; ${ATTRIBUTION_COOKIE}=${encodeURIComponent("ref=partner&utm_campaign=oct")}; b=2`;
+  assert.deepEqual(resolveAttribution(new URLSearchParams("plan=pilot"), cookie), { ref: "partner", utm_campaign: "oct" });
+  assert.deepEqual(resolveAttribution(params, cookie), { ref: "landing", utm_source: "linkedin" });
+  assert.equal(resolveAttribution(new URLSearchParams(""), `${ATTRIBUTION_COOKIE}=%E0%A4%A`), null);
 });
 
 test("billing errors map to explained codes, anything else to generic", () => {
@@ -67,7 +83,15 @@ test("checkout, notices, explore and admin are wired", () => {
   assert.doesNotMatch(start, /await update\(\)/);
   assert.doesNotMatch(read("app/dashboard/billing/success/page.tsx"), /useSession/);
   assert.match(read("app/dashboard/billing/success/page.tsx"), /api\.get<OrderStatus>\('\/billing\/orders', \{ params: \{ checkout_id: checkoutId \} \}\)/);
-  assert.match(read("app/billing/start/page.tsx"), /redirect\(value \? `\/dashboard\/billing\/start\?plan=\$\{encodeURIComponent\(value\)\}`/);
+  const route = read("app/billing/start/route.ts");
+  assert.match(route, /for \(const key of \['plan', 'offer', 'ref', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'\]\)/);
+  assert.match(route, /response\.cookies\.set\(ATTRIBUTION_COOKIE/);
+  assert.match(route, /headers: \{ Location: target/);
+  assert.match(read("proxy.ts"), /pathname\.startsWith\('\/dashboard\/billing'\) \? `\$\{pathname\}\$\{search\}` : pathname/);
+  assert.match(start, /offer, attribution \}\);/);
+  const page = read("app/dashboard/billing/page.tsx");
+  assert.match(page, /api\.post<\{ url: string \}>\('\/billing\/portal'\)/);
+  assert.match(page, /api\.post<BillingOverview>\('\/billing\/cancel-renewal'\)/);
   assert.match(read("app/dashboard/layout.tsx"), /const BILLING_PREFIX = '\/dashboard\/billing';/);
   assert.match(read("app/dashboard/layout.tsx"), /!pathname\.startsWith\(BILLING_PREFIX\)/);
   assert.match(read("app/dashboard/explore/page.tsx"), /href="\/dashboard\/billing\/start\?plan=pilot"/);
@@ -76,6 +100,8 @@ test("checkout, notices, explore and admin are wired", () => {
   for (const kind of ["suspended", "awaiting_payment", "annual_offer"]) assert.match(notice, new RegExp(`data-billing-notice="${kind}"`));
   assert.match(read("components/shell/AdminShell.tsx"), /href: '\/admin\/billing'/);
   const admin = read("app/admin/billing/page.tsx");
-  for (const path of ["/mark-paid", "/refund", "/override", "/onboarding/"]) assert.ok(admin.includes(path), path);
+  for (const path of ["/mark-paid", "/refund", "/override", "/onboarding/", "/offers", "/invoices`", "/confirm-cancel"]) {
+    assert.ok(admin.includes(path), path);
+  }
   assert.match(read("app/admin/audit/page.tsx"), /'BILLING_PLAN_ACTIVATED'/);
 });

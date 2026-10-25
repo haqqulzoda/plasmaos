@@ -43,7 +43,7 @@ def test_catalogue_prices_products_and_credit() -> None:
     assert PRODUCTS_FOR_SALE == ("pilot", "pursuit_desk", "extra_pursuit")
     assert {code: (p.plan, p.amount_cents, p.term_months, p.extra_pursuits) for code, p in PRODUCTS.items()} == {
         "pilot": ("pilot", 90_000, 3, 0), "pursuit_desk": ("pursuit_desk", 600_000, 12, 0),
-        "extra_pursuit": (None, 20_000, None, 1),
+        "extra_pursuit": (None, 20_000, None, 1), "per_tender": ("per_tender", 40_000, None, 0),
     }
     assert PILOT_CREDIT_CENTS == 90_000
     assert add_months(date(2026, 10, 24), 3) == date(2027, 1, 24)
@@ -89,6 +89,85 @@ def test_settings_refuse_polar_production_outside_production() -> None:
     assert billing_polar.POLAR_API["sandbox"] == "https://sandbox-api.polar.sh"
 
 
+def test_polar_env_switch_both_ways(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RC-5: production Polar only in a production environment and only with its keys; the API base follows."""
+    from app.core.config import Settings, settings
+
+    release = dict(POSTGRES_SERVER="x", POSTGRES_USER="x", POSTGRES_PASSWORD="x", POSTGRES_DB="x",
+                   SECRET_KEY="s" * 40, AUTH_BRIDGE_SECRET="b" * 40, TELEGRAM_BOT_TOKEN="x",
+                   ENVIRONMENT="production", BACKEND_CORS_ORIGINS=["https://app.example.com"], _env_file=None)
+    assert Settings(**release).POLAR_ENV == "sandbox"  # production may still use the sandbox
+    with pytest.raises(ValueError, match="requires POLAR_ACCESS_TOKEN"):
+        Settings(**release, POLAR_ENV="production")
+    live = Settings(**release, POLAR_ENV="production", POLAR_ACCESS_TOKEN="polar_oat_live",
+                    POLAR_WEBHOOK_SECRET="whsec_live", POLAR_PRODUCT_IDS='{"pilot": "p"}')
+    assert live.POLAR_ENV == "production"
+    monkeypatch.setattr(settings, "POLAR_ENV", "production")
+    assert billing_polar.api_base() == "https://api.polar.sh"
+    monkeypatch.setattr(settings, "POLAR_ENV", "sandbox")
+    assert billing_polar.api_base() == "https://sandbox-api.polar.sh"
+
+
+def test_polar_checkout_body_allows_codes_unless_the_credit_applies() -> None:
+    """A team code (the owner's one-use 100% live-test code) can be entered unless the pilot credit is preset."""
+    import httpx
+
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(201, json={"id": "chk", "url": "https://polar.test/chk"})
+
+    client = billing_polar.PolarClient(token="polar_oat_test", transport=httpx.MockTransport(handler))
+    for discount in (None, "disc_1"):
+        asyncio.run(client.create_checkout(
+            product_id="prod", success_url="https://app.test/s", metadata={}, customer_email="a@firm.uz",
+            external_customer_id="org", customer_name="Firm", country="UZ", discount_id=discount))
+    assert [body["allow_discount_codes"] for body in bodies] == [True, False]
+    assert "customer_tax_id" not in bodies[0] and bodies[1]["discount_id"] == "disc_1"
+
+
+def test_webhook_route_is_public_and_signature_gated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RC-5: POST /api/v1/billing/webhooks/polar needs no session; an unsigned or forged call gets 403."""
+    import httpx
+    from app.core.config import settings
+    from app.main import app
+
+    monkeypatch.setattr(settings, "POLAR_WEBHOOK_SECRET", SECRET)
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://api.test") as client:
+            forged = await client.post("/api/v1/billing/webhooks/polar", content=b'{"type":"order.paid","data":{}}',
+                                       headers={"webhook-id": "msg_x", "webhook-timestamp": str(int(time.time())),
+                                                "webhook-signature": "v1,Zm9yZ2Vk", "content-type": "application/json"})
+            assert forged.status_code == 403 and forged.json() == {"detail": "webhook_signature_invalid"}
+            unsigned = await client.post("/api/v1/billing/webhooks/polar", content=b"{}")
+            assert unsigned.status_code == 403 and unsigned.json() == {"detail": "webhook_headers_missing"}
+            assert (await client.get("/api/v1/billing/webhooks/polar")).status_code == 405
+
+    asyncio.run(scenario())
+
+
+def test_deploy5_pilot_end_dates_plan() -> None:
+    """The data step: pilot_setup.py pilots get start + 3 months; others are listed; ends flagged."""
+    from scripts.deploy5_pilot_end_dates import PROFILE_MARKER, plan_rows
+
+    today = date(2026, 10, 26)
+    org = lambda start, end, name: SimpleNamespace(id=uuid4(), display_name=name, plan_started_on=start, plan_ends_on=end)
+    profile = lambda ours: SimpleNamespace(notes=f"{PROFILE_MARKER} {{}}" if ours else "approved by hand")
+    rows = plan_rows([
+        (org(date(2026, 10, 20), None, "A"), profile(True)),
+        (org(date(2026, 9, 1), date(2026, 12, 1), "B"), profile(True)),
+        (org(date(2026, 7, 1), date(2027, 7, 1), "C"), profile(True)),
+        (org(None, None, "D"), profile(True)),
+        (org(date(2026, 1, 5), date(2026, 4, 5), "E"), profile(False)),
+    ], today)
+    assert [(row["name"], row["action"], row["proposed_ends_on"], row["ends_at_first_run"]) for row in rows] == [
+        ("A", "set", "2027-01-20", False), ("B", "keep", "2026-12-01", False), ("C", "set", "2026-10-01", True),
+        ("D", "no_start_date", None, False), ("E", "listed_only", None, True),
+    ]
+
+
 def test_terms_text_is_the_docs_copy_and_hashed_with_lf() -> None:
     root = Path(__file__).resolve().parents[1]
     docs = (root / "docs" / "legal" / "PILOT_TERMS_v1.md").read_text(encoding="utf-8").replace("\r\n", "\n")
@@ -120,7 +199,14 @@ def test_invoice_pdf_renders_uzs_and_usd() -> None:
             fx_rate_date=date(2026, 10, 24) if currency == "UZS" else None,
             total_uzs=Decimal("11385450.00") if currency == "UZS" else None,
         )
-        assert render_invoice_pdf(invoice, order).startswith(b"%PDF")
+        pdf = render_invoice_pdf(invoice, order)
+        assert pdf.startswith(b"%PDF")
+        import fitz
+        document = fitz.open(stream=pdf, filetype="pdf")
+        text = " ".join(page.get_text() for page in document)
+        assert "Payment invoice (proforma) PL-2026-001" in text
+        assert "The official electronic invoice is issued after payment." in text
+        assert "Payment is due within 7 days" in " ".join(text.split())
 
 
 # ---- migration ------------------------------------------------------------------------------------
@@ -182,6 +268,9 @@ class FakePolar:
         number = len(self.checkouts)
         return {"id": f"chk_{number}", "url": f"https://sandbox.polar.sh/checkout/chk_{number}"}
 
+    async def create_customer_portal_url(self, *, external_customer_id: str) -> str:
+        return f"https://sandbox.polar.sh/portal/{external_customer_id}"
+
 
 def _request(body: bytes = b"", headers: dict[str, str] | None = None) -> Request:
     async def receive():
@@ -233,7 +322,8 @@ def test_postgres_card_bank_transfer_credit_refund_grace_and_isolation(monkeypat
     monkeypatch.setattr(billing_fx, "fetch_cbu_rate", cbu)
     for name, value in {
         "POLAR_ACCESS_TOKEN": "polar_oat_sandbox_test", "POLAR_WEBHOOK_SECRET": SECRET, "POLAR_ENV": "sandbox",
-        "POLAR_PRODUCT_IDS": json.dumps({"pilot": "prod_pilot", "pursuit_desk": "prod_desk", "extra_pursuit": "prod_extra"}),
+        "POLAR_PRODUCT_IDS": json.dumps({"pilot": "prod_pilot", "pursuit_desk": "prod_desk", "extra_pursuit": "prod_extra",
+                                          "per_tender": "prod_per_tender"}),
         "INVOICE_BANK_DETAILS_UZS": "Bank: Test Bank | Account: 2020 8000 0000 0000 0001 | MFO: 00000",
         "INVOICE_BANK_DETAILS_USD": "Bank: Test Bank | SWIFT: TESTUZ22 | Account: 2020 8840 0000 0000 0001",
         "SMTP_HOST": "smtp.plasma.test", "SMTP_FROM": "billing@plasma.test",
@@ -295,14 +385,16 @@ async def _user(db, ids, key):
     return await db.get(User, ids[key], populate_existing=True)
 
 
-async def _checkout(db, ids, user_key, organization_key, product, method, *, accept=True, sha=None):
+async def _checkout(db, ids, user_key, organization_key, product, method, *, accept=True, sha=None, offer=None,
+                    attribution=None):
     from app.api.endpoints import billing as endpoints
     from app.schemas.billing import CheckoutRequest
 
     current = terms()
     return await endpoints.billing_checkout(
         CheckoutRequest(product=product, method=method, terms_version=current["version"],
-                        terms_sha256=sha or current["sha256"], accept_terms=accept),
+                        terms_sha256=sha or current["sha256"], accept_terms=accept, offer=offer,
+                        attribution=attribution),
         _request(), x_organization_id=ids[f"org_{organization_key}"], current_user=await _user(db, ids, user_key), db=db)
 
 
@@ -343,7 +435,21 @@ async def _card_pilot(sessions, ids, fake, monkeypatch) -> None:
             await _checkout(db, ids, "user_a", "a", "extra_pursuit", "card")
         assert no_extra.value.detail["code"] == "plan_required"
 
-        started = await _checkout(db, ids, "user_a", "a", "pilot", "card")
+        # RC-5: no USD bank transfer until INVOICE_USD_ENABLED (non-residents: card only).
+        from app.core.config import settings
+        usd = await endpoints.billing_quote(product="pilot", offer=None, x_organization_id=ids["org_a"],
+                                            current_user=await _user(db, ids, "user_a"), db=db)
+        assert (usd.invoice_currency, usd.methods.card, usd.methods.bank_transfer) == ("USD", True, False)
+        settings.INVOICE_USD_ENABLED = True
+        try:
+            usd = await endpoints.billing_quote(product="pilot", offer=None, x_organization_id=ids["org_a"],
+                                                current_user=await _user(db, ids, "user_a"), db=db)
+            assert usd.methods.bank_transfer is True
+        finally:
+            settings.INVOICE_USD_ENABLED = False
+
+        started = await _checkout(db, ids, "user_a", "a", "pilot", "card", attribution={
+            "ref": "landing-pricing", "utm_source": "linkedin", "utm_campaign": "pilot-oct", "evil": "x" * 500})
         assert started.checkout_url == "https://sandbox.polar.sh/checkout/chk_1" and started.status == "pending"
         sent = fake.checkouts[-1]
         assert sent["product_id"] == "prod_pilot" and sent["discount_id"] is None
@@ -354,6 +460,7 @@ async def _card_pilot(sessions, ids, fake, monkeypatch) -> None:
                 acceptance.organization_id) == ("PILOT_TERMS_v1", terms()["sha256"], ids["user_a"], "203.0.113.7", ids["org_a"])
         order = await db.get(BillingOrder, started.order_id)
         assert order.terms_acceptance_id == acceptance.id and order.amount_cents == 90_000
+        assert order.attribution == {"ref": "landing-pricing", "utm_source": "linkedin", "utm_campaign": "pilot-oct"}
         assert (await db.get(Organization, ids["org_a"], populate_existing=True)).plan == "explore"  # not paid yet
 
         paid = _polar_order(order, "polar_ord_1")  # built now: a refused delivery rolls the session back
@@ -427,7 +534,7 @@ async def _desk_credit_subscription_refund(sessions, ids, fake) -> None:
     from app.models.tenancy import Organization
 
     async with sessions() as db:
-        quote = await endpoints.billing_quote(product="pursuit_desk", x_organization_id=ids["org_a"],
+        quote = await endpoints.billing_quote(product="pursuit_desk", offer=None, x_organization_id=ids["org_a"],
                                               current_user=await _user(db, ids, "user_a"), db=db)
         assert (quote.list_amount_cents, quote.credit_cents, quote.amount_cents) == (600_000, 90_000, 510_000)
         started = await _checkout(db, ids, "user_a", "a", "pursuit_desk", "card")
@@ -444,7 +551,7 @@ async def _desk_credit_subscription_refund(sessions, ids, fake) -> None:
             "pursuit_desk", "paid", add_months(today, 12))
         assert await db.scalar(select(func.count(PilotCreditRedemption.id))) == 1
         # The credit is applied once: no credit on a later quote.
-        later = await endpoints.billing_quote(product="pursuit_desk", x_organization_id=ids["org_a"],
+        later = await endpoints.billing_quote(product="pursuit_desk", offer=None, x_organization_id=ids["org_a"],
                                               current_user=await _user(db, ids, "user_a"), db=db)
         assert later.credit_cents == 0 and later.blocker == "already_on_plan"
 
@@ -626,9 +733,25 @@ async def _credit_window_end_renewal_and_cancel(sessions, ids) -> None:
         # Canceled before the next renewal date: the plan ends there (Explore), no new invoice.
         await endpoints.admin_mark_paid(renewal_invoice.id, MarkPaidRequest(reference="KAPITALBANK 000777"),
                                         current_user=await _user(db, ids, "admin"), db=db)
-        await endpoints.admin_override(ids["org_b"], BillingOverrideRequest(
-            billing_status="canceled", reason="Customer cancelled by e-mail before renewal"),
-            current_user=await _user(db, ids, "admin"), db=db)
+        # RC-5: the customer asks (Cancel renewal), the team confirms; both audited, the team alerted.
+        with pytest.raises(HTTPException) as early:
+            await endpoints.admin_confirm_cancel(renewal.id, current_user=await _user(db, ids, "admin"), db=db)
+        assert early.value.detail["code"] == "cancel_not_requested"
+        overview = await endpoints.billing_cancel_renewal(x_organization_id=ids["org_b"],
+                                                          current_user=await _user(db, ids, "user_b"), db=db)
+        assert overview.summary.renewal.cancel_requested_at is not None and overview.summary.renewal.canceled is False
+        with pytest.raises(HTTPException) as twice:
+            await endpoints.billing_cancel_renewal(x_organization_id=ids["org_b"],
+                                                   current_user=await _user(db, ids, "user_b"), db=db)
+        assert twice.value.detail["code"] == "cancel_requested"
+        customers = await endpoints.admin_billing_customers(db=db)
+        assert next(row for row in customers if row.organization_id == ids["org_b"]).cancel_requested is True
+        detail = await endpoints.admin_confirm_cancel(renewal.id, current_user=await _user(db, ids, "admin"), db=db)
+        assert detail.billing_status == "canceled"
+        assert {"BILLING_CANCEL_REQUESTED", "BILLING_CANCEL_CONFIRMED"} <= {row["action"] for row in detail.audit}
+        from app.models.admin_alerts import AdminAlert
+        assert await db.scalar(select(func.count(AdminAlert.id)).where(
+            AdminAlert.kind == "BILLING", AdminAlert.payload["event"].astext == "cancel_requested")) == 1
         counts = await run_billing_schedule(db, today=add_months(desk_end, 12))
         await db.commit()
         assert (counts["ended"], counts["renewed"]) == (1, 0)
@@ -677,3 +800,70 @@ async def _isolation_and_admin(sessions, ids) -> None:
             current_user=admin, db=db)
         assert (detail.plan, detail.billing_status) == ("agent", "paid")
         assert any(row["action"] == "BILLING_STATUS_CHANGED" for row in detail.audit)
+
+    await _portal_per_tender_and_pilot_without_order(sessions, ids)
+
+
+async def _portal_per_tender_and_pilot_without_order(sessions, ids) -> None:
+    from app.api.endpoints import billing as endpoints
+    from app.models.billing import BillingOrder, TermsAcceptance
+    from app.models.tenancy import Organization
+    from app.schemas.billing import AdminInvoiceRequest, BillingOverrideRequest, OfferCreateRequest
+    from app.services.billing import run_billing_schedule
+
+    async with sessions() as db:
+        # Card customers get Polar's customer portal; a bank-only customer is refused.
+        portal = await endpoints.billing_portal(x_organization_id=ids["org_a"], current_user=await _user(db, ids, "user_a"), db=db)
+        assert portal.url == f"https://sandbox.polar.sh/portal/{ids['org_a']}"
+        with pytest.raises(HTTPException) as bank_only:
+            await endpoints.billing_portal(x_organization_id=ids["org_b"], current_user=await _user(db, ids, "user_b"), db=db)
+        assert bank_only.value.detail["code"] == "not_card_customer"
+
+        # Per-tender review: not self-serve; an admin's one-use link, then the usual checkout.
+        quote = await endpoints.billing_quote(product="per_tender", offer=None, x_organization_id=ids["org_b"],
+                                              current_user=await _user(db, ids, "user_b"), db=db)
+        assert quote.blocker == "offer_required" and quote.amount_cents == 40_000
+        with pytest.raises(HTTPException) as no_offer:
+            await _checkout(db, ids, "user_b", "b", "per_tender", "card")
+        assert no_offer.value.detail["code"] == "offer_required"
+        made = await endpoints.admin_create_offer(ids["org_b"], OfferCreateRequest(product="per_tender", note="Tender X"),
+                                                  current_user=await _user(db, ids, "admin"), db=db)
+        token = made.url.split("offer=")[1]
+        assert made.url.startswith("https://app.plasma.test/billing/start?plan=per_tender&offer=")
+        quote = await endpoints.billing_quote(product="per_tender", offer=token, x_organization_id=ids["org_b"],
+                                              current_user=await _user(db, ids, "user_b"), db=db)
+        assert quote.blocker is None
+        other = await endpoints.billing_quote(product="per_tender", offer=token, x_organization_id=ids["org_a"],
+                                              current_user=await _user(db, ids, "user_a"), db=db)
+        assert other.blocker == "offer_required"  # the link is bound to its organization
+        started = await _checkout(db, ids, "user_b", "b", "per_tender", "card", offer=token)
+        order = await db.get(BillingOrder, started.order_id)
+        status, body, _ = await _deliver(db, "order.paid", _polar_order(order, "polar_ord_pt1"))
+        assert body["outcome"] == "activated"
+        organization = await db.get(Organization, ids["org_b"], populate_existing=True)
+        assert (organization.plan, organization.access_state, organization.pursuit_limit_override) == ("per_tender", "paid", 1)
+        reused = await endpoints.billing_quote(product="per_tender", offer=token, x_organization_id=ids["org_b"],
+                                               current_user=await _user(db, ids, "user_b"), db=db)
+        assert reused.blocker == "offer_required"  # used once
+        # Or an admin invoice, with the signed order form as the terms acceptance: one more pursuit.
+        detail = await endpoints.admin_issue_invoice(ids["org_b"], AdminInvoiceRequest(
+            product="per_tender", signed_note="Order form signed 26 Oct by the director"),
+            current_user=await _user(db, ids, "admin"), db=db)
+        organization = await db.get(Organization, ids["org_b"], populate_existing=True)
+        assert (organization.plan, organization.pursuit_limit_override, organization.billing_status) == (
+            "per_tender", 2, "awaiting_payment")
+        signed = await db.scalar(select(TermsAcceptance).where(TermsAcceptance.accepted_via == "signed"))
+        assert (signed.user_id, signed.ip_address, signed.note) == (None, None, "Order form signed 26 Oct by the director")
+        assert detail.invoices[0].currency == "UZS"
+
+        # A pilot set up without an order (pilot_setup.py or an admin) ends on its end date too.
+        today = billing_today()
+        await endpoints.admin_override(ids["org_a"], BillingOverrideRequest(
+            plan="pilot", billing_status="none", reason="pilot_setup-style pilot",
+            plan_started_on=today - timedelta(days=95), plan_ends_on=today - timedelta(days=3)),
+            current_user=await _user(db, ids, "admin"), db=db)
+        counts = await run_billing_schedule(db, today=today)
+        await db.commit()
+        assert counts["ended"] >= 1
+        organization = await db.get(Organization, ids["org_a"], populate_existing=True)
+        assert (organization.plan, organization.access_state) == ("explore", "explore")

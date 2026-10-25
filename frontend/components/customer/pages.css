@@ -4690,6 +4690,36 @@
   gap: var(--ds-space-4);
 }
 
+.billing-renewal {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-4);
+}
+
+.billing-renewal > div {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.billing-renewal h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin: 0;
+  font-size: var(--ds-heading-sm);
+}
+
+.billing-renewal p {
+  margin: 0;
+}
+
+@media (max-width: 639px) {
+  .billing-renewal {
+    flex-direction: column;
+  }
+}
+
 .billing-product {
   display: flex;
   flex-direction: column;

@@ -32,7 +32,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 
 BILLING_STATUSES = ("paid", "awaiting_payment", "suspended", "refunded", "canceled")
-ORDER_PRODUCTS = ("pilot", "pursuit_desk", "extra_pursuit")
+ORDER_PRODUCTS = ("pilot", "pursuit_desk", "extra_pursuit", "per_tender")
 ORDER_METHODS = ("card", "bank_transfer")
 # pending: a card checkout not paid yet; awaiting_payment: a bank transfer, plan active; lapsed: the
 # transfer did not arrive by day 10 (plan back to Explore; marking it paid later reactivates it).
@@ -89,10 +89,14 @@ class TermsAcceptance(Base):
     text_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # online: "I accept" in the checkout; signed: the order form signed on paper, recorded by an admin.
+    accepted_via: Mapped[str] = mapped_column(String(20), nullable=False, default="online", server_default=text("'online'"))
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (
         CheckConstraint("text_sha256 ~ '^[0-9a-f]{64}$'", name="ck_terms_acceptance_hash"),
+        CheckConstraint("accepted_via IN ('online','signed')", name="ck_terms_acceptance_via"),
         Index("ix_terms_acceptances_organization", "organization_id", "accepted_at"),
     )
 
@@ -131,6 +135,17 @@ class BillingOrder(Base):
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     refund_note: Mapped[str | None] = mapped_column(Text)
+    # ref and utm_* from the link that started the checkout (/billing/start?...).
+    attribution: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    # Bank-transfer Pursuit Desk: the customer asks to cancel the renewal; an admin confirms.
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_by_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    cancel_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_confirmed_by_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -138,6 +153,7 @@ class BillingOrder(Base):
 
     __table_args__ = (
         CheckConstraint(f"product IN ({_values(ORDER_PRODUCTS)})", name="ck_billing_order_product"),
+        CheckConstraint("attribution IS NULL OR jsonb_typeof(attribution) = 'object'", name="ck_billing_order_attribution"),
         CheckConstraint(f"method IN ({_values(ORDER_METHODS)})", name="ck_billing_order_method"),
         CheckConstraint(f"status IN ({_values(ORDER_STATUSES)})", name="ck_billing_order_status"),
         CheckConstraint(
@@ -327,4 +343,32 @@ class OnboardingTask(Base):
         CheckConstraint("status IN ('open','done')", name="ck_onboarding_task_status"),
         CheckConstraint("(status = 'done') = (done_at IS NOT NULL)", name="ck_onboarding_task_done"),
         Index("ix_onboarding_tasks_status", "status", "created_at"),
+    )
+
+
+class BillingOffer(Base):
+    """A one-use checkout link an admin sends for a product that is not self-serve (per-tender review).
+    Only the SHA-256 of the token is stored; the link is shown once."""
+
+    __tablename__ = "billing_offers"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    organization_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False
+    )
+    product: Mapped[str] = mapped_column(String(20), nullable=False)
+    token_sha256: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    note: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    order_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("billing_orders.id", ondelete="RESTRICT"), unique=True
+    )
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(f"product IN ({_values(ORDER_PRODUCTS)})", name="ck_billing_offer_product"),
+        Index("ix_billing_offers_organization", "organization_id", "created_at"),
     )

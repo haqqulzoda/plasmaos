@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2, CreditCard, Download, FileText, MessageSquare, Receipt } from 'lucide-react';
+import { Building2, CreditCard, Download, ExternalLink, FileText, MessageSquare, Receipt, RefreshCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { BillingNotice, checkoutHref, useMoney } from '@/components/billing/BillingParts';
@@ -31,6 +31,8 @@ export default function BillingPage() {
   const [failed, setFailed] = useState(false);
   const [downloadFailed, setDownloadFailed] = useState(false);
   const [talk, setTalk] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [renewalBusy, setRenewalBusy] = useState(false);
+  const [renewalError, setRenewalError] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -58,6 +60,29 @@ export default function BillingPage() {
       setDownloadFailed(true);
     }
   }, []);
+
+  // Card customers: Polar's customer portal. Bank transfer: ask not to renew (the team confirms).
+  const openPortal = async () => {
+    setRenewalBusy(true);
+    setRenewalError(false);
+    try {
+      window.location.assign((await api.post<{ url: string }>('/billing/portal')).data.url);
+    } catch {
+      setRenewalError(true);
+      setRenewalBusy(false);
+    }
+  };
+  const cancelRenewal = async () => {
+    setRenewalBusy(true);
+    setRenewalError(false);
+    try {
+      setOverview((await api.post<BillingOverview>('/billing/cancel-renewal')).data);
+    } catch {
+      setRenewalError(true);
+    } finally {
+      setRenewalBusy(false);
+    }
+  };
 
   const talkToUs = async () => {
     setTalk('sending');
@@ -124,6 +149,27 @@ export default function BillingPage() {
             onClick={() => void talkToUs()}>{t('talkToUs')}</Button>}
       </Surface>
     </section>
+
+    {(overview.summary.renewal || overview.summary.card_customer) && <Surface className="billing-renewal" data-billing-renewal
+      aria-labelledby="billing-renewal-title">
+      <div>
+        <h2 id="billing-renewal-title"><RefreshCw aria-hidden /> {t('renewal.title')}</h2>
+        {overview.summary.renewal && <p>{overview.summary.renewal.canceled
+          ? t('renewal.endsOn', { date: money.date(overview.summary.renewal.renews_on) })
+          : t('renewal.renewsOn', { date: money.date(overview.summary.renewal.renews_on) })}</p>}
+        {overview.summary.renewal?.method === 'bank_transfer' && overview.summary.renewal.cancel_requested_at
+          && !overview.summary.renewal.canceled
+          && <p className="ds-muted" data-billing-cancel-requested>{t('renewal.requested', { date: money.date(overview.summary.renewal.cancel_requested_at) })}</p>}
+        <p className="ds-muted ds-text-small">{overview.summary.renewal?.method === 'bank_transfer' ? t('renewal.cancelHelp') : t('renewal.manageHelp')}</p>
+        {renewalError && <p className="pursuit-upload-error" role="alert">{t('renewal.failed')}</p>}
+      </div>
+      {overview.summary.renewal?.method === 'bank_transfer'
+        ? (!overview.summary.renewal.cancel_requested_at && !overview.summary.renewal.canceled
+          && <Button variant="secondary" loading={renewalBusy} onClick={() => void cancelRenewal()} data-billing-cancel>{t('renewal.cancel')}</Button>)
+        : overview.summary.card_customer
+          && <Button variant="secondary" loading={renewalBusy} leadingIcon={<ExternalLink aria-hidden />}
+            onClick={() => void openPortal()} data-billing-portal>{t('renewal.manage')}</Button>}
+    </Surface>}
 
     <section className="billing-section" aria-labelledby="billing-details-title">
       <h2 id="billing-details-title"><Building2 aria-hidden /> {t('detailsTitle')}</h2>

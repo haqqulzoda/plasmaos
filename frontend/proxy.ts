@@ -28,7 +28,9 @@ function denyRequest(request: NextRequest) {
     return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 });
   }
   const redirectUrl = new URL('/', request.url);
-  redirectUrl.searchParams.set('next', request.nextUrl.pathname);
+  // RC-5: a signed-out buyer comes back to the same checkout (plan, offer) after signing in.
+  const { pathname, search } = request.nextUrl;
+  redirectUrl.searchParams.set('next', pathname.startsWith('/dashboard/billing') ? `${pathname}${search}` : pathname);
   return NextResponse.redirect(redirectUrl);
 }
 

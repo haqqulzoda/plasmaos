@@ -53,11 +53,13 @@ class QuoteResponse(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    product: Literal["pilot", "pursuit_desk", "extra_pursuit"]
+    product: Literal["pilot", "pursuit_desk", "extra_pursuit", "per_tender"]
     method: Literal["card", "bank_transfer"]
     terms_version: str = Field(max_length=40)
     terms_sha256: str = Field(min_length=64, max_length=64)
     accept_terms: bool
+    offer: str | None = Field(default=None, max_length=200)  # the one-use link for an admin-sold product
+    attribution: dict[str, str] | None = None  # ref and utm_* from /billing/start
 
 
 class CheckoutResponse(BaseModel):
@@ -87,6 +89,9 @@ class OrderOut(BaseModel):
     plan_ends_on: date | None = None
     renewal: bool = False
     refund_window_ends_on: date | None = None
+    attribution: dict[str, str] | None = None
+    cancel_requested_at: datetime | None = None
+    cancel_confirmed_at: datetime | None = None
 
 
 class InvoiceOut(BaseModel):
@@ -141,8 +146,18 @@ class AnnualOffer(BaseModel):
     day: int
 
 
+class RenewalInfo(BaseModel):
+    method: str
+    order_id: UUID
+    renews_on: date | None = None
+    canceled: bool
+    cancel_requested_at: datetime | None = None
+
+
 class BillingSummary(BaseModel):
     status: str | None = None
+    renewal: RenewalInfo | None = None
+    card_customer: bool = False
     open_invoice: OpenInvoice | None = None
     annual_offer: AnnualOffer | None = None
     extra_pursuit_cents: int | None = None
@@ -190,6 +205,7 @@ class AdminBillingCustomer(BaseModel):
     last_order: OrderOut | None = None
     open_invoices: int
     onboarding_open: bool
+    cancel_requested: bool = False
     last_activity_at: datetime | None = None
 
 
@@ -200,6 +216,7 @@ class AdminBillingDetail(BillingOverview):
     terms_acceptances: list[dict[str, Any]]
     events: list[dict[str, Any]]
     onboarding: list[dict[str, Any]]
+    offers: list[dict[str, Any]] = []
     audit: list[dict[str, Any]]
 
 
@@ -236,3 +253,24 @@ class BillingOverrideRequest(BaseModel):
 
 class OnboardingDoneRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
+
+
+class PortalResponse(BaseModel):
+    url: str
+
+
+class OfferCreateRequest(BaseModel):
+    product: Literal["per_tender"]
+    days: int = Field(default=14, ge=1, le=60)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class OfferCreateResponse(BaseModel):
+    offer_id: UUID
+    url: str
+    expires_at: datetime
+
+
+class AdminInvoiceRequest(BaseModel):
+    product: Literal["per_tender"]
+    signed_note: str = Field(min_length=3, max_length=1000)

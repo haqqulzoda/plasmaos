@@ -28,7 +28,9 @@ PRODUCT_LINES = {
     "pilot": "Plasma Pilot, 3 months from activation: 6 pursuits, 1 partner or expert introduction, onboarding, 2 specialist reviews",
     "pursuit_desk": "Plasma Pursuit Desk, 12 months from activation, renews yearly: 24 pursuits and 2 introductions a plan year",
     "extra_pursuit": "Extra pursuit: 1 additional pursuit in the current plan period",
+    "per_tender": "Per-tender review: one pursuit end to end and a 30-minute review call",
 }
+OFFICIAL_INVOICE_NOTE = "The official electronic invoice is issued after payment."
 PILOT_NOTE = ("The pilot payment is credited once, in full, to the first annual-plan payment if an annual plan is "
               "ordered within 30 days after the Pilot ends.")
 
@@ -58,7 +60,7 @@ def render_invoice_pdf(invoice: BillingInvoice, order: BillingOrder) -> bytes:
     buffer = io.BytesIO()
     document = SimpleDocTemplate(
         buffer, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=18 * mm, bottomMargin=18 * mm,
-        title=f"Invoice {invoice.number}", author=settings.INVOICE_SELLER_NAME,
+        title=f"Payment invoice (proforma) {invoice.number}", author=settings.INVOICE_SELLER_NAME,
     )
     body = ParagraphStyle("body", fontName=FONT, fontSize=9.5, leading=13)
     small = ParagraphStyle("small", parent=body, fontSize=8.5, leading=11.5, textColor=colors.HexColor("#444444"))
@@ -79,7 +81,7 @@ def render_invoice_pdf(invoice: BillingInvoice, order: BillingOrder) -> bytes:
     bill_to += [str(buyer.get("address") or ""), str(buyer.get("country") or ""), str(buyer.get("billing_email") or "")]
 
     story: list = [
-        para(f"Invoice {invoice.number}", title), Spacer(1, 3 * mm),
+        para(f"Payment invoice (proforma) {invoice.number}", title), Spacer(1, 3 * mm),
         para(f"Issued {invoice.issued_on:%d %B %Y} · Due {invoice.due_on:%d %B %Y}", small), Spacer(1, 6 * mm),
     ]
     parties = Table(
@@ -137,6 +139,7 @@ def render_invoice_pdf(invoice: BillingInvoice, order: BillingOrder) -> bytes:
         story += [para("Pilot 30-day guarantee: full refund if you tell us within 30 days of activation that the "
                        "Pilot is not working for you.", small)]
     story += [para("Plasma Pilot and Subscription Terms, version 1 (26 October 2026), apply. Prices in US dollars "
-                   "exclude VAT and other taxes where they apply, and bank charges on your side.", small)]
+                   "exclude VAT and other taxes where they apply, and bank charges on your side.", small),
+              Spacer(1, 3 * mm), para(OFFICIAL_INVOICE_NOTE, heading)]
     document.build(story)
     return buffer.getvalue()

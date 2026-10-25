@@ -45,10 +45,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "product_pilot": "Pilot",
         "product_pursuit_desk": "Pursuit Desk",
         "product_extra_pursuit": "extra pursuit",
-        "invoice_subject": "Invoice {number} from Plasma",
+        "invoice_subject": "Payment invoice (proforma) {number} from Plasma",
         "invoice_body": "Your {product} is active now. Invoice {number} is attached: {amount}, payable by bank transfer by {due}.",
         "invoice_reference": "Use {number} as the payment reference. Payment is due by {due}. If the invoice is still unpaid on {explore}, your organization moves to the free Explore plan until the payment arrives.",
         "invoice_pilot_note": "The pilot payment is credited to your first annual invoice.",
+        "invoice_official": "The official electronic invoice is issued after payment.",
+        "product_per_tender": "Per-tender review",
+        "welcome_body_open": "Your {plan} is active from {start}.",
         "open_billing": "Billing in Plasma: {url}",
         "reminder_subject": "Reminder: invoice {number} is due on {due}",
         "reminder_body": "Invoice {number} ({amount}) is not paid yet.",
@@ -93,10 +96,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "product_pilot": "Пилот",
         "product_pursuit_desk": "Pursuit Desk",
         "product_extra_pursuit": "дополнительный тендер",
-        "invoice_subject": "Счёт {number} от Plasma",
+        "invoice_subject": "Счёт на оплату (проформа) {number} от Plasma",
         "invoice_body": "Ваш тариф «{product}» уже активен. Счёт {number} во вложении: {amount}, оплата банковским переводом до {due}.",
         "invoice_reference": "Укажите {number} в назначении платежа. Срок оплаты — до {due}. Если счёт не оплачен к {explore}, организация перейдёт на бесплатный тариф Explore до поступления оплаты.",
         "invoice_pilot_note": "Оплата пилота засчитывается в первый годовой счёт.",
+        "invoice_official": "Официальный электронный счёт-фактура выставляется после оплаты.",
+        "product_per_tender": "Разбор одного тендера",
+        "welcome_body_open": "Ваш тариф «{plan}» действует с {start}.",
         "open_billing": "Оплата в Plasma: {url}",
         "reminder_subject": "Напоминание: счёт {number} нужно оплатить до {due}",
         "reminder_body": "Счёт {number} ({amount}) ещё не оплачен.",
@@ -141,10 +147,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "product_pilot": "Pilot",
         "product_pursuit_desk": "Pursuit Desk",
         "product_extra_pursuit": "qo‘shimcha tender",
-        "invoice_subject": "Plasma’dan {number} hisob-fakturasi",
+        "invoice_subject": "Plasma’dan {number} to‘lov hisobi (proforma)",
         "invoice_body": "«{product}» tarifingiz faol. {number} hisob-fakturasi ilova qilingan: {amount}, {due} gacha bank o‘tkazmasi orqali to‘lanadi.",
         "invoice_reference": "To‘lov maqsadida {number} ni ko‘rsating. To‘lov muddati — {due} gacha. Agar hisob-faktura {explore} gacha to‘lanmasa, tashkilotingiz to‘lov kelguncha bepul Explore tarifiga o‘tadi.",
         "invoice_pilot_note": "Pilot uchun to‘lov birinchi yillik hisob-fakturaga hisoblanadi.",
+        "invoice_official": "Rasmiy elektron hisob-faktura to‘lovdan keyin rasmiylashtiriladi.",
+        "product_per_tender": "Bitta tender tahlili",
+        "welcome_body_open": "«{plan}» tarifingiz {start} dan faol.",
         "open_billing": "Plasma’da to‘lovlar: {url}",
         "reminder_subject": "Eslatma: {number} hisob-fakturasi {due} gacha to‘lanishi kerak",
         "reminder_body": "{number} hisob-fakturasi ({amount}) hali to‘lanmagan.",
@@ -189,10 +198,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "product_pilot": "التجربة",
         "product_pursuit_desk": "مكتب المناقصات",
         "product_extra_pursuit": "مناقصة إضافية",
-        "invoice_subject": "الفاتورة {number} من Plasma",
+        "invoice_subject": "فاتورة دفع مبدئية {number} من Plasma",
         "invoice_body": "خطتك ({product}) مفعّلة الآن. الفاتورة {number} مرفقة: {amount}، تُدفع بتحويل بنكي قبل {due}.",
         "invoice_reference": "اذكر {number} مرجعًا للدفع. موعد الاستحقاق {due}. إن بقيت الفاتورة غير مدفوعة حتى {explore} تنتقل مؤسستك إلى خطة الاستكشاف المجانية حتى وصول الدفعة.",
         "invoice_pilot_note": "يُحتسب مبلغ التجربة من أول فاتورة سنوية.",
+        "invoice_official": "تصدر الفاتورة الإلكترونية الرسمية بعد الدفع.",
+        "product_per_tender": "مراجعة مناقصة واحدة",
+        "welcome_body_open": "خطتك ({plan}) مفعّلة منذ {start}.",
         "open_billing": "الفوترة في Plasma: {url}",
         "reminder_subject": "تذكير: الفاتورة {number} مستحقة في {due}",
         "reminder_body": "الفاتورة {number} ({amount}) لم تُدفع بعد.",
@@ -329,9 +341,9 @@ def _render_billing(kind: str, locale: str, context: dict[str, Any], *, app_url:
               "explore": context.get("explore_on", "")}
     if kind == "BILLING_WELCOME":
         plan = _t(locale, f"product_{context.get('plan') or 'pilot'}")
-        lines: list[tuple[str, str | None]] = [
-            (_t(locale, "welcome_body", plan=plan, start=context.get("starts_on", ""), end=context.get("ends_on", "")), None),
-        ]
+        welcome = (_t(locale, "welcome_body", plan=plan, start=context.get("starts_on", ""), end=context["ends_on"])
+                   if context.get("ends_on") else _t(locale, "welcome_body_open", plan=plan, start=context.get("starts_on", "")))
+        lines: list[tuple[str, str | None]] = [(welcome, None)]
         if context.get("kickoff_url"):
             lines.append((_t(locale, "welcome_kickoff", url=context["kickoff_url"]), str(context["kickoff_url"])))
         lines.append((_t(locale, "welcome_next"), None))
@@ -347,6 +359,7 @@ def _render_billing(kind: str, locale: str, context: dict[str, Any], *, app_url:
                  (_t(locale, "invoice_reference", **values), None)]
         if context.get("pilot"):
             lines.append((_t(locale, "invoice_pilot_note"), None))
+        lines.append((_t(locale, "invoice_official"), None))
         lines.append((_t(locale, "open_billing", url=billing), billing))
         return _compose(locale, _t(locale, "invoice_subject", **values), lines, footer)
     if kind == "BILLING_REMINDER":

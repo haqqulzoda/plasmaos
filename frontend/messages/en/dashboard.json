@@ -197,6 +197,11 @@
         "name": "Extra pursuit",
         "price": "{price}",
         "points": "One more pursuit in this plan period"
+      },
+      "per_tender": {
+        "name": "Per-tender review",
+        "price": "{price}",
+        "points": "One pursuit end to end and a 30-minute review call"
       }
     },
     "buy": "Buy",
@@ -312,7 +317,13 @@
         "plan_required": "Extra pursuits are for a pilot or a paid plan.",
         "organization_disabled": "This organization is disabled.",
         "unknown_product": "This is not sold in the app.",
-        "generic": "Something went wrong. Try again."
+        "generic": "Something went wrong. Try again.",
+        "offer_required": "This is sold through a link from our team: ask us for one.",
+        "per_tender_on_plan": "Your organization is on a plan: add an extra pursuit instead.",
+        "not_cancellable": "There is no renewal to cancel.",
+        "cancel_requested": "Cancellation was already requested.",
+        "not_card_customer": "There is no card subscription to manage.",
+        "portal_unavailable": "The subscription page is not available right now: try again later."
       }
     },
     "success": {
@@ -324,6 +335,17 @@
       "notFound": "We could not find this checkout.",
       "openDashboard": "Open the dashboard"
     },
-    "addPursuit": "Add a pursuit ({price})"
+    "addPursuit": "Add a pursuit ({price})",
+    "renewal": {
+      "title": "Renewal",
+      "renewsOn": "Pursuit Desk renews on {date}.",
+      "endsOn": "Renewal canceled: the plan ends on {date}.",
+      "manage": "Manage subscription",
+      "manageHelp": "Cancel the renewal, change the card or download receipts on Polar.",
+      "cancel": "Cancel renewal",
+      "cancelHelp": "We stop the yearly invoice; the plan runs to its renewal date.",
+      "requested": "Cancellation requested on {date}: our team confirms it by e-mail.",
+      "failed": "This did not work. Try again or write to hq@plasmaos.uz."
+    }
   }
 }

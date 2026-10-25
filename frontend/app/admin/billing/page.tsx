@@ -17,7 +17,7 @@ type Customer = {
   organization_id: string; organization_name: string; legal_name: string | null; country: string | null;
   resident: boolean | null; plan: string; access_state: string; billing_status: string | null;
   plan_started_on: string | null; plan_ends_on: string | null; last_order: BillingOrder | null;
-  open_invoices: number; onboarding_open: boolean; last_activity_at: string | null;
+  open_invoices: number; onboarding_open: boolean; cancel_requested?: boolean; last_activity_at: string | null;
 };
 type Task = {
   id: string; organization_id: string; organization_name: string; product: string; method: string;
@@ -25,7 +25,8 @@ type Task = {
 };
 type Detail = BillingOverview & {
   organization_name: string; access_state: string; billing_status: string | null;
-  terms_acceptances: { id: string; terms_version: string; text_sha256: string; user_email: string | null; ip_address: string | null; accepted_at: string }[];
+  terms_acceptances: { id: string; terms_version: string; text_sha256: string; user_email: string | null; ip_address: string | null; accepted_at: string; accepted_via?: string; note?: string | null }[];
+  offers?: { id: string; product: string; note: string | null; expires_at: string; order_id: string | null; created_at: string }[];
   events: { id: string; event_type: string; provider_event_id: string; outcome: string | null; processing_error: string | null; received_at: string; processed_at: string | null }[];
   onboarding: { id: string; status: string; note: string | null; created_at: string }[];
   audit: { id: string; action: string; actor: string | null; reason: string | null; created_at: string }[];
@@ -34,9 +35,12 @@ type Action =
   | { kind: 'paid'; invoice: BillingInvoice }
   | { kind: 'refund'; order: BillingOrder }
   | { kind: 'override' }
-  | { kind: 'onboarding'; task: Task };
+  | { kind: 'onboarding'; task: Task }
+  | { kind: 'offer' }
+  | { kind: 'invoice' }
+  | { kind: 'confirmCancel'; order: BillingOrder };
 
-const PRODUCT: Record<string, string> = { pilot: 'Pilot', pursuit_desk: 'Pursuit Desk', extra_pursuit: 'Extra pursuit' };
+const PRODUCT: Record<string, string> = { pilot: 'Pilot', pursuit_desk: 'Pursuit Desk', extra_pursuit: 'Extra pursuit', per_tender: 'Per-tender review' };
 const PLANS = ['explore', 'pilot', 'pursuit_desk', 'agent', 'enterprise', 'per_tender'];
 const STATUSES = ['none', 'paid', 'awaiting_payment', 'suspended', 'refunded', 'canceled'];
 const TONE: Record<string, 'success' | 'warning' | 'danger' | 'neutral' | 'info'> = {
@@ -65,6 +69,7 @@ export default function AdminBillingPage() {
   const [form, setForm] = useState({ text: '', note: '', plan: '', status: '', downgrade: true });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [offerUrl, setOfferUrl] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -110,19 +115,34 @@ export default function AdminBillingPage() {
     setSaving(true);
     setFormError(null);
     try {
+      if (action.kind === 'offer') {
+        const made = (await api.post<{ url: string; expires_at: string }>(
+          `/admin/billing/organizations/${detail?.organization_id}/offers`, { product: 'per_tender', note: form.note.trim() || null })).data;
+        setOfferUrl(made.url);
+        setSuccess(`One-use checkout link created (expires ${formatTimestamp(made.expires_at)}). Copy it now: it is shown once.`);
+        setAction(null);
+        await open(detail?.organization_id ?? '');
+        return;
+      }
       if (action.kind === 'onboarding') {
         setTasks((await api.post<Task[]>(`/admin/billing/onboarding/${action.task.id}/done`, { note: form.note.trim() || null })).data);
         setSuccess(`Onboarding of ${action.task.organization_name} marked done.`);
       } else {
         const path = action.kind === 'paid' ? `/admin/billing/invoices/${action.invoice.id}/mark-paid`
           : action.kind === 'refund' ? `/admin/billing/orders/${action.order.id}/refund`
+          : action.kind === 'confirmCancel' ? `/admin/billing/orders/${action.order.id}/confirm-cancel`
+          : action.kind === 'invoice' ? `/admin/billing/organizations/${detail?.organization_id}/invoices`
           : `/admin/billing/organizations/${detail?.organization_id}/override`;
         const body = action.kind === 'paid' ? { reference: form.text.trim(), note: form.note.trim() || null }
           : action.kind === 'refund' ? { note: form.note.trim(), downgrade: form.downgrade }
+          : action.kind === 'confirmCancel' ? {}
+          : action.kind === 'invoice' ? { product: 'per_tender', signed_note: form.note.trim() }
           : { plan: form.plan || null, billing_status: form.status || null, reason: form.note.trim() };
         setDetail((await api.post<Detail>(path, body)).data);
         setSuccess(action.kind === 'paid' ? `Invoice ${action.invoice.number} marked paid.`
-          : action.kind === 'refund' ? 'Refund recorded.' : 'Plan and billing status saved.');
+          : action.kind === 'refund' ? 'Refund recorded.'
+          : action.kind === 'confirmCancel' ? 'Cancellation confirmed: no renewal invoice; the plan ends on its renewal date.'
+          : action.kind === 'invoice' ? 'Per-tender invoice issued and e-mailed.' : 'Plan and billing status saved.');
       }
       setAction(null);
       await load();
@@ -152,6 +172,7 @@ export default function AdminBillingPage() {
     </header>
     {error && <Alert tone="danger" title={error} />}
     {success && <Alert tone="success" title={success} />}
+    {offerUrl && <Alert tone="info" title="Per-tender checkout link (one use)"><TechnicalText>{offerUrl}</TechnicalText></Alert>}
 
     <section className="ds-stack" aria-labelledby="admin-onboarding-title" data-admin-onboarding>
       <h2 id="admin-onboarding-title">Onboarding queue ({openTasks.length} open)</h2>
@@ -197,7 +218,10 @@ export default function AdminBillingPage() {
             ? <span className="admin-partner-cell"><span>{PRODUCT[row.last_order.product]} · {label(row.last_order.method)} · {usd(row.last_order.amount_cents)}</span>
               <span className="ds-muted ds-text-small">{label(row.last_order.status)} · {formatTimestamp(row.last_order.created_at)}</span></span>
             : '—' },
-          { key: 'open', heading: 'Open invoices', cell: (row) => row.open_invoices || '—' },
+          { key: 'open', heading: 'Open invoices', cell: (row) => <span className="admin-partner-cell">
+            <span>{row.open_invoices || '—'}</span>
+            {row.cancel_requested && <StatusBadge tone="warning">cancel requested</StatusBadge>}
+          </span> },
           { key: 'actions', heading: '', cell: (row) => <Button size="sm" variant="secondary" onClick={() => void open(row.organization_id)}>Open</Button> },
         ]}
       />
@@ -211,6 +235,8 @@ export default function AdminBillingPage() {
       closeLabel="Close billing detail"
       footer={<>
         <Button variant="secondary" onClick={() => setDetail(null)}>Close</Button>
+        <Button variant="secondary" onClick={() => start({ kind: 'offer' })}>Per-tender: checkout link</Button>
+        <Button variant="secondary" onClick={() => start({ kind: 'invoice' })}>Per-tender: invoice (signed order)</Button>
         <Button onClick={() => start({ kind: 'override' })}>Override plan or status</Button>
       </>}
     >
@@ -232,6 +258,11 @@ export default function AdminBillingPage() {
           {order.refund_window_ends_on && ['paid', 'awaiting_payment', 'lapsed'].includes(order.status)
             && <span className="ds-muted ds-text-small"> · refund window (terms §6) to {order.refund_window_ends_on}</span>}
           {order.refund_note && <span className="ds-muted ds-text-small"> · {order.refund_note}</span>}
+          {order.attribution && <span className="ds-muted ds-text-small"> · {Object.entries(order.attribution).map(([key, value]) => `${key}=${value}`).join(' ')}</span>}
+          {order.cancel_requested_at && <span className="ds-text-small"> · cancel requested {formatTimestamp(order.cancel_requested_at)}
+            {order.cancel_confirmed_at ? `, confirmed ${formatTimestamp(order.cancel_confirmed_at)}` : ''}</span>}
+          {order.cancel_requested_at && !order.cancel_confirmed_at
+            && <Button size="sm" onClick={() => start({ kind: 'confirmCancel', order })}>Confirm cancellation</Button>}
           {['paid', 'awaiting_payment', 'lapsed'].includes(order.status)
             && <Button size="sm" variant="ghost" onClick={() => start({ kind: 'refund', order })}>Record refund</Button>}
         </li>)}</ul>}
@@ -243,7 +274,8 @@ export default function AdminBillingPage() {
         </li>)}</ul>}
         <h3>Terms accepted</h3>
         {detail.terms_acceptances.length === 0 ? <p className="ds-muted">None.</p> : <ul className="admin-plan-list">{detail.terms_acceptances.map((row) => <li key={row.id}>
-          {formatTimestamp(row.accepted_at)} · {row.terms_version} · <TechnicalText>{row.text_sha256.slice(0, 12)}…</TechnicalText> · {row.user_email ?? '—'} · IP {row.ip_address ?? '—'}
+          {formatTimestamp(row.accepted_at)} · {row.terms_version} · <TechnicalText>{row.text_sha256.slice(0, 12)}…</TechnicalText> · {row.accepted_via === 'signed'
+            ? `signed order form${row.note ? `: ${row.note}` : ''}` : `${row.user_email ?? '—'} · IP ${row.ip_address ?? '—'}`}
         </li>)}</ul>}
         <h3>Polar webhook events</h3>
         {detail.events.length === 0 ? <p className="ds-muted">None.</p> : <ul className="admin-plan-list">{detail.events.map((event) => <li key={event.id}>
@@ -261,10 +293,17 @@ export default function AdminBillingPage() {
       open={Boolean(action)}
       onClose={() => !saving && setAction(null)}
       title={action?.kind === 'paid' ? `Mark ${action.invoice.number} paid` : action?.kind === 'refund' ? 'Record a refund'
-        : action?.kind === 'onboarding' ? `Onboarding done: ${action.task.organization_name}` : 'Override plan or billing status'}
+        : action?.kind === 'onboarding' ? `Onboarding done: ${action.task.organization_name}`
+        : action?.kind === 'offer' ? 'Per-tender review: one-use checkout link'
+        : action?.kind === 'invoice' ? 'Per-tender review: invoice with the signed order form'
+        : action?.kind === 'confirmCancel' ? 'Confirm the renewal cancellation' : 'Override plan or billing status'}
       description={action?.kind === 'paid' ? 'The bank transfer arrived. A suspended plan comes back with its original dates. Audited.'
         : action?.kind === 'refund' ? 'For a refund made in the Polar dashboard or by bank. Audited; the customer is alerted by the team.'
-        : action?.kind === 'onboarding' ? 'The kickoff call is booked or done.' : 'A manual change, with a reason. Audited.'}
+        : action?.kind === 'onboarding' ? 'The kickoff call is booked or done.'
+        : action?.kind === 'offer' ? 'The customer opens the link, accepts the terms and pays by card or bank transfer. The link works once and is shown once. Audited.'
+        : action?.kind === 'invoice' ? 'A bank-transfer invoice (proforma) now; the signed order form is recorded as the terms acceptance. Audited.'
+        : action?.kind === 'confirmCancel' ? 'No renewal invoice; the plan ends on its renewal date (status canceled). Tell the customer by e-mail. Audited.'
+        : 'A manual change, with a reason. Audited.'}
       closeLabel="Close"
       footer={<>
         <Button variant="secondary" onClick={() => setAction(null)} disabled={saving}>Cancel</Button>
@@ -286,8 +325,9 @@ export default function AdminBillingPage() {
         </>}
         {action?.kind === 'refund' && <Checkbox label="Return the organization to Explore (when this order is its current plan)"
           checked={form.downgrade} onChange={(event) => setForm({ ...form, downgrade: event.target.checked })} />}
-        <Textarea label={action?.kind === 'paid' || action?.kind === 'onboarding' ? 'Note (optional)' : 'Reason'} rows={3} maxLength={1000}
-          value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} />
+        {action?.kind !== 'confirmCancel' && <Textarea label={action?.kind === 'paid' || action?.kind === 'onboarding' || action?.kind === 'offer'
+          ? 'Note (optional)' : action?.kind === 'invoice' ? 'Signed order form (date, signatory)' : 'Reason'} rows={3} maxLength={1000}
+          value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} />}
         {formError && <Alert tone="danger" title={formError} />}
       </div>
     </Dialog>

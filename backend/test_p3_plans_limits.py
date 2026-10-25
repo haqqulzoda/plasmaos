@@ -38,7 +38,7 @@ def test_catalog_follows_the_pricing_table() -> None:
         "pursuit_desk": (24, 2, None, True, True, True, INTELLIGENCE_SECTOR),
         "agent": (60, 12, None, True, True, True, INTELLIGENCE_FULL),
         "enterprise": (150, None, None, True, True, True, INTELLIGENCE_FULL),
-        "per_tender": (1, 0, None, True, True, False, INTELLIGENCE_NONE),
+        "per_tender": (1, 0, None, True, True, True, INTELLIGENCE_NONE),  # RC-5: terms §1, partner search on every paid plan
     }
     assert [code for code, p in CATALOG.items() if p.has("competitor_intelligence")] == ["agent", "enterprise"]
     assert all(p.has("tender_check") for p in CATALOG.values())
@@ -406,17 +406,14 @@ async def _introduction_quota_and_feature_gates(sessions, ids, organization_a, m
         status = await plan_status(db, await db.get(Organization, organization_a))
         assert (status["introductions"]["used"], status["introductions"]["limit"]) == (1, 1)
 
-        # Per-tender plan: no partner search. Pilot and Pursuit Desk: no competitor intelligence.
+        # Per-tender plan: partner search included (RC-5, terms §1). Pilot and Pursuit Desk: no competitor intelligence.
         organization = await db.get(Organization, organization_a)
         organization.plan = "per_tender"
         await db.commit()
-        with pytest.raises(HTTPException) as gated:
-            await finder_endpoints.partner_suggestions(
-                pursuit_id=pursuit_id, analysis_run_id=run_id, gap_id=gap, x_organization_id=organization_a,
-                current_user=user_a, db=db)
-        assert gated.value.status_code == 403 and gated.value.detail == {
-            "code": "PLAN_FEATURE", "message": "The per_tender plan does not include partner search",
-            "feature": "partner_search", "plan": "per_tender"}
+        suggestions = await finder_endpoints.partner_suggestions(
+            pursuit_id=pursuit_id, analysis_run_id=run_id, gap_id=gap, x_organization_id=organization_a,
+            current_user=user_a, db=db)
+        assert suggestions is not None
         for plan in ("pilot", "pursuit_desk"):
             organization = await db.get(Organization, organization_a)
             organization.plan = plan

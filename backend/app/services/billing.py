@@ -23,6 +23,7 @@ from decimal import Decimal
 import hashlib
 import json
 import re
+import secrets
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -47,7 +48,10 @@ from app.core.plans import (
     PLAN_PILOT,
     PLAN_PURSUIT_DESK,
     PRICES,
+    ADMIN_PRODUCTS,
+    PLAN_PER_TENDER,
     PRODUCT_EXTRA_PURSUIT,
+    PRODUCT_PER_TENDER,
     PRODUCT_PILOT,
     PRODUCT_PURSUIT_DESK,
     PRODUCTS,
@@ -57,6 +61,7 @@ from app.core.plans import (
 from app.models.billing import (
     BillingCustomer,
     BillingEvent,
+    BillingOffer,
     BillingInvoice,
     BillingOrder,
     BillingPayment,
@@ -69,7 +74,10 @@ from app.models.tenancy import Organization
 from app.models.user import User
 from app.services import billing_polar
 from app.services.admin_activity import (
+    ACTION_BILLING_CANCEL_CONFIRMED,
+    ACTION_BILLING_CANCEL_REQUESTED,
     ACTION_BILLING_CREDIT_APPLIED,
+    ACTION_BILLING_OFFER_CREATED,
     ACTION_BILLING_CUSTOMER_UPDATED,
     ACTION_BILLING_INVOICE_ISSUED,
     ACTION_BILLING_ONBOARDING_COMPLETED,
@@ -99,6 +107,8 @@ TERMS_PATH = Path(__file__).resolve().parents[1] / "legal" / "PILOT_TERMS_v1.md"
 TERMS_PDF_PATH = TERMS_PATH.with_suffix(".pdf")
 TERMS_PDF_NAME = "Plasma-Pilot-and-Subscription-Terms-v1.pdf"
 PAID_PLANS = ("pursuit_desk", "agent", "enterprise", "per_tender")
+OFFER_DAYS = 14
+ATTRIBUTION_KEYS = ("ref", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content")
 METHOD_CARD = "card"
 METHOD_BANK = "bank_transfer"
 ACTOR_WEBHOOK = "billing:polar-webhook"
@@ -158,6 +168,13 @@ def terms() -> dict[str, str]:
             "markdown": markdown}
 
 
+def bank_transfer_available(currency: str) -> bool:
+    """Bank details for the invoice currency are set; USD also needs INVOICE_USD_ENABLED (RC-5)."""
+    if currency == "USD" and not settings.INVOICE_USD_ENABLED:
+        return False
+    return bool(bank_lines(currency))
+
+
 def catalog() -> dict[str, Any]:
     """Plans (prices, limits, features) and the checkout products: one table for the gates and billing."""
     plans = []
@@ -175,9 +192,9 @@ def catalog() -> dict[str, Any]:
         "code": product.code, "plan": product.plan, "amount_cents": product.amount_cents,
         "billing": product.billing, "term_months": product.term_months, "extra_pursuits": product.extra_pursuits,
         "card_available": billing_polar.card_available(product.code),
-    } for product in PRODUCTS.values()]
+    } for product in PRODUCTS.values() if product.code in PRODUCTS_FOR_SALE]
     return {"currency": "USD", "plans": plans, "products": products, "pilot_credit_cents": PILOT_CREDIT_CENTS,
-            "bank_transfer": {"UZS": bool(bank_lines("UZS")), "USD": bool(bank_lines("USD"))},
+            "bank_transfer": {"UZS": bank_transfer_available("UZS"), "USD": bank_transfer_available("USD")},
             "polar_env": settings.POLAR_ENV}
 
 
@@ -205,15 +222,20 @@ async def _audit(
     )
 
 
-async def _alert(db: AsyncSession, organization: Organization, event: str, order: BillingOrder, **extra: Any) -> None:
+async def _alert(
+    db: AsyncSession, organization: Organization, event: str, order: BillingOrder | None, **extra: Any,
+) -> None:
     payload = {
         "event": event, "organization_id": str(organization.id), "organization_name": _display(organization),
-        "order_id": str(order.id), "product": order.product, "method": order.method,
-        "amount_cents": order.amount_cents, "credit_cents": order.credit_cents, "plan": organization.plan,
-        "billing_status": organization.billing_status, "at": _now().isoformat(timespec="seconds"),
+        "plan": organization.plan, "billing_status": organization.billing_status,
+        "at": _now().isoformat(timespec="seconds"),
     }
+    if order is not None:
+        payload.update({"order_id": str(order.id), "product": order.product, "method": order.method,
+                        "amount_cents": order.amount_cents, "credit_cents": order.credit_cents})
     payload.update({key: value for key, value in extra.items() if value is not None})
-    await stage_admin_alert(db, kind="BILLING", dedupe_key=f"admin-alert:billing:{event}:{order.id}", payload=payload)
+    key = order.id if order is not None else f"{organization.id}:{organization.plan_ends_on}"
+    await stage_admin_alert(db, kind="BILLING", dedupe_key=f"admin-alert:billing:{event}:{key}", payload=payload)
 
 
 async def _recipient(db: AsyncSession, order: BillingOrder) -> tuple[str | None, str, UUID | None]:
@@ -317,9 +339,14 @@ async def pilot_credit_source(db: AsyncSession, organization_id: UUID, *, on: da
     return pilot
 
 
-async def checkout_blocker(db: AsyncSession, organization: Organization, product: str) -> str | None:
-    """Why this organization cannot buy ``product`` now (a code), or None."""
-    if product not in PRODUCTS_FOR_SALE:
+async def checkout_blocker(
+    db: AsyncSession, organization: Organization, product: str, *, offer: BillingOffer | None = None,
+) -> str | None:
+    """Why this organization cannot buy ``product`` now (a code), or None. An admin-sold product needs a
+    valid offer (a one-use link) or an admin-issued invoice."""
+    if product in ADMIN_PRODUCTS and offer is None:
+        return "offer_required"
+    if product not in PRODUCTS_FOR_SALE and product not in ADMIN_PRODUCTS:
         return "unknown_product"
     if organization.access_state == "disabled":
         return "organization_disabled"
@@ -345,15 +372,68 @@ async def checkout_blocker(db: AsyncSession, organization: Organization, product
             return "already_on_plan"
     if product == PRODUCT_EXTRA_PURSUIT and organization.plan == PLAN_EXPLORE:
         return "plan_required"
+    if product == PRODUCT_PER_TENDER and organization.plan not in (PLAN_EXPLORE, PLAN_PER_TENDER):
+        return "per_tender_on_plan"  # on a pilot or a plan: an extra pursuit instead
     return None
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def find_offer(
+    db: AsyncSession, organization_id: UUID, token: str | None, product: str, *, lock: bool = False,
+) -> BillingOffer | None:
+    """The unused, unexpired offer behind ``token`` for this organization and product, or None."""
+    if not token or len(token) > 200:
+        return None
+    statement = select(BillingOffer).where(
+        BillingOffer.token_sha256 == _token_hash(token), BillingOffer.organization_id == organization_id,
+        BillingOffer.product == product, BillingOffer.order_id.is_(None), BillingOffer.expires_at > _now(),
+    )
+    return await db.scalar(statement.with_for_update() if lock else statement)
+
+
+async def create_offer(
+    db: AsyncSession, *, organization: Organization, product: str, actor_user: User, note: str | None = None,
+    days: int = OFFER_DAYS,
+) -> tuple[BillingOffer, str]:
+    """A one-use checkout link for an admin-sold product; returns the offer and the token (shown once)."""
+    if product not in ADMIN_PRODUCTS:
+        raise BillingError("unknown_product", "Only an admin-sold product needs an offer")
+    blocker = await checkout_blocker(db, organization, product, offer=BillingOffer())
+    if blocker:
+        raise BillingConflictError(blocker, _BLOCKER_MESSAGES.get(blocker, "This cannot be offered now"))
+    token = secrets.token_urlsafe(24)
+    offer = BillingOffer(
+        organization_id=organization.id, product=product, token_sha256=_token_hash(token),
+        note=_clean(note, 1000) or None, expires_at=_now() + timedelta(days=max(1, min(days, 60))),
+        created_by_user_id=actor_user.id,
+    )
+    db.add(offer)
+    await db.flush()
+    await _audit(db, organization, ACTION_BILLING_OFFER_CREATED, actor_user=actor_user, actor_label=None,
+                 resource_type="BILLING_OFFER", resource_id=offer.id,
+                 new_state={"product": product, "expires_at": offer.expires_at.isoformat(timespec="seconds")},
+                 reason=offer.note or f"Checkout link for {product}.")
+    return offer, token
+
+
+def clean_attribution(values: dict[str, Any] | None) -> dict[str, str] | None:
+    """ref and utm_* only, short strings; anything else is dropped."""
+    cleaned = {key: _clean(values[key], 200) for key in ATTRIBUTION_KEYS
+               if values and isinstance(values.get(key), str) and _clean(values[key], 200)}
+    return cleaned or None
 
 
 async def quote(
     db: AsyncSession, organization: Organization, product_code: str, *, today: date | None = None,
+    offer_token: str | None = None,
 ) -> dict[str, Any]:
     product = PRODUCTS.get(product_code)
     if product is None:
         raise BillingNotFoundError("unknown_product", "This product is not sold in the app")
+    offer = await find_offer(db, organization.id, offer_token, product.code) if product.code in ADMIN_PRODUCTS else None
     credit = 0
     if product.code == PRODUCT_PURSUIT_DESK and await pilot_credit_source(db, organization.id, on=today) is not None:
         credit = min(PILOT_CREDIT_CENTS, product.amount_cents)
@@ -362,8 +442,9 @@ async def quote(
     return {
         "product": product.code, "plan": product.plan, "list_amount_cents": product.amount_cents,
         "credit_cents": credit, "amount_cents": product.amount_cents - credit, "billing": product.billing,
-        "term_months": product.term_months, "blocker": await checkout_blocker(db, organization, product.code),
-        "methods": {"card": billing_polar.card_available(product.code), "bank_transfer": bool(bank_lines(currency))},
+        "term_months": product.term_months,
+        "blocker": await checkout_blocker(db, organization, product.code, offer=offer),
+        "methods": {"card": billing_polar.card_available(product.code), "bank_transfer": bank_transfer_available(currency)},
         "invoice_currency": currency,
     }
 
@@ -372,33 +453,42 @@ async def quote(
 
 async def accept_terms(
     db: AsyncSession, *, organization: Organization, user: User, version: str, sha256: str,
-    ip_address: str | None, user_agent: str | None,
+    ip_address: str | None, user_agent: str | None, signed_note: str | None = None,
 ) -> TermsAcceptance:
+    """Online: the customer's user, the text hash shown, IP. Signed: an admin records the signed order form
+    (``user`` is the admin; no customer user, no IP)."""
     current = terms()
     if version != current["version"] or sha256 != current["sha256"]:
         raise BillingConflictError("terms_changed", "The terms changed: read and accept the current version")
+    signed = signed_note is not None
     acceptance = TermsAcceptance(
-        organization_id=organization.id, user_id=user.id, terms_version=version, text_sha256=sha256,
-        ip_address=(ip_address or "")[:64] or None, user_agent=(user_agent or "")[:300] or None,
+        organization_id=organization.id, user_id=None if signed else user.id, terms_version=version,
+        text_sha256=sha256, ip_address=None if signed else (ip_address or "")[:64] or None,
+        user_agent=None if signed else (user_agent or "")[:300] or None,
+        accepted_via="signed" if signed else "online", note=_clean(signed_note, 1000) or None if signed else None,
     )
     db.add(acceptance)
     await db.flush()
     await _audit(db, organization, ACTION_BILLING_TERMS_ACCEPTED, actor_user=user, actor_label=None,
                  resource_type="TERMS_ACCEPTANCE", resource_id=acceptance.id,
-                 new_state={"terms_version": version, "text_sha256": sha256, "ip_address": acceptance.ip_address},
-                 reason=f"{version} accepted.")
+                 new_state={"terms_version": version, "text_sha256": sha256, "ip_address": acceptance.ip_address,
+                            "accepted_via": acceptance.accepted_via},
+                 reason=acceptance.note or f"{version} accepted.")
     return acceptance
 
 
 async def start_checkout(
     db: AsyncSession, *, organization: Organization, user: User, product_code: str, method: str,
     terms_version: str, terms_sha256: str, accepted: bool, ip_address: str | None, user_agent: str | None,
-    success_url: str, today: date | None = None,
+    success_url: str, today: date | None = None, offer_token: str | None = None,
+    attribution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     today = today or billing_today()
     if method not in (METHOD_CARD, METHOD_BANK):
         raise BillingError("method_invalid", "Choose card or bank transfer")
-    offer = await quote(db, organization, product_code, today=today)
+    sale_offer = (await find_offer(db, organization.id, offer_token, product_code, lock=True)
+                  if product_code in ADMIN_PRODUCTS else None)
+    offer = await quote(db, organization, product_code, today=today, offer_token=offer_token)
     if offer["blocker"]:
         raise BillingConflictError(offer["blocker"], _BLOCKER_MESSAGES.get(offer["blocker"], "This cannot be bought now"))
     customer = await get_customer(db, organization.id)
@@ -415,15 +505,18 @@ async def start_checkout(
         organization_id=organization.id, product=product.code, plan=product.plan, method=method,
         status="pending" if method == METHOD_CARD else "awaiting_payment", currency="USD",
         list_amount_cents=product.amount_cents, credit_cents=offer["credit_cents"], amount_cents=offer["amount_cents"],
-        terms_acceptance_id=acceptance.id, created_by_user_id=user.id,
+        terms_acceptance_id=acceptance.id, created_by_user_id=user.id, attribution=clean_attribution(attribution),
     )
     db.add(order)
     await db.flush()
+    if sale_offer is not None:
+        sale_offer.order_id = order.id  # used: the link works once
     await _audit(db, organization, ACTION_BILLING_ORDER_CREATED, actor_user=user, actor_label=None,
                  resource_type="BILLING_ORDER", resource_id=order.id,
                  new_state={"product": order.product, "method": method, "status": order.status,
                             "list_amount_cents": order.list_amount_cents, "credit_cents": order.credit_cents,
-                            "amount_cents": order.amount_cents}, reason=f"Checkout: {product.code} by {method}.")
+                            "amount_cents": order.amount_cents, "attribution": order.attribution},
+                 reason=f"Checkout: {product.code} by {method}.")
     if method == METHOD_CARD:
         return await _card_checkout(db, organization=organization, customer=customer, order=order, success_url=success_url)
     invoice = await _bank_transfer(db, organization=organization, customer=customer, order=order, today=today)
@@ -440,7 +533,48 @@ _BLOCKER_MESSAGES = {
     "already_higher_plan": "Your organization is on a larger plan: talk to us",
     "already_on_plan": "Your organization is already on Pursuit Desk",
     "plan_required": "Extra pursuits are for a pilot or a paid plan: start a pilot first",
+    "offer_required": "This is sold through a link from our team: ask us for one",
+    "per_tender_on_plan": "Your organization is on a plan: add an extra pursuit instead",
 }
+
+
+async def admin_invoice(
+    db: AsyncSession, *, organization: Organization, product_code: str, actor_user: User, signed_note: str,
+    today: date | None = None,
+) -> dict[str, Any]:
+    """An admin-sold product by bank transfer: the signed order form recorded as the terms acceptance, then the
+    usual invoice, activation and e-mails."""
+    today = today or billing_today()
+    if product_code not in ADMIN_PRODUCTS:
+        raise BillingError("unknown_product", "Admin invoices are for admin-sold products")
+    if len(_clean(signed_note, 1000)) < 3:
+        raise BillingError("note_required", "Describe the signed order form (date, signatory)")
+    blocker = await checkout_blocker(db, organization, product_code, offer=BillingOffer())
+    if blocker:
+        raise BillingConflictError(blocker, _BLOCKER_MESSAGES.get(blocker, "This cannot be invoiced now"))
+    customer = await get_customer(db, organization.id)
+    if customer is None:
+        raise BillingError("customer_required", "Enter the company details first")
+    currency = "UZS" if customer.resident else "USD"
+    if not bank_transfer_available(currency):
+        raise BillingUnavailableError("method_unavailable", f"Bank transfer in {currency} is not available yet")
+    current = terms()
+    acceptance = await accept_terms(db, organization=organization, user=actor_user, version=current["version"],
+                                    sha256=current["sha256"], ip_address=None, user_agent=None, signed_note=signed_note)
+    product = PRODUCTS[product_code]
+    order = BillingOrder(
+        organization_id=organization.id, product=product.code, plan=product.plan, method=METHOD_BANK,
+        status="awaiting_payment", currency="USD", list_amount_cents=product.amount_cents, credit_cents=0,
+        amount_cents=product.amount_cents, terms_acceptance_id=acceptance.id, created_by_user_id=actor_user.id,
+    )
+    db.add(order)
+    await db.flush()
+    await _audit(db, organization, ACTION_BILLING_ORDER_CREATED, actor_user=actor_user, actor_label=None,
+                 resource_type="BILLING_ORDER", resource_id=order.id,
+                 new_state={"product": order.product, "method": METHOD_BANK, "status": order.status,
+                            "amount_cents": order.amount_cents}, reason=f"Admin invoice: {product.code}.")
+    invoice = await _bank_transfer(db, organization=organization, customer=customer, order=order, today=today)
+    return {"order_id": order.id, "invoice_id": invoice.id, "invoice_number": invoice.number}
 
 
 async def _card_checkout(
@@ -581,7 +715,29 @@ async def activate_order(
     if order.activated_at is not None:
         return
     product = PRODUCTS[order.product]
-    if product.plan is not None:
+    if product.code == PRODUCT_PER_TENDER:
+        from app.services.organization_access import set_organization_access
+
+        again = organization.plan == PLAN_PER_TENDER
+        purchases = (organization.pursuit_limit_override or 0) + 1 if again else 1
+        start = organization.plan_started_on if again and organization.plan_started_on else today
+        await set_organization_access(
+            db, organization=organization, state="disabled" if organization.access_state == "disabled" else "paid",
+            plan=PLAN_PER_TENDER, plan_started_on=start, plan_ends_on=None, pursuit_limit_override=purchases,
+            actor_user=None, actor_label=actor_label, reason=f"Per-tender review bought ({order.method}).",
+            source=SOURCE_BILLING, actor_type=ACTOR_SYSTEM,
+        )
+        organization.billing_status = billing_status
+        order.plan_started_on, order.plan_ends_on = start, None
+        await db.execute(
+            pg_insert(OnboardingTask).values(organization_id=organization.id, order_id=order.id, status="open")
+            .on_conflict_do_nothing(index_elements=["order_id"])
+        )
+        await _email(db, order, "BILLING_WELCOME", f"welcome:{order.id}", {
+            "plan": PLAN_PER_TENDER, "starts_on": today.isoformat(), "ends_on": None, "kickoff_url": kickoff_url(),
+            "awaiting_payment": billing_status == "awaiting_payment", "terms_version": TERMS_VERSION,
+        })
+    elif product.plan is not None:
         start, end = today, add_months(today, product.term_months or 12)
         await _set_plan(db, organization=organization, plan=product.plan, start=start, end=end, actor_user=None,
                         actor_label=actor_label, reason=f"{product.code} bought ({order.method}).")
@@ -933,7 +1089,7 @@ async def _end_and_renew(db: AsyncSession, *, today: date, counts: dict[str, int
     - Pursuit Desk by card: Polar's subscription renews it (``order.paid``) or ends it (``subscription.revoked``).
     - Pursuit Desk by bank transfer: canceled → Explore; otherwise a renewal order and invoice for the next year
       (§4's 7/10-day rules then apply to that invoice).
-    Plans an admin set without an order are left to the admin."""
+    A Pursuit Desk an admin set without an order is left to the admin; every Pilot ends on its end date."""
     organizations = list((await db.scalars(
         select(Organization).where(
             Organization.plan.in_((PLAN_PILOT, PLAN_PURSUIT_DESK)), Organization.plan_ends_on.is_not(None),
@@ -942,11 +1098,15 @@ async def _end_and_renew(db: AsyncSession, *, today: date, counts: dict[str, int
     )).all())
     for organization in organizations:
         order = await current_plan_order(db, organization.id)
-        if order is None or order.plan != organization.plan or order.status not in ("paid", "awaiting_payment"):
-            continue
+        bought = order is not None and order.plan == organization.plan and order.status in ("paid", "awaiting_payment")
         if organization.plan == PLAN_PILOT:
-            await _end_plan(db, organization=organization, order=order, status=None, reason="Pilot ended after three months.")
+            # Every pilot ends on its end date: bought, set up by scripts/pilot_setup.py, or set by an admin
+            # (an admin moves the end date to extend one).
+            await _end_plan(db, organization=organization, order=order if bought else None, status=None,
+                            reason="Pilot ended after three months.")
             counts["ended"] += 1
+        elif not bought:
+            continue
         elif order.method == METHOD_BANK:
             if organization.billing_status == "canceled":
                 await _end_plan(db, organization=organization, order=order, status="canceled",
@@ -957,7 +1117,7 @@ async def _end_and_renew(db: AsyncSession, *, today: date, counts: dict[str, int
 
 
 async def _end_plan(
-    db: AsyncSession, *, organization: Organization, order: BillingOrder, status: str | None, reason: str,
+    db: AsyncSession, *, organization: Organization, order: BillingOrder | None, status: str | None, reason: str,
 ) -> None:
     before = {"plan": organization.plan, "billing_status": organization.billing_status,
               "plan_ends_on": organization.plan_ends_on.isoformat() if organization.plan_ends_on else None}
@@ -966,9 +1126,10 @@ async def _end_plan(
     organization.billing_status = status
     await db.flush()
     await _audit(db, organization, ACTION_BILLING_STATUS_CHANGED, actor_user=None, actor_label=ACTOR_SCHEDULE,
-                 resource_type="BILLING_ORDER", resource_id=order.id, previous_state=before,
+                 resource_type="BILLING_ORDER" if order is not None else "ORGANIZATION",
+                 resource_id=order.id if order is not None else organization.id, previous_state=before,
                  new_state={"plan": organization.plan, "billing_status": status}, reason=reason)
-    await _alert(db, organization, "plan_ended", order)
+    await _alert(db, organization, "plan_ended", order, ended_plan=before["plan"], ended_on=before["plan_ends_on"])
 
 
 async def _renew_by_invoice(db: AsyncSession, organization: Organization, order: BillingOrder, today: date) -> bool:
@@ -1109,6 +1270,58 @@ async def override_billing(
                      new_state={"billing_status": wanted, "plan": organization.plan}, reason=reason)
 
 
+async def request_cancel_renewal(db: AsyncSession, *, organization: Organization, user: User) -> BillingOrder:
+    """Bank-transfer Pursuit Desk: the customer asks not to renew (terms §7). The team confirms it."""
+    order = await current_plan_order(db, organization.id)
+    if (order is None or order.product != PRODUCT_PURSUIT_DESK or order.method != METHOD_BANK
+            or organization.plan != PLAN_PURSUIT_DESK or organization.billing_status not in ("paid", "awaiting_payment")):
+        raise BillingConflictError("not_cancellable", "There is no bank-transfer renewal to cancel")
+    if order.cancel_requested_at is not None:
+        raise BillingConflictError("cancel_requested", "Cancellation was already requested")
+    order.cancel_requested_at, order.cancel_requested_by_user_id = _now(), user.id
+    await db.flush()
+    await _audit(db, organization, ACTION_BILLING_CANCEL_REQUESTED, actor_user=user, actor_label=None,
+                 resource_type="BILLING_ORDER", resource_id=order.id,
+                 new_state={"renews_on": organization.plan_ends_on.isoformat() if organization.plan_ends_on else None},
+                 reason="Customer asked not to renew Pursuit Desk.")
+    await _alert(db, organization, "cancel_requested", order,
+                 renews_on=organization.plan_ends_on.isoformat() if organization.plan_ends_on else None)
+    return order
+
+
+async def confirm_cancel_renewal(db: AsyncSession, *, order: BillingOrder, actor_user: User) -> None:
+    """The team confirms: no renewal invoice; the plan ends on its renewal date (status canceled)."""
+    if order.cancel_requested_at is None:
+        raise BillingConflictError("cancel_not_requested", "The customer has not asked to cancel")
+    if order.cancel_confirmed_at is not None:
+        raise BillingConflictError("cancel_confirmed", "Already confirmed")
+    organization = await db.get(Organization, order.organization_id, with_for_update=True)
+    before = organization.billing_status
+    order.cancel_confirmed_at, order.cancel_confirmed_by_user_id = _now(), actor_user.id
+    organization.billing_status = "canceled"
+    await db.flush()
+    await _audit(db, organization, ACTION_BILLING_CANCEL_CONFIRMED, actor_user=actor_user, actor_label=None,
+                 resource_type="BILLING_ORDER", resource_id=order.id, previous_state={"billing_status": before},
+                 new_state={"billing_status": "canceled",
+                            "ends_on": organization.plan_ends_on.isoformat() if organization.plan_ends_on else None},
+                 reason="Renewal canceled at the customer's request.")
+
+
+async def card_customer(db: AsyncSession, organization_id: UUID) -> bool:
+    """Polar knows this organization as a customer (a card order was paid)."""
+    return await db.scalar(select(BillingPayment.id).where(
+        BillingPayment.organization_id == organization_id, BillingPayment.method == METHOD_CARD).limit(1)) is not None
+
+
+async def customer_portal_url(db: AsyncSession, *, organization: Organization) -> str:
+    if not await card_customer(db, organization.id):
+        raise BillingConflictError("not_card_customer", "There is no card subscription to manage")
+    try:
+        return await billing_polar.polar_client().create_customer_portal_url(external_customer_id=str(organization.id))
+    except billing_polar.PolarError as exc:
+        raise BillingUnavailableError("portal_unavailable", "The subscription page is not available right now") from exc
+
+
 async def complete_onboarding(db: AsyncSession, *, task: OnboardingTask, note: str | None, actor_user: User) -> None:
     if task.status == "done":
         raise BillingConflictError("task_done", "This onboarding task is already done")
@@ -1132,6 +1345,8 @@ def order_view(order: BillingOrder) -> dict[str, Any]:
         "plan_started_on": order.plan_started_on, "plan_ends_on": order.plan_ends_on,
         "renewal": order.renewal_of_order_id is not None,
         "refund_window_ends_on": refund_window_ends_on(order),
+        "attribution": order.attribution,
+        "cancel_requested_at": order.cancel_requested_at, "cancel_confirmed_at": order.cancel_confirmed_at,
     }
 
 
@@ -1179,8 +1394,17 @@ async def billing_summary(db: AsyncSession, organization: Organization, *, today
         offer = {"product": PRODUCT_PURSUIT_DESK, "list_amount_cents": PRODUCTS[PRODUCT_PURSUIT_DESK].amount_cents,
                  "credit_cents": credit, "pilot_ends_on": organization.plan_ends_on,
                  "day": (today - organization.plan_started_on).days}
+    renewal = None
+    if organization.plan == PLAN_PURSUIT_DESK:
+        order = await current_plan_order(db, organization.id)
+        if order is not None and order.plan == PLAN_PURSUIT_DESK:
+            renewal = {"method": order.method, "order_id": order.id, "renews_on": organization.plan_ends_on,
+                       "canceled": organization.billing_status == "canceled",
+                       "cancel_requested_at": order.cancel_requested_at}
     return {
         "status": organization.billing_status,
+        "renewal": renewal,
+        "card_customer": await card_customer(db, organization.id),
         "open_invoice": None if open_invoice is None else {
             "id": open_invoice.id, "number": open_invoice.number, "due_on": open_invoice.due_on,
             "days_left": (open_invoice.due_on - today).days, "currency": open_invoice.currency,
@@ -1224,6 +1448,9 @@ async def admin_customers(db: AsyncSession) -> list[dict[str, Any]]:
             BillingInvoice.organization_id == organization.id, BillingInvoice.status.in_(("issued", "overdue"))))
         open_task = await db.scalar(select(OnboardingTask.id).where(
             OnboardingTask.organization_id == organization.id, OnboardingTask.status == "open").limit(1))
+        cancel_request = await db.scalar(select(BillingOrder.id).where(
+            BillingOrder.organization_id == organization.id, BillingOrder.cancel_requested_at.is_not(None),
+            BillingOrder.cancel_confirmed_at.is_(None)).limit(1))
         rows.append({
             "organization_id": organization.id, "organization_name": _display(organization),
             "legal_name": customer.legal_name if customer else None, "country": customer.country if customer else None,
@@ -1231,7 +1458,7 @@ async def admin_customers(db: AsyncSession) -> list[dict[str, Any]]:
             "access_state": organization.access_state, "billing_status": organization.billing_status,
             "plan_started_on": organization.plan_started_on, "plan_ends_on": organization.plan_ends_on,
             "last_order": order_view(last) if last else None, "open_invoices": int(open_invoices or 0),
-            "onboarding_open": open_task is not None,
+            "onboarding_open": open_task is not None, "cancel_requested": cancel_request is not None,
             "last_activity_at": last.updated_at if last else (customer.updated_at if customer else None),
         })
     rows.sort(key=lambda row: row["last_activity_at"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
@@ -1263,14 +1490,19 @@ async def admin_detail(db: AsyncSession, organization: Organization) -> dict[str
         "organization_name": _display(organization), "access_state": organization.access_state,
         "billing_status": organization.billing_status,
         "terms_acceptances": [{
-            "id": row.id, "terms_version": row.terms_version, "text_sha256": row.text_sha256,
+            "terms_version": row.terms_version, "text_sha256": row.text_sha256,
             "user_email": users.get(row.user_id), "ip_address": row.ip_address, "accepted_at": row.accepted_at,
+            "accepted_via": row.accepted_via, "note": row.note,
         } for row in acceptances],
         "events": [{"id": row.id, "event_type": row.event_type, "provider_event_id": row.provider_event_id,
                     "outcome": row.outcome, "processing_error": row.processing_error, "received_at": row.received_at,
                     "processed_at": row.processed_at} for row in events],
         "onboarding": [{"id": row.id, "order_id": row.order_id, "status": row.status, "note": row.note,
                         "created_at": row.created_at, "done_at": row.done_at} for row in tasks],
+        "offers": [{"id": row.id, "product": row.product, "note": row.note, "expires_at": row.expires_at,
+                    "order_id": row.order_id, "created_at": row.created_at} for row in (await db.scalars(
+                        select(BillingOffer).where(BillingOffer.organization_id == organization.id)
+                        .order_by(BillingOffer.created_at.desc()).limit(20))).all()],
         "audit": [{"id": row.id, "action": row.action, "actor": row.actor_email_snapshot or row.actor_label,
                    "reason": row.reason, "created_at": row.created_at, "new_state": row.new_state} for row in audit],
     })

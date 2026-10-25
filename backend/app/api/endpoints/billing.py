@@ -29,7 +29,11 @@ from app.schemas.billing import (
     MarkPaidRequest,
     OnboardingDoneRequest,
     OnboardingTaskOut,
+    AdminInvoiceRequest,
+    OfferCreateRequest,
+    OfferCreateResponse,
     OrderStatusResponse,
+    PortalResponse,
     QuoteResponse,
     RefundNoteRequest,
     TermsResponse,
@@ -111,14 +115,14 @@ async def save_billing_customer(
 
 @router.get("/quote", response_model=QuoteResponse)
 async def billing_quote(
-    product: str = Query(..., max_length=40),
+    product: str = Query(..., max_length=40), offer: str | None = Query(default=None, max_length=200),
     x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ) -> QuoteResponse:
     """The price for this organization (with the pilot credit when it applies), and what blocks it."""
     context = await _context(db, current_user, x_organization_id)
     try:
-        return QuoteResponse(**await service.quote(db, context.organization, product))
+        return QuoteResponse(**await service.quote(db, context.organization, product, offer_token=offer))
     except service.BillingError as exc:
         await _fail(db, exc)
 
@@ -142,12 +146,42 @@ async def billing_checkout(
             method=payload.method, terms_version=payload.terms_version, terms_sha256=payload.terms_sha256,
             accepted=payload.accept_terms, ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"), success_url=success_url,
+            offer_token=payload.offer, attribution=payload.attribution,
         )
     except service.BillingError as exc:
         await _fail(db, exc)
     await db.commit()
     kick_admin_alerts()
     return CheckoutResponse(**result)
+
+
+@router.post("/portal", response_model=PortalResponse)
+async def billing_portal(
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> PortalResponse:
+    """Card customers: a link to Polar's customer portal (cancel or change the subscription, card, receipts)."""
+    context = await _context(db, current_user, x_organization_id, owner=True)
+    try:
+        return PortalResponse(url=await service.customer_portal_url(db, organization=context.organization))
+    except service.BillingError as exc:
+        await _fail(db, exc)
+
+
+@router.post("/cancel-renewal", response_model=BillingOverview)
+async def billing_cancel_renewal(
+    x_organization_id: UUID | None = Header(default=None, alias="X-Organization-ID"),
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+) -> BillingOverview:
+    """Bank-transfer Pursuit Desk: ask not to renew. Recorded and audited; the team confirms."""
+    context = await _context(db, current_user, x_organization_id, owner=True)
+    try:
+        await service.request_cancel_renewal(db, organization=context.organization, user=current_user)
+    except service.BillingError as exc:
+        await _fail(db, exc)
+    await db.commit()
+    kick_admin_alerts()
+    return BillingOverview(**await service.overview(db, context.organization))
 
 
 @router.get("/orders/{order_id}", response_model=OrderStatusResponse)
@@ -314,6 +348,60 @@ async def admin_override(
         raise HTTPException(422, detail={"code": "override_invalid", "message": str(exc)}) from exc
     await db.commit()
     return AdminBillingDetail(**await service.admin_detail(db, await _organization(db, organization_id)))
+
+
+@admin_router.post("/organizations/{organization_id}/offers", response_model=OfferCreateResponse)
+async def admin_create_offer(
+    organization_id: UUID, payload: OfferCreateRequest,
+    current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
+) -> OfferCreateResponse:
+    """A one-use checkout link for a per-tender review: the customer completes the usual checkout (terms, card
+    or bank transfer). The link is shown once."""
+    organization = await _organization(db, organization_id)
+    base = app_url()
+    if not base:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail={
+            "code": "app_url_missing", "message": "PUBLIC_APP_URL is not set"})
+    try:
+        offer, token = await service.create_offer(db, organization=organization, product=payload.product,
+                                                  actor_user=current_user, note=payload.note, days=payload.days)
+    except service.BillingError as exc:
+        await _fail(db, exc)
+    await db.commit()
+    return OfferCreateResponse(offer_id=offer.id, expires_at=offer.expires_at,
+                               url=f"{base}/billing/start?plan={payload.product}&offer={token}")
+
+
+@admin_router.post("/organizations/{organization_id}/invoices", response_model=AdminBillingDetail)
+async def admin_issue_invoice(
+    organization_id: UUID, payload: AdminInvoiceRequest,
+    current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
+) -> AdminBillingDetail:
+    """A per-tender review by bank transfer, with the signed order form as the terms acceptance."""
+    organization = await _organization(db, organization_id)
+    try:
+        await service.admin_invoice(db, organization=organization, product_code=payload.product,
+                                    actor_user=current_user, signed_note=payload.signed_note)
+    except service.BillingError as exc:
+        await _fail(db, exc)
+    await db.commit()
+    kick_admin_alerts()
+    return AdminBillingDetail(**await service.admin_detail(db, await _organization(db, organization_id)))
+
+
+@admin_router.post("/orders/{order_id}/confirm-cancel", response_model=AdminBillingDetail)
+async def admin_confirm_cancel(
+    order_id: UUID, current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db),
+) -> AdminBillingDetail:
+    order = await db.get(BillingOrder, order_id, with_for_update=True)
+    if order is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Order not found")
+    try:
+        await service.confirm_cancel_renewal(db, order=order, actor_user=current_user)
+    except service.BillingError as exc:
+        await _fail(db, exc)
+    await db.commit()
+    return AdminBillingDetail(**await service.admin_detail(db, await _organization(db, order.organization_id)))
 
 
 @admin_router.post("/onboarding/{task_id}/done", response_model=list[OnboardingTaskOut])

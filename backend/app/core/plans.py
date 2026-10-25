@@ -66,7 +66,8 @@ CATALOG: dict[str, Plan] = {
     # Enterprise: the pursuit number comes from the agreement (pursuit_limit_override); 150 until set.
     PLAN_ENTERPRISE: Plan(PLAN_ENTERPRISE, PERIOD_PLAN_YEAR, 150, None, None, True, True, True, INTELLIGENCE_FULL),
     # Per-tender review ($400): one pursuit end to end per purchase (pursuit_limit_override = purchases).
-    PLAN_PER_TENDER: Plan(PLAN_PER_TENDER, PERIOD_LIFETIME, 1, 0, None, True, True, False, INTELLIGENCE_NONE),
+    # Terms §1: every paid plan includes partner and expert search (RC-5: per-tender too).
+    PLAN_PER_TENDER: Plan(PLAN_PER_TENDER, PERIOD_LIFETIME, 1, 0, None, True, True, True, INTELLIGENCE_NONE),
 }
 
 # The P1 access state each plan implies (the company approval follows it); "disabled" is separate.
@@ -117,7 +118,10 @@ PRICES: dict[str, Price] = {
 PRODUCT_PILOT = "pilot"
 PRODUCT_PURSUIT_DESK = "pursuit_desk"
 PRODUCT_EXTRA_PURSUIT = "extra_pursuit"
-PRODUCTS_FOR_SALE = (PRODUCT_PILOT, PRODUCT_PURSUIT_DESK, PRODUCT_EXTRA_PURSUIT)
+PRODUCT_PER_TENDER = "per_tender"
+PRODUCTS_FOR_SALE = (PRODUCT_PILOT, PRODUCT_PURSUIT_DESK, PRODUCT_EXTRA_PURSUIT)  # self-serve
+# Not self-serve: an admin sends a one-use checkout link (an offer) or issues the invoice.
+ADMIN_PRODUCTS = (PRODUCT_PER_TENDER,)
 
 
 @dataclass(frozen=True)
@@ -138,6 +142,8 @@ PRODUCTS: dict[str, Product] = {
         PRODUCT_PURSUIT_DESK, PLAN_PURSUIT_DESK, PRICES[PLAN_PURSUIT_DESK].amount_cents, BILLING_ANNUAL, 12
     ),
     PRODUCT_EXTRA_PURSUIT: Product(PRODUCT_EXTRA_PURSUIT, None, 20_000, BILLING_ONE_TIME, None, extra_pursuits=1),
+    # One pursuit end to end and a review call; each purchase adds one to the per-tender plan's limit.
+    PRODUCT_PER_TENDER: Product(PRODUCT_PER_TENDER, PLAN_PER_TENDER, PRICES[PLAN_PER_TENDER].amount_cents, BILLING_ONE_TIME, None),
 }
 
 # The Plasma Pilot and Subscription Terms, version 1 (effective 26 Oct 2026), set the numbers below.

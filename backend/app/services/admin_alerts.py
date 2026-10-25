@@ -133,7 +133,8 @@ def render_alert(alert: AdminAlert) -> tuple[str, list[str]]:
     return (f"Plasma {label} request: {data.get('organization_name') or data.get('email')}", lines)
 
 
-BILLING_PRODUCTS = {"pilot": "Pilot", "pursuit_desk": "Pursuit Desk", "extra_pursuit": "an extra pursuit"}
+BILLING_PRODUCTS = {"pilot": "Pilot", "pursuit_desk": "Pursuit Desk", "extra_pursuit": "an extra pursuit",
+                    "per_tender": "a per-tender review"}
 BILLING_EVENTS = {
     "activated": "{organization} bought {product} ({method}): active now",
     "bank_transfer_paid": "{organization} paid invoice {invoice} by bank transfer",
@@ -148,12 +149,14 @@ BILLING_EVENTS = {
     "subscription_active": "{organization}: {product} subscription active",
     "subscription_uncanceled": "{organization}: {product} subscription resumed",
     "plan_ended": "{organization}: {product} ended, back to Explore",
+    "cancel_requested": "{organization} asked not to renew {product}: confirm on /admin/billing",
 }
 
 
 def _render_billing(data: dict[str, Any], when: str) -> tuple[str, list[str]]:
     organization = data.get("organization_name") or "An organization"
-    product = BILLING_PRODUCTS.get(str(data.get("product")), str(data.get("product")))
+    product = BILLING_PRODUCTS.get(str(data.get("product") or data.get("ended_plan")),
+                                   str(data.get("product") or data.get("ended_plan") or "the plan"))
     method = "card" if data.get("method") == "card" else "bank transfer"
     template = BILLING_EVENTS.get(str(data.get("event")), "{organization}: billing event {event}")
     headline = template.format(organization=organization, product=product, method=method,

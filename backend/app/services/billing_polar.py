@@ -20,7 +20,7 @@ from typing import Any, Mapping
 import httpx
 
 from app.core.config import settings
-from app.core.plans import PRODUCTS_FOR_SALE
+from app.core.plans import PRODUCTS
 
 POLAR_API = {"sandbox": "https://sandbox-api.polar.sh", "production": "https://api.polar.sh"}
 WEBHOOK_TOLERANCE_SECONDS = 5 * 60
@@ -46,7 +46,7 @@ def product_ids() -> dict[str, str]:
         return {}
     if not isinstance(value, dict):
         return {}
-    return {code: str(value[code]).strip() for code in PRODUCTS_FOR_SALE if str(value.get(code) or "").strip()}
+    return {code: str(value[code]).strip() for code in PRODUCTS if str(value.get(code) or "").strip()}
 
 
 def card_available(product: str) -> bool:
@@ -99,7 +99,9 @@ class PolarClient:
             "products": [product_id], "success_url": success_url, "metadata": metadata,
             "external_customer_id": external_customer_id,
             "customer_name": customer_name[:256], "customer_billing_address": {"country": country},
-            "allow_discount_codes": False,
+            # A code the team created in Polar (e.g. the owner's one-use 100% test code) can be entered, unless
+            # the app already applies a discount (the pilot credit): one discount per checkout.
+            "allow_discount_codes": discount_id is None,
         }
         if customer_email:  # Polar refuses reserved domains (e.g. .invalid)
             body["customer_email"] = customer_email
@@ -109,6 +111,18 @@ class PolarClient:
         if not data.get("url"):
             raise PolarError("polar_bad_response")
         return {"id": str(data["id"]), "url": str(data["url"])}
+
+
+async def _customer_portal(self: "PolarClient", *, external_customer_id: str) -> str:
+    """A pre-authenticated Polar customer portal link (manage the subscription, payment method, receipts)."""
+    data = await self._post("/v1/customer-sessions/", {"external_customer_id": external_customer_id})
+    url = data.get("customer_portal_url")
+    if not url:
+        raise PolarError("polar_bad_response")
+    return str(url)
+
+
+PolarClient.create_customer_portal_url = _customer_portal  # type: ignore[attr-defined]
 
 
 def polar_client() -> PolarClient:

@@ -14,7 +14,7 @@ import { Checkbox, Input, Radio, Select } from '@/components/ui/Forms';
 import { api } from '@/lib/api';
 import { PLAN_STATUS_EVENT } from '@/lib/plans';
 import {
-  billingErrorCode, billingErrorKey, productFrom, type BillingCustomer, type BillingOverview, type BillingQuote, type BillingTerms,
+  billingErrorCode, billingErrorKey, productFrom, resolveAttribution, type BillingCustomer, type BillingOverview, type BillingQuote, type BillingTerms,
   type PaymentMethod, type ProductCode,
 } from '@/lib/billing';
 
@@ -35,7 +35,10 @@ function BillingStart() {
   const s = useTranslations('dashboard.billing.start');
   const money = useMoney();
   const params = useSearchParams();
-  const product = productFrom(params.get('plan'));
+  const offer = params.get('offer');
+  const product = productFrom(params.get('plan'), offer);
+  // ref and utm_* from the link (or the cookie /billing/start set before a sign-in), stored on the order.
+  const attribution = useMemo(() => resolveAttribution(params, typeof document === 'undefined' ? '' : document.cookie), [params]);
   const [step, setStep] = useState<Step>('details');
   const [customer, setCustomer] = useState<BillingCustomer>(EMPTY);
   const [terms, setTerms] = useState<BillingTerms | null>(null);
@@ -58,12 +61,12 @@ function BillingStart() {
   }, [money.locale]);
 
   const loadQuote = useCallback(async (code: ProductCode) => {
-    const response = await api.get<BillingQuote>('/billing/quote', { params: { product: code } });
+    const response = await api.get<BillingQuote>('/billing/quote', { params: offer ? { product: code, offer } : { product: code } });
     setQuote(response.data);
     setMethod((current) => current && response.data.methods[current] ? current
       : response.data.methods.card ? 'card' : response.data.methods.bank_transfer ? 'bank_transfer' : null);
     return response.data;
-  }, []);
+  }, [offer]);
 
   useEffect(() => {
     if (!product) return;
@@ -106,7 +109,8 @@ function BillingStart() {
     setError(null);
     try {
       const response = await api.post<{ checkout_url: string | null; order_id: string; invoice_id: string | null; invoice_number: string | null }>(
-        '/billing/checkout', { product, method, terms_version: terms.version, terms_sha256: terms.sha256, accept_terms: accepted });
+        '/billing/checkout', { product, method, terms_version: terms.version, terms_sha256: terms.sha256, accept_terms: accepted,
+          offer, attribution });
       if (response.data.checkout_url) {
         window.location.assign(response.data.checkout_url);
         return;

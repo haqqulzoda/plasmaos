@@ -197,6 +197,11 @@
         "name": "Qo‘shimcha tender",
         "price": "{price}",
         "points": "Joriy tarif davrida yana bitta tender"
+      },
+      "per_tender": {
+        "name": "Bitta tender tahlili",
+        "price": "{price}",
+        "points": "Bitta tender boshidan oxirigacha va 30 daqiqalik tahlil qo‘ng‘irog‘i"
       }
     },
     "buy": "Sotib olish",
@@ -312,7 +317,13 @@
         "plan_required": "Qo‘shimcha tenderlar pilot yoki pullik tarif uchun.",
         "organization_disabled": "Bu tashkilot o‘chirilgan.",
         "unknown_product": "Bu ilovada sotilmaydi.",
-        "generic": "Nimadir xato ketdi. Qayta urinib ko‘ring."
+        "generic": "Nimadir xato ketdi. Qayta urinib ko‘ring.",
+        "offer_required": "Bu jamoamiz havolasi orqali sotiladi: bizdan so‘rang.",
+        "per_tender_on_plan": "Tashkilotingiz tarifda: qo‘shimcha tender qo‘shing.",
+        "not_cancellable": "Bekor qilinadigan yangilanish yo‘q.",
+        "cancel_requested": "Bekor qilish allaqachon so‘ralgan.",
+        "not_card_customer": "Karta orqali obuna yo‘q.",
+        "portal_unavailable": "Obuna sahifasi hozir mavjud emas: keyinroq urinib ko‘ring."
       }
     },
     "success": {
@@ -324,6 +335,17 @@
       "notFound": "Bu to‘lovni topib bo‘lmadi.",
       "openDashboard": "Bosh sahifani ochish"
     },
-    "addPursuit": "Tender qo‘shish ({price})"
+    "addPursuit": "Tender qo‘shish ({price})",
+    "renewal": {
+      "title": "Yangilanish",
+      "renewsOn": "Pursuit Desk {date} da yangilanadi.",
+      "endsOn": "Yangilanish bekor qilindi: tarif {date} gacha amal qiladi.",
+      "manage": "Obunani boshqarish",
+      "manageHelp": "Polar’da yangilanishni bekor qiling, kartani almashtiring yoki cheklarni yuklab oling.",
+      "cancel": "Yangilanishni bekor qilish",
+      "cancelHelp": "Yillik hisobni chiqarmaymiz; tarif yangilanish sanasigacha amal qiladi.",
+      "requested": "Bekor qilish {date} da so‘ralgan: jamoamiz uni e-mail orqali tasdiqlaydi.",
+      "failed": "Bo‘lmadi. Qayta urinib ko‘ring yoki hq@plasmaos.uz ga yozing."
+    }
   }
 }

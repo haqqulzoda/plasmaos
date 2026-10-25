@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     INVOICE_SELLER_PHONE: str = "+998 94 877 87 83"
     INVOICE_BANK_DETAILS_UZS: str | None = None
     INVOICE_BANK_DETAILS_USD: str | None = None
+    # RC-5: USD bank transfer (non-residents) only when this is true and the USD details are set; until then
+    # non-resident customers are offered card payment only.
+    INVOICE_USD_ENABLED: bool = False
     # The kickoff booking link in the welcome e-mail; unset: PUBLIC_BOOK_CALL_URL.
     BILLING_KICKOFF_URL: str | None = None
 
@@ -123,6 +126,11 @@ class Settings(BaseSettings):
             raise ValueError("POLAR_ENV must be sandbox or production")
         if self.POLAR_ENV == "production" and self.ENVIRONMENT not in {"production", "release"}:
             raise ValueError("Polar production keys are refused outside a production environment")
+        if self.POLAR_ENV == "production" and not (
+            (self.POLAR_ACCESS_TOKEN or "").strip() and (self.POLAR_WEBHOOK_SECRET or "").strip()
+            and (self.POLAR_PRODUCT_IDS or "").strip()
+        ):
+            raise ValueError("POLAR_ENV=production requires POLAR_ACCESS_TOKEN, POLAR_WEBHOOK_SECRET and POLAR_PRODUCT_IDS")
         if self.ENVIRONMENT in {"production", "release"}:
             dangerous = self.AUTO_CREATE_TABLES or self.DEMO_OCR_BYPASS or self.PLASMA_ENABLE_PSEUDO_LOCALE or any(
                 os.getenv(name, "").lower() in {"1", "true", "yes", "on"}

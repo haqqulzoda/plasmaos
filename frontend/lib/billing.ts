@@ -3,11 +3,13 @@
  * Import-free for the node test runner.
  */
 
-export type ProductCode = 'pilot' | 'pursuit_desk' | 'extra_pursuit';
+export type ProductCode = 'pilot' | 'pursuit_desk' | 'extra_pursuit' | 'per_tender';
 export type PaymentMethod = 'card' | 'bank_transfer';
 export type BillingStatus = 'paid' | 'awaiting_payment' | 'suspended' | 'refunded' | 'canceled';
 
-export const PRODUCT_CODES: ProductCode[] = ['pilot', 'pursuit_desk', 'extra_pursuit'];
+export const PRODUCT_CODES: ProductCode[] = ['pilot', 'pursuit_desk', 'extra_pursuit', 'per_tender'];
+/** Sold only through a one-use link from the team (an offer). */
+export const OFFER_PRODUCTS: ProductCode[] = ['per_tender'];
 
 export type BillingCustomer = {
   legal_name: string;
@@ -53,6 +55,9 @@ export type BillingOrder = {
   renewal: boolean;
   /** Terms §6: Pilot refundable on request within 30 days of activation; annual fees not after 14 days. */
   refund_window_ends_on?: string | null;
+  attribution?: Record<string, string> | null;
+  cancel_requested_at?: string | null;
+  cancel_confirmed_at?: string | null;
 };
 
 export type BillingInvoice = {
@@ -90,6 +95,12 @@ export type BillingPayment = {
 
 export type BillingSummary = {
   status: BillingStatus | null;
+  /** Pursuit Desk: how it renews (card: Polar's subscription; bank transfer: an invoice), and a cancellation. */
+  renewal?: {
+    method: PaymentMethod; order_id: string; renews_on: string | null; canceled: boolean; cancel_requested_at: string | null;
+  } | null;
+  /** Polar knows the organization (a card payment): the customer portal can be opened. */
+  card_customer?: boolean;
   open_invoice: {
     id: string; number: string; due_on: string; days_left: number; currency: string;
     total_usd_cents: number; total_uzs: string | null; status: string;
@@ -113,16 +124,44 @@ export type BillingOverview = {
   pilot_credit_available: boolean;
 };
 
-/** /billing/start?plan=… accepts only the products sold in the app. */
-export function productFrom(value: string | null | undefined): ProductCode | null {
-  return PRODUCT_CODES.includes(value as ProductCode) ? (value as ProductCode) : null;
+/** /billing/start?plan=… accepts the products sold in the app; per-tender only with the team's offer link. */
+export function productFrom(value: string | null | undefined, offer?: string | null): ProductCode | null {
+  const product = PRODUCT_CODES.includes(value as ProductCode) ? (value as ProductCode) : null;
+  return product && OFFER_PRODUCTS.includes(product) && !offer ? null : product;
+}
+
+/** ref and utm_* carried from /billing/start to the order (marketing attribution). */
+export const ATTRIBUTION_KEYS = ['ref', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const;
+export const ATTRIBUTION_COOKIE = 'plasma_billing_attribution';
+
+export function attributionFrom(params: URLSearchParams): Record<string, string> | null {
+  const values: Record<string, string> = {};
+  for (const key of ATTRIBUTION_KEYS) {
+    const value = params.get(key)?.trim();
+    if (value) values[key] = value.slice(0, 200);
+  }
+  return Object.keys(values).length ? values : null;
+}
+
+/** The attribution from the URL, else from the cookie /billing/start set (it survives the sign-in). */
+export function resolveAttribution(params: URLSearchParams, cookieHeader: string): Record<string, string> | null {
+  const fromUrl = attributionFrom(params);
+  if (fromUrl) return fromUrl;
+  const raw = cookieHeader.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${ATTRIBUTION_COOKIE}=`));
+  if (!raw) return null;
+  try {
+    return attributionFrom(new URLSearchParams(decodeURIComponent(raw.slice(ATTRIBUTION_COOKIE.length + 1))));
+  } catch {
+    return null;
+  }
 }
 
 /** The checkout errors the app explains (dashboard.billing.start.errors.*); anything else is "generic". */
 export const BILLING_ERROR_CODES = [
   'customer_invalid', 'customer_required', 'terms_not_accepted', 'terms_changed', 'method_unavailable', 'card_unavailable',
   'fx_unavailable', 'owner_required', 'pilot_used', 'already_paid_plan', 'already_on_plan', 'already_higher_plan',
-  'awaiting_payment', 'plan_required', 'organization_disabled', 'unknown_product',
+  'awaiting_payment', 'plan_required', 'organization_disabled', 'unknown_product', 'offer_required', 'per_tender_on_plan',
+  'not_cancellable', 'cancel_requested', 'not_card_customer', 'portal_unavailable',
 ] as const;
 export type BillingErrorKey = (typeof BILLING_ERROR_CODES)[number] | 'generic';
 
