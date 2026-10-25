@@ -97,8 +97,8 @@ def test_polar_env_switch_both_ways(monkeypatch: pytest.MonkeyPatch) -> None:
                    SECRET_KEY="s" * 40, AUTH_BRIDGE_SECRET="b" * 40, TELEGRAM_BOT_TOKEN="x",
                    ENVIRONMENT="production", BACKEND_CORS_ORIGINS=["https://app.example.com"], _env_file=None)
     assert Settings(**release).POLAR_ENV == "sandbox"  # production may still use the sandbox
-    with pytest.raises(ValueError, match="requires POLAR_ACCESS_TOKEN"):
-        Settings(**release, POLAR_ENV="production")
+    with pytest.raises(ValueError, match="requires POLAR_ACCESS_TOKEN"):  # explicit None: the gate's environment has keys
+        Settings(**release, POLAR_ENV="production", POLAR_ACCESS_TOKEN=None, POLAR_WEBHOOK_SECRET=None, POLAR_PRODUCT_IDS=None)
     live = Settings(**release, POLAR_ENV="production", POLAR_ACCESS_TOKEN="polar_oat_live",
                     POLAR_WEBHOOK_SECRET="whsec_live", POLAR_PRODUCT_IDS='{"pilot": "p"}')
     assert live.POLAR_ENV == "production"
