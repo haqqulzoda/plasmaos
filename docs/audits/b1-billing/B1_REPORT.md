@@ -4,11 +4,13 @@ Branch `pilot/b1-billing` on `pilot/p3-plans-limits` (worktree `D:\projects\plas
 pushed or deployed. One additive migration (`20261025_0001_b1_billing`). Deploy note:
 [`docs/ops/DEPLOY_5_B1_BILLING_NOTE.md`](../../ops/DEPLOY_5_B1_BILLING_NOTE.md).
 
-**Not yet tested against the Polar sandbox.** No Polar sandbox credentials exist on this machine, and creating a
-Polar account was not mine to do. Everything Polar-facing is built to Polar's API and Standard Webhooks
-documentation and tested with a fake Polar in the tests and a local stand-in for the demo; the sandbox run is one
-command once the owner has the sandbox keys (§9). No live key exists anywhere: the app refuses
-`POLAR_ENV=production` outside a production environment.
+**Polar sandbox (25 Oct):** the token, the three products, the checkout request and the pilot-credit discount were
+checked against the real sandbox (§9); a webhook from Polar to this app has not been received yet (the endpoint
+URL is a placeholder until Deploy 5). No live key exists anywhere: the app refuses `POLAR_ENV=production` outside a
+production environment.
+
+**Terms (25 Oct):** the owner-approved **Plasma Pilot and Subscription Terms, version 1 (effective 26 Oct 2026)**
+replace the draft; the behaviour was aligned with them and the remaining differences are listed in §12.
 
 ## 1. The flow
 
@@ -25,7 +27,8 @@ A firm on Explore clicks **Start a pilot** (Explore page, the plan notice, or `/
      there. The **`order.paid` webhook** activates the plan; the success page waits for it.
    - **Bank transfer**: the app issues invoice **PL-YYYY-NNN** (gapless per year), in **UZS at the CBU rate of
      the day** for residents (USD otherwise), e-mails it as a PDF, and **activates the plan at once** with billing
-     status `awaiting_payment`. Reminders on **days 3 and 6**; on **day 10** unpaid the organization returns to
+     status `awaiting_payment`, **payment due in 7 days**. Reminders on **days 3 and 6**; still unpaid on
+     **day 10** the organization returns to
      **Explore** with an in-app notice (and an e-mail); an admin **marks it paid** with the bank reference (a
      suspended plan comes back with its original dates).
 
@@ -175,26 +178,31 @@ self sign-ups from P3 ("Bukhara Water Advisory LLC (local demo)": bank transfer;
 demo)": card); the day-75 and day-10 states were produced by moving the pilot start back and running the schedule
 for "today + 3, + 6, + 10" against the demo database.
 
-## 9. Polar sandbox: what remains
+## 9. Polar sandbox
 
-1. Owner: a Polar **sandbox** organization, three products (Pilot $900 one-time, Pursuit Desk $6,000 yearly,
-   Extra pursuit $200 one-time), an access token (`checkouts:write`, `discounts:write`, `products:read`), a webhook
-   to `https://<API_DOMAIN>/api/v1/billing/webhooks/polar` with the seven events (deploy note).
-2. `python scripts/polar_sandbox_check.py --webhook-selftest` (products match the catalogue; the secret
-   verifies), then `--checkout` to pay one sandbox checkout with 4242 4242 4242 4242 and see `order.paid`
-   arrive (stored as `unmatched_order`, touching no customer).
-3. Then the Deploy 5 checks: a real sandbox pilot purchase end to end, a refund, a Pursuit Desk with the credit.
+Done on 25 Oct with the owner's sandbox token (`scripts/polar_sandbox_check.py`):
 
-Assumptions to confirm in that run (from Polar's documentation, not yet observed): the order payload carries
-`metadata`, `checkout_id`, `subscription_id`, `total_amount`, `refunded_amount`, `status`; subscription renewal
-orders carry the checkout's metadata or the subscription id (both are handled); discounts take
-`amounts: {"usd": cents}`; the product read returns `prices[].price_amount` and `recurring_interval`.
+- the token reads products; **Pilot** 90000 usd one-time, **Pursuit Desk** 600000 usd **yearly**, **Extra pursuit**
+  20000 usd one-time: all three match the catalogue (Agent, Enterprise and Per-tender products also exist in the
+  sandbox; the app does not sell them, so they are not configured);
+- the webhook secret verifies with the app's Standard Webhooks check;
+- a **checkout** with the app's exact request (metadata, external customer id, name, billing country, no discount
+  codes) is created (201);
+- the **pilot credit**: a fixed one-time $900 discount (`amounts: {"usd": 90000}`, one redemption, Pursuit Desk only)
+  is created, and a Pursuit Desk checkout carrying it is created.
+
+Two fixes came out of it: **Polar refuses an Uzbek TIN** as `customer_tax_id` (422 "Invalid tax ID"), which would
+have broken card checkout for every resident, so the TIN is no longer sent to Polar (it stays on our records and
+invoices; Polar is seller of record for cards); and Polar refuses reserved e-mail domains, so the e-mail is
+optional in the client.
+
+Still to do once the webhook points at a reachable URL (Deploy 5): pay a sandbox checkout with
+4242 4242 4242 4242 and watch `order.paid` arrive; a refund; a Pursuit Desk with the credit. Not yet observed: the
+webhook payload fields (`metadata`, `checkout_id`, `subscription_id`, `total_amount`, `refunded_amount`, `status`)
+and whether renewal orders carry the checkout's metadata (both cases are handled).
 
 ## 10. Risks and open points
 
-- **Pilot Terms are a draft.** The pilot agreement template you mentioned lives in a Claude Docs page I could not
-  read from here; `PILOT_TERMS_v1.md` is written from the 23 Oct decisions (prices, credit, 30-day refund, 10-day
-  bank transfer rule, data, liability capped at the fees, Uzbek law). Replace it before Deploy 5.
 - **Bank transfer gives ten days of a full pilot before money arrives** (by design: "use it immediately").
 - **IP in the terms acceptance** is the request's client address. Locally it is 127.0.0.1; behind Caddy and the
   Next.js rewrite it may be the frontend container's address unless the forwarded header reaches the backend.
@@ -218,3 +226,58 @@ orders carry the checkout's metadata or the subscription id (both are handled); 
   and pass parity), a real e-mail send (the outbox rows were rendered, not sent).
 - Local leftovers: database `plasma_s05b4b_b1_demo` (disposable copy), a throwaway Redis container
   `b1-demo-redis` (stopped at the end), the worktree's `node_modules` copy.
+
+## 12. The approved terms (v1, effective 26 Oct 2026) against the code
+
+`docs/legal/PILOT_TERMS_v1.md` and `PILOT_TERMS_v1.pdf` are the owner-approved text (from
+`paa/legal/PLASMA_PILOT_TERMS_v1.*`; the backend copies are byte-identical, checked by the test). The checkout's
+terms step renders it (headings, lists, its three tables, rules) as text, and `terms_acceptances` stores the SHA-256
+of exactly that text (`c5f091d6…`). The **PDF is attached to the activation (welcome) e-mail**.
+
+**Made to match:**
+
+| Terms | Before | Now |
+| --- | --- | --- |
+| §1 Pilot: 3 months, 6 pursuits, 1 introduction, unlimited users | already | unchanged (P3 catalogue) |
+| §4 bank transfer: due within 7 days | due on day 10 | due on day **7**; reminders days 3 and 6 |
+| §4 Explore if unpaid 10 days after issue | already | unchanged; invoice, e-mails and app say both dates |
+| §5 credit only if the annual plan is ordered within 30 days after the Pilot ends | any time | window enforced, judged on the order date (not the payment date) |
+| §6 Pilot refund within 30 days of activation; annual not after 14 days | "30 days of payment" | wording fixed; the admin console shows each order's refund window |
+| §7 Pilot ends after 3 months, no renewal; "when a plan ends … Explore" | a Pilot ran on past its end | a bought Pilot moves to Explore on its end date |
+| §7 Pursuit Desk renews yearly | card only (Polar subscription) | bank transfer too: a renewal order and invoice on the renewal date, plan extended at once, then §4's 7/10-day rules; once only |
+| §7 cancel before the renewal date | — | bank transfer: an admin sets "canceled" (e-mail request) → the plan ends on the renewal date, no invoice |
+
+**Still different, for the owner to decide:**
+
+1. **Cancel "in the app"** (§7): there is no cancel button. Card subscriptions can be canceled in Polar's customer
+   portal (linked from Polar's receipts); bank-transfer customers must e-mail and an admin records it. An in-app
+   "Cancel renewal" (calling Polar for cards) is a small follow-up.
+2. **Per-tender review** (§1, "online in the Plasma app"): the app does not sell it (it is "talk to us"); the Polar
+   product exists but is not wired. Also P3 gives Per-tender **no partner search**, while §1 says "every paid plan
+   includes … partner and expert search".
+3. **VAT** (§4 "prices exclude VAT … where they apply"): invoices show no VAT line and no VAT status. Whether Plasma
+   charges VAT, and whether resident invoices must also go out as electronic invoices through the tax system,
+   needs the accountant's answer before real bank-transfer invoices.
+4. **Refund windows are shown, not enforced** (§6): an admin can still record a refund after 30 / 14 days (the law
+   or a service failure may require it). The **onboarding guarantee** (7 business days from receiving documents)
+   is not tracked: onboarding tasks have no "documents received" date or deadline.
+5. **Services** (§2–§3): onboarding loads, specialist reviews (2 per pilot, 1 per quarter) and success criteria are
+   delivered by the team; the app does not count reviews (success criteria exist only as P1's admin field).
+6. **Plans set by an admin** (P1/P3 pilots, invoiced by hand) are not ended automatically at their end date; only
+   plans bought through B1 are. Existing pilots need the owner's decision.
+7. **§13 new versions**: renewals keep the accepted version; there is no flow yet to ask for acceptance of a v2 at
+   renewal.
+8. **Effective date**: the app shows and records v1 as soon as it is deployed; if Deploy 5 happens before
+   26 Oct 2026, acceptances will predate the stated effective date.
+9. **Seller address**: the terms name "Plasma AI Solutions, Tashkent" (HQ Tashkent, regional office Karshi); invoices
+   carry the registered legal entity, PLASMA AI SOLUTIONS MChJ, 21 Mustaqillik Street, Qarshi. Consistent with §15,
+   but worth a glance.
+
+Tests for these: `test_b1_billing.py` checks the terms copy and PDF (clauses for 7 days, 10 days, the credit window,
+the refund window, renewal, the pilot's 6 pursuits and 1 introduction), the 7-day due date, the PDF on the welcome
+e-mail, the credit window (day 30 after the pilot yes, day 31 no), the pilot ending (not the day before, Explore on
+the day), a Pursuit Desk by bank transfer with the credit, its renewal (once, invoice due in 7 days, plan extended)
+and, after an admin "canceled", its end. All 7 B1 tests pass; P3, P2, R3-04 and the drift tests pass (except the
+known Windows CRLF-hash test); frontend 419/419, `tsc`, ESLint and the token audit clean. Screens 01–08 were
+re-captured with the approved terms (03: the terms step with its tables; 06: the invoice with the 7-day due date,
+the day-10 rule and the credit window), and `emails-sample.md` shows the welcome e-mail with the terms PDF attached.

@@ -36,9 +36,13 @@ from app.core.config import settings
 from app.core.plans import (
     ACCESS_STATE_FOR_PLAN,
     ANNUAL_OFFER_DAY,
+    ANNUAL_REFUND_DAYS,
+    BANK_TRANSFER_DUE_DAYS,
     BANK_TRANSFER_REMINDER_DAYS,
     BANK_TRANSFER_SUSPEND_DAY,
     PILOT_CREDIT_CENTS,
+    PILOT_CREDIT_WINDOW_DAYS,
+    PILOT_GUARANTEE_DAYS,
     PLAN_EXPLORE,
     PLAN_PILOT,
     PLAN_PURSUIT_DESK,
@@ -87,9 +91,13 @@ from app.services.billing_fx import FxUnavailableError, usd_rate
 from app.services.billing_invoice_pdf import bank_lines
 from app.services.email_notifications import stage_email, user_locale
 
+# The Plasma Pilot and Subscription Terms, version 1, effective 26 Oct 2026 (owner-approved text; the PDF is the
+# same text, attached to the activation e-mail). Every acceptance stores the SHA-256 of the Markdown shown.
 TERMS_VERSION = "PILOT_TERMS_v1"
 TASHKENT = ZoneInfo("Asia/Tashkent")
 TERMS_PATH = Path(__file__).resolve().parents[1] / "legal" / "PILOT_TERMS_v1.md"
+TERMS_PDF_PATH = TERMS_PATH.with_suffix(".pdf")
+TERMS_PDF_NAME = "Plasma-Pilot-and-Subscription-Terms-v1.pdf"
 PAID_PLANS = ("pursuit_desk", "agent", "enterprise", "per_tender")
 METHOD_CARD = "card"
 METHOD_BANK = "bank_transfer"
@@ -131,6 +139,10 @@ def _now() -> datetime:
 def billing_today() -> date:
     """The business date in Tashkent: invoice dates, the CBU rate of the day, plan start dates, the day count."""
     return datetime.now(TASHKENT).date()
+
+
+def _local_date(moment: datetime | None) -> date | None:
+    return moment.astimezone(TASHKENT).date() if moment is not None else None
 
 
 def add_months(day: date, months: int) -> date:
@@ -286,17 +298,23 @@ async def save_customer(
 
 # ---- eligibility -------------------------------------------------------------------------------
 
-async def pilot_credit_source(db: AsyncSession, organization_id: UUID) -> BillingOrder | None:
-    """The paid pilot not yet credited (None when there is none, or the credit was used)."""
+async def pilot_credit_source(db: AsyncSession, organization_id: UUID, *, on: date | None = None) -> BillingOrder | None:
+    """The paid pilot not yet credited, for an annual order placed ``on`` that date (terms §5: within 30 days after
+    the pilot ends). None when there is none, the credit was used, or the window has closed."""
+    on = on or billing_today()
     used = await db.scalar(select(PilotCreditRedemption.id).where(PilotCreditRedemption.organization_id == organization_id))
     if used is not None:
         return None
-    return await db.scalar(
+    pilot = await db.scalar(
         select(BillingOrder).where(
             BillingOrder.organization_id == organization_id, BillingOrder.product == PRODUCT_PILOT,
             BillingOrder.status == "paid",
         ).order_by(BillingOrder.paid_at).limit(1)
     )
+    if pilot is None or (pilot.plan_ends_on is not None
+                         and on > pilot.plan_ends_on + timedelta(days=PILOT_CREDIT_WINDOW_DAYS)):
+        return None
+    return pilot
 
 
 async def checkout_blocker(db: AsyncSession, organization: Organization, product: str) -> str | None:
@@ -330,12 +348,14 @@ async def checkout_blocker(db: AsyncSession, organization: Organization, product
     return None
 
 
-async def quote(db: AsyncSession, organization: Organization, product_code: str) -> dict[str, Any]:
+async def quote(
+    db: AsyncSession, organization: Organization, product_code: str, *, today: date | None = None,
+) -> dict[str, Any]:
     product = PRODUCTS.get(product_code)
     if product is None:
         raise BillingNotFoundError("unknown_product", "This product is not sold in the app")
     credit = 0
-    if product.code == PRODUCT_PURSUIT_DESK and await pilot_credit_source(db, organization.id) is not None:
+    if product.code == PRODUCT_PURSUIT_DESK and await pilot_credit_source(db, organization.id, on=today) is not None:
         credit = min(PILOT_CREDIT_CENTS, product.amount_cents)
     customer = await get_customer(db, organization.id)
     currency = "UZS" if customer is not None and customer.resident else "USD"
@@ -378,7 +398,7 @@ async def start_checkout(
     today = today or billing_today()
     if method not in (METHOD_CARD, METHOD_BANK):
         raise BillingError("method_invalid", "Choose card or bank transfer")
-    offer = await quote(db, organization, product_code)
+    offer = await quote(db, organization, product_code, today=today)
     if offer["blocker"]:
         raise BillingConflictError(offer["blocker"], _BLOCKER_MESSAGES.get(offer["blocker"], "This cannot be bought now"))
     customer = await get_customer(db, organization.id)
@@ -439,7 +459,7 @@ async def _card_checkout(
             product_id=product_id, success_url=success_url, metadata=metadata,
             customer_email=customer.billing_email, external_customer_id=str(organization.id),
             customer_name=customer.legal_name, country=customer.country,
-            tax_id=customer.tin, discount_id=order.provider_discount_id,
+            discount_id=order.provider_discount_id,
         )
     except billing_polar.PolarError as exc:
         raise BillingUnavailableError("card_unavailable", "Card payment is not available right now: try bank transfer or later") from exc
@@ -490,7 +510,7 @@ async def issue_invoice(
                   "address": customer.address, "billing_email": customer.billing_email, "resident": customer.resident},
         currency=currency, list_amount_cents=order.list_amount_cents, credit_cents=order.credit_cents,
         total_usd_cents=order.amount_cents, fx_rate=rate, fx_rate_date=rate_date, total_uzs=total_uzs,
-        issued_on=today, due_on=today + timedelta(days=BANK_TRANSFER_SUSPEND_DAY), status="issued",
+        issued_on=today, due_on=today + timedelta(days=BANK_TRANSFER_DUE_DAYS), status="issued",
     )
     db.add(invoice)
     await db.flush()
@@ -509,14 +529,16 @@ def _invoice_payload(invoice: BillingInvoice, order: BillingOrder) -> dict[str, 
         "currency": invoice.currency, "total_usd": f"{invoice.total_usd_cents / 100:,.2f}",
         "total_uzs": f"{invoice.total_uzs:,.2f}".replace(",", " ") if invoice.total_uzs is not None else None,
         "due_on": invoice.due_on.isoformat(), "pilot": order.product == PRODUCT_PILOT,
+        "explore_on": (invoice.issued_on + timedelta(days=BANK_TRANSFER_SUSPEND_DAY)).isoformat(),
     }
 
 
 async def _redeem_credit(
     db: AsyncSession, *, organization: Organization, order: BillingOrder, actor_user: User | None, actor_label: str,
 ) -> bool:
-    """Record the pilot credit on ``order``; False when it was already used (the order keeps its figures)."""
-    source = await pilot_credit_source(db, organization.id)
+    """Record the pilot credit on ``order``; False when it was already used (the order keeps its figures).
+    The window is judged on the date the order was placed, not the date the payment arrives."""
+    source = await pilot_credit_source(db, organization.id, on=_local_date(order.created_at))
     if source is None:
         return False
     inserted = await db.scalar(
@@ -572,6 +594,7 @@ async def activate_order(
         await _email(db, order, "BILLING_WELCOME", f"welcome:{order.id}", {
             "plan": product.plan, "starts_on": start.isoformat(), "ends_on": end.isoformat(),
             "kickoff_url": kickoff_url(), "awaiting_payment": billing_status == "awaiting_payment",
+            "terms_version": TERMS_VERSION,
         })
     else:
         from app.services.plans import GRANT_PURSUITS, add_grant
@@ -873,9 +896,11 @@ async def record_webhook_failure(db: AsyncSession, *, body: bytes, event_id: str
 # ---- bank transfer schedule --------------------------------------------------------------------
 
 async def run_billing_schedule(db: AsyncSession, *, today: date | None = None) -> dict[str, int]:
-    """Reminders on days 3 and 6 of an unpaid invoice, Explore on day 10. Idempotent; the caller commits."""
+    """Plan endings and bank-transfer renewals (terms §7), then reminders on days 3 and 6 of an unpaid invoice and
+    Explore on day 10 (§4). Idempotent; the caller commits."""
     today = today or billing_today()
-    counts = {"reminders": 0, "suspended": 0}
+    counts = {"reminders": 0, "suspended": 0, "ended": 0, "renewed": 0}
+    await _end_and_renew(db, today=today, counts=counts)
     invoices = list((await db.scalars(
         select(BillingInvoice).where(BillingInvoice.status == "issued").order_by(BillingInvoice.issued_on)
         .with_for_update(skip_locked=True)
@@ -893,12 +918,98 @@ async def run_billing_schedule(db: AsyncSession, *, today: date | None = None) -
         if due and invoice.reminders_sent < due[-1]:
             await _email(db, order, "BILLING_REMINDER", f"reminder:{invoice.id}:{due[-1]}", {
                 **_invoice_payload(invoice, order), "day": due[-1],
-                "days_left": BANK_TRANSFER_SUSPEND_DAY - age,
+                "days_left": max(0, (invoice.due_on - today).days),
             })
             invoice.reminders_sent = due[-1]
             counts["reminders"] += 1
     await db.flush()
     return counts
+
+
+async def _end_and_renew(db: AsyncSession, *, today: date, counts: dict[str, int]) -> None:
+    """Bought plans whose term is over. ``plan_ends_on`` is the first day after the term (= the renewal date).
+
+    - Pilot (terms §7: does not renew) → Explore.
+    - Pursuit Desk by card: Polar's subscription renews it (``order.paid``) or ends it (``subscription.revoked``).
+    - Pursuit Desk by bank transfer: canceled → Explore; otherwise a renewal order and invoice for the next year
+      (§4's 7/10-day rules then apply to that invoice).
+    Plans an admin set without an order are left to the admin."""
+    organizations = list((await db.scalars(
+        select(Organization).where(
+            Organization.plan.in_((PLAN_PILOT, PLAN_PURSUIT_DESK)), Organization.plan_ends_on.is_not(None),
+            Organization.plan_ends_on <= today, Organization.access_state != "disabled",
+        ).with_for_update(skip_locked=True)
+    )).all())
+    for organization in organizations:
+        order = await current_plan_order(db, organization.id)
+        if order is None or order.plan != organization.plan or order.status not in ("paid", "awaiting_payment"):
+            continue
+        if organization.plan == PLAN_PILOT:
+            await _end_plan(db, organization=organization, order=order, status=None, reason="Pilot ended after three months.")
+            counts["ended"] += 1
+        elif order.method == METHOD_BANK:
+            if organization.billing_status == "canceled":
+                await _end_plan(db, organization=organization, order=order, status="canceled",
+                                reason="Pursuit Desk canceled before its renewal date.")
+                counts["ended"] += 1
+            elif organization.billing_status == "paid" and await _renew_by_invoice(db, organization, order, today):
+                counts["renewed"] += 1
+
+
+async def _end_plan(
+    db: AsyncSession, *, organization: Organization, order: BillingOrder, status: str | None, reason: str,
+) -> None:
+    before = {"plan": organization.plan, "billing_status": organization.billing_status,
+              "plan_ends_on": organization.plan_ends_on.isoformat() if organization.plan_ends_on else None}
+    await _set_plan(db, organization=organization, plan=PLAN_EXPLORE, start=None, end=None, actor_user=None,
+                    actor_label=ACTOR_SCHEDULE, reason=reason)
+    organization.billing_status = status
+    await db.flush()
+    await _audit(db, organization, ACTION_BILLING_STATUS_CHANGED, actor_user=None, actor_label=ACTOR_SCHEDULE,
+                 resource_type="BILLING_ORDER", resource_id=order.id, previous_state=before,
+                 new_state={"plan": organization.plan, "billing_status": status}, reason=reason)
+    await _alert(db, organization, "plan_ended", order)
+
+
+async def _renew_by_invoice(db: AsyncSession, organization: Organization, order: BillingOrder, today: date) -> bool:
+    """Next Pursuit Desk year for a bank-transfer customer: a renewal order, active at once, and its invoice."""
+    base = order if order.renewal_of_order_id is None else await db.get(BillingOrder, order.renewal_of_order_id)
+    start = organization.plan_ends_on
+    exists = await db.scalar(select(BillingOrder.id).where(
+        BillingOrder.renewal_of_order_id == base.id, BillingOrder.plan_started_on == start))
+    customer = await get_customer(db, organization.id)
+    if exists is not None or customer is None:
+        return False
+    if customer.resident:
+        try:
+            await usd_rate(db, today)  # no rate yet today: try again at the next run, before creating anything
+        except FxUnavailableError:
+            return False
+    product = PRODUCTS[PRODUCT_PURSUIT_DESK]
+    end = add_months(start, product.term_months or 12)
+    renewal = BillingOrder(
+        organization_id=organization.id, product=product.code, plan=product.plan, method=METHOD_BANK,
+        status="awaiting_payment", currency="USD", list_amount_cents=product.amount_cents, credit_cents=0,
+        amount_cents=product.amount_cents, terms_acceptance_id=base.terms_acceptance_id,
+        created_by_user_id=base.created_by_user_id, renewal_of_order_id=base.id, activated_at=_now(),
+        plan_started_on=start, plan_ends_on=end,
+    )
+    db.add(renewal)
+    await db.flush()
+    await _set_plan(db, organization=organization, plan=product.plan, start=organization.plan_started_on, end=end,
+                    actor_user=None, actor_label=ACTOR_SCHEDULE, reason="Pursuit Desk renewed for another year.",
+                    reset_overrides=False)
+    organization.billing_status = "awaiting_payment"
+    await _audit(db, organization, ACTION_BILLING_ORDER_CREATED, actor_user=None, actor_label=ACTOR_SCHEDULE,
+                 resource_type="BILLING_ORDER", resource_id=renewal.id,
+                 new_state={"product": renewal.product, "method": METHOD_BANK, "status": renewal.status,
+                            "amount_cents": renewal.amount_cents, "renewal_of": str(base.id),
+                            "plan_started_on": start.isoformat(), "plan_ends_on": end.isoformat()},
+                 reason="Pursuit Desk renews yearly (terms §7).")
+    invoice = await issue_invoice(db, organization=organization, customer=customer, order=renewal, today=today)
+    await _email(db, renewal, "BILLING_INVOICE", f"invoice:{invoice.id}", _invoice_payload(invoice, renewal))
+    await _alert(db, organization, "renewed", renewal, invoice_number=invoice.number)
+    return True
 
 
 async def _lapse(db: AsyncSession, *, invoice: BillingInvoice, order: BillingOrder) -> None:
@@ -1020,7 +1131,16 @@ def order_view(order: BillingOrder) -> dict[str, Any]:
         "activated_at": order.activated_at, "refunded_at": order.refunded_at, "refund_note": order.refund_note,
         "plan_started_on": order.plan_started_on, "plan_ends_on": order.plan_ends_on,
         "renewal": order.renewal_of_order_id is not None,
+        "refund_window_ends_on": refund_window_ends_on(order),
     }
+
+
+def refund_window_ends_on(order: BillingOrder) -> date | None:
+    """Terms §6: Pilot refundable on request within 30 days of activation; annual fees not after 14 days."""
+    activated = _local_date(order.activated_at)
+    if activated is None or order.product == PRODUCT_EXTRA_PURSUIT:
+        return None
+    return activated + timedelta(days=PILOT_GUARANTEE_DAYS if order.product == PRODUCT_PILOT else ANNUAL_REFUND_DAYS)
 
 
 def invoice_view(invoice: BillingInvoice) -> dict[str, Any]:
@@ -1055,7 +1175,7 @@ async def billing_summary(db: AsyncSession, organization: Organization, *, today
     offer = None
     if organization.plan == PLAN_PILOT and organization.plan_started_on is not None \
             and (today - organization.plan_started_on).days >= ANNUAL_OFFER_DAY:
-        credit = PILOT_CREDIT_CENTS if await pilot_credit_source(db, organization.id) is not None else 0
+        credit = PILOT_CREDIT_CENTS if await pilot_credit_source(db, organization.id, on=today) is not None else 0
         offer = {"product": PRODUCT_PURSUIT_DESK, "list_amount_cents": PRODUCTS[PRODUCT_PURSUIT_DESK].amount_cents,
                  "credit_cents": credit, "pilot_ends_on": organization.plan_ends_on,
                  "day": (today - organization.plan_started_on).days}
@@ -1087,7 +1207,7 @@ async def overview(db: AsyncSession, organization: Organization, *, today: date 
         "orders": [order_view(order) for order in orders if order.status != "pending" or order.provider_checkout_id],
         "invoices": [invoice_view(invoice) for invoice in invoices],
         "payments": [payment_view(payment) for payment in payments],
-        "pilot_credit_available": await pilot_credit_source(db, organization.id) is not None,
+        "pilot_credit_available": await pilot_credit_source(db, organization.id, on=today) is not None,
     }
 
 

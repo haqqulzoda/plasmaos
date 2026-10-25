@@ -47,17 +47,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "product_extra_pursuit": "extra pursuit",
         "invoice_subject": "Invoice {number} from Plasma",
         "invoice_body": "Your {product} is active now. Invoice {number} is attached: {amount}, payable by bank transfer by {due}.",
-        "invoice_reference": "Use {number} as the payment reference. If it is unpaid on {due}, your organization returns to the free Explore plan until the payment arrives.",
+        "invoice_reference": "Use {number} as the payment reference. Payment is due by {due}. If the invoice is still unpaid on {explore}, your organization moves to the free Explore plan until the payment arrives.",
         "invoice_pilot_note": "The pilot payment is credited to your first annual invoice.",
         "open_billing": "Billing in Plasma: {url}",
         "reminder_subject": "Reminder: invoice {number} is due on {due}",
-        "reminder_body": "Invoice {number} ({amount}) is not paid yet. {days} days left: pay by {due} to keep your plan.",
+        "reminder_body": "Invoice {number} ({amount}) is not paid yet.",
         "suspended_subject": "Your Plasma plan is paused: invoice {number} is unpaid",
         "suspended_body": "Invoice {number} was not paid within 10 days, so your organization is back on the free Explore plan. Your data is kept: pay the invoice and your plan comes back.",
         "welcome_subject": "Welcome to Plasma {plan}",
         "welcome_body": "Your {plan} is active from {start} to {end}.",
         "welcome_kickoff": "Book your kickoff call: {url}",
         "welcome_next": "Next: open a tender in Plasma and start its analysis. Our team will contact you to plan the first pursuits.",
+        "welcome_terms": "The Plasma Pilot and Subscription Terms you accepted (version 1) are attached.",
         "welcome_awaiting": "The invoice comes in a separate e-mail; your plan is already active.",
         "open_dashboard": "Open Plasma: {url}",
     },
@@ -94,17 +95,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "product_extra_pursuit": "дополнительный тендер",
         "invoice_subject": "Счёт {number} от Plasma",
         "invoice_body": "Ваш тариф «{product}» уже активен. Счёт {number} во вложении: {amount}, оплата банковским переводом до {due}.",
-        "invoice_reference": "Укажите {number} в назначении платежа. Если счёт не оплачен к {due}, организация вернётся на бесплатный тариф Explore до поступления оплаты.",
+        "invoice_reference": "Укажите {number} в назначении платежа. Срок оплаты — до {due}. Если счёт не оплачен к {explore}, организация перейдёт на бесплатный тариф Explore до поступления оплаты.",
         "invoice_pilot_note": "Оплата пилота засчитывается в первый годовой счёт.",
         "open_billing": "Оплата в Plasma: {url}",
         "reminder_subject": "Напоминание: счёт {number} нужно оплатить до {due}",
-        "reminder_body": "Счёт {number} ({amount}) ещё не оплачен. Осталось дней: {days}. Оплатите до {due}, чтобы сохранить тариф.",
+        "reminder_body": "Счёт {number} ({amount}) ещё не оплачен.",
         "suspended_subject": "Тариф Plasma приостановлен: счёт {number} не оплачен",
         "suspended_body": "Счёт {number} не был оплачен в течение 10 дней, поэтому организация вернулась на бесплатный тариф Explore. Данные сохранены: оплатите счёт, и тариф вернётся.",
         "welcome_subject": "Добро пожаловать в Plasma: {plan}",
         "welcome_body": "Ваш тариф «{plan}» действует с {start} по {end}.",
         "welcome_kickoff": "Запишитесь на стартовый звонок: {url}",
         "welcome_next": "Дальше: откройте тендер в Plasma и запустите анализ. Наша команда свяжется с вами, чтобы спланировать первые тендеры.",
+        "welcome_terms": "Во вложении — принятые вами Условия пилота и подписки Plasma (версия 1).",
         "welcome_awaiting": "Счёт придёт отдельным письмом; тариф уже активен.",
         "open_dashboard": "Открыть Plasma: {url}",
     },
@@ -141,17 +143,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "product_extra_pursuit": "qo‘shimcha tender",
         "invoice_subject": "Plasma’dan {number} hisob-fakturasi",
         "invoice_body": "«{product}» tarifingiz faol. {number} hisob-fakturasi ilova qilingan: {amount}, {due} gacha bank o‘tkazmasi orqali to‘lanadi.",
-        "invoice_reference": "To‘lov maqsadida {number} ni ko‘rsating. {due} gacha to‘lanmasa, tashkilotingiz to‘lov kelguncha bepul Explore tarifiga qaytadi.",
+        "invoice_reference": "To‘lov maqsadida {number} ni ko‘rsating. To‘lov muddati — {due} gacha. Agar hisob-faktura {explore} gacha to‘lanmasa, tashkilotingiz to‘lov kelguncha bepul Explore tarifiga o‘tadi.",
         "invoice_pilot_note": "Pilot uchun to‘lov birinchi yillik hisob-fakturaga hisoblanadi.",
         "open_billing": "Plasma’da to‘lovlar: {url}",
         "reminder_subject": "Eslatma: {number} hisob-fakturasi {due} gacha to‘lanishi kerak",
-        "reminder_body": "{number} hisob-fakturasi ({amount}) hali to‘lanmagan. {days} kun qoldi: tarifni saqlash uchun {due} gacha to‘lang.",
+        "reminder_body": "{number} hisob-fakturasi ({amount}) hali to‘lanmagan.",
         "suspended_subject": "Plasma tarifingiz to‘xtatildi: {number} hisob-fakturasi to‘lanmagan",
         "suspended_body": "{number} hisob-fakturasi 10 kun ichida to‘lanmadi, shuning uchun tashkilotingiz bepul Explore tarifiga qaytdi. Ma’lumotlaringiz saqlangan: hisob-fakturani to‘lang va tarif qaytadi.",
         "welcome_subject": "Plasma {plan} tarifiga xush kelibsiz",
         "welcome_body": "«{plan}» tarifingiz {start} dan {end} gacha faol.",
         "welcome_kickoff": "Boshlang‘ich qo‘ng‘iroqqa yoziling: {url}",
         "welcome_next": "Keyingi qadam: Plasma’da tenderni oching va tahlilni boshlang. Jamoamiz birinchi tenderlarni rejalashtirish uchun siz bilan bog‘lanadi.",
+        "welcome_terms": "Siz qabul qilgan Plasma pilot va obuna shartlari (1-versiya) ilova qilingan.",
         "welcome_awaiting": "Hisob-faktura alohida xatda keladi; tarifingiz allaqachon faol.",
         "open_dashboard": "Plasma’ni ochish: {url}",
     },
@@ -188,17 +191,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "product_extra_pursuit": "مناقصة إضافية",
         "invoice_subject": "الفاتورة {number} من Plasma",
         "invoice_body": "خطتك ({product}) مفعّلة الآن. الفاتورة {number} مرفقة: {amount}، تُدفع بتحويل بنكي قبل {due}.",
-        "invoice_reference": "اذكر {number} مرجعًا للدفع. إن لم تُدفع حتى {due} تعود مؤسستك إلى خطة الاستكشاف المجانية حتى وصول الدفعة.",
+        "invoice_reference": "اذكر {number} مرجعًا للدفع. موعد الاستحقاق {due}. إن بقيت الفاتورة غير مدفوعة حتى {explore} تنتقل مؤسستك إلى خطة الاستكشاف المجانية حتى وصول الدفعة.",
         "invoice_pilot_note": "يُحتسب مبلغ التجربة من أول فاتورة سنوية.",
         "open_billing": "الفوترة في Plasma: {url}",
         "reminder_subject": "تذكير: الفاتورة {number} مستحقة في {due}",
-        "reminder_body": "الفاتورة {number} ({amount}) لم تُدفع بعد. متبقٍ {days} أيام: ادفع قبل {due} للحفاظ على خطتك.",
+        "reminder_body": "الفاتورة {number} ({amount}) لم تُدفع بعد.",
         "suspended_subject": "تم إيقاف خطتك في Plasma مؤقتًا: الفاتورة {number} غير مدفوعة",
         "suspended_body": "لم تُدفع الفاتورة {number} خلال 10 أيام، لذا عادت مؤسستك إلى خطة الاستكشاف المجانية. بياناتك محفوظة: ادفع الفاتورة وتعود خطتك.",
         "welcome_subject": "مرحبًا بك في Plasma: {plan}",
         "welcome_body": "خطتك ({plan}) مفعّلة من {start} إلى {end}.",
         "welcome_kickoff": "احجز مكالمة البدء: {url}",
         "welcome_next": "التالي: افتح مناقصة في Plasma وابدأ تحليلها. سيتواصل فريقنا معك لتخطيط أولى المناقصات.",
+        "welcome_terms": "مرفق شروط Plasma للتجربة والاشتراك التي قبلتها (الإصدار 1).",
         "welcome_awaiting": "تصلك الفاتورة في رسالة منفصلة؛ خطتك مفعّلة بالفعل.",
         "open_dashboard": "افتح Plasma: {url}",
     },
@@ -321,7 +325,8 @@ def _render_billing(kind: str, locale: str, context: dict[str, Any], *, app_url:
     footer = _t(locale, "billing_footer")
     billing = _url(app_url, "/dashboard/billing")
     product = _t(locale, f"product_{context.get('product') or 'pilot'}")
-    values = {"number": context.get("number", ""), "due": context.get("due_on", ""), "amount": _amount(context)}
+    values = {"number": context.get("number", ""), "due": context.get("due_on", ""), "amount": _amount(context),
+              "explore": context.get("explore_on", "")}
     if kind == "BILLING_WELCOME":
         plan = _t(locale, f"product_{context.get('plan') or 'pilot'}")
         lines: list[tuple[str, str | None]] = [
@@ -330,6 +335,8 @@ def _render_billing(kind: str, locale: str, context: dict[str, Any], *, app_url:
         if context.get("kickoff_url"):
             lines.append((_t(locale, "welcome_kickoff", url=context["kickoff_url"]), str(context["kickoff_url"])))
         lines.append((_t(locale, "welcome_next"), None))
+        if context.get("terms_version"):
+            lines.append((_t(locale, "welcome_terms"), None))
         if context.get("awaiting_payment"):
             lines.append((_t(locale, "welcome_awaiting"), None))
         dashboard = _url(app_url, "/dashboard")

@@ -51,6 +51,8 @@ export type BillingOrder = {
   plan_started_on: string | null;
   plan_ends_on: string | null;
   renewal: boolean;
+  /** Terms §6: Pilot refundable on request within 30 days of activation; annual fees not after 14 days. */
+  refund_window_ends_on?: string | null;
 };
 
 export type BillingInvoice = {
@@ -141,7 +143,9 @@ export function billingErrorCode(error: unknown): string | null {
 export type MarkdownInline = { text: string; strong?: boolean; em?: boolean };
 export type MarkdownBlock =
   | { kind: 'h1' | 'h2' | 'h3' | 'p'; inline: MarkdownInline[] }
-  | { kind: 'ul'; items: MarkdownInline[][] };
+  | { kind: 'ul'; items: MarkdownInline[][] }
+  | { kind: 'table'; header: MarkdownInline[][]; rows: MarkdownInline[][][] }
+  | { kind: 'hr' };
 
 /** **bold** and *italic* only; everything else is text (rendered as React text, never as HTML). */
 export function parseInline(text: string): MarkdownInline[] {
@@ -157,21 +161,42 @@ export function parseInline(text: string): MarkdownInline[] {
   return parts;
 }
 
-/** The small Markdown the terms use: #/##/### headings, paragraphs, "- " lists. */
+const cells = (line: string) => line.replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => parseInline(cell.trim()));
+const isTableRule = (line: string) => /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$/.test(line);
+
+/** The Markdown the terms use: #/##/### headings, paragraphs, "- " lists, pipe tables, "---" rules. */
 export function parseMarkdown(markdown: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
   let paragraph: string[] = [];
   let list: string[] = [];
+  let table: string[] = [];
   const flush = () => {
     if (paragraph.length) blocks.push({ kind: 'p', inline: parseInline(paragraph.join(' ')) });
     if (list.length) blocks.push({ kind: 'ul', items: list.map(parseInline) });
+    if (table.length) {
+      const [head, ...rest] = table;
+      const body = rest[0] !== undefined && isTableRule(rest[0]) ? rest.slice(1) : rest;
+      blocks.push({ kind: 'table', header: cells(head), rows: body.map(cells) });
+    }
     paragraph = [];
     list = [];
+    table = [];
   };
   for (const raw of markdown.replace(/\r\n/g, '\n').split('\n')) {
     const line = raw.trim();
     const heading = /^(#{1,3})\s+(.*)$/.exec(line);
     if (!line) { flush(); continue; }
+    if (line.startsWith('|')) {
+      if (!table.length) flush();
+      table.push(line);
+      continue;
+    }
+    if (table.length) flush();
+    if (/^(-{3,}|\*{3,})$/.test(line)) {
+      flush();
+      blocks.push({ kind: 'hr' });
+      continue;
+    }
     if (heading) {
       flush();
       blocks.push({ kind: (`h${heading[1].length}`) as 'h1' | 'h2' | 'h3', inline: parseInline(heading[2]) });

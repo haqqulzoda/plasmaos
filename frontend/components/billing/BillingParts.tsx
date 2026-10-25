@@ -69,11 +69,16 @@ function Inline({ parts }: { parts: MarkdownInline[] }) {
     : part.em ? <em key={index}>{part.text}</em> : <span key={index}>{part.text}</span>)}</>;
 }
 
-/** The Pilot Terms (Markdown from the API), rendered as React text: never as HTML. */
+/** The Plasma Pilot and Subscription Terms (Markdown from the API), rendered as React text: never as HTML. */
 export function TermsText({ markdown }: { markdown: string }) {
   return <div className="billing-terms-text" data-billing-terms>
     {parseMarkdown(markdown).map((block, index) => {
       if (block.kind === 'ul') return <ul key={index}>{block.items.map((item, key) => <li key={key}><Inline parts={item} /></li>)}</ul>;
+      if (block.kind === 'hr') return <hr key={index} />;
+      if (block.kind === 'table') return <div key={index} className="billing-terms-table-wrap"><table className="billing-terms-table">
+        <thead><tr>{block.header.map((cell, key) => <th key={key} scope="col"><Inline parts={cell} /></th>)}</tr></thead>
+        <tbody>{block.rows.map((row, key) => <tr key={key}>{row.map((cell, column) => <td key={column}><Inline parts={cell} /></td>)}</tr>)}</tbody>
+      </table></div>;
       if (block.kind === 'h1') return <h3 key={index}><Inline parts={block.inline} /></h3>;
       if (block.kind === 'h2' || block.kind === 'h3') return <h4 key={index}><Inline parts={block.inline} /></h4>;
       return <p key={index}><Inline parts={block.inline} /></p>;

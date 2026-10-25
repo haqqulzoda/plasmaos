@@ -186,12 +186,12 @@
       "pilot": {
         "name": "Pilot",
         "price": "3 oy uchun {price} (oyiga {monthly})",
-        "points": "6 ta tender · 1 ta hamkor bilan tanishtirish · EOI, o‘z dalillari va hamkor qidiruvi · 30 kun ichida to‘liq qaytarish"
+        "points": "6 ta tender · hamkor yoki ekspert bilan 1 ta tanishtirish · onboarding va 2 ta mutaxassis ko‘rigi · faollashtirilgandan keyin 30 kun ichida to‘liq qaytarish"
       },
       "pursuit_desk": {
         "name": "Pursuit Desk",
         "price": "yiliga {price}",
-        "points": "yiliga 24 ta tender va 2 ta tanishtirish · soha tahlili"
+        "points": "tarif yilida 24 ta tender va 2 ta tanishtirish · har chorakda 1 ta mutaxassis ko‘rigi · har yili yangilanadi"
       },
       "extra_pursuit": {
         "name": "Qo‘shimcha tender",
@@ -200,7 +200,7 @@
       }
     },
     "buy": "Sotib olish",
-    "creditNote": "Pilot uchun to‘lov ({credit}) Pursuit Desk’ga bir marta hisoblanadi.",
+    "creditNote": "Pilot uchun to‘lov ({credit}) pilot tugaganidan keyin 30 kun ichida buyurtma qilingan Pursuit Desk’ga bir marta hisoblanadi.",
     "talkTitle": "Agent va Enterprise",
     "talkHelp": "Agent yiliga {agent}, Enterprise yiliga {enterprise} dan: shartlar va hisobni jamoamiz tayyorlaydi.",
     "talkToUs": "Biz bilan bog‘laning",
@@ -253,7 +253,7 @@
       "canceledTitle": "Obuna bekor qilindi",
       "canceledHelp": "Tarif to‘langan davr oxirigacha amal qiladi.",
       "offerTitle": "Pilotdan keyin Pursuit Desk bilan davom eting",
-      "offerHelp": "Pilot {date} da tugaydi. Pursuit Desk yiliga {price}; pilot uchun to‘lovingiz {credit} bir marta hisoblanadi.",
+      "offerHelp": "Pilot {date} da tugaydi. Shundan keyin 30 kun ichida Pursuit Desk’ni (yiliga {price}) buyurtma qiling va pilot uchun to‘lovingiz {credit} bir marta hisoblanadi.",
       "offerHelpNoCredit": "Pilot {date} da tugaydi. Pursuit Desk yiliga {price}.",
       "openBilling": "To‘lovlarni ochish",
       "continueDesk": "Pursuit Desk bilan davom etish"
@@ -263,7 +263,7 @@
       "stepOf": "{step}-qadam, jami 3",
       "steps": {
         "details": "Kompaniya rekvizitlari",
-        "terms": "Pilot shartlari",
+        "terms": "Shartlar",
         "payment": "To‘lov"
       },
       "legalName": "Kompaniyaning yuridik nomi",
@@ -276,8 +276,8 @@
       "resident": "O‘zbekistonda ro‘yxatdan o‘tgan (hisob kun kursi bo‘yicha so‘mda)",
       "next": "Davom etish",
       "back": "Orqaga",
-      "termsHelp": "Qabul qilishdan oldin shartlarni o‘qing (versiya {version}).",
-      "accept": "{company} nomidan Pilot shartlarini o‘qidim va qabul qilaman",
+      "termsHelp": "Qabul qilishdan oldin Plasma pilot va obuna shartlarini o‘qing ({version}).",
+      "accept": "{company} nomidan Plasma pilot va obuna shartlarini o‘qidim va qabul qilaman, men buning uchun vakolatliman",
       "summary": "Buyurtma",
       "listPrice": "Narx",
       "credit": "Pilot to‘lovi",
@@ -285,20 +285,20 @@
       "card": "Karta",
       "cardHelp": "Polar orqali xavfsiz to‘lov. Tarif to‘lov tasdiqlangach boshlanadi.",
       "bank": "Bank o‘tkazmasi",
-      "bankHelp": "{currency} da hisob-faktura yuboramiz. Tarif hozir boshlanadi; 10 kun ichida to‘lang.",
+      "bankHelp": "{currency} da hisob-faktura yuboramiz. Tarif hozir boshlanadi; to‘lov muddati — 7 kun.",
       "unavailable": "Hozircha mavjud emas",
       "sandbox": "Sinov rejimi (Polar sandbox): haqiqiy pul yechilmaydi.",
       "payCard": "Karta orqali to‘lashga o‘tish",
       "issueInvoice": "Hisob-faktura olish va hozir boshlash",
       "invoiceIssuedTitle": "{number} hisob-fakturasi yuborildi",
-      "invoiceIssuedHelp": "{product} hozir faol. Hisob-fakturani {email} ga yubordik. 10 kun ichida to‘lov maqsadida {number} ni ko‘rsatib to‘lang.",
+      "invoiceIssuedHelp": "{product} hozir faol. Hisob-fakturani {email} ga yubordik. To‘lov muddati — 7 kun, to‘lov maqsadida {number} ni ko‘rsating.",
       "downloadInvoice": "Hisob-fakturani yuklab olish (PDF)",
       "openPlasma": "Plasma’ni ochish",
       "unknownProduct": "To‘lov sahifasida nima sotib olishni tanlang.",
       "errors": {
         "customer_invalid": "Kompaniya rekvizitlarini tekshiring.",
         "customer_required": "Avval kompaniya rekvizitlarini kiriting.",
-        "terms_not_accepted": "Davom etish uchun Pilot shartlarini qabul qiling.",
+        "terms_not_accepted": "Davom etish uchun shartlarni qabul qiling.",
         "terms_changed": "Shartlar o‘zgardi: joriy versiyani o‘qing va qayta qabul qiling.",
         "method_unavailable": "Bu to‘lov usuli hozircha mavjud emas.",
         "card_unavailable": "Karta orqali to‘lov hozir mavjud emas: bank o‘tkazmasini tanlang yoki keyinroq urinib ko‘ring.",

@@ -29,9 +29,17 @@ test("the terms render as text blocks: headings, paragraphs, lists, bold; no HTM
   assert.deepEqual(blocks[1].inline, [{ text: "A " }, { text: "bold", strong: true }, { text: " and " }, { text: "soft", em: true },
     { text: " line continues." }]);
   assert.equal(blocks[2].items[1][0].text, "two <b>x</b>");
+  const table = parseMarkdown(["| Plan | Price |", "|---|---|", "| **Pilot** | USD 900 |", "", "---", "", "After."].join(String.fromCharCode(10)));
+  assert.deepEqual(table.map((block) => block.kind), ["table", "hr", "p"]);
+  assert.deepEqual(table[0].header.map((cell) => cell[0].text), ["Plan", "Price"]);
+  assert.deepEqual(table[0].rows[0][0], [{ text: "Pilot", strong: true }]);
   const terms = parseMarkdown(read("../docs/legal/PILOT_TERMS_v1.md"));
   assert.equal(terms[0].kind, "h1");
   assert.ok(terms.some((block) => block.kind === "ul"));
+  // The owner-approved terms: the plan table (4 plans), the order form and the signature block.
+  const tables = terms.filter((block) => block.kind === "table");
+  assert.equal(tables.length, 3);
+  assert.deepEqual(tables[0].rows.map((row) => row[0][0].text), ["Pilot", "Pursuit Desk", "Per-tender review", "Extra pursuit"]);
   assert.doesNotMatch(read("components/billing/BillingParts.tsx"), /dangerouslySetInnerHTML/);
 });
 

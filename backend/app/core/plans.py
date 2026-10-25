@@ -140,12 +140,17 @@ PRODUCTS: dict[str, Product] = {
     PRODUCT_EXTRA_PURSUIT: Product(PRODUCT_EXTRA_PURSUIT, None, 20_000, BILLING_ONE_TIME, None, extra_pursuits=1),
 }
 
-# A paid pilot is credited once, to the first annual invoice (a one-time $900 off Pursuit Desk).
+# The Plasma Pilot and Subscription Terms, version 1 (effective 26 Oct 2026), set the numbers below.
+# §5: the paid pilot is credited once, in full, to the first annual-plan order placed within 30 days after the
+# pilot ends (a one-time $900 off Pursuit Desk).
 PILOT_CREDIT_CENTS = PRICES[PLAN_PILOT].amount_cents
-PILOT_GUARANTEE_DAYS = 30  # full refund within 30 days of the pilot payment
+PILOT_CREDIT_WINDOW_DAYS = 30
+PILOT_GUARANTEE_DAYS = 30  # §6: full pilot refund if asked within 30 days of activation
+ANNUAL_REFUND_DAYS = 14  # §6: annual fees not refundable after 14 days from activation
 ANNUAL_OFFER_DAY = 75  # the in-app Pursuit Desk offer from the pilot's 75th day
 BANK_TRANSFER_REMINDER_DAYS = (3, 6)
-BANK_TRANSFER_SUSPEND_DAY = 10  # unpaid on day 10: back to Explore
+BANK_TRANSFER_DUE_DAYS = 7  # §4: payment due within 7 days
+BANK_TRANSFER_SUSPEND_DAY = 10  # §4: still unpaid 10 days after issue: back to Explore
 
 
 def product_for(code: str | None) -> Product | None:

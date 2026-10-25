@@ -147,6 +147,7 @@ BILLING_EVENTS = {
     "subscription_revoked": "{organization}: {product} subscription ended, back to Explore",
     "subscription_active": "{organization}: {product} subscription active",
     "subscription_uncanceled": "{organization}: {product} subscription resumed",
+    "plan_ended": "{organization}: {product} ended, back to Explore",
 }
 
 

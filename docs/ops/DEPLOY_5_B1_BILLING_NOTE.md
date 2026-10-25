@@ -12,18 +12,21 @@ later, separate step (end of this note).
 | Migrations | Deploy 4 ends at `20261016_0002_p1_organization_access`. Deploy 5 runs, in order: `20261023_0001_p2_partner_finder` → `20261024_0001_p3_plans_limits` → **`20261025_0001_b1_billing`**. All additive. B1 alone: ten new tables, one column, three widened check constraints, no data change |
 | New tables (B1) | `billing_customers`, `terms_acceptances`, `billing_orders`, `billing_invoice_counters`, `billing_invoices`, `billing_payments`, `billing_events` (webhook inbox), `billing_pilot_credits`, `billing_fx_rates`, `billing_onboarding_tasks`; column `organizations.billing_status` |
 | Widened constraints | `admin_alerts.kind` + `BILLING`; `email_deliveries.kind` + `BILLING_INVOICE`, `BILLING_REMINDER`, `BILLING_WELCOME`, `BILLING_SUSPENDED`; `email_deliveries.category` + `BILLING` |
-| New Beat task | `run-billing-schedule`, hourly at :15 (bank transfer reminders on days 3 and 6, Explore on day 10). Idempotent |
+| New Beat task | `run-billing-schedule`, hourly at :15: bought Pilots end after 3 months (Explore); bank-transfer Pursuit Desk renews on its renewal date (new invoice) or ends if canceled; invoice reminders on days 3 and 6 (due on day 7), Explore on day 10. Idempotent. Plans set by an admin are not touched |
 | New routes | app: `/billing/start?plan=pilot\|pursuit_desk\|extra_pursuit` (→ `/dashboard/billing/start`), `/dashboard/billing`, `/dashboard/billing/success`, `/admin/billing`. API: `/api/v1/billing/*`, `/api/v1/admin/billing/*`, **`POST /api/v1/billing/webhooks/polar`** (no session; the Standard Webhooks signature is the authentication) |
 | Outbound calls | `sandbox-api.polar.sh` (checkout and discount creation), `cbu.uz` (the USD rate of the day, cached per day, only for invoices to Uzbek residents) |
 
 ## Before the window
 
-1. **Pilot Terms.** `docs/legal/PILOT_TERMS_v1.md` (and its copy `backend/app/legal/PILOT_TERMS_v1.md`, kept identical
-   by `test_b1_billing.py`) is a **draft written from the 23 Oct decisions**: replace it with the text of the pilot
-   agreement template before Deploy 5. Every acceptance stores the SHA-256 of the exact text shown, so changing the
-   text later is safe (old acceptances keep their hash); a materially new text should get a new version
-   (`PILOT_TERMS_v2.md` and `TERMS_VERSION` in `app/services/billing.py`).
-2. **Polar sandbox** (https://sandbox.polar.sh, a separate account from production):
+1. **Terms.** `docs/legal/PILOT_TERMS_v1.md` / `.pdf` are the owner-approved **Plasma Pilot and Subscription Terms,
+   version 1, effective 26 Oct 2026** (backend copies in `backend/app/legal/`, kept identical by
+   `test_b1_billing.py`). The PDF goes with every activation e-mail. Every acceptance stores the SHA-256 of the exact
+   text shown; a new text gets a new version (`PILOT_TERMS_v2.*` and `TERMS_VERSION` in `app/services/billing.py`).
+   Open points against the code: report §12 (cancel in the app, per-tender, VAT, refund and onboarding windows not
+   enforced, admin-set pilots not ended automatically).
+2. **Polar sandbox** (https://sandbox.polar.sh, a separate account from production). **Done 25 Oct**: products,
+   token and secret checked with `scripts/polar_sandbox_check.py`; only the webhook URL is still a placeholder
+   (set it to the API domain below):
    - create three products, USD: **Pilot** one-time **$900**; **Pursuit Desk** recurring **yearly $6,000**;
      **Extra pursuit** one-time **$200**. Copy the three product ids;
    - create an **organization access token** with scopes `checkouts:write`, `discounts:write`, `products:read`;

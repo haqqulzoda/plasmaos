@@ -80,9 +80,9 @@ async def main() -> int:
     if args.checkout and "pilot" in ids:
         checkout = await billing_polar.PolarClient().create_checkout(
             product_id=ids["pilot"], success_url=f"{(settings.PUBLIC_APP_URL or 'https://example.invalid').rstrip('/')}/dashboard/billing",
-            metadata={"purpose": "sandbox-check"}, customer_email="sandbox-check@plasma.invalid",
+            metadata={"purpose": "sandbox-check"}, customer_email=None,
             external_customer_id=f"sandbox-check-{int(time.time())}", customer_name="Plasma sandbox check",
-            country="UZ", tax_id=None, discount_id=None,
+            country="UZ", discount_id=None,
         )
         print(f"CHECKOUT {checkout['id']}: {checkout['url']}")
         print("Pay with 4242 4242 4242 4242; then look for an 'unmatched_order' order.paid row in billing_events.")

@@ -95,7 +95,15 @@ def test_terms_text_is_the_docs_copy_and_hashed_with_lf() -> None:
     current = terms()
     assert current["markdown"] == docs and current["version"] == "PILOT_TERMS_v1"
     assert current["sha256"] == hashlib.sha256(docs.encode()).hexdigest()
-    assert "credited once, to your first annual invoice" in docs and "30 days" in docs
+    # The owner-approved Plasma Pilot and Subscription Terms, version 1, effective 26 Oct 2026, and its PDF.
+    assert docs.startswith("# Plasma Pilot and Subscription Terms\n\n**Version 1 · effective 26 October 2026**")
+    for clause in ("Payment is due within 7 days", "still unpaid 10 days after it was issued",
+                   "within 30 days after the Pilot ends", "within 30 days of activation",
+                   "Pursuit Desk renews for another year", "6 pursuits", "1 partner or expert introduction"):
+        assert clause in docs, clause
+    pdf = (root / "docs" / "legal" / "PILOT_TERMS_v1.pdf").read_bytes()
+    from app.services.billing import TERMS_PDF_PATH
+    assert pdf.startswith(b"%PDF") and TERMS_PDF_PATH.read_bytes() == pdf
 
 
 def test_invoice_pdf_renders_uzs_and_usd() -> None:
@@ -387,6 +395,10 @@ async def _card_pilot(sessions, ids, fake, monkeypatch) -> None:
         welcome = (await db.scalars(select(EmailDelivery).where(EmailDelivery.kind == "BILLING_WELCOME"))).all()
         assert len(welcome) == 1 and welcome[0].recipient_email == "billing@alpha.invalid"
         assert welcome[0].payload["kickoff_url"] == "https://cal.com/plasmahq/30min"
+        from app.services.email_notifications import attachments_for
+        from app.services.billing import TERMS_PDF_NAME, TERMS_PDF_PATH
+        attached = await attachments_for(db, welcome[0])
+        assert attached == [(TERMS_PDF_NAME, TERMS_PDF_PATH.read_bytes(), "application/pdf")]
         alerts = (await db.scalars(select(AdminAlert).where(AdminAlert.kind == "BILLING"))).all()
         assert [alert.payload["event"] for alert in alerts] == ["activated"]
         from app.services.admin_alerts import render_alert
@@ -485,7 +497,7 @@ async def _bank_transfer_grace_and_mark_paid(sessions, ids) -> None:
         invoice = await db.get(BillingInvoice, started.invoice_id)
         assert (invoice.currency, invoice.fx_rate, invoice.total_uzs, invoice.fx_rate_date) == (
             "UZS", Decimal("12650.5000"), Decimal("11385450.00"), today)
-        assert invoice.customer["tin"] == "301234567" and invoice.due_on == today + timedelta(days=10)
+        assert invoice.customer["tin"] == "301234567" and invoice.due_on == today + timedelta(days=7)
         # Active at once, awaiting payment.
         organization = await db.get(Organization, ids["org_b"], populate_existing=True)
         assert (organization.plan, organization.access_state, organization.billing_status) == ("pilot", "pilot", "awaiting_payment")
@@ -500,17 +512,17 @@ async def _bank_transfer_grace_and_mark_paid(sessions, ids) -> None:
         assert "UZS 11 385 450.00" in message.get_body(("plain",)).get_content()
 
         # Grace: reminders on days 3 and 6 (once each), Explore on day 10.
-        assert await run_billing_schedule(db, today=today + timedelta(days=2)) == {"reminders": 0, "suspended": 0}
-        assert await run_billing_schedule(db, today=today + timedelta(days=3)) == {"reminders": 1, "suspended": 0}
-        assert await run_billing_schedule(db, today=today + timedelta(days=4)) == {"reminders": 0, "suspended": 0}
-        assert await run_billing_schedule(db, today=today + timedelta(days=6)) == {"reminders": 1, "suspended": 0}
-        assert await run_billing_schedule(db, today=today + timedelta(days=9)) == {"reminders": 0, "suspended": 0}
+        assert await run_billing_schedule(db, today=today + timedelta(days=2)) == {"reminders": 0, "suspended": 0, "ended": 0, "renewed": 0}
+        assert await run_billing_schedule(db, today=today + timedelta(days=3)) == {"reminders": 1, "suspended": 0, "ended": 0, "renewed": 0}
+        assert await run_billing_schedule(db, today=today + timedelta(days=4)) == {"reminders": 0, "suspended": 0, "ended": 0, "renewed": 0}
+        assert await run_billing_schedule(db, today=today + timedelta(days=6)) == {"reminders": 1, "suspended": 0, "ended": 0, "renewed": 0}
+        assert await run_billing_schedule(db, today=today + timedelta(days=9)) == {"reminders": 0, "suspended": 0, "ended": 0, "renewed": 0}
         await db.commit()
         reminders = (await db.scalars(select(EmailDelivery).where(EmailDelivery.kind == "BILLING_REMINDER")
                                       .order_by(EmailDelivery.created_at))).all()
         assert [row.payload["day"] for row in reminders] == [3, 6]
         assert (await db.get(Organization, ids["org_b"], populate_existing=True)).plan == "pilot"
-        assert await run_billing_schedule(db, today=today + timedelta(days=10)) == {"reminders": 0, "suspended": 1}
+        assert await run_billing_schedule(db, today=today + timedelta(days=10)) == {"reminders": 0, "suspended": 1, "ended": 0, "renewed": 0}
         await db.commit()
         organization = await db.get(Organization, ids["org_b"], populate_existing=True)
         assert (organization.plan, organization.access_state, organization.billing_status) == ("explore", "explore", "suspended")
@@ -521,7 +533,7 @@ async def _bank_transfer_grace_and_mark_paid(sessions, ids) -> None:
         # The in-app notice: the plan endpoint carries the billing status and the open invoice.
         summary = await billing_summary(db, organization, today=today + timedelta(days=10))
         assert summary["status"] == "suspended" and summary["open_invoice"]["number"] == invoice.number
-        assert await run_billing_schedule(db, today=today + timedelta(days=11)) == {"reminders": 0, "suspended": 0}
+        assert await run_billing_schedule(db, today=today + timedelta(days=11)) == {"reminders": 0, "suspended": 0, "ended": 0, "renewed": 0}
 
         # An admin marks it paid with the bank reference: the pilot comes back with its dates.
         invoice_id, invoice_number = invoice.id, invoice.number  # a refused request rolls the session back
@@ -557,6 +569,71 @@ async def _bank_transfer_grace_and_mark_paid(sessions, ids) -> None:
         assert summary["annual_offer"] == {"product": "pursuit_desk", "list_amount_cents": 600_000, "credit_cents": 90_000,
                                            "pilot_ends_on": organization.plan_ends_on, "day": 75}
         assert (await billing_summary(db, organization, today=today - timedelta(days=1)))["annual_offer"] is None
+
+    await _credit_window_end_renewal_and_cancel(sessions, ids)
+
+
+async def _credit_window_end_renewal_and_cancel(sessions, ids) -> None:
+    from app.api.endpoints import billing as endpoints
+    from app.models.billing import BillingInvoice, BillingOrder
+    from app.models.tenancy import Organization
+    from app.schemas.billing import BillingOverrideRequest, MarkPaidRequest
+    from app.services.billing import pilot_credit_source, run_billing_schedule
+
+    today = billing_today()
+    async with sessions() as db:
+        organization = await db.get(Organization, ids["org_b"], populate_existing=True)
+        pilot_end = organization.plan_ends_on
+        assert pilot_end == add_months(today, 3)
+        # Terms §5: the credit only for an annual plan ordered within 30 days after the pilot ends.
+        assert await pilot_credit_source(db, ids["org_b"], on=pilot_end + timedelta(days=30)) is not None
+        assert await pilot_credit_source(db, ids["org_b"], on=pilot_end + timedelta(days=31)) is None
+        # Terms §7: a Pilot ends after three months (no renewal): Explore.
+        assert (await run_billing_schedule(db, today=pilot_end - timedelta(days=1)))["ended"] == 0
+        counts = await run_billing_schedule(db, today=pilot_end)
+        await db.commit()
+        assert counts["ended"] == 1
+        organization = await db.get(Organization, ids["org_b"], populate_existing=True)
+        assert (organization.plan, organization.access_state, organization.billing_status) == ("explore", "explore", None)
+
+        # Pursuit Desk by bank transfer, ordered within the window: the $900 credit, once.
+        desk = await _checkout(db, ids, "user_b", "b", "pursuit_desk", "bank_transfer")
+        invoice = await db.get(BillingInvoice, desk.invoice_id)
+        assert (invoice.list_amount_cents, invoice.credit_cents, invoice.total_usd_cents) == (600_000, 90_000, 510_000)
+        await endpoints.admin_mark_paid(invoice.id, MarkPaidRequest(reference="KAPITALBANK 000555"),
+                                        current_user=await _user(db, ids, "admin"), db=db)
+        organization = await db.get(Organization, ids["org_b"], populate_existing=True)
+        desk_end = organization.plan_ends_on
+        assert (organization.plan, organization.billing_status, desk_end) == ("pursuit_desk", "paid", add_months(today, 12))
+
+        # Terms §7: Pursuit Desk renews yearly. By bank transfer: a renewal order and invoice on the renewal date,
+        # the plan extended at once and awaiting payment; once only.
+        assert (await run_billing_schedule(db, today=desk_end - timedelta(days=1)))["renewed"] == 0
+        assert (await run_billing_schedule(db, today=desk_end))["renewed"] == 1
+        assert (await run_billing_schedule(db, today=desk_end))["renewed"] == 0
+        await db.commit()
+        renewal = await db.scalar(select(BillingOrder).where(
+            BillingOrder.organization_id == ids["org_b"], BillingOrder.renewal_of_order_id == desk.order_id))
+        assert (renewal.status, renewal.amount_cents, renewal.credit_cents, renewal.plan_started_on, renewal.plan_ends_on) == (
+            "awaiting_payment", 600_000, 0, desk_end, add_months(desk_end, 12))
+        renewal_invoice = await db.scalar(select(BillingInvoice).where(BillingInvoice.order_id == renewal.id))
+        assert (renewal_invoice.issued_on, renewal_invoice.due_on, renewal_invoice.total_usd_cents) == (
+            desk_end, desk_end + timedelta(days=7), 600_000)
+        organization = await db.get(Organization, ids["org_b"], populate_existing=True)
+        assert (organization.plan, organization.billing_status, organization.plan_ends_on) == (
+            "pursuit_desk", "awaiting_payment", add_months(desk_end, 12))
+
+        # Canceled before the next renewal date: the plan ends there (Explore), no new invoice.
+        await endpoints.admin_mark_paid(renewal_invoice.id, MarkPaidRequest(reference="KAPITALBANK 000777"),
+                                        current_user=await _user(db, ids, "admin"), db=db)
+        await endpoints.admin_override(ids["org_b"], BillingOverrideRequest(
+            billing_status="canceled", reason="Customer cancelled by e-mail before renewal"),
+            current_user=await _user(db, ids, "admin"), db=db)
+        counts = await run_billing_schedule(db, today=add_months(desk_end, 12))
+        await db.commit()
+        assert (counts["ended"], counts["renewed"]) == (1, 0)
+        organization = await db.get(Organization, ids["org_b"], populate_existing=True)
+        assert (organization.plan, organization.billing_status) == ("explore", "canceled")
 
 
 async def _isolation_and_admin(sessions, ids) -> None:

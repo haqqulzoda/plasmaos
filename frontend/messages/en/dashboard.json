@@ -186,12 +186,12 @@
       "pilot": {
         "name": "Pilot",
         "price": "{price} for 3 months ({monthly} a month)",
-        "points": "6 pursuits · 1 partner introduction · EOI, own evidence and partner search · full refund within 30 days"
+        "points": "6 pursuits · 1 partner or expert introduction · onboarding and 2 specialist reviews · full refund within 30 days of activation"
       },
       "pursuit_desk": {
         "name": "Pursuit Desk",
         "price": "{price} a year",
-        "points": "24 pursuits and 2 partner introductions a year · sector intelligence"
+        "points": "24 pursuits and 2 introductions a plan year · 1 specialist review a quarter · renews yearly"
       },
       "extra_pursuit": {
         "name": "Extra pursuit",
@@ -200,7 +200,7 @@
       }
     },
     "buy": "Buy",
-    "creditNote": "Your paid pilot ({credit}) is credited once to Pursuit Desk.",
+    "creditNote": "Your paid pilot ({credit}) is credited once to Pursuit Desk ordered within 30 days after the pilot ends.",
     "talkTitle": "Agent and Enterprise",
     "talkHelp": "Agent {agent} a year, Enterprise from {enterprise} a year: quoted and invoiced by our team.",
     "talkToUs": "Talk to us",
@@ -253,7 +253,7 @@
       "canceledTitle": "Your subscription is canceled",
       "canceledHelp": "The plan stays active to the end of the paid period.",
       "offerTitle": "Continue after the pilot with Pursuit Desk",
-      "offerHelp": "Your pilot ends on {date}. Pursuit Desk is {price} a year; your pilot payment of {credit} is credited once.",
+      "offerHelp": "Your pilot ends on {date}. Order Pursuit Desk ({price} a year) within 30 days after that and your pilot payment of {credit} is credited once.",
       "offerHelpNoCredit": "Your pilot ends on {date}. Pursuit Desk is {price} a year.",
       "openBilling": "Open billing",
       "continueDesk": "Continue with Pursuit Desk"
@@ -263,7 +263,7 @@
       "stepOf": "Step {step} of 3",
       "steps": {
         "details": "Company details",
-        "terms": "Pilot Terms",
+        "terms": "Terms",
         "payment": "Payment"
       },
       "legalName": "Legal name of the company",
@@ -276,8 +276,8 @@
       "resident": "Registered in Uzbekistan (the invoice is in UZS at the Central Bank rate of the day)",
       "next": "Continue",
       "back": "Back",
-      "termsHelp": "Read the terms before you accept them (version {version}).",
-      "accept": "I have read and accept the Pilot Terms on behalf of {company}",
+      "termsHelp": "Read the Plasma Pilot and Subscription Terms before you accept them ({version}).",
+      "accept": "I have read and accept the Plasma Pilot and Subscription Terms on behalf of {company}, and I am authorised to bind it",
       "summary": "Order summary",
       "listPrice": "Price",
       "credit": "Pilot credit",
@@ -285,20 +285,20 @@
       "card": "Card",
       "cardHelp": "Secure checkout by Polar. The plan starts when the payment is confirmed.",
       "bank": "Bank transfer",
-      "bankHelp": "We e-mail an invoice in {currency}. The plan starts now; pay within 10 days.",
+      "bankHelp": "We e-mail an invoice in {currency}. The plan starts now; payment is due within 7 days.",
       "unavailable": "Not available yet",
       "sandbox": "Test mode (Polar sandbox): no real payment is taken.",
       "payCard": "Continue to card payment",
       "issueInvoice": "Get the invoice and start now",
       "invoiceIssuedTitle": "Invoice {number} is on its way",
-      "invoiceIssuedHelp": "{product} is active now. We e-mailed the invoice to {email}. Pay within 10 days with {number} as the payment reference.",
+      "invoiceIssuedHelp": "{product} is active now. We e-mailed the invoice to {email}. Payment is due within 7 days, with {number} as the payment reference.",
       "downloadInvoice": "Download the invoice (PDF)",
       "openPlasma": "Open Plasma",
       "unknownProduct": "Choose what to buy on the billing page.",
       "errors": {
         "customer_invalid": "Check the company details.",
         "customer_required": "Enter the company details first.",
-        "terms_not_accepted": "Accept the Pilot Terms to continue.",
+        "terms_not_accepted": "Accept the terms to continue.",
         "terms_changed": "The terms changed: read the current version and accept it again.",
         "method_unavailable": "This payment method is not available yet.",
         "card_unavailable": "Card payment is not available right now: try bank transfer, or again later.",

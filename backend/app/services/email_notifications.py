@@ -361,7 +361,12 @@ def build_message(
 
 
 async def attachments_for(db: AsyncSession, delivery: EmailDelivery) -> list[tuple[str, bytes, str]]:
-    """B1: the invoice PDF, rendered at send time from the stored invoice (nothing stored in the outbox)."""
+    """B1: the invoice PDF, rendered at send time from the stored invoice (nothing stored in the outbox); the
+    activation (welcome) e-mail carries the terms PDF."""
+    if delivery.kind == "BILLING_WELCOME":
+        from app.services.billing import TERMS_PDF_NAME, TERMS_PDF_PATH
+
+        return [(TERMS_PDF_NAME, TERMS_PDF_PATH.read_bytes(), "application/pdf")]
     if delivery.kind != "BILLING_INVOICE":
         return []
     from app.models.billing import BillingInvoice, BillingOrder

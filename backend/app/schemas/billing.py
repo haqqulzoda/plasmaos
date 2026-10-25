@@ -86,6 +86,7 @@ class OrderOut(BaseModel):
     plan_started_on: date | None = None
     plan_ends_on: date | None = None
     renewal: bool = False
+    refund_window_ends_on: date | None = None
 
 
 class InvoiceOut(BaseModel):

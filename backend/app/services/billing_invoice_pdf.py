@@ -3,6 +3,7 @@ same invoice always renders the same figures (the CBU rate and the buyer are sto
 
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 import io
 from pathlib import Path
@@ -24,11 +25,12 @@ FONT = "PlasmaInvoiceRoboto"
 FONT_BOLD = "PlasmaInvoiceRoboto-Bold"
 
 PRODUCT_LINES = {
-    "pilot": "Plasma Pilot, 3 months: 6 pursuits, 1 partner introduction, EOI, own evidence, partner search",
-    "pursuit_desk": "Plasma Pursuit Desk, 12 months: 24 pursuits a year, 2 partner introductions a year",
+    "pilot": "Plasma Pilot, 3 months from activation: 6 pursuits, 1 partner or expert introduction, onboarding, 2 specialist reviews",
+    "pursuit_desk": "Plasma Pursuit Desk, 12 months from activation, renews yearly: 24 pursuits and 2 introductions a plan year",
     "extra_pursuit": "Extra pursuit: 1 additional pursuit in the current plan period",
 }
-PILOT_NOTE = "The pilot payment is credited to the first annual invoice."
+PILOT_NOTE = ("The pilot payment is credited once, in full, to the first annual-plan payment if an annual plan is "
+              "ordered within 30 days after the Pilot ends.")
 
 
 def _fonts() -> None:
@@ -125,11 +127,16 @@ def render_invoice_pdf(invoice: BillingInvoice, order: BillingOrder) -> bytes:
         para(f"Payment reference: {invoice.number}", heading),
         Spacer(1, 4 * mm),
         para(
-            f"The plan is active from the issue date. Please pay by {invoice.due_on:%d %B %Y}: an invoice unpaid "
-            f"on that day returns the organization to the free Explore plan until the payment arrives.", small,
+            f"The plan is active from the issue date. Payment is due within 7 days, by {invoice.due_on:%d %B %Y}. "
+            f"If the invoice is still unpaid on {invoice.issued_on + timedelta(days=10):%d %B %Y} (10 days after "
+            f"issue), the organization moves to the free Explore plan until the payment arrives; its data is kept.",
+            small,
         ),
     ]
     if order.product == "pilot":
-        story += [para("Full refund within 30 days of payment if the pilot does not work for you.", small)]
+        story += [para("Pilot 30-day guarantee: full refund if you tell us within 30 days of activation that the "
+                       "Pilot is not working for you.", small)]
+    story += [para("Plasma Pilot and Subscription Terms, version 1 (26 October 2026), apply. Prices in US dollars "
+                   "exclude VAT and other taxes where they apply, and bank charges on your side.", small)]
     document.build(story)
     return buffer.getvalue()

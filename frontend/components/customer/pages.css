@@ -4835,6 +4835,36 @@
   list-style: disc;
 }
 
+.billing-terms-text hr {
+  margin: var(--ds-space-4) 0;
+  border: 0;
+  border-block-start: 1px solid var(--ds-border-subtle);
+}
+
+.billing-terms-table-wrap {
+  margin-block-end: var(--ds-space-3);
+  overflow-x: auto;
+}
+
+.billing-terms-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--ds-label);
+}
+
+.billing-terms-table th,
+.billing-terms-table td {
+  padding: var(--ds-space-2);
+  border: 1px solid var(--ds-border-subtle);
+  text-align: start;
+  vertical-align: top;
+}
+
+.billing-terms-table th {
+  background: var(--ds-surface);
+  font-weight: 600;
+}
+
 .billing-methods {
   display: grid;
   gap: var(--ds-space-3);

@@ -89,18 +89,20 @@ class PolarClient:
         return str(data["id"])
 
     async def create_checkout(
-        self, *, product_id: str, success_url: str, metadata: dict[str, str], customer_email: str,
-        external_customer_id: str, customer_name: str, country: str, tax_id: str | None,
+        self, *, product_id: str, success_url: str, metadata: dict[str, str], customer_email: str | None,
+        external_customer_id: str, customer_name: str, country: str,
         discount_id: str | None,
     ) -> dict[str, str]:
+        # No customer_tax_id: Polar validates tax ids against its own formats and refuses an Uzbek TIN (STIR)
+        # (sandbox, 25 Oct 2026). The TIN stays on our records and invoices; Polar is seller of record for cards.
         body: dict[str, Any] = {
             "products": [product_id], "success_url": success_url, "metadata": metadata,
-            "customer_email": customer_email, "external_customer_id": external_customer_id,
+            "external_customer_id": external_customer_id,
             "customer_name": customer_name[:256], "customer_billing_address": {"country": country},
             "allow_discount_codes": False,
         }
-        if tax_id:
-            body["customer_tax_id"] = tax_id
+        if customer_email:  # Polar refuses reserved domains (e.g. .invalid)
+            body["customer_email"] = customer_email
         if discount_id:
             body["discount_id"] = discount_id
         data = await self._post("/v1/checkouts/", body)

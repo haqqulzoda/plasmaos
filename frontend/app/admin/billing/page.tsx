@@ -229,6 +229,8 @@ export default function AdminBillingPage() {
         {detail.orders.length === 0 ? <p className="ds-muted">None.</p> : <ul className="admin-plan-list">{detail.orders.map((order) => <li key={order.id}>
           {formatTimestamp(order.created_at)} · {PRODUCT[order.product]}{order.renewal ? ' (renewal)' : ''} · {label(order.method)} · {usd(order.amount_cents)}
           {order.credit_cents > 0 && ` (pilot credit ${usd(order.credit_cents)})`} · <StatusBadge tone={TONE[order.status] ?? 'neutral'}>{label(order.status)}</StatusBadge>
+          {order.refund_window_ends_on && ['paid', 'awaiting_payment', 'lapsed'].includes(order.status)
+            && <span className="ds-muted ds-text-small"> · refund window (terms §6) to {order.refund_window_ends_on}</span>}
           {order.refund_note && <span className="ds-muted ds-text-small"> · {order.refund_note}</span>}
           {['paid', 'awaiting_payment', 'lapsed'].includes(order.status)
             && <Button size="sm" variant="ghost" onClick={() => start({ kind: 'refund', order })}>Record refund</Button>}
