@@ -561,7 +561,9 @@ export function PursuitTeam({ pursuitId, headers, onScenariosChange }: Props) {
         api.get<CandidateLibrary>('/candidates', { headers }),
         api.get<CandidateParticipationRecord[]>(`/pursuits/${encodeURIComponent(pursuitId)}/participation-records`, { headers }),
         api.get<TeamScenario[]>(`/pursuits/${encodeURIComponent(pursuitId)}/team-scenarios`, { headers }),
-        api.get<PartnerRequest[]>(`/pursuits/${encodeURIComponent(pursuitId)}/partner-requests`, { headers }),
+        // RC-5: optional for the tab. A plan without partner search answers 403; the rest of the Team tab must load.
+        api.get<PartnerRequest[]>(`/pursuits/${encodeURIComponent(pursuitId)}/partner-requests`, { headers })
+          .catch(() => ({ data: [] as PartnerRequest[] })),
       ]);
       setAnalysis(analysisResponse.data);
       setRuns(runsResponse.data);

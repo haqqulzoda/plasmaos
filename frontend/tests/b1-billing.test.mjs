@@ -104,4 +104,6 @@ test("checkout, notices, explore and admin are wired", () => {
     assert.ok(admin.includes(path), path);
   }
   assert.match(read("app/admin/audit/page.tsx"), /'BILLING_PLAN_ACTIVATED'/);
+  // The Team tab loads even when the partner requests are refused (a plan without partner search: 403).
+  assert.match(read("components/pursuits/PursuitTeam.tsx"), /\/partner-requests`, \{ headers \}\)\s+\.catch\(\(\) => \(\{ data: \[\] as PartnerRequest\[\] \}\)\)/);
 });
