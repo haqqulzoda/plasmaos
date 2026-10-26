@@ -25,7 +25,7 @@ this window also brings S1 and P1: the marked **[D3]** steps then come from `doc
 | New tables | P2: `partner_requests`, `partner_request_events`, `team_scenario_prospective_members`; P3: `organization_pursuit_usage`, `organization_plan_grants`; B1: `billing_customers`, `terms_acceptances`, `billing_orders`, `billing_invoice_counters`, `billing_invoices`, `billing_payments`, `billing_events`, `billing_pilot_credits`, `billing_fx_rates`, `billing_onboarding_tasks`, `billing_offers` |
 | Data changes | P3: `organizations.plan` from the access state (pilot → **Pilot**, paid → Pursuit Desk, explore/disabled → Explore) and one usage row per pursuit that already had an analysis (counted at its first run). B1: none. **Data step (10b)**: `pilot_setup.py` pilots get end date = start + 3 months |
 | New behaviour that acts on data | the hourly Beat job `run-billing-schedule` (from step 11): **every Pilot whose end date has come moves to Explore** (terms §7), bank-transfer invoice reminders (days 3, 6), Explore on day 10 unpaid, bank-transfer Pursuit Desk renewals |
-| New variables | **B1** (step 7): `POLAR_ENV`, `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_IDS`, `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS`, `INVOICE_SELLER_TIN`, `INVOICE_SELLER_EMAIL`, `INVOICE_SELLER_PHONE`, `INVOICE_BANK_DETAILS_UZS`, `INVOICE_USD_ENABLED=false`, `BILLING_KICKOFF_URL`. **[D3]** plus Deploy 4's P1 block (SMTP, `PUBLIC_APP_URL`, alerts, production Gemini key) |
+| New variables | step 7, one block, each key **added only if missing**: **P1** (Deploy 4's block; Case D4 has them): `SMTP_HOST`, `SMTP_PORT`, `SMTP_TLS`, `SMTP_USER`, `SMTP_PASSWORD` (Resend), `SMTP_FROM`, `PUBLIC_APP_URL`, `PUBLIC_BOOK_CALL_URL`, `ADMIN_ALERT_TELEGRAM_CHAT_ID`; **B1**: `POLAR_ENV`, `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_IDS`, `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS`, `INVOICE_SELLER_TIN`, `INVOICE_SELLER_EMAIL`, `INVOICE_SELLER_PHONE`, `INVOICE_BANK_DETAILS_UZS`, `INVOICE_USD_ENABLED=false`, `BILLING_KICKOFF_URL`. **Replaced**: `GEMINI_API_KEY` (only if the key in `.env` does not answer `200`), `TELEGRAM_BOT_TOKEN` (rotated). Landing (Vercel): step 15 |
 | Gate | `640e9be` from an LF export (end of this file) |
 | **Not touched** | **`db`, `redis` and `clamav` keep their containers** (never `up`, `down`, `restart` or `rollback` them here) |
 | Downtime | step 9 → step 11: **~2 min** expected (rehearsal: migrations 24-26 s, data step 4 s; Deploy 3 measured image switch 8 s, start to `/health/ready` 48 s, stop ~12 s) |
@@ -57,8 +57,13 @@ script; never `exec` into `plasma_backend`. Check `free -h` shows `available` �
    account: not yet**, so `INVOICE_USD_ENABLED=false`: non-resident customers are offered **card only**.
 4. **Terms**: `docs/legal/PILOT_TERMS_v1.md` / `.pdf` (owner-approved, effective 26 Oct 2026) are in the release.
 5. **Landing**: the R2 build with the checkout links (`landing/r2`, "Start a pilot" → `<APP_DOMAIN>/billing/start?plan=pilot`)
-   deployed as a **Vercel preview, not promoted**. Step 15 promotes it after the live test.
-6. **[D3] only**: Deploy 4's "Before the window" (e-mail provider and DNS verified, production Gemini key `200`).
+   deployed as a **Vercel preview, not promoted**, with the Vercel variables of step 15 set. Step 15 promotes it
+   after the live test.
+6. **E-mail and Gemini**: **[D3]** Deploy 4's "Before the window" (Resend domain `plasmaos.uz` verified: DKIM, MX,
+   SPF). Both cases: an app Resend API key and the production Gemini key (proven `200`) at hand for step 7, which
+   uses them only where `.env` lacks them.
+7. **Telegram**: access to @BotFather for the production bot. The token is revoked and replaced in step 7, not
+   before.
 
 ---
 
@@ -154,40 +159,89 @@ prod$ sha256sum /opt/plasma-console/plasma-release-640e9be.tar.gz
 ```
 Expect `7984b5363d26db7d0a471f2c381a743717aba93e3795225af88cc3c976d7e995`. **STOP** if it differs (copy again).
 
-## 7. `.env`: keep a copy, add the B1 variables
+## 7. `.env`: keep a copy, one block for P1 and B1 (only if missing), the production Gemini key, the rotated Telegram token
+
+One block for both cases: Deploy 4's P1 keys (SMTP through Resend, `PUBLIC_APP_URL`, `PUBLIC_BOOK_CALL_URL`, team
+alerts) and the B1 keys are each **added only if the key is missing**, so Case D4 keeps its values and Case D3 gets
+them all; re-running the block is safe. Two keys are **replaced**: `GEMINI_API_KEY` (only if the key in `.env` does not
+answer `200`) and `TELEGRAM_BOT_TOKEN` (the rotated token).
 
 ```
 prod$ cp -p .env .env.pre-deploy5 && chmod 600 .env.pre-deploy5 && cmp .env .env.pre-deploy5 && echo ENV_SAVED
-prod$ grep -c '^PUBLIC_APP_URL=https://' .env; grep -c '^SMTP_HOST=.' .env
+prod$ grep -c '^SECRET_KEY=.' .env; grep -c '^PLASMA_ADMIN_EMAILS=.' .env
+prod$ set +o history   # the values below are secrets: keep them out of ~/.bash_history
+prod$ addenv() { if grep -q "^$1=" .env; then echo "KEEP $1"; else printf '%s=%s\n' "$1" "$2" >> .env; echo "ADDED $1"; fi; }
+prod$ setenv() { if grep -q "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; echo "REPLACED $1"; else printf '%s=%s\n' "$1" "$2" >> .env; echo "ADDED $1"; fi; }
+prod$ grep -q '^# --- Deploy 5' .env || printf '\n# --- Deploy 5 (P1 from Deploy 4 if missing, B1 billing) ---\n' >> .env
+# P1 (Deploy 4 step 7): sign-in codes, invitations, invoices and the welcome e-mail over Resend SMTP
+prod$ addenv SMTP_HOST 'smtp.resend.com'
+prod$ addenv SMTP_PORT '587'
+prod$ addenv SMTP_TLS 'starttls'
+prod$ addenv SMTP_USER 'resend'
+prod$ addenv SMTP_PASSWORD '<the app Resend API key re_…, sending access to plasmaos.uz>'
+prod$ addenv SMTP_FROM 'Plasma <no-reply@plasmaos.uz>'
+prod$ addenv PUBLIC_APP_URL 'https://<APP_DOMAIN>'
+prod$ addenv PUBLIC_BOOK_CALL_URL 'https://cal.com/plasmahq/30min'
+# Team alerts (sign-ups, pilot and call requests, purchases, AI provider failures): Telegram if set, else e-mail to PLASMA_ADMIN_EMAILS
+prod$ addenv ADMIN_ALERT_TELEGRAM_CHAT_ID '<team group chat id, -100…>'
+# B1: Polar ("Polar live switch" section). production = live payments; sandbox = test mode (https://sandbox-api.polar.sh)
+prod$ addenv POLAR_ENV 'production'
+prod$ addenv POLAR_ACCESS_TOKEN '<Polar organization access token: checkouts:write, discounts:write, products:read, customer_sessions:write>'
+prod$ addenv POLAR_WEBHOOK_SECRET '<whsec_… of the webhook endpoint>'
+prod$ addenv POLAR_PRODUCT_IDS '{"pilot":"<id>","pursuit_desk":"<id>","extra_pursuit":"<id>","per_tender":"<id>"}'
+# B1: bank transfer invoices (proforma; the official e-invoice is issued after payment)
+prod$ addenv INVOICE_SELLER_NAME 'PLASMA AI SOLUTIONS MChJ (LLC)'
+prod$ addenv INVOICE_SELLER_ADDRESS '21 Mustaqillik Street, Qarshi, Qashqadaryo, Uzbekistan'
+prod$ addenv INVOICE_SELLER_TIN '313156099'
+prod$ addenv INVOICE_SELLER_EMAIL 'hq@plasmaos.uz'
+prod$ addenv INVOICE_SELLER_PHONE '+998 94 877 87 83'
+prod$ addenv INVOICE_BANK_DETAILS_UZS 'Bank: Aloqa Bank | Account (UZS): <20-digit account> | MFO (bank code): 00401 | Beneficiary: Plasma AI Solutions | TIN: 313156099'
+# USD account not opened yet: non-residents pay by card only. Later: INVOICE_BANK_DETAILS_USD=… and INVOICE_USD_ENABLED=true
+prod$ addenv INVOICE_USD_ENABLED 'false'
+prod$ addenv BILLING_KICKOFF_URL 'https://cal.com/plasmahq/30min'
 ```
-**[D3]**: first append Deploy 4's step 7 block (SMTP, `PUBLIC_APP_URL`, alerts) and replace the Gemini key as written
-there. Both counts must then be `1` (**STOP** otherwise: card checkout needs `PUBLIC_APP_URL`; invoices and the
-welcome e-mail need SMTP).
+Expect `ENV_SAVED`, `1`, `1` (an existing `SECRET_KEY` and `PLASMA_ADMIN_EMAILS`), then one `KEEP`/`ADDED` line per
+key: Case D4 `KEEP` for the P1 keys, `ADDED` for B1; Case D3 `ADDED` throughout. A `KEEP` for a key that holds an
+old or empty value: `setenv <KEY> '<value>'`.
 
+**Production Gemini key** (only if the key in `.env` is not the production one). The check sends one tiny call
+with the key **from `.env`** (a fraction of a cent; the key is not typed or printed):
 ```
-prod$ cat >> .env <<'EOF'
-# --- Deploy 5 (B1 billing) ---
-# Polar: "Polar live switch" section. production = live payments; sandbox = test mode (https://sandbox-api.polar.sh)
-POLAR_ENV=production
-POLAR_ACCESS_TOKEN=<Polar organization access token: checkouts:write, discounts:write, products:read, customer_sessions:write>
-POLAR_WEBHOOK_SECRET=<whsec_… of the webhook endpoint>
-POLAR_PRODUCT_IDS={"pilot":"<id>","pursuit_desk":"<id>","extra_pursuit":"<id>","per_tender":"<id>"}
-# Bank transfer invoices (proforma; the official e-invoice is issued after payment)
-INVOICE_SELLER_NAME=PLASMA AI SOLUTIONS MChJ (LLC)
-INVOICE_SELLER_ADDRESS=21 Mustaqillik Street, Qarshi, Qashqadaryo, Uzbekistan
-INVOICE_SELLER_TIN=313156099
-INVOICE_SELLER_EMAIL=hq@plasmaos.uz
-INVOICE_SELLER_PHONE=+998 94 877 87 83
-INVOICE_BANK_DETAILS_UZS=Bank: Aloqa Bank | Account (UZS): <20-digit account> | MFO (bank code): 00401 | Beneficiary: Plasma AI Solutions | TIN: 313156099
-# USD account not opened yet: non-residents pay by card only. Later: INVOICE_BANK_DETAILS_USD=… and true
-INVOICE_USD_ENABLED=false
-BILLING_KICKOFF_URL=https://cal.com/plasmahq/30min
-EOF
+prod$ gemini_check() { curl -s -o /dev/null -w '%{http_code}\n' -H "x-goog-api-key: $(grep '^GEMINI_API_KEY=' .env | cut -d= -f2-)" -H 'Content-Type: application/json' \
+        -d '{"contents":[{"parts":[{"text":"Reply OK"}]}]}' "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"; }
+prod$ gemini_check
+```
+`200` → keep it (Case D4: Deploy 4 put the production key in). Anything else (Case D3 still has the development key,
+which returns `402`): `setenv GEMINI_API_KEY '<PRODUCTION_GEMINI_KEY>'` (the key from a separate billing account), then
+`gemini_check` again → `200`. **STOP** without `200` (every analysis would fail).
+
+**Rotated `TELEGRAM_BOT_TOKEN`.** Revoke now, not before the window (production alerts fail from the revoke until
+step 11; the app is stopped from step 9 anyway): @BotFather → `/mybots` → the production bot → API Token → **Revoke
+current token**, copy the new token.
+```
+prod$ setenv TELEGRAM_BOT_TOKEN '<the new token from BotFather>'
+prod$ tg_check() { curl -s "https://api.telegram.org/bot$(grep '^TELEGRAM_BOT_TOKEN=' "$1" | cut -d= -f2-)/getMe" | grep -o '"ok":[a-z]*'; }
+prod$ tg_check .env; tg_check .env.pre-deploy5
+prod$ set -o history
+```
+Expect `REPLACED TELEGRAM_BOT_TOKEN`, then `"ok":true` (the new token) and `"ok":false` (the revoked one in the copy).
+**STOP** on `"ok":false` for `.env`. The same bot elsewhere needs the new token as well, or its messages stop: the
+landing's form alerts (Vercel `TELEGRAM_BOT_TOKEN`, step 15) and the host alerts (`OPS_TELEGRAM_BOT_TOKEN` in
+`/etc/plasma/ops.env`, if it is the same bot).
+
+**Every key present once, with a value**, and **no placeholders left**:
+```
+prod$ KEYS="SECRET_KEY PLASMA_ADMIN_EMAILS TELEGRAM_BOT_TOKEN GEMINI_API_KEY SMTP_HOST SMTP_PORT SMTP_TLS SMTP_USER SMTP_PASSWORD SMTP_FROM PUBLIC_APP_URL PUBLIC_BOOK_CALL_URL ADMIN_ALERT_TELEGRAM_CHAT_ID POLAR_ENV POLAR_ACCESS_TOKEN POLAR_WEBHOOK_SECRET POLAR_PRODUCT_IDS INVOICE_SELLER_NAME INVOICE_SELLER_ADDRESS INVOICE_SELLER_TIN INVOICE_SELLER_EMAIL INVOICE_SELLER_PHONE INVOICE_BANK_DETAILS_UZS INVOICE_USD_ENABLED BILLING_KICKOFF_URL"
+prod$ bad=0; for k in $KEYS; do n="$(grep -c "^$k=" .env)/$(grep -c "^$k=." .env)"; [ "$n" = 1/1 ] || { echo "BAD $k lines/with-value=$n"; bad=1; }; done; [ $bad = 0 ] && echo ALL_KEYS_OK
+prod$ grep -nE '^[A-Z0-9_]+=.*(<[^>@]*>|…|CHANGE_ME)' .env | cut -d= -f1; echo PLACEHOLDER_SCAN_DONE
 prod$ chmod 600 .env
 prod$ scripts/compose-release.sh config --quiet && echo CONFIG_OK
 prod$ scripts/compose-release.sh config | grep -E -- '--concurrency=|mem_limit' | sort | uniq -c
 ```
-Expect `ENV_SAVED`, `CONFIG_OK`, and exactly the Deploy 3/4 lines:
+Expect `ALL_KEYS_OK` (a `BAD` line: `0/0` missing → `addenv`; `1/0` empty or `2/…` duplicate → fix that line with
+`setenv`, removing the extra one by hand), then **only** `PLACEHOLDER_SCAN_DONE` (every line printed before it is a
+`<…>` value still to fill: `setenv <KEY> '<value>'`, line number and key shown, never the value; `SMTP_FROM`'s
+`<no-reply@plasmaos.uz>` is not a placeholder), `CONFIG_OK`, and exactly the Deploy 3/4 lines:
 ```
       3       - --concurrency=1
       1       - --concurrency=2
@@ -198,8 +252,19 @@ Expect `ENV_SAVED`, `CONFIG_OK`, and exactly the Deploy 3/4 lines:
       1     mem_limit: "536870912"
       1     mem_limit: "805306368"
 ```
-**STOP** on different numbers. The backend **refuses to start** with `POLAR_ENV=production` unless the token, the
-secret and the product ids are all set (step 11 would show it): fill them or set `POLAR_ENV=sandbox`.
+**STOP** on different numbers, without `ALL_KEYS_OK`, or with a placeholder line (card checkout needs
+`PUBLIC_APP_URL`; invoices and the welcome e-mail need SMTP). The backend **refuses to start** with
+`POLAR_ENV=production` unless the token, the secret and the product ids are all set (step 11 would show it): fill
+them or `setenv POLAR_ENV 'sandbox'` with the sandbox values.
+
+- **`SECRET_KEY` does not change** in this window: the sign-in codes, their limiter keys and the sealed codes in the
+  e-mail outbox are derived from it; rotating it invalidates every open code and every session.
+- The app's Resend key (`SMTP_PASSWORD`) and the landing's (`RESEND_API_KEY`, step 15) are separate keys, so either
+  can be revoked alone. **[D3]**: the domain `plasmaos.uz` must be verified in Resend first (Deploy 4, "Before the
+  window").
+- Telegram chat id: add the bot to the team group, send one message, then
+  `curl -s "https://api.telegram.org/bot$(grep '^TELEGRAM_BOT_TOKEN=' .env | cut -d= -f2-)/getUpdates" | grep -o '"chat":{"id":-[0-9]*'`.
+- `AI_PRICE_TABLE_JSON` is not part of this block (**[D3]**: Deploy 4 step 16 decides it).
 
 ## 8. Import the images
 ```
@@ -401,10 +466,31 @@ every result. The night rollback rule applies.
 
 ## 15. Landing: promote the checkout links (only after step 14 passes)
 
+**Vercel variables** (plasma-landing → Settings → Environment Variables; set each for **Production and Preview**, so
+the preview checked before the window and the promoted build read the same values; reference:
+`docs/r2/LANDING_R2.md` in the landing repository):
+
+| Variable | Value | Read |
+| --- | --- | --- |
+| `RESEND_API_KEY` | the landing's own Resend API key (`re_…`, sending access to `plasmaos.uz`; not the app's `SMTP_PASSWORD`). **Required**: without it every form answers 503 | at run time |
+| `FORMS_TO_EMAIL` | `hq@plasmaos.uz` (the default; the inbox for all four forms) | at run time |
+| `FORMS_FROM_EMAIL` | unset (default `Plasma website <forms@plasmaos.uz>`; the domain is the one verified in Resend) | at run time |
+| `NEXT_PUBLIC_BOOKING_URL` | `https://cal.com/plasmahq/30min`, the same link as `PUBLIC_BOOK_CALL_URL` and `BILLING_KICKOFF_URL` (step 7) | at build |
+| app URL | **no variable**: `appUrl` in the landing's `src/config/site.ts` is `https://console.plasmaos.uz/`; "Sign in", Explore and the checkout links are built from it. It must equal `PUBLIC_APP_URL` (step 7); **STOP** this step if it does not (a landing code change) | at build |
+| `COMPANY_LEGAL_NAME` | only the legal name the owner confirms for the site (the registered name is on the invoices: `INVOICE_SELLER_NAME`); empty shows "Plasma". Never a guess | at build |
+| `PILOT_GUARANTEE` | unset (on: "Cancel within the first 30 days and we refund the full fee.", terms §6); `off` hides it | at build |
+| `SECURITY_PROGRAM_LINE` | unset (on, owner 24 Oct 2026); `off` hides it | at build |
+| `BACKUPS_LIVE` | `1` **only** if off-host backups run (step 4: `R2_CONFIGURED`) and a restore test passed; else unset | at build |
+| `HOSTING_REGION_TEXT` | unset unless the owner approved the text of "Where your data is" | at build |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | optional form alerts; if this is the production bot, the **rotated** token from step 7 | at run time |
+
+A build-time value changed after the preview was built needs a redeploy of the preview before promoting it.
+
 In Vercel (plasma-landing): promote the `landing/r2` preview checked in "Before the window" to production. Check
 `https://plasmaos.uz/en/pricing`: "Start a pilot" opens `https://<APP_DOMAIN>/billing/start?plan=pilot…` and lands on
-the checkout (signed out: the sign-in page, then the checkout again with `plan` kept). **On a night rollback this step
-is not done**: the landing stays on its old version.
+the checkout (signed out: the sign-in page, then the checkout again with `plan` kept); "Book a demo" opens the
+cal.com link; one "Request the trust pack" form (your own e-mail) arrives in `FORMS_TO_EMAIL`. **On a night rollback
+this step is not done**: the landing stays on its old version.
 
 ## 16. Feature check (owner, browser; may be next morning)
 
@@ -433,7 +519,8 @@ prod$ scripts/ops/beat_memory.sh --target production --baseline "$BEAT_RSS_KB"
 prod$ docker exec -i plasma_db psql -U plasma -d plasma_ai -c "select kind, state, count(*) from email_deliveries where created_at > now() - interval '1 day' group by 1,2" -c "select kind, state, count(*) from admin_alerts where created_at > now() - interval '1 day' group by 1,2" -c "select event_type, outcome, processing_error, count(*) from billing_events group by 1,2,3"
 ```
 Expect `oom=false restarts=0`, smoke `0 failure(s)`, Beat exit 0, e-mails `SENT`, alerts delivered, every billing event
-processed (no `processing_error`). Then delete the backup copy and `.env.pre-deploy5`.
+processed (no `processing_error`). Then delete the backup copy, `.env.pre-deploy5` (it holds the revoked Telegram
+token) and `.env.deploy5` if a Rollback A2 made one.
 
 ---
 
@@ -506,13 +593,16 @@ prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
 prod$ scripts/compose-release.sh run --rm --no-deps backend alembic downgrade 20261016_0002_p1_organization_access
 prod$ scripts/compose-release.sh use "$PREV_SHA"
 prod$ git checkout -B <previous branch> "$PREV_COMMIT" && test "$(git rev-parse HEAD)" = "$PREV_COMMIT" && echo CHECKOUT_OK
-prod$ cp -p .env.pre-deploy5 .env && echo ENV_RESTORED
+prod$ cp -p .env .env.deploy5 && chmod 600 .env.deploy5 && cp -p .env.pre-deploy5 .env && echo ENV_RESTORED
+prod$ for k in TELEGRAM_BOT_TOKEN GEMINI_API_KEY; do sed -i "s|^$k=.*|$(grep "^$k=" .env.deploy5)|" .env; done
+prod$ diff <(grep -E '^(TELEGRAM_BOT_TOKEN|GEMINI_API_KEY)=' .env | sort) <(grep -E '^(TELEGRAM_BOT_TOKEN|GEMINI_API_KEY)=' .env.deploy5 | sort) >/dev/null && echo SECRETS_KEPT
 prod$ scripts/compose-release.sh up "$PREV_SHA" --no-deps $APPS
 prod$ scripts/ops/smoke.sh --target production --expect-sha "$PREV_SHA" --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
 ```
 The downgrade (rehearsal: **4 s**) removes B1, P3 and P2 **with their data** (orders, invoices, partner requests, usage
-rows); **[D3]**: then continue with Deploy 4's Rollback B to reach the Deploy 3 schema. Expect `DNS_OK`, `CHECKOUT_OK`,
-`ENV_RESTORED`, `build_sha` = `PREV_SHA`, smoke **0 failures**.
+rows); **[D3]**: then continue with Deploy 4's Rollback B to reach the Deploy 3 schema. The restored `.env` keeps
+step 7's rotated Telegram token (the old one is revoked) and the production Gemini key (the carry-over lines).
+Expect `DNS_OK`, `CHECKOUT_OK`, `ENV_RESTORED`, `SECRETS_KEPT`, `build_sha` = `PREV_SHA`, smoke **0 failures**.
 
 **C. Database restore** (loses everything since step 4): Deploy 1 Rollback C with `$SET` from step 4 (pre-stop gate
 first), then A2's image/checkout/`.env` lines. Never `docker compose down -v`.
