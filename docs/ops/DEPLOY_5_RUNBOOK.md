@@ -11,6 +11,14 @@ gates), **B1** (online checkout: card through Polar, bank transfer by invoice; t
 Terms v1; activation, renewal, the admin billing console). **If production is still on Deploy 3** (step 1 decides),
 this window also brings S1 and P1: the marked **[D3]** steps then come from `docs/ops/DEPLOY_4_RUNBOOK.md`.
 
+> **Corrected after Deploy 5 (30 Oct 2026, see `docs/ops/DEPLOY_5_1_RUNBOOK.md`).** Production has **no API
+> domain**: the app is `https://console.plasmaos.uz`, which serves `/api/v1/*` from the backend (Next.js rewrite); on the
+> host the backend is `http://127.0.0.1:8000`. Smoke, the webhook URL and the Polar event list below are corrected.
+> The Deploy 5 frontend refused the webhook at that URL (401: the route was not public in `proxy.ts`), the
+> `worker_pursuit_analysis` service had no `ENVIRONMENT` line (crash loop with `POLAR_ENV=production`), and the
+> webhook was subscribed to `checkout.*` only. Deploy 5.1 fixes these; `.env` now also sets
+> **`ENVIRONMENT=production`** explicitly (step 7).
+
 > **Night rollback rule.** If the owner's live test (step 14) fails and the fix is not obvious **within 20 minutes**,
 > take **Rollback A** and **leave the landing on its old version** (step 15 is not done). Nothing else is decided at
 > night.
@@ -36,7 +44,8 @@ list, `compose-release.sh rollback`, `docker compose up`, `down` or `restart`: w
 recreate `db`/`redis`.
 
 Conventions as before: `prod$` on the production host in `/opt/plasma-console/plasmaos`; `laptop$` on the owner's PC
-(Git Bash). `<prod>`, `<APP_DOMAIN>`, `<API_DOMAIN>` as before.
+(Git Bash). `<prod>` as before. **Domains**: the app is `https://console.plasmaos.uz`; there is **no API domain**
+(`/api/v1/*` on the app domain reaches the backend through the Next.js rewrite; on the host: `http://127.0.0.1:8000`).
 
 APP services (the only ones this runbook recreates):
 `celery_worker worker_heavy worker_private_documents worker_pursuit_analysis celery_beat backend frontend`
@@ -56,7 +65,7 @@ script; never `exec` into `plasma_backend`. Check `free -h` shows `available` �
 3. **Bank details**: UZS account at **Aloqa Bank** (MFO 00401, beneficiary Plasma AI Solutions) in step 7. **USD
    account: not yet**, so `INVOICE_USD_ENABLED=false`: non-resident customers are offered **card only**.
 4. **Terms**: `docs/legal/PILOT_TERMS_v1.md` / `.pdf` (owner-approved, effective 26 Oct 2026) are in the release.
-5. **Landing**: the R2 build with the checkout links (`landing/r2`, "Start a pilot" → `<APP_DOMAIN>/billing/start?plan=pilot`)
+5. **Landing**: the R2 build with the checkout links (`landing/r2`, "Start a pilot" → `https://console.plasmaos.uz/billing/start?plan=pilot`)
    deployed as a **Vercel preview, not promoted**, with the Vercel variables of step 15 set. Step 15 promotes it
    after the live test.
 6. **E-mail and Gemini**: **[D3]** Deploy 4's "Before the window" (Resend domain `plasmaos.uz` verified: DKIM, MX,
@@ -173,6 +182,8 @@ prod$ set +o history   # the values below are secrets: keep them out of ~/.bash_
 prod$ addenv() { if grep -q "^$1=" .env; then echo "KEEP $1"; else printf '%s=%s\n' "$1" "$2" >> .env; echo "ADDED $1"; fi; }
 prod$ setenv() { if grep -q "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; echo "REPLACED $1"; else printf '%s=%s\n' "$1" "$2" >> .env; echo "ADDED $1"; fi; }
 prod$ grep -q '^# --- Deploy 5' .env || printf '\n# --- Deploy 5 (P1 from Deploy 4 if missing, B1 billing) ---\n' >> .env
+# Deploy 5.1: explicit, so every service reads production even where compose does not set it
+prod$ setenv ENVIRONMENT 'production'
 # P1 (Deploy 4 step 7): sign-in codes, invitations, invoices and the welcome e-mail over Resend SMTP
 prod$ addenv SMTP_HOST 'smtp.resend.com'
 prod$ addenv SMTP_PORT '587'
@@ -180,13 +191,13 @@ prod$ addenv SMTP_TLS 'starttls'
 prod$ addenv SMTP_USER 'resend'
 prod$ addenv SMTP_PASSWORD '<the app Resend API key re_…, sending access to plasmaos.uz>'
 prod$ addenv SMTP_FROM 'Plasma <no-reply@plasmaos.uz>'
-prod$ addenv PUBLIC_APP_URL 'https://<APP_DOMAIN>'
+prod$ addenv PUBLIC_APP_URL 'https://console.plasmaos.uz'
 prod$ addenv PUBLIC_BOOK_CALL_URL 'https://cal.com/plasmahq/30min'
 # Team alerts (sign-ups, pilot and call requests, purchases, AI provider failures): Telegram if set, else e-mail to PLASMA_ADMIN_EMAILS
 prod$ addenv ADMIN_ALERT_TELEGRAM_CHAT_ID '<team group chat id, -100…>'
 # B1: Polar ("Polar live switch" section). production = live payments; sandbox = test mode (https://sandbox-api.polar.sh)
 prod$ addenv POLAR_ENV 'production'
-prod$ addenv POLAR_ACCESS_TOKEN '<Polar organization access token: checkouts:write, discounts:write, products:read, customer_sessions:write>'
+prod$ addenv POLAR_ACCESS_TOKEN '<Polar organization access token: checkouts:write, discounts:write, products:read, customer_sessions:write, orders:read, subscriptions:read>'
 prod$ addenv POLAR_WEBHOOK_SECRET '<whsec_… of the webhook endpoint>'
 prod$ addenv POLAR_PRODUCT_IDS '{"pilot":"<id>","pursuit_desk":"<id>","extra_pursuit":"<id>","per_tender":"<id>"}'
 # B1: bank transfer invoices (proforma; the official e-invoice is issued after payment)
@@ -231,7 +242,7 @@ landing's form alerts (Vercel `TELEGRAM_BOT_TOKEN`, step 15) and the host alerts
 
 **Every key present once, with a value**, and **no placeholders left**:
 ```
-prod$ KEYS="SECRET_KEY PLASMA_ADMIN_EMAILS TELEGRAM_BOT_TOKEN GEMINI_API_KEY SMTP_HOST SMTP_PORT SMTP_TLS SMTP_USER SMTP_PASSWORD SMTP_FROM PUBLIC_APP_URL PUBLIC_BOOK_CALL_URL ADMIN_ALERT_TELEGRAM_CHAT_ID POLAR_ENV POLAR_ACCESS_TOKEN POLAR_WEBHOOK_SECRET POLAR_PRODUCT_IDS INVOICE_SELLER_NAME INVOICE_SELLER_ADDRESS INVOICE_SELLER_TIN INVOICE_SELLER_EMAIL INVOICE_SELLER_PHONE INVOICE_BANK_DETAILS_UZS INVOICE_USD_ENABLED BILLING_KICKOFF_URL"
+prod$ KEYS="ENVIRONMENT SECRET_KEY PLASMA_ADMIN_EMAILS TELEGRAM_BOT_TOKEN GEMINI_API_KEY SMTP_HOST SMTP_PORT SMTP_TLS SMTP_USER SMTP_PASSWORD SMTP_FROM PUBLIC_APP_URL PUBLIC_BOOK_CALL_URL ADMIN_ALERT_TELEGRAM_CHAT_ID POLAR_ENV POLAR_ACCESS_TOKEN POLAR_WEBHOOK_SECRET POLAR_PRODUCT_IDS INVOICE_SELLER_NAME INVOICE_SELLER_ADDRESS INVOICE_SELLER_TIN INVOICE_SELLER_EMAIL INVOICE_SELLER_PHONE INVOICE_BANK_DETAILS_UZS INVOICE_USD_ENABLED BILLING_KICKOFF_URL"
 prod$ bad=0; for k in $KEYS; do n="$(grep -c "^$k=" .env)/$(grep -c "^$k=." .env)"; [ "$n" = 1/1 ] || { echo "BAD $k lines/with-value=$n"; bad=1; }; done; [ $bad = 0 ] && echo ALL_KEYS_OK
 prod$ grep -nE '^[A-Z0-9_]+=.*(<[^>@]*>|…|CHANGE_ME)' .env | cut -d= -f1; echo PLACEHOLDER_SCAN_DONE
 prod$ chmod 600 .env
@@ -274,16 +285,7 @@ prod$ rm /opt/plasma-console/plasma-release-640e9be.tar.gz && df -h /
 Expect seven `Loaded image: plasma-<service>:640e9be…`, then `every service has plasma-<service>:640e9be…`; `Use%` ≤ 85 %.
 **STOP** on `import incomplete` (repeat step 6).
 
-## 9. Pre-stop gate, counts, then stop the app (db, redis and ClamAV keep running)
-
-```
-prod$ $RUN python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
-prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
-prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | diff - $HOME/deploy5-dbredis.txt && echo DBREDIS_UNCHANGED
-```
-Expect `DNS_OK`, `"ready":true`, `DBREDIS_UNCHANGED`. **STOP, do not stop anything** without `DNS_OK`:
-`docker restart plasma_db plasma_redis plasma_clamav`, then `for s in $APPS; do docker restart plasma_$s; done`, wait for
-`/health/ready`, gate again.
+## 9. Counts, pre-stop gate, then stop the app (db, redis and ClamAV keep running)
 
 Counts before the migrations (kept for the step 10 checks):
 ```
@@ -297,7 +299,14 @@ prod$ docker exec plasma_db psql -U plasma -d plasma_ai -At -c "select 'organiza
 ```
 (**[D3]**: the last command fails, there is no `access_state` yet; that is expected.)
 
-Then stop the app:
+The pre-stop gate (Deploy 5.1: moved after the counts, right before the stop):
+```
+prod$ $RUN python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db', 'redis', 'clamav')]; print('DNS_OK')" | tail -n 1
+prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
+prod$ docker inspect -f '{{.Name}} {{.Id}} cmd={{.Config.Cmd}} oom_adj={{.HostConfig.OomScoreAdj}}' plasma_db plasma_redis | diff - $HOME/deploy5-dbredis.txt && echo DBREDIS_UNCHANGED
+```
+Expect `DNS_OK`, `"ready":true`, `DBREDIS_UNCHANGED`. **STOP, do not stop anything** without `DNS_OK`: `docker restart
+plasma_db plasma_redis plasma_clamav`, then `for s in $APPS; do docker restart plasma_$s; done`, `/health/ready`, gate again.
 ```
 prod$ date -u +%T
 prod$ scripts/compose-release.sh stop $APPS
@@ -394,7 +403,7 @@ Rollback A** if `/health/ready` is not OK after 5 minutes (`docker logs plasma_b
 ## 12. Smoke, Beat memory, plans
 
 ```
-prod$ scripts/ops/smoke.sh --target production --expect-sha "$SHA" --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
+prod$ scripts/ops/smoke.sh --target production --expect-sha "$SHA" --frontend-url https://console.plasmaos.uz --backend-url http://127.0.0.1:8000
 prod$ scripts/compose-release.sh exec -T worker_pursuit_analysis python scripts/analysis_smoke.py
 prod$ scripts/ops/beat_memory.sh --target production --baseline "$BEAT_RSS_KB"
 prod$ docker exec plasma_db psql -U plasma -d plasma_ai -c "select plan, access_state, billing_status, count(*) from organizations group by 1,2,3"
@@ -408,11 +417,12 @@ ledger), **16** (AI prices) and **17** (S1/P1 feature checks).
 ## 13. The Polar webhook route is reachable (no payment)
 
 ```
-prod$ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<API_DOMAIN>/api/v1/billing/webhooks/polar
-prod$ curl -s -X POST https://<API_DOMAIN>/api/v1/billing/webhooks/polar; echo
+prod$ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://console.plasmaos.uz/api/v1/billing/webhooks/polar
+prod$ curl -s -X POST https://console.plasmaos.uz/api/v1/billing/webhooks/polar; echo
 ```
-Expect `403` and `{"detail":"webhook_headers_missing"}` (the route answers through Caddy; unsigned calls are
-refused and stored nowhere). **STOP the live test** on `404`/`502` (Caddy or the route: fix forward). In the Polar
+Expect `403` and `{"detail":"webhook_headers_missing"}` (the route answers through the app domain and the frontend's
+`/api/v1` rewrite; unsigned calls are refused and stored nowhere). **`401 {"detail":"Unauthorized"}`** = a frontend
+before Deploy 5.1 (its proxy did not let the webhook through): deploy 5.1. **STOP the live test** on `404`/`502` (Caddy or the route: fix forward). In the Polar
 dashboard (Settings → Webhooks → the endpoint) the URL must be exactly this one.
 
 ## 14. The owner's live test (production, ~30 min)
@@ -487,7 +497,7 @@ the preview checked before the window and the promoted build read the same value
 A build-time value changed after the preview was built needs a redeploy of the preview before promoting it.
 
 In Vercel (plasma-landing): promote the `landing/r2` preview checked in "Before the window" to production. Check
-`https://plasmaos.uz/en/pricing`: "Start a pilot" opens `https://<APP_DOMAIN>/billing/start?plan=pilot…` and lands on
+`https://plasmaos.uz/en/pricing`: "Start a pilot" opens `https://console.plasmaos.uz/billing/start?plan=pilot…` and lands on
 the checkout (signed out: the sign-in page, then the checkout again with `plan` kept); "Book a demo" opens the
 cal.com link; one "Request the trust pack" form (your own e-mail) arrives in `FORMS_TO_EMAIL`. **On a night rollback
 this step is not done**: the landing stays on its old version.
@@ -514,7 +524,7 @@ prod$ scripts/ops/disk_report.sh --threshold 85; free -h; tail -n 4 .release-his
 24 hours later:
 ```
 prod$ docker inspect -f '{{.Name}} oom={{.State.OOMKilled}} restarts={{.RestartCount}}' $(docker ps -q) | sort
-prod$ scripts/ops/smoke.sh --target production --expect-sha "$SHA" --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
+prod$ scripts/ops/smoke.sh --target production --expect-sha "$SHA" --frontend-url https://console.plasmaos.uz --backend-url http://127.0.0.1:8000
 prod$ scripts/ops/beat_memory.sh --target production --baseline "$BEAT_RSS_KB"
 prod$ docker exec -i plasma_db psql -U plasma -d plasma_ai -c "select kind, state, count(*) from email_deliveries where created_at > now() - interval '1 day' group by 1,2" -c "select kind, state, count(*) from admin_alerts where created_at > now() - interval '1 day' group by 1,2" -c "select event_type, outcome, processing_error, count(*) from billing_events group by 1,2,3"
 ```
@@ -538,12 +548,16 @@ token) and `.env.deploy5` if a Rollback A2 made one.
 Copy each product id (Product → ⋯ → Copy ID).
 
 **2. Organization access token** (Settings → Developers → New token): scopes **`checkouts:write`,
-`discounts:write`, `products:read`, `customer_sessions:write`**; no expiry or one year. Shown once.
+`discounts:write`, `products:read`, `customer_sessions:write`, `orders:read`, `subscriptions:read`** (the last two for
+`scripts/billing/reconcile_polar.py`, Deploy 5.1); no expiry or one year. Shown once. A token's scopes cannot be added
+later: create a new one and replace `POLAR_ACCESS_TOKEN`.
 
 **3. Webhook** (Settings → Webhooks → Add endpoint):
-- URL: **`https://<API_DOMAIN>/api/v1/billing/webhooks/polar`**; format **Raw**;
-- events: **`order.paid`, `order.refunded`, `subscription.active`, `subscription.canceled`,
-  `subscription.uncanceled`, `subscription.revoked`, `subscription.updated`**;
+- URL: **`https://console.plasmaos.uz/api/v1/billing/webhooks/polar`**; format **Raw**;
+- events, exactly these eight (**not** `checkout.*`: the app ignores them, and an endpoint subscribed to `checkout.*`
+  only never activates a card payment): **`order.paid`, `order.refunded`, `subscription.created`,
+  `subscription.active`, `subscription.updated`, `subscription.canceled`, `subscription.uncanceled`,
+  `subscription.revoked`**;
 - **secret: generate a new one for production** (never reuse the sandbox secret; the sandbox secret was shared in a
   chat on 25 Oct and is to be regenerated there too). Copy the `whsec_…` value.
 - Rotating later: regenerate in Polar, put the new value in `.env`, `scripts/compose-release.sh up "$SHA" --no-deps
@@ -578,7 +592,7 @@ prod$ $RUN python -c "import socket; [socket.getaddrinfo(h, None) for h in ('db'
 prod$ curl -fsS http://127.0.0.1:8000/health/ready; echo
 prod$ scripts/compose-release.sh up "$PREV_SHA" --no-deps $APPS
 prod$ until curl -fsS http://127.0.0.1:8000/health/ready >/dev/null; do sleep 3; done; curl -fsS http://127.0.0.1:8000/health; echo
-prod$ scripts/ops/smoke.sh --target production --expect-sha "$PREV_SHA" --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
+prod$ scripts/ops/smoke.sh --target production --expect-sha "$PREV_SHA" --frontend-url https://console.plasmaos.uz --backend-url http://127.0.0.1:8000
 ```
 Expect `build_sha` = `PREV_SHA` and smoke with one expected failure: `database schema is not at the Alembic head:
 … Can't locate revision identified by '20261025_0001_b1_billing'`. Remnants while on A: the billing, plan and partner
@@ -597,7 +611,7 @@ prod$ cp -p .env .env.deploy5 && chmod 600 .env.deploy5 && cp -p .env.pre-deploy
 prod$ for k in TELEGRAM_BOT_TOKEN GEMINI_API_KEY; do sed -i "s|^$k=.*|$(grep "^$k=" .env.deploy5)|" .env; done
 prod$ diff <(grep -E '^(TELEGRAM_BOT_TOKEN|GEMINI_API_KEY)=' .env | sort) <(grep -E '^(TELEGRAM_BOT_TOKEN|GEMINI_API_KEY)=' .env.deploy5 | sort) >/dev/null && echo SECRETS_KEPT
 prod$ scripts/compose-release.sh up "$PREV_SHA" --no-deps $APPS
-prod$ scripts/ops/smoke.sh --target production --expect-sha "$PREV_SHA" --frontend-url https://<APP_DOMAIN> --backend-url https://<API_DOMAIN>
+prod$ scripts/ops/smoke.sh --target production --expect-sha "$PREV_SHA" --frontend-url https://console.plasmaos.uz --backend-url http://127.0.0.1:8000
 ```
 The downgrade (rehearsal: **4 s**) removes B1, P3 and P2 **with their data** (orders, invoices, partner requests, usage
 rows); **[D3]**: then continue with Deploy 4's Rollback B to reach the Deploy 3 schema. The restored `.env` keeps
