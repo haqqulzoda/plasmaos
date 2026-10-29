@@ -1705,13 +1705,15 @@ def main():
                             admin.get_by_role("button", name="Open", exact=True).first.click()
                         expect(detail_box).to_be_visible()
 
-                    def save(count):
+                    def save(count, closes=True):
                         admin.get_by_role("button", name="Save", exact=True).click()
                         for _ in range(100):
                             if len(posts) >= count:
                                 break
                             admin.wait_for_timeout(50)
                         assert len(posts) == count, posts
+                        if closes:  # the response handled: the action dialog closes, the detail comes back
+                            expect(admin.get_by_role("button", name="Save", exact=True)).to_be_hidden()
 
                     open_detail()
                     admin.get_by_role("button", name="Override plan or status").click()
@@ -1720,7 +1722,7 @@ def main():
                     admin.get_by_role("button", name="Override plan or status").click()
                     admin.get_by_label("Plan", exact=True).select_option("pursuit_desk")
                     admin.get_by_label("Reason").fill("x")
-                    save(1)
+                    save(1, closes=False)
                     expect(admin.get_by_text("Give a reason", exact=True)).to_be_visible()  # the backend's message
                     admin.get_by_label("Reason").fill("Paid in Polar; order.paid missing")
                     save(2)
