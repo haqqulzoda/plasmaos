@@ -55,8 +55,9 @@ class ReleaseAdminRepairTests(unittest.TestCase):
         # inviter name, masked e-mail); accepting an invitation still requires a session.
         # P1: requesting an e-mail sign-in code is public (rate limited, account-independent answer);
         # verifying it goes through Auth.js only.
+        # Deploy 5.1: Polar's webhook (no session; the backend verifies its signature) through the app domain.
         self.assertIn(
-            "PUBLIC_EXACT_PATHS = ['/api/v1/health/version', '/api/v1/invitations/preview', '/api/v1/auth/email/request-code']",
+            "PUBLIC_EXACT_PATHS = ['/api/v1/health/version', '/api/v1/invitations/preview', '/api/v1/auth/email/request-code', '/api/v1/billing/webhooks/polar']",
             network_proxy,
         )
         self.assertNotIn("'/api/v1/invitations/accept'", network_proxy)

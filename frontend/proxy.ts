@@ -12,10 +12,7 @@ const PUBLIC_PATHS = ['/', '/api/auth', '/api/build', '/_next', '/favicon.ico'];
 // Deploy 5.1: Polar's webhook has no session; its Standard Webhooks signature is the authentication, checked by
 // the backend. Production serves it as https://<app domain>/api/v1/billing/webhooks/polar (no API domain), so
 // without this entry every delivery stopped here with 401.
-const PUBLIC_EXACT_PATHS = [
-  '/api/v1/health/version', '/api/v1/invitations/preview', '/api/v1/auth/email/request-code',
-  '/api/v1/billing/webhooks/polar',
-];
+const PUBLIC_EXACT_PATHS = ['/api/v1/health/version', '/api/v1/invitations/preview', '/api/v1/auth/email/request-code', '/api/v1/billing/webhooks/polar'];
 
 function shouldUseSecureCookies(): boolean {
   const authUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;
