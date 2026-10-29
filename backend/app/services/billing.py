@@ -44,6 +44,9 @@ from app.core.plans import (
     PILOT_CREDIT_CENTS,
     PILOT_CREDIT_WINDOW_DAYS,
     PILOT_GUARANTEE_DAYS,
+    PERIOD_LIFETIME,
+    PERIOD_PLAN_TERM,
+    PERIOD_PLAN_YEAR,
     PLAN_EXPLORE,
     PLAN_PILOT,
     PLAN_PURSUIT_DESK,
@@ -114,6 +117,8 @@ METHOD_BANK = "bank_transfer"
 ACTOR_WEBHOOK = "billing:polar-webhook"
 ACTOR_SCHEDULE = "billing:schedule"
 ACTOR_CHECKOUT = "billing:checkout"
+ACTOR_RECONCILE = "reconcile"  # scripts/billing/reconcile_polar.py (Deploy 5.1)
+ORDER_PAID_ALERT_HOURS = 24
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _TIN = re.compile(r"^(\d{9}|\d{14})$")
 
@@ -841,7 +846,11 @@ async def _subscription_order(db: AsyncSession, subscription_id: Any) -> Billing
     )
 
 
-async def _on_order_paid(db: AsyncSession, data: dict[str, Any], today: date) -> tuple[str, UUID | None]:
+async def _on_order_paid(
+    db: AsyncSession, data: dict[str, Any], today: date, *, actor_label: str = ACTOR_WEBHOOK,
+    note: str = "Polar order.paid",
+) -> tuple[str, UUID | None]:
+    """The order.paid webhook; reconciliation runs the same path with its own actor and note."""
     polar_order_id = str(data.get("id") or "")
     if not polar_order_id:
         return "invalid_payload", None
@@ -863,16 +872,16 @@ async def _on_order_paid(db: AsyncSession, data: dict[str, Any], today: date) ->
         return "paid_after_close", organization.id
     await _record_payment(db, organization=organization, order=order, invoice=None, method=METHOD_CARD,
                           amount_cents=amount, currency=currency, provider_payment_id=polar_order_id, reference=None,
-                          actor_user=None, actor_label=ACTOR_WEBHOOK, note="Polar order.paid")
+                          actor_user=None, actor_label=actor_label, note=note)
     order.status, order.paid_at = "paid", _now()
     if data.get("subscription_id"):
         order.provider_subscription_id = str(data["subscription_id"])
     if order.credit_cents and not await _redeem_credit(db, organization=organization, order=order, actor_user=None,
-                                                       actor_label=ACTOR_WEBHOOK):
+                                                       actor_label=actor_label):
         await _alert(db, organization, "credit_already_used", order)
     if order.activated_at is None:
         await activate_order(db, order=order, organization=organization, billing_status="paid", today=today,
-                             actor_label=ACTOR_WEBHOOK)
+                             actor_label=actor_label)
     elif await _is_current(db, organization, order):
         organization.billing_status = "paid"
     await db.flush()
@@ -985,6 +994,72 @@ async def _on_subscription(db: AsyncSession, event_type: str, data: dict[str, An
         await _alert(db, organization, event_type.replace(".", "_"), order)
     await db.flush()
     return outcome, organization.id
+
+
+RECONCILE_HIGHER_PLANS = ("agent", "enterprise")
+
+
+async def reconcile_paid_card_order(
+    db: AsyncSession, *, order_id: UUID, polar_order: dict[str, Any], today: date | None = None, apply: bool,
+) -> dict[str, Any]:
+    """Deploy 5.1 (scripts/billing/reconcile_polar.py): a card order Polar shows as **paid** (the caller checked
+    ``polar_order`` belongs to this order) that never got its ``order.paid`` webhook.
+
+    - ``activate``: the organization is not on the bought plan → the order.paid path (payment, credit, plan,
+      onboarding task, welcome e-mail, team alert), actor ``reconcile``;
+    - ``link_only``: the organization is already on the bought plan (an admin activated it by hand) → the Polar
+      order and subscription ids are linked and the order marked paid; the plan, its dates and the billing status
+      stay as the admin set them (the order takes the organization's dates, so later subscription events apply);
+    - ``already_paid``, ``already_linked``, ``not_pending``, ``needs_review`` (a larger plan) → nothing.
+    Without ``apply`` only the decision is returned. The caller commits."""
+    today = today or billing_today()
+    order = await db.get(BillingOrder, order_id, with_for_update=apply)
+    polar_order_id = str(polar_order.get("id") or "")
+    if order is None or order.method != METHOD_CARD or not polar_order_id:
+        return {"action": "not_found"}
+    if order.status == "paid":
+        return {"action": "already_paid"}
+    if order.status != "pending":
+        return {"action": "not_pending"}
+    if await db.scalar(select(BillingPayment.id).where(BillingPayment.provider_payment_id == polar_order_id)):
+        return {"action": "already_linked"}
+    organization = await db.get(Organization, order.organization_id, with_for_update=apply)
+    if order.plan is not None and organization.plan == order.plan:
+        action = "link_only"
+    elif order.plan is not None and organization.plan in RECONCILE_HIGHER_PLANS:
+        action = "needs_review"  # activating would move a larger plan down to the one bought
+    else:
+        action = "activate"
+    if not apply or action == "needs_review":
+        return {"action": action}
+    note = "Polar order.paid (reconciled: the webhook never delivered it)"
+    if action == "activate":
+        data = {**polar_order, "metadata": {**(polar_order.get("metadata") or {}), "order_id": str(order.id),
+                                            "organization_id": str(order.organization_id)}}
+        outcome, _ = await _on_order_paid(db, data, today, actor_label=ACTOR_RECONCILE, note=note)
+        return {"action": action, "outcome": outcome}
+    before = {"status": order.status, "provider_subscription_id": order.provider_subscription_id}
+    await _record_payment(
+        db, organization=organization, order=order, invoice=None, method=METHOD_CARD,
+        amount_cents=int(polar_order.get("total_amount") or 0), currency=str(polar_order.get("currency") or "usd").upper()[:3],
+        provider_payment_id=polar_order_id, reference=None, actor_user=None, actor_label=ACTOR_RECONCILE, note=note,
+    )
+    order.status, order.paid_at = "paid", _now()
+    if polar_order.get("subscription_id"):
+        order.provider_subscription_id = str(polar_order["subscription_id"])
+    if order.credit_cents:
+        await _redeem_credit(db, organization=organization, order=order, actor_user=None, actor_label=ACTOR_RECONCILE)
+    order.activated_at = _now()
+    order.plan_started_on, order.plan_ends_on = organization.plan_started_on, organization.plan_ends_on
+    await db.flush()
+    await _audit(db, organization, ACTION_BILLING_STATUS_CHANGED, actor_user=None, actor_label=ACTOR_RECONCILE,
+                 resource_type="BILLING_ORDER", resource_id=order.id, previous_state=before,
+                 new_state={"status": "paid", "provider_order_id": polar_order_id,
+                            "provider_subscription_id": order.provider_subscription_id,
+                            "plan": organization.plan, "billing_status": organization.billing_status,
+                            "activation": "kept_manual"},
+                 reason="Reconciled with Polar: paid; the plan was already activated by hand, ids linked only.")
+    return {"action": action, "outcome": "linked"}
 
 
 async def process_polar_event(
@@ -1243,11 +1318,27 @@ async def record_refund(
     await refund_order(db, order=order, note=note, actor_user=actor_user, actor_label="admin", downgrade=downgrade)
 
 
+def default_plan_dates(plan: str, start: date) -> tuple[date | None, date | None]:
+    """The term a plan gets when an admin sets it without dates: Pilot 3 months, annual plans 12 months,
+    per-tender open-ended, Explore none."""
+    period = CATALOG[plan].period
+    if period == PERIOD_PLAN_TERM:
+        return start, add_months(start, PRODUCTS[PRODUCT_PILOT].term_months or 3)
+    if period == PERIOD_PLAN_YEAR:
+        return start, add_months(start, PRODUCTS[PRODUCT_PURSUIT_DESK].term_months or 12)
+    if period == PERIOD_LIFETIME:
+        return start, None
+    return None, None
+
+
 async def override_billing(
     db: AsyncSession, *, organization: Organization, plan: str | None, billing_status: str | None, reason: str,
     actor_user: User, plan_started_on: date | None = None, plan_ends_on: date | None = None,
+    today: date | None = None,
 ) -> None:
-    """Manual plan and/or billing status, with a reason (both audited)."""
+    """Manual plan and/or billing status, with a reason (both audited). A changed plan (or one without a start
+    date) takes the dates given, the rest from ``default_plan_dates`` starting today (or on the start given); the
+    same plan keeps its dates unless new ones are given."""
     reason = _clean(reason, 500)
     if len(reason) < 3:
         raise BillingError("reason_required", "Give a reason")
@@ -1256,10 +1347,15 @@ async def override_billing(
     if plan is not None:
         if plan not in CATALOG:
             raise BillingError("plan_invalid", "Unknown plan")
-        await _set_plan(db, organization=organization, plan=plan,
-                        start=plan_started_on or organization.plan_started_on,
-                        end=plan_ends_on or organization.plan_ends_on, actor_user=actor_user, actor_label="admin",
-                        reason=reason, reset_overrides=False)
+        if plan != organization.plan or organization.plan_started_on is None:
+            default_start, default_end = default_plan_dates(plan, plan_started_on or today or billing_today())
+            start, end = plan_started_on or default_start, plan_ends_on or default_end
+        else:
+            start, end = plan_started_on or organization.plan_started_on, plan_ends_on or organization.plan_ends_on
+        if start is not None and end is not None and end < start:
+            raise BillingError("dates_invalid", f"The plan cannot end ({end.isoformat()}) before it starts ({start.isoformat()})")
+        await _set_plan(db, organization=organization, plan=plan, start=start, end=end, actor_user=actor_user,
+                        actor_label="admin", reason=reason, reset_overrides=False)
     if billing_status is not None:
         wanted = None if billing_status in ("", "none") else billing_status
         before = organization.billing_status
@@ -1487,6 +1583,8 @@ async def admin_detail(db: AsyncSession, organization: Organization) -> dict[str
         .order_by(AdminActivityEvent.created_at.desc()).limit(60)
     )).all()
     data.update({
+        # The console's detail actions (override, offers, invoices) post to this id (Deploy 5.1).
+        "organization_id": organization.id,
         "organization_name": _display(organization), "access_state": organization.access_state,
         "billing_status": organization.billing_status,
         "terms_acceptances": [{
@@ -1507,6 +1605,30 @@ async def admin_detail(db: AsyncSession, organization: Organization) -> dict[str
                    "reason": row.reason, "created_at": row.created_at, "new_state": row.new_state} for row in audit],
     })
     return data
+
+
+async def webhook_health(db: AsyncSession, *, now: datetime | None = None) -> dict[str, Any]:
+    """Deploy 5.1: is Polar delivering ``order.paid``? Warns when none has arrived 24 hours after the first card
+    checkout (the live endpoint was once subscribed to checkout.* only, so paid cards stayed pending)."""
+    now = now or _now()
+    first_checkout = await db.scalar(select(func.min(BillingOrder.created_at)).where(
+        BillingOrder.method == METHOD_CARD, BillingOrder.provider_checkout_id.is_not(None)))
+    rows = (await db.execute(
+        select(BillingEvent.event_type, func.count(), func.max(BillingEvent.received_at))
+        .where(BillingEvent.provider == "polar").group_by(BillingEvent.event_type).order_by(BillingEvent.event_type)
+    )).all()
+    events = [{"event_type": event_type, "count": int(count), "last_received_at": last} for event_type, count, last in rows]
+    order_paid = next((row for row in events if row["event_type"] == "order.paid"), None)
+    pending = await db.scalar(select(func.count()).select_from(BillingOrder).where(
+        BillingOrder.method == METHOD_CARD, BillingOrder.status == "pending",
+        BillingOrder.provider_checkout_id.is_not(None)))
+    return {
+        "first_card_checkout_at": first_checkout,
+        "last_order_paid_at": order_paid["last_received_at"] if order_paid else None,
+        "pending_card_orders": int(pending or 0), "events": events,
+        "warning": bool(first_checkout is not None and order_paid is None
+                        and now - first_checkout >= timedelta(hours=ORDER_PAID_ALERT_HOURS)),
+    }
 
 
 async def admin_onboarding_queue(db: AsyncSession) -> list[dict[str, Any]]:

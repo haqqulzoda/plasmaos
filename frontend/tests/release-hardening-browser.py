@@ -1647,6 +1647,100 @@ def main():
                 finally: other.close()
                 return {'user_a':'en','user_b':'ru','isolated':True}
             case('locale/two-user-isolation',locale_isolation)
+
+            def d51_admin_billing_actions():
+                """Deploy 5.1: Admin → Billing detail actions post to the organization's real id (they posted to
+                /organizations/undefined/… because the detail dialog's close event dropped the detail), a refused
+                save shows the backend's message, Cancel returns to the detail, the order.paid warning shows."""
+                org_id = "51000000-0000-4000-8000-0000000000b1"
+                detail = {
+                    "organization_id": org_id, "organization_name": "Synthetic Desk LLC", "plan": "explore",
+                    "plan_started_on": None, "plan_ends_on": None, "access_state": "explore", "billing_status": None,
+                    "summary": {"status": None, "card_customer": False}, "customer": None, "orders": [], "invoices": [],
+                    "payments": [], "pilot_credit_available": False, "terms_acceptances": [], "events": [],
+                    "onboarding": [], "offers": [], "audit": [],
+                }
+                customer = {"organization_id": org_id, "organization_name": "Synthetic Desk LLC", "legal_name": None,
+                            "country": None, "resident": None, "plan": "explore", "access_state": "explore",
+                            "billing_status": None, "plan_started_on": None, "plan_ends_on": None, "last_order": None,
+                            "open_invoices": 0, "onboarding_open": False, "cancel_requested": False, "last_activity_at": None}
+                health = {"first_card_checkout_at": "2026-10-27T18:00:00Z", "last_order_paid_at": None,
+                          "pending_card_orders": 1, "warning": True,
+                          "events": [{"event_type": "checkout.created", "count": 2, "last_received_at": "2026-10-27T18:00:00Z"}]}
+                posts = []
+
+                def admin_session(route):
+                    route.fulfill(json={"user": {"name": "Synthetic Admin", "email": "admin@example.invalid"},
+                                        "expires": "2099-01-01T00:00:00.000Z", "accessToken": "s72-token-a",
+                                        "platform_role": "admin", "approval_status": "approved", "is_admin": True})
+
+                def billing_api(route):
+                    request = route.request
+                    path = urlparse(request.url).path
+                    if request.method == "GET":
+                        body = {"/api/v1/admin/billing/customers": [customer], "/api/v1/admin/billing/onboarding": [],
+                                "/api/v1/admin/billing/webhook-health": health,
+                                f"/api/v1/admin/billing/organizations/{org_id}": detail}.get(path)
+                        return route.fulfill(json=body) if body is not None else route.fulfill(status=404, json={"detail": "Not Found"})
+                    posts.append((path, request.post_data_json))
+                    if path.endswith("/override") and len((request.post_data_json or {}).get("reason", "")) < 3:
+                        return route.fulfill(status=422, json={"detail": {"code": "reason_required", "message": "Give a reason"}})
+                    if path.endswith("/offers"):
+                        return route.fulfill(json={"offer_id": "51000000-0000-4000-8000-0000000000c1",
+                                                   "url": "https://console.example.invalid/billing/start?plan=per_tender&offer=t",
+                                                   "expires_at": "2026-11-13T00:00:00Z"})
+                    return route.fulfill(json=detail)
+
+                admin = context.new_page()
+                try:
+                    admin.set_viewport_size({"width": 1440, "height": 900})
+                    admin.route("**/api/auth/session", admin_session)
+                    admin.route("**/api/v1/admin/billing/**", billing_api)
+                    admin.goto(BASE + "/admin/billing", wait_until="networkidle")
+                    expect(admin.locator("[data-admin-billing-webhook-warning]")).to_contain_text("checkout.created ×2")
+                    detail_box = admin.locator("[data-admin-billing-detail]")
+
+                    def open_detail():
+                        if not detail_box.is_visible():
+                            admin.get_by_role("button", name="Open", exact=True).first.click()
+                        expect(detail_box).to_be_visible()
+
+                    def save(count):
+                        admin.get_by_role("button", name="Save", exact=True).click()
+                        for _ in range(100):
+                            if len(posts) >= count:
+                                break
+                            admin.wait_for_timeout(50)
+                        assert len(posts) == count, posts
+
+                    open_detail()
+                    admin.get_by_role("button", name="Override plan or status").click()
+                    admin.get_by_role("button", name="Cancel", exact=True).click()
+                    expect(detail_box).to_be_visible()  # Cancel comes back to the detail
+                    admin.get_by_role("button", name="Override plan or status").click()
+                    admin.get_by_label("Plan", exact=True).select_option("pursuit_desk")
+                    admin.get_by_label("Reason").fill("x")
+                    save(1)
+                    expect(admin.get_by_text("Give a reason", exact=True)).to_be_visible()  # the backend's message
+                    admin.get_by_label("Reason").fill("Paid in Polar; order.paid missing")
+                    save(2)
+                    open_detail()
+                    admin.get_by_role("button", name="Per-tender: checkout link").click()
+                    save(3)
+                    open_detail()
+                    admin.get_by_role("button", name="Per-tender: invoice (signed order)").click()
+                    admin.get_by_label("Signed order form (date, signatory)").fill("Signed 30 Oct by the director")
+                    save(4)
+                    base = f"/api/v1/admin/billing/organizations/{org_id}"
+                    assert [path for path, _ in posts] == [f"{base}/override", f"{base}/override", f"{base}/offers", f"{base}/invoices"], posts
+                    assert posts[1][1] == {"plan": "pursuit_desk", "billing_status": None, "reason": "Paid in Polar; order.paid missing",
+                                           "plan_started_on": None, "plan_ends_on": None}, posts[1]
+                    assert not any("undefined" in path for path, _ in posts)
+                    admin.screenshot(path=str(OUT / "en-d51-admin-billing-1440.png"), full_page=True)
+                    return {"posts": [path for path, _ in posts]}
+                finally:
+                    admin.close()
+            case("d5-1/admin-billing/detail-actions-post-real-id", d51_admin_billing_actions)
             def revoked():
                 load('settings','en',390)
                 controls['revoked'] = True

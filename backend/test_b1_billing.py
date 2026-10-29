@@ -168,6 +168,36 @@ def test_deploy5_pilot_end_dates_plan() -> None:
     ]
 
 
+def test_deploy51_reconcile_matches_only_a_paid_polar_order_of_this_order() -> None:
+    """Never activate what Polar does not show as paid, or what belongs to another order."""
+    from scripts.billing.reconcile_polar import match_polar
+
+    mine, other = str(uuid4()), str(uuid4())
+    checkout = {"id": "chk", "status": "succeeded", "metadata": {"order_id": mine}}
+    paid = {"id": "po_1", "status": "paid", "paid": True, "checkout_id": "chk", "metadata": {"order_id": mine}}
+    assert match_polar(mine, "chk", checkout, [paid]) == ("paid", paid, None)
+    assert match_polar(mine, "chk", {**checkout, "metadata": {}}, [{**paid, "metadata": {}}])[0] == "paid"  # by checkout id
+    assert match_polar(mine, "chk", {**checkout, "status": "open"}, [])[0] == "not_paid"
+    assert match_polar(mine, "chk", checkout, [{**paid, "status": "pending", "paid": False}])[0] == "not_paid"
+    assert match_polar(mine, "chk", checkout, [{**paid, "status": "void", "paid": False}])[0] == "not_paid"
+    assert match_polar(mine, "chk", checkout, [{**paid, "status": "paid", "paid": False}])[0] == "not_paid"
+    assert match_polar(mine, "chk", checkout, [{**paid, "status": "refunded"}])[0] == "needs_review"
+    assert match_polar(mine, "chk", checkout, [paid, {**paid, "id": "po_2"}])[0] == "needs_review"
+    assert match_polar(mine, "chk", {**checkout, "metadata": {"order_id": other}}, [paid])[0] == "mismatch"
+    assert match_polar(mine, "chk", checkout, [{**paid, "metadata": {"order_id": other}}])[0] == "mismatch"
+
+
+def test_deploy51_override_default_dates() -> None:
+    from app.services.billing import default_plan_dates
+
+    day = date(2026, 10, 30)
+    assert default_plan_dates("pilot", day) == (day, date(2027, 1, 30))
+    for plan in ("pursuit_desk", "agent", "enterprise"):
+        assert default_plan_dates(plan, day) == (day, date(2027, 10, 30))
+    assert default_plan_dates("per_tender", day) == (day, None)
+    assert default_plan_dates("explore", day) == (None, None)
+
+
 def test_terms_text_is_the_docs_copy_and_hashed_with_lf() -> None:
     root = Path(__file__).resolve().parents[1]
     docs = (root / "docs" / "legal" / "PILOT_TERMS_v1.md").read_text(encoding="utf-8").replace("\r\n", "\n")
@@ -258,6 +288,22 @@ class FakePolar:
     def __init__(self) -> None:
         self.checkouts: list[dict] = []
         self.discounts: list[dict] = []
+        # Deploy 5.1 reads (reconcile_polar.py): what Polar shows per checkout id.
+        self.checkout_reads: dict[str, dict] = {}
+        self.orders_by_checkout: dict[str, list[dict]] = {}
+        self.subscriptions: dict[str, dict] = {}
+        self.refuse_reads = False
+
+    async def get_checkout(self, checkout_id: str) -> dict:
+        if self.refuse_reads:
+            raise billing_polar.PolarError("polar_http_403")
+        return self.checkout_reads[checkout_id]
+
+    async def list_orders(self, *, checkout_id: str) -> list[dict]:
+        return self.orders_by_checkout.get(checkout_id, [])
+
+    async def get_subscription(self, subscription_id: str) -> dict:
+        return self.subscriptions[subscription_id]
 
     async def create_discount(self, **values) -> str:
         self.discounts.append(values)
@@ -455,6 +501,12 @@ async def _card_pilot(sessions, ids, fake, monkeypatch) -> None:
         assert sent["product_id"] == "prod_pilot" and sent["discount_id"] is None
         assert sent["metadata"] == {"organization_id": str(ids["org_a"]), "order_id": str(started.order_id), "product": "pilot"}
         assert sent["success_url"].startswith("https://app.plasma.test/dashboard/billing/success?checkout_id=")
+        # Deploy 5.1: no order.paid 24 hours after the first card checkout → the admin console warns.
+        health = await service.webhook_health(db)
+        assert health["first_card_checkout_at"] is not None and health["pending_card_orders"] == 1
+        assert health["warning"] is False  # not 24 hours yet
+        later = health["first_card_checkout_at"] + timedelta(hours=24)
+        assert (await service.webhook_health(db, now=later))["warning"] is True
         acceptance = await db.scalar(select(TermsAcceptance))
         assert (acceptance.terms_version, acceptance.text_sha256, acceptance.user_id, acceptance.ip_address,
                 acceptance.organization_id) == ("PILOT_TERMS_v1", terms()["sha256"], ids["user_a"], "203.0.113.7", ids["org_a"])
@@ -496,6 +548,10 @@ async def _card_pilot(sessions, ids, fake, monkeypatch) -> None:
         assert await db.scalar(select(func.count(BillingPayment.id)).where(BillingPayment.order_id == started.order_id)) == 1
         stored = await db.scalar(select(BillingEvent).where(BillingEvent.provider_event_id == event_id))
         assert stored.attempts == 2 and stored.organization_id == ids["org_a"] and stored.payload["type"] == "order.paid"
+        health = await endpoints.admin_webhook_health(db=db)
+        assert health.warning is False and health.last_order_paid_at is not None and health.pending_card_orders == 0
+        assert (await service.webhook_health(db, now=later + timedelta(days=30)))["warning"] is False
+        assert {row.event_type: row.count for row in health.events} == {"order.paid": 2}
 
         # Side effects: one onboarding task, one welcome e-mail with the kickoff link, one team alert.
         assert await db.scalar(select(func.count(OnboardingTask.id)).where(OnboardingTask.organization_id == ids["org_a"])) == 1
@@ -867,3 +923,157 @@ async def _portal_per_tender_and_pilot_without_order(sessions, ids) -> None:
         assert counts["ended"] >= 1
         organization = await db.get(Organization, ids["org_a"], populate_existing=True)
         assert (organization.plan, organization.access_state) == ("explore", "explore")
+
+    await _deploy51_reconcile_override_and_detail_ids(sessions, ids)
+
+
+def _polar_reads(fake: FakePolar, order, *, polar_id: str | None, subscription_id: str | None = None,
+                 checkout_status: str = "succeeded") -> None:
+    """What Polar shows for this order's checkout: a paid order (polar_id) or none."""
+    metadata = {"organization_id": str(order.organization_id), "order_id": str(order.id), "product": order.product}
+    fake.checkout_reads[order.provider_checkout_id] = {"id": order.provider_checkout_id, "status": checkout_status,
+                                                       "metadata": metadata, "subscription_id": subscription_id}
+    fake.orders_by_checkout[order.provider_checkout_id] = [] if polar_id is None else [{
+        **_polar_order(order, polar_id, subscription_id=subscription_id), "metadata": metadata}]
+    if subscription_id:
+        fake.subscriptions[subscription_id] = {"id": subscription_id, "status": "active"}
+
+
+async def _deploy51_reconcile_override_and_detail_ids(sessions, ids) -> None:
+    """Deploy 5.1: reconcile_polar.py (dry run, activate, link only after a manual override, not paid, Polar
+    refusing, idempotent), the override's default dates and messages, organization_id in every detail."""
+    from app.api.endpoints import billing as endpoints
+    from app.models.audit import AdminActivityEvent
+    from app.models.billing import BillingOrder, BillingPayment, OnboardingTask
+    from app.models.email import EmailDelivery
+    from app.models.tenancy import Organization
+    from app.schemas.billing import AdminBillingDetail, AdminInvoiceRequest, BillingOverrideRequest
+    from app.services import admin_alerts
+    from scripts.billing import reconcile_polar as script
+
+    fake = billing_polar.polar_client()
+    today = billing_today()
+    kicks = []
+    original_kick = admin_alerts.kick_admin_alerts
+    admin_alerts.kick_admin_alerts = lambda: kicks.append(1)
+    reconcile = lambda order_id, *, dry_run, all_pending=False: script.run(  # noqa: E731
+        "local", order_id=order_id, all_pending=all_pending, dry_run=dry_run, client=fake, sessions=sessions, today=today)
+    try:
+        # 1. A paid Pursuit Desk card order whose order.paid never arrived (org A, in Explore): activate.
+        async with sessions() as db:
+            started = await _checkout(db, ids, "user_a", "a", "pursuit_desk", "card")
+            order = await db.get(BillingOrder, started.order_id)
+            _polar_reads(fake, order, polar_id="polar_ord_r1", subscription_id="sub_r1")
+            desk_a = order.id
+        dry = await reconcile(desk_a, dry_run=True)
+        assert [(row["action"], row["applied"], row["polar_order_id"], row["subscription_status"]) for row in dry] == [
+            ("activate", False, "polar_ord_r1", "active")]
+        async with sessions() as db:
+            assert (await db.get(BillingOrder, desk_a)).status == "pending"  # the dry run changed nothing
+            assert (await db.get(Organization, ids["org_a"])).plan == "explore"
+        applied = await reconcile(desk_a, dry_run=False)
+        assert [(row["action"], row["outcome"], row["applied"]) for row in applied] == [("activate", "activated", True)]
+        assert kicks == [1]
+        async with sessions() as db:
+            order = await db.get(BillingOrder, desk_a)
+            organization = await db.get(Organization, ids["org_a"])
+            assert (order.status, order.provider_subscription_id) == ("paid", "sub_r1")
+            assert (organization.plan, organization.billing_status, organization.plan_ends_on) == (
+                "pursuit_desk", "paid", add_months(today, 12))
+            payment = await db.scalar(select(BillingPayment).where(BillingPayment.order_id == desk_a))
+            assert payment.provider_payment_id == "polar_ord_r1" and "reconciled" in payment.note
+            assert await db.scalar(select(func.count(OnboardingTask.id)).where(OnboardingTask.order_id == desk_a)) == 1
+            actors = dict((await db.execute(select(AdminActivityEvent.action, AdminActivityEvent.actor_label).where(
+                AdminActivityEvent.target_resource_id.in_((str(desk_a), str(payment.id), str(ids["org_a"]))),
+                AdminActivityEvent.action.in_(("BILLING_PLAN_ACTIVATED", "BILLING_PAYMENT_RECORDED", "BILLING_CREDIT_APPLIED")),
+                AdminActivityEvent.created_at >= order.created_at))).all())
+            assert actors == {"BILLING_PLAN_ACTIVATED": "reconcile", "BILLING_PAYMENT_RECORDED": "reconcile",
+                              "BILLING_CREDIT_APPLIED": "reconcile"}
+            # Idempotent: a second run, and a late order.paid delivery once the endpoint is subscribed.
+            assert [row["action"] for row in await reconcile(desk_a, dry_run=False)] == ["already_paid"]
+            status, body, _ = await _deliver(db, "order.paid", _polar_order(order, "polar_ord_r1", subscription_id="sub_r1"))
+            assert body["outcome"] == "duplicate_payment"
+
+        # 2. Activated by hand first (org B), then reconciled: ids linked, the admin's plan and dates kept.
+        async with sessions() as db:
+            started = await _checkout(db, ids, "user_b", "b", "pursuit_desk", "card")
+            order = await db.get(BillingOrder, started.order_id)
+            _polar_reads(fake, order, polar_id="polar_ord_r2", subscription_id="sub_r2")
+            desk_b = order.id
+            admin = await _user(db, ids, "admin")
+            detail = await endpoints.admin_override(ids["org_b"], BillingOverrideRequest(
+                plan="pursuit_desk", billing_status="paid", reason="Paid in Polar; order.paid missing"),
+                current_user=admin, db=db)
+            # No dates given, a new plan: today + 12 months (it was per-tender, open-ended).
+            assert (detail.plan, detail.plan_started_on, detail.plan_ends_on) == ("pursuit_desk", today, add_months(today, 12))
+            welcomes = await db.scalar(select(func.count(EmailDelivery.id)).where(EmailDelivery.kind == "BILLING_WELCOME"))
+        dry = await reconcile(desk_b, dry_run=True)
+        assert [(row["action"], row["applied"]) for row in dry] == [("link_only", False)]
+        linked = await reconcile(desk_b, dry_run=False)
+        assert [(row["action"], row["outcome"], row["check_dates"]) for row in linked] == [("link_only", "linked", False)]
+        async with sessions() as db:
+            order = await db.get(BillingOrder, desk_b)
+            organization = await db.get(Organization, ids["org_b"])
+            assert (order.status, order.provider_subscription_id, order.plan_started_on, order.plan_ends_on) == (
+                "paid", "sub_r2", today, add_months(today, 12))
+            assert order.activated_at is not None
+            assert (organization.plan, organization.billing_status, organization.plan_ends_on) == (
+                "pursuit_desk", "paid", add_months(today, 12))
+            assert await db.scalar(select(BillingPayment.provider_payment_id).where(BillingPayment.order_id == desk_b)) == "polar_ord_r2"
+            # Not activated again: no onboarding task, no second welcome e-mail.
+            assert await db.scalar(select(func.count(OnboardingTask.id)).where(OnboardingTask.order_id == desk_b)) == 0
+            assert await db.scalar(select(func.count(EmailDelivery.id)).where(EmailDelivery.kind == "BILLING_WELCOME")) == welcomes
+            audit = await db.scalar(select(AdminActivityEvent).where(
+                AdminActivityEvent.action == "BILLING_STATUS_CHANGED", AdminActivityEvent.target_resource_id == str(desk_b)))
+            assert audit.actor_label == "reconcile" and audit.new_state["activation"] == "kept_manual"
+            # Linked: the subscription's later events now apply to the plan.
+            status, body, _ = await _deliver(db, "subscription.canceled", {"id": "sub_r2", "status": "active"})
+            assert (await db.get(Organization, ids["org_b"], populate_existing=True)).billing_status == "canceled"
+
+        # 3. Not paid in Polar (an open checkout), and Polar refusing the token: nothing changes.
+        async with sessions() as db:
+            started = await _checkout(db, ids, "user_a", "a", "extra_pursuit", "card")
+            order = await db.get(BillingOrder, started.order_id)
+            _polar_reads(fake, order, polar_id=None, checkout_status="open")
+            extra = order.id
+        rows = await reconcile(None, dry_run=False, all_pending=True)
+        assert [(row["order_id"], row["action"], row["applied"]) for row in rows] == [(str(extra), "not_paid", False)]
+        fake.refuse_reads = True
+        assert [(row["action"], row["error"]) for row in await reconcile(extra, dry_run=True)] == [("polar_error", "polar_http_403")]
+        fake.refuse_reads = False
+        async with sessions() as db:
+            assert (await db.get(BillingOrder, extra)).status == "pending"
+        assert [row["action"] for row in await reconcile(uuid4(), dry_run=True)] == ["not_found"]
+
+        # 4. Override: messages instead of a schema refusal, default and kept dates; organization_id everywhere.
+        async with sessions() as db:
+            with pytest.raises(HTTPException) as short:
+                await endpoints.admin_override(ids["org_a"], BillingOverrideRequest(plan="pilot", reason=" x "),
+                                               current_user=await _user(db, ids, "admin"), db=db)
+            assert (short.value.status_code, short.value.detail) == (422, {"code": "reason_required", "message": "Give a reason"})
+            with pytest.raises(HTTPException) as backwards:
+                await endpoints.admin_override(ids["org_a"], BillingOverrideRequest(
+                    plan="pilot", plan_started_on=today, plan_ends_on=today - timedelta(days=1), reason="Wrong dates"),
+                    current_user=await _user(db, ids, "admin"), db=db)
+            assert backwards.value.detail["code"] == "dates_invalid" and "cannot end" in backwards.value.detail["message"]
+            pilot = await endpoints.admin_override(ids["org_a"], BillingOverrideRequest(plan="pilot", reason="Back to a pilot"),
+                                                   current_user=await _user(db, ids, "admin"), db=db)
+            assert (pilot.plan_started_on, pilot.plan_ends_on) == (today, add_months(today, 3))
+            kept = await endpoints.admin_override(ids["org_a"], BillingOverrideRequest(
+                plan="pilot", billing_status="paid", reason="Status only"), current_user=await _user(db, ids, "admin"), db=db)
+            assert (kept.plan_started_on, kept.plan_ends_on, kept.billing_status) == (today, add_months(today, 3), "paid")
+            moved = await endpoints.admin_override(ids["org_a"], BillingOverrideRequest(
+                plan="pilot", plan_ends_on=add_months(today, 4), reason="Extended a month"), current_user=await _user(db, ids, "admin"), db=db)
+            assert (moved.plan_started_on, moved.plan_ends_on) == (today, add_months(today, 4))
+            with pytest.raises(HTTPException) as unsigned:
+                await endpoints.admin_issue_invoice(ids["org_b"], AdminInvoiceRequest(product="per_tender", signed_note=""),
+                                                    current_user=await _user(db, ids, "admin"), db=db)
+            assert unsigned.value.detail == {"code": "note_required", "message": "Describe the signed order form (date, signatory)"}
+            for detail, organization_id in (
+                (await endpoints.admin_billing_detail(ids["org_a"], db=db), ids["org_a"]), (pilot, ids["org_a"]),
+                (await endpoints.admin_billing_detail(ids["org_b"], db=db), ids["org_b"]),
+            ):
+                assert detail.organization_id == organization_id
+                assert AdminBillingDetail.model_validate(detail).model_dump(mode="json")["organization_id"] == str(organization_id)
+    finally:
+        admin_alerts.kick_admin_alerts = original_kick

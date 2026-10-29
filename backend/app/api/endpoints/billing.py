@@ -37,6 +37,7 @@ from app.schemas.billing import (
     QuoteResponse,
     RefundNoteRequest,
     TermsResponse,
+    WebhookHealth,
 )
 from app.services import billing as service
 from app.services.admin_alerts import kick_admin_alerts
@@ -277,6 +278,13 @@ async def admin_billing_customers(db: AsyncSession = Depends(get_db)) -> list[Ad
 @admin_router.get("/onboarding", response_model=list[OnboardingTaskOut])
 async def admin_onboarding(db: AsyncSession = Depends(get_db)) -> list[OnboardingTaskOut]:
     return [OnboardingTaskOut(**row) for row in await service.admin_onboarding_queue(db)]
+
+
+@admin_router.get("/webhook-health", response_model=WebhookHealth)
+async def admin_webhook_health(db: AsyncSession = Depends(get_db)) -> WebhookHealth:
+    """Deploy 5.1: Polar deliveries by event type; a warning when no order.paid arrived 24 h after the first card
+    checkout (the endpoint is then not subscribed to order.paid)."""
+    return WebhookHealth(**await service.webhook_health(db))
 
 
 @admin_router.get("/organizations/{organization_id}", response_model=AdminBillingDetail)

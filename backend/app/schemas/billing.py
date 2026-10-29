@@ -210,6 +210,7 @@ class AdminBillingCustomer(BaseModel):
 
 
 class AdminBillingDetail(BillingOverview):
+    organization_id: UUID  # the console's detail actions post to /organizations/{organization_id}/… (Deploy 5.1)
     organization_name: str
     access_state: str
     billing_status: str | None = None
@@ -248,7 +249,23 @@ class BillingOverrideRequest(BaseModel):
     billing_status: Literal["none", "paid", "awaiting_payment", "suspended", "refunded", "canceled"] | None = None
     plan_started_on: date | None = None
     plan_ends_on: date | None = None
-    reason: str = Field(min_length=3, max_length=500)
+    # No minimum here: the service answers a short reason with its own message ("Give a reason"), which the
+    # console shows; a schema refusal would only say "Invalid request". The dialog allows 1,000 characters.
+    reason: str = Field(default="", max_length=1000)
+
+
+class WebhookEventCount(BaseModel):
+    event_type: str
+    count: int
+    last_received_at: datetime | None = None
+
+
+class WebhookHealth(BaseModel):
+    first_card_checkout_at: datetime | None = None
+    last_order_paid_at: datetime | None = None
+    pending_card_orders: int
+    events: list[WebhookEventCount]
+    warning: bool
 
 
 class OnboardingDoneRequest(BaseModel):
@@ -273,4 +290,4 @@ class OfferCreateResponse(BaseModel):
 
 class AdminInvoiceRequest(BaseModel):
     product: Literal["per_tender"]
-    signed_note: str = Field(min_length=3, max_length=1000)
+    signed_note: str = Field(default="", max_length=1000)  # the service checks it ("Describe the signed order form")

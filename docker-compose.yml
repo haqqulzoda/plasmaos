@@ -291,6 +291,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       PLASMA_SERVICE_NAME: worker_pursuit_analysis
     command: [ "celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "-Q", "pursuit_analysis", "--concurrency=${PURSUIT_ANALYSIS_WORKER_CONCURRENCY:-2}", "--max-tasks-per-child=10", "--max-memory-per-child=${PLASMA_CHILD_KB_WORKER_PURSUIT_ANALYSIS:-163840}" ]
     depends_on:

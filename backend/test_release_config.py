@@ -65,6 +65,20 @@ def test_tracked_compose_database_is_loopback_only_and_has_no_literal_admin_pass
     assert "Samadov772." not in source
 
 
+def test_every_python_service_sets_environment_the_same_way():
+    """Deploy 5.1: worker_pursuit_analysis lacked ENVIRONMENT, read the settings default (development) and
+    crash-looped on the POLAR_ENV=production check. Every service built from ./backend sets it identically."""
+    import yaml
+    root = Path(__file__).resolve().parents[1]
+    services = yaml.safe_load((root / "docker-compose.yml").read_text(encoding="utf-8"))["services"]
+    python = {name: service for name, service in services.items()
+              if isinstance(service.get("build"), dict) and service["build"].get("context") == "./backend"}
+    assert {"backend", "celery_worker", "worker_heavy", "worker_private_documents", "worker_pursuit_analysis",
+            "celery_beat"} <= set(python)
+    assert {name: (service.get("environment") or {}).get("ENVIRONMENT") for name, service in python.items()} == {
+        name: "${ENVIRONMENT:-production}" for name in python}
+
+
 def test_python_constraints_are_exact_stable_and_cover_installed_requirements():
     from importlib.metadata import version
     from packaging.requirements import Requirement

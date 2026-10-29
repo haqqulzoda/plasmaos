@@ -62,7 +62,8 @@ class PolarClient:
         self._token = (token or settings.POLAR_ACCESS_TOKEN or "").strip()
         self._transport = transport
 
-    async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    async def _request(self, method: str, path: str, *, body: dict[str, Any] | None = None,
+                       params: dict[str, Any] | None = None) -> Any:
         if not self._token:
             raise PolarError("polar_not_configured")
         try:
@@ -70,15 +71,43 @@ class PolarClient:
                 base_url=api_base(), transport=self._transport, timeout=20,
                 headers={"Authorization": f"Bearer {self._token}", "Accept": "application/json"},
             ) as client:
-                response = await client.post(path, json=body)
+                response = await client.request(method, path, json=body, params=params)
         except httpx.HTTPError as exc:
             raise PolarError("polar_unreachable") from exc
         if response.status_code >= 400:
             raise PolarError(f"polar_http_{response.status_code}")
-        data = response.json()
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise PolarError("polar_bad_response") from exc
+
+    async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        data = await self._request("POST", path, body=body)
         if not isinstance(data, dict) or not data.get("id"):
             raise PolarError("polar_bad_response")
         return data
+
+    async def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        data = await self._request("GET", path, params=params)
+        if not isinstance(data, dict):
+            raise PolarError("polar_bad_response")
+        return data
+
+    # Reads for scripts/billing/reconcile_polar.py. The token needs checkouts:read (or checkouts:write),
+    # orders:read and subscriptions:read; a missing scope answers 401/403 (polar_http_403).
+
+    async def get_checkout(self, checkout_id: str) -> dict[str, Any]:
+        return await self._get(f"/v1/checkouts/{checkout_id}")
+
+    async def list_orders(self, *, checkout_id: str) -> list[dict[str, Any]]:
+        """The Polar orders created from one checkout (normally one)."""
+        items = (await self._get("/v1/orders/", {"checkout_id": checkout_id, "limit": 10})).get("items")
+        if not isinstance(items, list):
+            raise PolarError("polar_bad_response")
+        return [item for item in items if isinstance(item, dict)]
+
+    async def get_subscription(self, subscription_id: str) -> dict[str, Any]:
+        return await self._get(f"/v1/subscriptions/{subscription_id}")
 
     async def create_discount(self, *, product_id: str, amount_cents: int, name: str, metadata: dict[str, str]) -> str:
         """A one-time fixed discount on one product, redeemable once (the pilot credit)."""

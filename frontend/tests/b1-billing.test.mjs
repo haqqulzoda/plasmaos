@@ -8,6 +8,7 @@ import {
   ATTRIBUTION_COOKIE, BILLING_ERROR_CODES, attributionFrom, billingErrorCode, billingErrorKey, parseMarkdown, productFrom,
   resolveAttribution,
 } from "../lib/billing.ts";
+import { adminBillingRequest, emptyAdminBillingForm } from "../lib/adminBilling.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const read = (path) => readFileSync(join(ROOT, path), "utf8");
@@ -100,10 +101,60 @@ test("checkout, notices, explore and admin are wired", () => {
   for (const kind of ["suspended", "awaiting_payment", "annual_offer"]) assert.match(notice, new RegExp(`data-billing-notice="${kind}"`));
   assert.match(read("components/shell/AdminShell.tsx"), /href: '\/admin\/billing'/);
   const admin = read("app/admin/billing/page.tsx");
-  for (const path of ["/mark-paid", "/refund", "/override", "/onboarding/", "/offers", "/invoices`", "/confirm-cancel"]) {
-    assert.ok(admin.includes(path), path);
+  const requests = read("lib/adminBilling.ts");
+  for (const path of ["/mark-paid", "/refund", "'override'", "'offers'", "'invoices'", "/confirm-cancel"]) {
+    assert.ok(requests.includes(path), path);
   }
+  assert.ok(admin.includes("/onboarding/"));
+  assert.match(admin, /adminBillingRequest\(action, form\)/);
   assert.match(read("app/admin/audit/page.tsx"), /'BILLING_PLAN_ACTIVATED'/);
   // The Team tab loads even when the partner requests are refused (a plan without partner search: 403).
   assert.match(read("components/pursuits/PursuitTeam.tsx"), /\/partner-requests`, \{ headers \}\)\s+\.catch\(\(\) => \(\{ data: \[\] as PartnerRequest\[\] \}\)\)/);
+});
+
+test("Deploy 5.1: every admin billing detail action posts to the organization's real id", () => {
+  const organizationId = "5b0c2f7e-1d2a-4c3b-9e8f-0a1b2c3d4e5f";
+  const form = { ...emptyAdminBillingForm(), text: " KAPITALBANK 1 ", note: " Signed agreement ", plan: "pursuit_desk", status: "paid",
+    startsOn: "2026-10-30", endsOn: "" };
+  const sent = Object.fromEntries([
+    { kind: "override", organizationId }, { kind: "offer", organizationId }, { kind: "invoice", organizationId },
+    { kind: "paid", invoice: { id: "inv-1", number: "PL-2026-002" } }, { kind: "refund", order: { id: "ord-1" } },
+    { kind: "confirmCancel", order: { id: "ord-2" } },
+  ].map((action) => [action.kind, adminBillingRequest(action, form)]));
+  assert.deepEqual(Object.fromEntries(Object.entries(sent).map(([kind, request]) => [kind, request.path])), {
+    override: `/admin/billing/organizations/${organizationId}/override`,
+    offer: `/admin/billing/organizations/${organizationId}/offers`,
+    invoice: `/admin/billing/organizations/${organizationId}/invoices`,
+    paid: "/admin/billing/invoices/inv-1/mark-paid", refund: "/admin/billing/orders/ord-1/refund",
+    confirmCancel: "/admin/billing/orders/ord-2/confirm-cancel",
+  });
+  assert.deepEqual(sent.override.body, { plan: "pursuit_desk", billing_status: "paid", reason: "Signed agreement",
+    plan_started_on: "2026-10-30", plan_ends_on: null });
+  assert.deepEqual(sent.invoice.body, { product: "per_tender", signed_note: "Signed agreement" });
+  for (const request of Object.values(sent)) assert.doesNotMatch(request.path, /undefined|null/);
+  // No organization open: refused locally with a message, never sent to /organizations/undefined/….
+  for (const kind of ["override", "offer", "invoice"]) {
+    for (const bad of ["", undefined]) {
+      assert.throws(() => adminBillingRequest({ kind, organizationId: bad }, form), /open it again/);
+    }
+  }
+  // The page takes the id when the action starts, and the detail survives the dialog switch (native close event).
+  const admin = read("app/admin/billing/page.tsx");
+  for (const kind of ["override", "offer", "invoice"]) {
+    assert.match(admin, new RegExp(`start\\(\\{ kind: '${kind}', organizationId: detail\\.organization_id \\}\\)`), kind);
+  }
+  assert.match(admin, /onClose=\{\(\) => \{ if \(!action\) setDetail\(null\); \}\}/);
+  assert.doesNotMatch(admin, /detail\?\.organization_id/);
+  assert.match(admin, /'\/admin\/billing\/webhook-health'/);
+  assert.match(admin, /data-admin-billing-webhook-warning/);
+});
+
+test("Deploy 5.1: the Polar webhook passes the frontend proxy (signature-gated by the backend), nothing else billing", () => {
+  const proxy = read("proxy.ts");
+  const exact = proxy.match(/const PUBLIC_EXACT_PATHS = \[([^\]]*)\]/)[1];
+  assert.match(exact, /'\/api\/v1\/billing\/webhooks\/polar'/);
+  // Exact paths only: no other billing route becomes public.
+  assert.deepEqual([...exact.matchAll(/'([^']+)'/g)].map((match) => match[1]).filter((path) => path.includes("billing")),
+    ["/api/v1/billing/webhooks/polar"]);
+  assert.doesNotMatch(proxy.match(/const PUBLIC_PATHS = \[[^\]]*\]/)[0], /billing/);
 });

@@ -10,6 +10,7 @@ import { Alert } from '@/components/ui/Feedback';
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/Forms';
 import { Dialog } from '@/components/ui/Overlay';
 import { api } from '@/lib/api';
+import { adminBillingRequest, emptyAdminBillingForm, type AdminBillingAction, type WebhookHealth } from '@/lib/adminBilling';
 import { formatTimestamp } from '@/lib/adminPanels';
 import type { BillingInvoice, BillingOrder, BillingOverview, BillingPayment } from '@/lib/billing';
 
@@ -31,14 +32,7 @@ type Detail = BillingOverview & {
   onboarding: { id: string; status: string; note: string | null; created_at: string }[];
   audit: { id: string; action: string; actor: string | null; reason: string | null; created_at: string }[];
 };
-type Action =
-  | { kind: 'paid'; invoice: BillingInvoice }
-  | { kind: 'refund'; order: BillingOrder }
-  | { kind: 'override' }
-  | { kind: 'onboarding'; task: Task }
-  | { kind: 'offer' }
-  | { kind: 'invoice' }
-  | { kind: 'confirmCancel'; order: BillingOrder };
+type Action = AdminBillingAction | { kind: 'onboarding'; task: Task };
 
 const PRODUCT: Record<string, string> = { pilot: 'Pilot', pursuit_desk: 'Pursuit Desk', extra_pursuit: 'Extra pursuit', per_tender: 'Per-tender review' };
 const PLANS = ['explore', 'pilot', 'pursuit_desk', 'agent', 'enterprise', 'per_tender'];
@@ -66,10 +60,11 @@ export default function AdminBillingPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [action, setAction] = useState<Action | null>(null);
-  const [form, setForm] = useState({ text: '', note: '', plan: '', status: '', downgrade: true });
+  const [form, setForm] = useState(emptyAdminBillingForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [offerUrl, setOfferUrl] = useState<string | null>(null);
+  const [webhooks, setWebhooks] = useState<WebhookHealth | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,6 +80,11 @@ export default function AdminBillingPage() {
     } finally {
       setLoading(false);
     }
+    try {
+      setWebhooks((await api.get<WebhookHealth>('/admin/billing/webhook-health')).data);
+    } catch {
+      setWebhooks(null); // the warning is advisory: the console works without it
+    }
   }, []);
   useEffect(() => { void load(); }, [load]);
 
@@ -99,7 +99,7 @@ export default function AdminBillingPage() {
 
   const start = (next: Action) => {
     setAction(next);
-    setForm({ text: '', note: '', plan: '', status: '', downgrade: true });
+    setForm(emptyAdminBillingForm());
     setFormError(null);
   };
 
@@ -116,28 +116,19 @@ export default function AdminBillingPage() {
     setFormError(null);
     try {
       if (action.kind === 'offer') {
-        const made = (await api.post<{ url: string; expires_at: string }>(
-          `/admin/billing/organizations/${detail?.organization_id}/offers`, { product: 'per_tender', note: form.note.trim() || null })).data;
+        const { path, body } = adminBillingRequest(action, form);
+        const made = (await api.post<{ url: string; expires_at: string }>(path, body)).data;
         setOfferUrl(made.url);
         setSuccess(`One-use checkout link created (expires ${formatTimestamp(made.expires_at)}). Copy it now: it is shown once.`);
         setAction(null);
-        await open(detail?.organization_id ?? '');
+        await open(action.organizationId);
         return;
       }
       if (action.kind === 'onboarding') {
         setTasks((await api.post<Task[]>(`/admin/billing/onboarding/${action.task.id}/done`, { note: form.note.trim() || null })).data);
         setSuccess(`Onboarding of ${action.task.organization_name} marked done.`);
       } else {
-        const path = action.kind === 'paid' ? `/admin/billing/invoices/${action.invoice.id}/mark-paid`
-          : action.kind === 'refund' ? `/admin/billing/orders/${action.order.id}/refund`
-          : action.kind === 'confirmCancel' ? `/admin/billing/orders/${action.order.id}/confirm-cancel`
-          : action.kind === 'invoice' ? `/admin/billing/organizations/${detail?.organization_id}/invoices`
-          : `/admin/billing/organizations/${detail?.organization_id}/override`;
-        const body = action.kind === 'paid' ? { reference: form.text.trim(), note: form.note.trim() || null }
-          : action.kind === 'refund' ? { note: form.note.trim(), downgrade: form.downgrade }
-          : action.kind === 'confirmCancel' ? {}
-          : action.kind === 'invoice' ? { product: 'per_tender', signed_note: form.note.trim() }
-          : { plan: form.plan || null, billing_status: form.status || null, reason: form.note.trim() };
+        const { path, body } = adminBillingRequest(action, form);
         setDetail((await api.post<Detail>(path, body)).data);
         setSuccess(action.kind === 'paid' ? `Invoice ${action.invoice.number} marked paid.`
           : action.kind === 'refund' ? 'Refund recorded.'
@@ -147,7 +138,9 @@ export default function AdminBillingPage() {
       setAction(null);
       await load();
     } catch (problem) {
-      setFormError(failure(problem, 'The change could not be saved.'));
+      // A request that never left (no organization open) explains itself; a refused one shows the backend's message.
+      const local = problem instanceof Error && !(problem as { isAxiosError?: boolean }).isAxiosError;
+      setFormError(failure(problem, local ? (problem as Error).message : 'The change could not be saved.'));
     } finally {
       setSaving(false);
     }
@@ -173,6 +166,14 @@ export default function AdminBillingPage() {
     {error && <Alert tone="danger" title={error} />}
     {success && <Alert tone="success" title={success} />}
     {offerUrl && <Alert tone="info" title="Per-tender checkout link (one use)"><TechnicalText>{offerUrl}</TechnicalText></Alert>}
+    {webhooks?.warning && <div data-admin-billing-webhook-warning><Alert tone="warning" title="Polar has not delivered order.paid">
+      The first card checkout was {formatTimestamp(webhooks.first_card_checkout_at)} and no <TechnicalText>order.paid</TechnicalText> delivery
+      has arrived since, so paid cards stay pending ({webhooks.pending_card_orders} pending card
+      order{webhooks.pending_card_orders === 1 ? '' : 's'}). Polar delivered so far: {webhooks.events.length
+        ? webhooks.events.map((event) => `${event.event_type} ×${event.count}`).join(', ') : 'nothing'}. In Polar → Settings →
+      Webhooks, subscribe the endpoint to order.paid, order.refunded and the subscription events, then reconcile the
+      pending orders with <TechnicalText>scripts/billing/reconcile_polar.py</TechnicalText> (Deploy 5.1 runbook).
+    </Alert></div>}
 
     <section className="ds-stack" aria-labelledby="admin-onboarding-title" data-admin-onboarding>
       <h2 id="admin-onboarding-title">Onboarding queue ({openTasks.length} open)</h2>
@@ -229,15 +230,17 @@ export default function AdminBillingPage() {
 
     <Dialog
       open={Boolean(detail) && !action}
-      onClose={() => setDetail(null)}
+      // Opening an action closes this dialog (a native close event): keep the detail so the action, and Cancel,
+      // come back to it; only a close by the user (button, Escape, backdrop) drops it.
+      onClose={() => { if (!action) setDetail(null); }}
       title={detail ? `Billing: ${detail.organization_name}` : ''}
       description={detail ? `Plan ${label(detail.plan)} (${detail.access_state}) · billing status ${label(detail.billing_status)}` : ''}
       closeLabel="Close billing detail"
       footer={<>
         <Button variant="secondary" onClick={() => setDetail(null)}>Close</Button>
-        <Button variant="secondary" onClick={() => start({ kind: 'offer' })}>Per-tender: checkout link</Button>
-        <Button variant="secondary" onClick={() => start({ kind: 'invoice' })}>Per-tender: invoice (signed order)</Button>
-        <Button onClick={() => start({ kind: 'override' })}>Override plan or status</Button>
+        <Button variant="secondary" onClick={() => detail && start({ kind: 'offer', organizationId: detail.organization_id })}>Per-tender: checkout link</Button>
+        <Button variant="secondary" onClick={() => detail && start({ kind: 'invoice', organizationId: detail.organization_id })}>Per-tender: invoice (signed order)</Button>
+        <Button onClick={() => detail && start({ kind: 'override', organizationId: detail.organization_id })}>Override plan or status</Button>
       </>}
     >
       {detail && <div className="ds-stack admin-billing-detail" data-admin-billing-detail>
@@ -322,6 +325,14 @@ export default function AdminBillingPage() {
             <option value="">Keep {label(detail?.billing_status)}</option>
             {STATUSES.map((status) => <option key={status} value={status}>{label(status)}</option>)}
           </Select>
+          <div className="ds-row">
+            <Input label="Plan starts (optional)" type="date" value={form.startsOn}
+              onChange={(event) => setForm({ ...form, startsOn: event.target.value })} />
+            <Input label="Plan ends (optional)" type="date" value={form.endsOn}
+              onChange={(event) => setForm({ ...form, endsOn: event.target.value })} />
+          </div>
+          <p className="ds-muted ds-text-small">Without dates a new plan starts today: Pilot for 3 months; Pursuit Desk, Agent and
+            Enterprise for 12 months; per-tender open-ended. The same plan keeps its dates.</p>
         </>}
         {action?.kind === 'refund' && <Checkbox label="Return the organization to Explore (when this order is its current plan)"
           checked={form.downgrade} onChange={(event) => setForm({ ...form, downgrade: event.target.checked })} />}
