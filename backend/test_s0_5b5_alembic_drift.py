@@ -126,7 +126,7 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
         script.get_revision("20260925_0001_w2_organization_membership").down_revision
         == "20260912_0001_s10_5_communications"
     )
-    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 54
+    assert len(list((BACKEND_DIR / "alembic" / "versions").glob("*.py"))) == 55
 
 
 def test_historical_migrations_are_untouched() -> None:

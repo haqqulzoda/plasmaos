@@ -248,7 +248,8 @@ def test_migration_is_additive_network_free_single_head() -> None:
     script = ScriptDirectory.from_config(config)
     assert script.get_heads() == [HEAD]
     # D1-03 -> D2-01 -> D2-05 follow P0 on one chain.
-    assert script.get_revision(HEAD).down_revision == "20261024_0001_p3_plans_limits"
+    assert script.get_revision(HEAD).down_revision == "20261025_0001_b1_billing"
+    assert script.get_revision("20261025_0001_b1_billing").down_revision == "20261024_0001_p3_plans_limits"
     assert script.get_revision("20261024_0001_p3_plans_limits").down_revision == "20261023_0001_p2_partner_finder"
     assert script.get_revision("20261023_0001_p2_partner_finder").down_revision == "20261016_0002_p1_organization_access"
     assert script.get_revision("20261016_0002_p1_organization_access").down_revision == "20261016_0001_p1_email_sign_in"
