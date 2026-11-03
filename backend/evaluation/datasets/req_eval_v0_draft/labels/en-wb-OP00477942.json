@@ -1,0 +1,112 @@
+{
+ "doc_id": "en-wb-OP00477942",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "en-wb-OP00477942#01",
+   "quote": "higher education in information technology, health care, public administration, economics, or a related field",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#02",
+   "quote": "at least 2 years of direct experience in digital health, including business process analysis, digital project coordination, information systems implementation, or digital team leadership",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#03",
+   "quote": "experience coordinating projects involving government authorities and organizations responsible for the technical implementation of information systems",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#04",
+   "quote": "experience preparing and monitoring work plans, meeting minutes, official correspondence, analytical materials, and reports",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#05",
+   "quote": "knowledge of digital solutions and information systems used in the health system of the Kyrgyz Republic, including Sanarip Clinic, the iLab LIS, and the National BI Platform, is an advantage",
+   "type": "QUALIFICATION",
+   "obligation": "PREFERRED"
+  },
+  {
+   "id": "en-wb-OP00477942#06",
+   "quote": "fluency in Kyrgyz and Russian",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#07",
+   "quote": "proficiency in Microsoft Office, particularly Excel, Word, and PowerPoint, as well as task management, planning, and monitoring tools such as ClickUp, Trello, or Asana",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#08",
+   "quote": "skills in using collaboration and document-sharing tools, such as Microsoft Teams and SharePoint or equivalent solutions",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#09",
+   "quote": "skills in preparing analytical reports and data visualizations using Power BI or equivalent tools are an advantage",
+   "type": "QUALIFICATION",
+   "obligation": "PREFERRED"
+  },
+  {
+   "id": "en-wb-OP00477942#10",
+   "quote": "Interested candidates are invited to send their CV, indicating their contact telephone number and position in English and Russian",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#11",
+   "quote": "letters of recommendation from their place of work",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#12",
+   "quote": "copies of relevant diplomas and certificates",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#13",
+   "quote": "the contact details of at least two referees for verification of references",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#14",
+   "quote": "by 18:00 on November 11, 2026",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY",
+   "alt_quotes": [
+    "Deadline for applications: 11-11-2026"
+   ]
+  },
+  {
+   "id": "en-wb-OP00477942#15",
+   "quote": "Documents must be submitted in PDF format, and resumes must be signed.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#16",
+   "quote": "Applications without the job title, containing an incomplete set of documents, or received after the deadline will not be considered.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477942#17",
+   "quote": "Only the most suitable candidates will be invited for an interview.",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  }
+ ]
+}

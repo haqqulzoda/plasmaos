@@ -1,0 +1,85 @@
+{
+ "note": "Standard UzEx qualification-field sentences, labelled once by hand and applied to every UzEx lot whose text contains the identical sentence (unless the lot's own labels already use it).",
+ "sentences": [
+  {
+   "quote": "Шартномани бажариш учун зарур техник, молиявий, моддий, кадрлар ресурсларининг ҳамда бошқа ресурсларнинг мавжудлиги.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Шартнома тузиш учун қонуний ҳуқуққа эгалик.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Солиқлар ва йиғимларни тўлаш бўйича муддати ўтган қарздорликнинг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Ўзига нисбатан жорий этилган банкротлик тартиб-таомилларининг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Инсофсиз ижрочиларнинг ягона реестрида қайд этилмаганлиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "O‘zbekiston Respublikasi Bosh prokuraturasi huzuridagi Majburiy ijro byurosining ma’lumotlar bazalarida ishtirokchining sud qarorlari bo‘yicha bajarilmagan majburiyatlari mavjud emasligi",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Имтиёзли солиқ режимидаги молиявий операцияларни амалга оширишда маълумотларни ошкор қилиш ва тақдим этишни назарда тутмайдиган давлатлар ёки ҳудудларда (офшор ҳудудлар) иштирокчилар ва уларнинг банк ҳисобрақамлари рўйхатдан ўтказилганлиги ёки ўтказилмаганлиги",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Иштирокчиларнинг жорий буюртмачи билан илгари тузилган шартномалар бўйича ўз зиммасига олган мажбуриятларнинг ижро этилмаганлиги ёки лозим даражада ижро этилмаганлиги бўйича судда иши (шу жумладан, арбитраж муносабатлари мавжуд бўлган иштирокчилар) кўрилганлигию",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Манфаатлар тўқнашуви ва аффилланганлик ҳолатлари мавжуд эмаслиги",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Коррупция кўринишларига йўл қўймаслик бўйича ариза.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Таъсис хужжатлари ва фаолиятининг қонуний асослари ҳамда давлат рўйхатидан ўтказилганлиги тўғрисидаги гувоҳнома мавжудлиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Молиявий ҳисоботлар (ташқи аудитор ташкилотлар томонидан тасдиқланган ёки солиқ органлари томонидан қабул қилинганлиги тасдиқланган ҳолда) мавжудлиги",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Экологик, гигиеник сертификатлаш, калибрлаш тўғрисидаги тегишли гувоҳномалар ёки синов баённомалари, сифат сертификатлари, мувофиқлик сертификатлари, шу жумладан хавфсизлик талабларига мувофиқлик сертификатлари",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Иштирокчиларнинг ишбилармонлик обрўсини (ишчи-ходимлари малакаси, иш тажрибаси, шу жумладан махсус фаолият бўйича тажрибаси) тасдиқловчи ҳужжатлар.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Закалат киритилганлигини тасдиқловчи ҳужжат ёки банк кафолатининг асл нусхаси (харид қилиш ҳужжатларига мувофиқ талаб қилинганда).",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "quote": "Xorijiy davlatlar va xalqaro tashkilotlar tomonidan ishtirokchiga nisbatan sanksiya qo‘llanilmaganligi",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  }
+ ]
+}

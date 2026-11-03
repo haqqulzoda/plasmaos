@@ -1,0 +1,144 @@
+{
+ "doc_id": "uz-uzex-521157",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "uz-uzex-521157#01",
+   "quote": "Texnik topshiriqga muvofiqligi",
+   "type": "TECHNICAL",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "uz-uzex-521157#02",
+   "quote": "4-shakl va 4a-shakl ilovasiga muvofiq rasmiylashtiriladi.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521157#03",
+   "quote": "Shuningdek, xarid xujjatining 1 ilovasidagi 1 jadvalda ko’rsatilgan (15,16,17,18,19,20,21) ro’yxatdagi xujjatlar biriktiriladi.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521157#04",
+   "quote": "Agar muvofiq bo’lmasa, ishtirokchi tenderda qatnashishdan chetlashtiriladi.",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521157#05",
+   "quote": "Yetkazib berish muddatlari belgilangan muddatning kamida 50 foizga qisqartirilganda - 1 ball",
+   "type": "TECHNICAL",
+   "obligation": "SCORED",
+   "alt_quotes": [
+    "Yetkazib berish muddati",
+    "Yetkazib berish muddatlari belgilangan muddatning kamida 75 foizga qisqartirilganda - 2 ball"
+   ]
+  },
+  {
+   "id": "uz-uzex-521157#06",
+   "quote": "Yetkazib berish muddatini tasdiqlovchi kafolat xati",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521157#07",
+   "quote": "Ishlab chiqaruvchi zavod avtorizatsiyasining mavjudligi",
+   "type": "ELIGIBILITY",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "uz-uzex-521157#08",
+   "quote": "Xarid ishtirokchisi taklif etilayotgan tovar ishlab chiqaruvchisi bo’lmagan taqdirda 5- shaklga muvofiq rasmiylashtiriladi.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521157#09",
+   "quote": "Texnik, moliyaviy, moddiy va kadrlar resurslarining mavjudligi to’g’risida hujjatlar yoki kafolat xati (oxirgi marta soliq organlariga taqdim etilgan moliyaviy hisobotlar) taqdim etiladi.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY",
+   "alt_quotes": [
+    "Шартномани бажариш учун зарур техник, молиявий, моддий, кадрлар ресурсларининг ҳамда бошқа ресурсларнинг мавжудлиги."
+   ]
+  },
+  {
+   "id": "uz-uzex-521157#10",
+   "quote": "Tasis hujjatlari va davlat ro’yxatidan o’tkazilganligi to’g’risidagi guvohnoma.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "alt_quotes": [
+    "Шартнома тузиш учун қонуний ҳуқуққа эгалик."
+   ]
+  },
+  {
+   "id": "uz-uzex-521157#11",
+   "quote": "Soliq organlari tomonidan taqdim etilgan yoki haqiqatda soliqlardan qarzdorligi mavjud emasligi to’g’risida vakolatli organ tomonidan taqdim etilgan rasmiy hujjat.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "alt_quotes": [
+    "Солиқлар ва йиғимларни тўлаш бўйича муддати ўтган қарздорликнинг мавжуд эмаслиги."
+   ]
+  },
+  {
+   "id": "uz-uzex-521157#12",
+   "quote": "Insofsiz ijrochilarning yagona reestridan malumot.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "alt_quotes": [
+    "Инсофсиз ижрочиларнинг ягона реестрида қайд этилмаганлиги."
+   ]
+  },
+  {
+   "id": "uz-uzex-521157#13",
+   "quote": "O’zbekiston Respublikasi Bosh prokuraturasi huzuridagi Majburiy ijro byurosining malumotlar bazasidan malumot.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521157#14",
+   "quote": "2-shakl va 2a-shaklga muvofiq rasmiylashtirilgan malumotlar asosida o’rganiladi.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY",
+   "alt_quotes": [
+    "Манфаатлар тўқнашуви ва аффилланганлик ҳолатлари мавжуд эмаслиги"
+   ]
+  },
+  {
+   "id": "uz-uzex-521157#15",
+   "quote": "Ўзига нисбатан жорий этилган банкротлик тартиб-таомилларининг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-521157#16",
+   "quote": "O‘zbekiston Respublikasi Bosh prokuraturasi huzuridagi Majburiy ijro byurosining ma’lumotlar bazalarida ishtirokchining sud qarorlari bo‘yicha bajarilmagan majburiyatlari mavjud emasligi",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-521157#17",
+   "quote": "Имтиёзли солиқ режимидаги молиявий операцияларни амалга оширишда маълумотларни ошкор қилиш ва тақдим этишни назарда тутмайдиган давлатлар ёки ҳудудларда (офшор ҳудудлар) иштирокчилар ва уларнинг банк ҳисобрақамлари рўйхатдан ўтказилганлиги ёки ўтказилмаганлиги",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-521157#18",
+   "quote": "Иштирокчиларнинг жорий буюртмачи билан илгари тузилган шартномалар бўйича ўз зиммасига олган мажбуриятларнинг ижро этилмаганлиги ёки лозим даражада ижро этилмаганлиги бўйича судда иши (шу жумладан, арбитраж муносабатлари мавжуд бўлган иштирокчилар) кўрилганлигию",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-521157#19",
+   "quote": "Коррупция кўринишларига йўл қўймаслик бўйича ариза.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  }
+ ]
+}

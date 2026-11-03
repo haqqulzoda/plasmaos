@@ -7,11 +7,17 @@ retain their original sprint-specific datasets, heads and invocation requirement
 The current setup and hardening gaps remain Sprint 9.3 work. Do not run old add/reset/
 init/seed scripts as a migration path. Preserve immutable migration/baseline evidence.
 
+The table below classifies the scripts reviewed in Sprint 9.2 plus the two evaluation tools.
+Scripts added after Sprint 9.2 (smoke, billing, ledger, pilot and release helpers) are not all
+listed; read each script's docstring before running it.
+
 Moved live diagnostics and exact usage: [probes](probes/README.md).
 Sprint 9.2 decisions: [cleanup report](../../docs/S9_2_LEGACY_CONTRACT_TEST_TOPOLOGY_CLEANUP.md).
 
 | Current file | Classification |
 | --- | --- |
+| `backend/scripts/bench_pursuit_models.py` | Explicit-use D1 model bench; calls the live provider; local stack only; count-only reports in `docs/audits/d1/` |
+| `backend/scripts/eval_requirement_extraction.py` | Requirement-extraction evaluation (EN/RU/UZ). `validate`, `score`, `scope-check` are offline; `live` calls the provider and needs `--confirm-live-provider-calls`. See `backend/evaluation/README.md` |
 | `backend/add_company_columns.py` | Operator-dangerous; explicit target/intent only; not setup authority |
 | `backend/add_financial_columns.py` | Operator-dangerous; explicit target/intent only; not setup authority |
 | `backend/add_vault_profile_columns.py` | Operator-dangerous; explicit target/intent only; not setup authority |
@@ -22,10 +28,6 @@ Sprint 9.2 decisions: [cleanup report](../../docs/S9_2_LEGACY_CONTRACT_TEST_TOPO
 | `backend/local_test_ai.py` | Explicit-use diagnostic/report/operator tooling; not an automatic setup step |
 | `backend/local_test_parser.py` | Explicit-use diagnostic/report/operator tooling; not an automatic setup step |
 | `backend/reset_db.py` | Operator-dangerous; explicit target/intent only; not setup authority |
-| `backend/scripts/__pycache__/seed_taxonomy.cpython-314.pyc` | Operator-dangerous; explicit target/intent only; not setup authority |
-| `backend/scripts/__pycache__/test_evaluator.cpython-314.pyc` | Historical/focused verification; explicit invocation; retained sprint-specific assumptions |
-| `backend/scripts/__pycache__/test_extraction.cpython-314.pyc` | Historical/focused verification; explicit invocation; retained sprint-specific assumptions |
-| `backend/scripts/__pycache__/verify_vault_db.cpython-314.pyc` | Historical/focused verification; explicit invocation; retained sprint-specific assumptions |
 | `backend/scripts/audit_sr1_source_refresh.py` | Explicit-use diagnostic/report/operator tooling; not an automatic setup step |
 | `backend/scripts/audit_sr2_1_semantic_batch.py` | Explicit-use diagnostic/report/operator tooling; not an automatic setup step |
 | `backend/scripts/audit_sr2_2_source_refresh_orchestration.py` | Explicit-use diagnostic/report/operator tooling; not an automatic setup step |

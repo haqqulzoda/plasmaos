@@ -1,0 +1,234 @@
+{
+ "doc_id": "uz-uzex-519590",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "uz-uzex-519590#01",
+   "quote": "Ишларни бажариш ва хизматларни кўрсатиш шартлари: Техник топшириқда назарда тутилган хажм, техник параметрлар ва талабларига мувофиқлиги",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#02",
+   "quote": "«БМБАТ» Ахборот тизимининг Интеграцион шлюз модули бўйича ўз техник таклифини бериш (техник таклиф, BPMN диаграмма ва архитектура тақдим этилиши шарт)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#03",
+   "quote": "«БМБАТ» ахборот тизимининг мониторинг, кидирув ва классификаторлар модули бўйича ўз техник таклифини бериш (техник таклиф, BPMN диаграмма ва архитектура тақдим этилиши шарт)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#04",
+   "quote": "«БМБАТ» dashboard, таҳлил ва риск-таҳлил модули бўйича ўз техник таклифини бериш (техник таклиф, BPMN диаграмма ва архитектура тақдим этилиши шарт)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#05",
+   "quote": "«БМБАТ» ахборот тизимининг ғазначилик ва харид жараёнлари модули бўйича ўз техник таклифини бериш (техник таклиф, BPMN диаграмма ва архитектура тақдим этилиши шарт)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#06",
+   "quote": "«БМБАТ» Ахборот тизимининг Бухгалтерия ҳисоби ва ҳисоботлар модули бўйича ўз техник таклифини бериш (техник таклиф, BPMN диаграмма ва архитектура тақдим этилиши шарт",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#07",
+   "quote": "«БМБАТ» ахборот хавфсизлигини таъминлаш ва маълумотларни ҳимоя қилиш талаблари бўйича ўз техник таклифини бериш (техник таклиф ва қўшимча равишда ахборот хавфсизлиги архитектурасини визуал диаграмма кўринишида тақдим этилиши шарт)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#08",
+   "quote": "Бухгалтерия ҳисобини юритиш учун ахборот тизимларини ишлаб чиқиш тажрибасига эга бўлиш (4, 4а, 5-шаклдаги маълумот ҳамда ташкилотлари билан тузилган шартнома, ҳисобварақ-фактуралар ва тақризнома(агар мавждуд бўлса) тақдим этилиши лозим)",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#09",
+   "quote": "«БМБАТ» ахборот тизимининг Иш ҳақи, пенсия ва нафақалар модули бўйича ўз техник таклифини бериш (техник таклиф, BPMN диаграмма ва архитектура тақдим этилиши шарт).",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#10",
+   "quote": "банк томонидан асл муҳр билан тасдиқланган иштирокчининг банк ҳисоб рақамида 2025 йилда камида 3,25 млрд сўм миқдорига тенг умумий айланма бўлганлиги тўғрисида маълумот",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#11",
+   "quote": "8-сонли шаклдаги техник-молиявий таклиф ва маълумотлар тақдим этилади.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#12",
+   "quote": "2025 йил салбий молиявий натижаси билан якунланган бўлса ёки сўралган талабларга жавоб бермайдиган маълумот тақдим этилса, “мос эмас” деб топилади ва иштирокчи савдолардан четлашти-рилади ҳамда баҳоланмайди.",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#13",
+   "quote": "my.soliq.uz порталида шакллантирилган ва QR-кодни сканер қилиш орқали текшириш мумкин бўлган электрон ҳужжат",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#14",
+   "quote": "Давлат активларни бошқариш агентлиги тасдиқланган маълумотнома тақдим этилади",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#15",
+   "quote": "Кафолат хати (3-шакл) ва xarid.uzex.uz платформа-сидан тегишли скриншот",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#16",
+   "quote": "mib.uz ва порталидан олинган скриншот",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#17",
+   "quote": "Солиқ органлари томонидан қабул қилинган ва QR код билан тасдиқлаган 2023-2025 йилдаги Бухгалтерия баланси, Молиявий натижалар тўғрисида ҳисобот, Хусусий капитал тўғрисидаги ҳисобот, Пул оқимлари тўғрисида ҳисобот.",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#18",
+   "quote": "7-сон шакли асосида коррупция кўринишларига йўл қўймаслик бўйича ариза",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY",
+   "alt_quotes": [
+    "Коррупция кўринишларига йўл қўймаслик бўйича ариза."
+   ]
+  },
+  {
+   "id": "uz-uzex-519590#19",
+   "quote": "Илгари буюртмачи билан шартнома тузилган бўлса, тузилган шартнома ва ҳисобварақ-фактура нусхалари тақдим этилади.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#20",
+   "quote": "ташкилот таркибида дастурий таъминотини ишлаб чиқиш ёки амалий бухгалтерия соҳасида камида 1 йил малакага эга камида беш нафар ходим (Backend дастурчи, mobil дастурчи, Frontend дастурчи, бухгалтер-таҳлилчи, маълумотлар таҳлилчиси) тўғрисида my.mehnat.uz электрон платформасидан олинган маълумот.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#21",
+   "quote": "Ушбу ходимлар олий маълумотли (бакалавр) ёки малака сертификатига эга бўлиши тасдиқловчи ҳужжатлар;",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#22",
+   "quote": "Ташкилотида камида 1 нафар ходимда ахборот хавфсизлигини таъминлаш бўйича сертификатга эга бўлиши (сертификат нусхаси);",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#23",
+   "quote": "4-шаклдаги маълу-моти бўйича юридик шахсларга ахборот тизим(лар)ини ишлаб чиқиш тажрибасига эга бўлиш (юридик шахслар билан тузилган шартнома ва ҳисобварақ-фактуралар билан тасдиқланиш керак)",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#24",
+   "quote": "Харид комиссияси раиси номига электрон тендерда иштирок этиш учун ариза (1-шакл)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#25",
+   "quote": "Тендер иштирокчиси ҳақида умумий маълумот (2-шакл)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#26",
+   "quote": "давлат рўйхатидан ўтганлигини тасдиқловчи гувоҳнома нусхаси",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#27",
+   "quote": "ташкилот низоми birdarcha.uz платформасидан тадбиркорлик субъектлари ягона давлат реестридан тадбиркорлик субъекти-юридик шахс тўғрисидаги кўчирма",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519590#28",
+   "quote": "Шартномани бажариш учун зарур техник, молиявий, моддий, кадрлар ресурсларининг ҳамда бошқа ресурсларнинг мавжудлиги.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519590#29",
+   "quote": "Шартнома тузиш учун қонуний ҳуқуққа эгалик.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519590#30",
+   "quote": "Солиқлар ва йиғимларни тўлаш бўйича муддати ўтган қарздорликнинг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519590#31",
+   "quote": "Ўзига нисбатан жорий этилган банкротлик тартиб-таомилларининг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519590#32",
+   "quote": "Инсофсиз ижрочиларнинг ягона реестрида қайд этилмаганлиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519590#33",
+   "quote": "O‘zbekiston Respublikasi Bosh prokuraturasi huzuridagi Majburiy ijro byurosining ma’lumotlar bazalarida ishtirokchining sud qarorlari bo‘yicha bajarilmagan majburiyatlari mavjud emasligi",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519590#34",
+   "quote": "Иштирокчиларнинг жорий буюртмачи билан илгари тузилган шартномалар бўйича ўз зиммасига олган мажбуриятларнинг ижро этилмаганлиги ёки лозим даражада ижро этилмаганлиги бўйича судда иши (шу жумладан, арбитраж муносабатлари мавжуд бўлган иштирокчилар) кўрилганлигию",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519590#35",
+   "quote": "Таъсис хужжатлари ва фаолиятининг қонуний асослари ҳамда давлат рўйхатидан ўтказилганлиги тўғрисидаги гувоҳнома мавжудлиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519590#36",
+   "quote": "Иштирокчиларнинг ишбилармонлик обрўсини (ишчи-ходимлари малакаси, иш тажрибаси, шу жумладан махсус фаолият бўйича тажрибаси) тасдиқловчи ҳужжатлар.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  }
+ ]
+}

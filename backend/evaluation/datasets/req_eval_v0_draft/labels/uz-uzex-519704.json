@@ -1,0 +1,166 @@
+{
+ "doc_id": "uz-uzex-519704",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "uz-uzex-519704#01",
+   "quote": "Ишларни бажаришнинг аниқ муддатлари ёки энг қисқа амалга ошириш вақти кўрсатилиши шарт.",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519704#02",
+   "quote": "Лойиҳа-смета ҳужжатларига асосан ишларни бажариш графиги тақдим этилиши лозим.",
+   "type": "DOCUMENT",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "uz-uzex-519704#03",
+   "quote": "Иш жараёнида хавфсизлик чоралари, стандартлар ва талаблар тўлиқ бажарилиши, эҳтимолий хавфлар камайтирилганлиги ҳақида маълумотнома тақдим этилиш лозим.",
+   "type": "DOCUMENT",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "uz-uzex-519704#04",
+   "quote": "Техника хавфсизлиги йўриқномаси билан ходимлар таништирилган бўлиши шарт",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519704#05",
+   "quote": "Ишларни бажариш ёки хизматларни кўрсатиш учун тегишли зарурий жиҳозлар, асбоблар ва технологик воситалар бўйича умумуий маълумотнома.",
+   "type": "TECHNICAL",
+   "obligation": "SCORED",
+   "alt_quotes": [
+    "Ишларни бажариш ёки хизматларни кўрсатиш учун тегишли зарурий жиҳозлар, асбоблар ва технологик воситаларга қўйиладиган талаблар."
+   ]
+  },
+  {
+   "id": "uz-uzex-519704#06",
+   "quote": "Ижрочида зарур малакали кадрлар ёки шартнома асосида жалб қилинган мутахассислар бўйича маълумотнома.",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED",
+   "alt_quotes": [
+    "Ишларни бажариш ёки хизматларни кўрсатиш учун тегишли зарурий малакали ёки шартнома асосида ёлланадиган мутахассислар мавжудлигига қўйиладиган талаблар"
+   ]
+  },
+  {
+   "id": "uz-uzex-519704#07",
+   "quote": "Ижрочи томонидан бажарилган ишларда келиб чиққан камчиликларни бартараф этиш ва ишларни бажариш муддати бўйича кафолат хати.",
+   "type": "DOCUMENT",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "uz-uzex-519704#08",
+   "quote": "Шартномани бажариш учун зарур техник, молиявий, моддий, кадрлар ресурсларининг ҳамда бошқа ресурсларнинг мавжудлиги.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#09",
+   "quote": "Шартнома тузиш учун қонуний ҳуқуққа эгалик.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#10",
+   "quote": "Солиқлар ва йиғимларни тўлаш бўйича муддати ўтган қарздорликнинг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#11",
+   "quote": "Ўзига нисбатан жорий этилган банкротлик тартиб-таомилларининг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#12",
+   "quote": "Инсофсиз ижрочиларнинг ягона реестрида қайд этилмаганлиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#13",
+   "quote": "O‘zbekiston Respublikasi Bosh prokuraturasi huzuridagi Majburiy ijro byurosining ma’lumotlar bazalarida ishtirokchining sud qarorlari bo‘yicha bajarilmagan majburiyatlari mavjud emasligi",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#14",
+   "quote": "Имтиёзли солиқ режимидаги молиявий операцияларни амалга оширишда маълумотларни ошкор қилиш ва тақдим этишни назарда тутмайдиган давлатлар ёки ҳудудларда (офшор ҳудудлар) иштирокчилар ва уларнинг банк ҳисобрақамлари рўйхатдан ўтказилганлиги ёки ўтказилмаганлиги",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#15",
+   "quote": "Иштирокчиларнинг жорий буюртмачи билан илгари тузилган шартномалар бўйича ўз зиммасига олган мажбуриятларнинг ижро этилмаганлиги ёки лозим даражада ижро этилмаганлиги бўйича судда иши (шу жумладан, арбитраж муносабатлари мавжуд бўлган иштирокчилар) кўрилганлигию",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#16",
+   "quote": "Манфаатлар тўқнашуви ва аффилланганлик ҳолатлари мавжуд эмаслиги",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#17",
+   "quote": "Коррупция кўринишларига йўл қўймаслик бўйича ариза.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#18",
+   "quote": "Таъсис хужжатлари ва фаолиятининг қонуний асослари ҳамда давлат рўйхатидан ўтказилганлиги тўғрисидаги гувоҳнома мавжудлиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#19",
+   "quote": "Молиявий ҳисоботлар (ташқи аудитор ташкилотлар томонидан тасдиқланган ёки солиқ органлари томонидан қабул қилинганлиги тасдиқланган ҳолда) мавжудлиги",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#20",
+   "quote": "Экологик, гигиеник сертификатлаш, калибрлаш тўғрисидаги тегишли гувоҳномалар ёки синов баённомалари, сифат сертификатлари, мувофиқлик сертификатлари, шу жумладан хавфсизлик талабларига мувофиқлик сертификатлари",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#21",
+   "quote": "Иштирокчиларнинг ишбилармонлик обрўсини (ишчи-ходимлари малакаси, иш тажрибаси, шу жумладан махсус фаолият бўйича тажрибаси) тасдиқловчи ҳужжатлар.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#22",
+   "quote": "Закалат киритилганлигини тасдиқловчи ҳужжат ёки банк кафолатининг асл нусхаси (харид қилиш ҳужжатларига мувофиқ талаб қилинганда).",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519704#23",
+   "quote": "Xorijiy davlatlar va xalqaro tashkilotlar tomonidan ishtirokchiga nisbatan sanksiya qo‘llanilmaganligi",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  }
+ ]
+}

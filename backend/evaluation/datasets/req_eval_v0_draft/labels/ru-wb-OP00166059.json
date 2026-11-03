@@ -1,0 +1,157 @@
+{
+ "doc_id": "ru-wb-OP00166059",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "ru-wb-OP00166059#01",
+   "quote": "Высшее образование в области наук об окружающей среде, безопасности и гигиене труда или инженерии",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#02",
+   "quote": "не менее 5 лет опыта работы в области управления окружающей средой",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#03",
+   "quote": "знание и понимание принципов экологической оценки и процедур мониторинга",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#04",
+   "quote": "Знание национальных и международных стандартов и требований к качеству питьевой воды, вопросов орошения и землепользования, стандартов общественного здравоохранения, технических параметров и стандартов безопасности;",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#05",
+   "quote": "По крайней мере, годичный опыт работы в системе управления частным, местным или национальным правительством",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#06",
+   "quote": "Опыт взаимодействия с местными властями и сообществами;",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#07",
+   "quote": "Честность и порядочность.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY",
+   "optional": true
+  },
+  {
+   "id": "ru-wb-OP00166059#08",
+   "quote": "Опыт работы с проектами с международным финансированием (Всемирный банк, Азиатский банк развития, ЕС, USAID, ПРООН или другие международные или двусторонние доноры);",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#09",
+   "quote": "Хорошие коммуникативные навыки на таджикском и русском языках - устно и письменно;",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#10",
+   "quote": "хорошие навыки работы с компьютером (MS office)",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#11",
+   "quote": "Знание английского было бы преимуществом.",
+   "type": "QUALIFICATION",
+   "obligation": "PREFERRED"
+  },
+  {
+   "id": "ru-wb-OP00166059#12",
+   "quote": "Заинтересованные лица должны представить полный комплект перечисленных ниже документов в запечатанном пакете с обязательным указанием вакантной должности",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#13",
+   "quote": "Заявление на участие в конкурсе",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#14",
+   "quote": "Резюме (CV) обязательно на английском и на русском языке",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#15",
+   "quote": "Личный листок по учету кадров (на таджикском или русском языке)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#16",
+   "quote": "Автобиография (на таджикском или русском языке)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#17",
+   "quote": "Копия диплома об образовании (оригинал)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#18",
+   "quote": "Копия трудовой книжки",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#19",
+   "quote": "Копия паспорта",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#20",
+   "quote": "Две фотографии (3,5 х 4,5)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#21",
+   "quote": "Рекомендательные письма",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#22",
+   "quote": "Копии сертификатов о дополнительном образовании (при наличии)",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#23",
+   "quote": "Окончательный срок представления документов 28.02.2022 г. до 10-00 часов по местному времени.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#24",
+   "quote": "Неполный пакет документов, а также документы поданные после указанного срока не будут рассматриваться.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "ru-wb-OP00166059#25",
+   "quote": "Только те кандидаты, квалификация и опыт работы которых удовлетворяют минимальным квалификационным требованиям, будут отобраны на оценку.",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  }
+ ]
+}

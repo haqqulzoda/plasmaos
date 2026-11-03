@@ -1,0 +1,61 @@
+{
+ "doc_id": "en-wb-OP00473394",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "en-wb-OP00473394#01",
+   "quote": "is open to all eligible Suppliers as defined in the Regulations",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00473394#02",
+   "quote": "Suppliers may submit quotations for one, several, or all items.",
+   "type": "SUBMISSION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00473394#03",
+   "quote": "Award will be made separately for each item to the lowest evaluated substantially responsive Supplier",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00473394#04",
+   "quote": "In case of any discrepancy between the Russian and English versions, the Russian version shall prevail.",
+   "type": "SUBMISSION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00473394#05",
+   "quote": "The validity period of quotations shall be 45 days from the deadline for submission.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00473394#06",
+   "quote": "Quotations shall be submitted in sealed envelopes clearly marked “UZ-INSON-RFQ-3.2.3/R” and indicating the item number(s) quoted, to the address below.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00473394#07",
+   "quote": "Electronic submissions will not be accepted.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00473394#08",
+   "quote": "Late quotations will be rejected and returned unopened.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00473394#09",
+   "quote": "Deadline for submission of quotations is 23 October 2026 at 17:00 Tashkent time (UTC+5).",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  }
+ ]
+}

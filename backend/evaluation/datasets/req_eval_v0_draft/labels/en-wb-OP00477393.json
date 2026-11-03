@@ -1,0 +1,76 @@
+{
+ "doc_id": "en-wb-OP00477393",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "en-wb-OP00477393#01",
+   "quote": "Single-Stage, Two-Envelope procedure",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00477393#02",
+   "quote": "is open to all eligible Bidders as defined in the Procurement Regulations",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477393#03",
+   "quote": "please refer to the Procurement Regulations setting forth the World Bank’s policy on conflict of interest",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477393#04",
+   "quote": "Bids must be delivered to the address below on or before 14:00 (Bishkek Time) on December 09, 2026.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477393#05",
+   "quote": "Electronic bidding will not be permitted.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477393#06",
+   "quote": "Late Bids will be rejected.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477393#07",
+   "quote": "All Bids must be accompanied by a Bid Security of United States Dollars Four Hundred Thousand (USD 400,000), or an equivalent amount in a freely convertible currency.",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477393#08",
+   "quote": "The outer Bid envelopes marked “ORIGINAL BID”, and the inner envelopes marked “TECHNICAL PART”",
+   "type": "SUBMISSION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00477393#09",
+   "quote": "All envelopes marked “FINANCIAL PART” shall remain unopened",
+   "type": "SUBMISSION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00477393#10",
+   "quote": "requiring the Borrower to disclose information on the successful bidder’s beneficial ownership",
+   "type": "ELIGIBILITY",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00477393#11",
+   "quote": "The bidding document in English may be obtained free of charge by interested eligible Bidders upon submission of a written request to the address below.",
+   "type": "SUBMISSION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  }
+ ]
+}

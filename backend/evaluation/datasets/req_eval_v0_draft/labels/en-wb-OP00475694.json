@@ -1,0 +1,92 @@
+{
+ "doc_id": "en-wb-OP00475694",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "en-wb-OP00475694#01",
+   "quote": "Interested Consultants shall provide information demonstrating that they have the required qualifications and relevant experience to perform the assignment, including an updated Curriculum Vitae (CV) with a description of experience in similar assignments and a brief cover letter.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00475694#02",
+   "quote": "A university degree in economics, entrepreneurship, management, international development, sociology, finance, or another relevant field.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00475694#03",
+   "quote": "At least five (5) years of demonstrated professional experience in entrepreneurship development, livelihood support, small business development, adult training, or development project implementation;",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00475694#04",
+   "quote": "At least three (3) years of experience in Tajikistan in supporting entrepreneurship and/or the private sector;",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00475694#05",
+   "quote": "Experience working with government authorities, private sector organizations, local communities, and development partners.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00475694#06",
+   "quote": "Fluency in Tajik and Russian",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00475694#07",
+   "quote": "knowledge of English will be an advantage",
+   "type": "QUALIFICATION",
+   "obligation": "PREFERRED"
+  },
+  {
+   "id": "en-wb-OP00475694#08",
+   "quote": "Proficiency in MS Office applications (Word, Excel, PowerPoint) and reporting tools.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00475694#09",
+   "quote": "setting forth the World Bank’s policy on conflict of interest",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00475694#10",
+   "quote": "A Consultant will be selected in accordance with the Individual Consultant selection method",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00475694#11",
+   "quote": "Expressions of interest, including CV and cover letter, may be submitted in English, Russian, or Tajik and must be submitted to the e-mail address below on or before 16:00 hours local time on October 26, 2026.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00475694#12",
+   "quote": "The submitted documents, including the CV and cover letter, should be concise and must not exceed ten (10) pages in total.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00475694#13",
+   "quote": "The Specialist will work full-time at the Project Implementation Group (PIG) office at SCISPM in Dushanbe, with regular field visits to the Project’s target districts.",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00475694#14",
+   "quote": "including a three (3)-month probationary period",
+   "type": "TECHNICAL",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  }
+ ]
+}

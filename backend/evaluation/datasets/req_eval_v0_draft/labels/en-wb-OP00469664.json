@@ -1,0 +1,85 @@
+{
+ "doc_id": "en-wb-OP00469664",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "en-wb-OP00469664#01",
+   "quote": "The assignment shall be performed on a full-time basis for an initial period of 24 months.",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00469664#02",
+   "quote": "duty travel to Project sites in the regions of the Republic of Uzbekistan is required",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00469664#03",
+   "quote": "Interested Consultants should provide information demonstrating that they have the required qualifications and relevant experience to perform the Services (a CV describing relevant experience).",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00469664#04",
+   "quote": "only the experience and qualifications of the respective individual candidate will be considered in the selection",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00469664#05",
+   "quote": "Bachelor’s degree or higher in occupational health and safety, environmental or civil engineering, industrial safety, environmental sciences, public health, engineering, or another related field.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00469664#06",
+   "quote": "at least five (5) years of professional experience in OHS, including at least three (3) years of OHS experience on construction projects",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00469664#07",
+   "quote": "practical experience in OHS management at construction, rehabilitation or infrastructure sites, contractor monitoring, conducting inspections and risk assessments, incident investigation, and development or application of OHS plans, ESMPs/C-ESMPs, or similar documents",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00469664#08",
+   "quote": "familiarity with applicable environmental and social requirements",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00469664#09",
+   "quote": "Experience in projects financed by international financial institutions or development partners, as well as familiarity with World Bank requirements, will be an advantage.",
+   "type": "QUALIFICATION",
+   "obligation": "PREFERRED"
+  },
+  {
+   "id": "en-wb-OP00469664#10",
+   "quote": "excellent command of Uzbek and Russian and a good working knowledge of English",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00469664#11",
+   "quote": "The candidate ranked first based on the CV evaluation may be invited for an interview to confirm his/her qualifications, experience and availability for the assignment.",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00469664#12",
+   "quote": "setting forth the World Bank’s policy on conflict of interest",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00469664#13",
+   "quote": "Expressions of Interest, supported by CVs, must be submitted in writing to the address below (in person, by mail, or by e-mail) by 28 September 2026.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  }
+ ]
+}

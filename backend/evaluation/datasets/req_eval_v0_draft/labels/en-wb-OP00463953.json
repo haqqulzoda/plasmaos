@@ -1,0 +1,77 @@
+{
+ "doc_id": "en-wb-OP00463953",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "en-wb-OP00463953#01",
+   "quote": "The contract realization period for will be 12 months.",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00463953#02",
+   "quote": "In case of participation, the Bidder shall provide the appropriate License indicating the level of responsibility for the construction and reconstruction of buildings (copies), issued by the State Agency for Architecture and Construction and Housing and Communal Services under the Cabinet of Ministers of the Kyrgyz Republic.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00463953#03",
+   "quote": "is open to all eligible Bidders as defined in the Procurement Regulations",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00463953#04",
+   "quote": "The bidding document in Russian language may be obtained by interested eligible Bidders upon the submission of a written application",
+   "type": "SUBMISSION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00463953#05",
+   "quote": "Bids must be delivered to the address below on or before 15-00 hours (Bishkek time) September 11, 2026.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00463953#06",
+   "quote": "Electronic bidding will not be permitted.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00463953#07",
+   "quote": "Late Bids will be rejected.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00463953#08",
+   "quote": "The outer Bid envelopes marked “ORIGINAL BID”, and the inner envelopes marked “TECHNICAL PART”",
+   "type": "SUBMISSION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00463953#09",
+   "quote": "All Bids must be accompanied by a Bid-Securing Declaration;",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00463953#10",
+   "quote": "requiring the Borrower to disclose information on the successful bidder’s beneficial ownership",
+   "type": "ELIGIBILITY",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00463953#11",
+   "quote": "Bidding will be conducted through national competitive bidding using Request for Bids (RFB)",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  }
+ ]
+}

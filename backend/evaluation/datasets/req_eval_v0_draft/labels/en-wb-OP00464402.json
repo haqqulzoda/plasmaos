@@ -1,0 +1,78 @@
+{
+ "doc_id": "en-wb-OP00464402",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "en-wb-OP00464402#01",
+   "quote": "Interested Consultants should provide information demonstrating that they have the required qualifications and relevant experience to perform the Services.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00464402#02",
+   "quote": "independent third-party organization with demonstrated experience in at least three relevant projects",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00464402#03",
+   "quote": "a permanent establishment of no fewer than ten full-time professionals",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00464402#04",
+   "quote": "with expertise covering local governance, public sector planning and budgeting, public financial management and accounting, stakeholder consultation and process facilitation, as well as data validation, performance monitoring, compliance audits, and field verification.",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00464402#05",
+   "quote": "track record of high standards of integrity, as reflected in ISO status and/or internal protocols regarding ethical standards, integrity and preventing corruption",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00464402#06",
+   "quote": "turn-over of at least USD 350,000 equivalent as per the last available financial audit (not older than 2 years.",
+   "type": "FINANCIAL",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00464402#07",
+   "quote": "Key Experts will not be evaluated at the shortlisting stage.",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00464402#08",
+   "quote": "setting forth the World Bank’s policy on conflict of interest",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00464402#09",
+   "quote": "Consultants may associate with other firms to enhance their qualifications, but should indicate clearly whether the association is in the form of a joint venture and/or a sub-consultancy.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00464402#10",
+   "quote": "In the case of a joint venture, all the partners in the joint venture shall be jointly and severally liable for the entire contract, if selected.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00464402#11",
+   "quote": "A Consultant will be selected in accordance with the Quality and Cost Based Selection method",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00464402#12",
+   "quote": "Expressions of interest must be delivered in a written form to the address below (in person, or by mail, or by e-mail) by 17:00 hours, 07 September 2026.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  }
+ ]
+}

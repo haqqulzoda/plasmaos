@@ -1,0 +1,38 @@
+{
+ "doc_id": "en-wb-OP00476587",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "en-wb-OP00476587#01",
+   "quote": "is open to all eligible Bidders as defined in the Procurement Regulations",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476587#02",
+   "quote": "Bidders shall submit their quotation in hard copy and must deliver to the address below on or before November 04, 15:00.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476587#03",
+   "quote": "Late offers will be rejected.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476587#04",
+   "quote": "All interested Bidders can obtain a copy of the RFQ which contains detailed instructions for preparation of the quotation in Russian by submitting an official letter to the address below or through email.",
+   "type": "SUBMISSION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00476587#05",
+   "quote": "Bidding will be conducted through competitive procurement using a Request for Quotation (RFQ)",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  }
+ ]
+}

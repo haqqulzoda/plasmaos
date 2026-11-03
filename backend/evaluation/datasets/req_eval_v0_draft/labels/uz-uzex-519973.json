@@ -1,0 +1,119 @@
+{
+ "doc_id": "uz-uzex-519973",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "uz-uzex-519973#01",
+   "quote": "Ishtirokchi 4-son shaklga muvofiq texnik taklifini taqdim etishi kerak.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519973#02",
+   "quote": "Ishtirokchi turar va noturar joy ob’ektlari qurilishini loyihaviy moliyalashtirish va “eskrou” hisobvarag‘i bo‘yicha operatsiyalarni amalga oshirishda O‘z.Res. va/yoki MDH davlatlaridagi tijorat banklarida diagnostika va tahlil ishlari yuzasidan tegishli xizmatlarni ko‘rsatganligi",
+   "type": "QUALIFICATION",
+   "obligation": "PREFERRED",
+   "note": "Field layout is ambiguous: 'Afzalroq' (preferable) follows the scoring lines; obligation needs expert review."
+  },
+  {
+   "id": "uz-uzex-519973#03",
+   "quote": "Ishtirokchi tasdiqlash uchun shartnoma va mazkur tenderni e’lon qilish sanasidan oldin rasmiylashtirilgan QR kodli ishlarni topshirish va qabul qilish dalolatnomasi (yoki hisob faktura)ni taqdim etishi talab etiladi",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519973#04",
+   "quote": "O‘z. Res.tijorat banklarida loyihaviy moliyalashtirish sohasida tajribaga ega mutaxassis mavjudligi",
+   "type": "QUALIFICATION",
+   "obligation": "PREFERRED",
+   "note": "Obligation inferred from the following 'Afzalroq'; needs expert review."
+  },
+  {
+   "id": "uz-uzex-519973#05",
+   "quote": "MDH davlatlarida uy joy qurilish obyektlarini loyihaviy moliyalashtirish, eskrou mexanizmlarini joriy etish bo‘yicha vakolatli yoki ishchi organlarda ish tajribasiga ega bo‘lgan mutaxassisning mavjudligi",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY",
+   "note": "Obligation inferred from the following '0 ball olsa tenderdan chetlatiladi'; needs expert review."
+  },
+  {
+   "id": "uz-uzex-519973#06",
+   "quote": "Ishtirokchi jamosida FRM (Financial Risk Manager) yoki CFA (Chartered Financial Analyst) yoki PFRM (Professional Financial Risk Manager) yoki CAIA (Chartered Alternative Investment Analyst) sertifikatiga ega xodimning mavjudligi",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-519973#07",
+   "quote": "Ishtirokchining oxirgi yillik (2025-yil) moliyaviy holati va natijalari to‘g‘risida ma’lumot (ilovaga muvofiq yoki soliq organidan tasdiqlangan oxirgi yillik moliyaviy hisobot).",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY",
+   "alt_quotes": [
+    "Молиявий ҳисоботлар (ташқи аудитор ташкилотлар томонидан тасдиқланган ёки солиқ органлари томонидан қабул қилинганлиги тасдиқланган ҳолда) мавжудлиги"
+   ]
+  },
+  {
+   "id": "uz-uzex-519973#08",
+   "quote": "Korrupsiya ko‘rinishlariga yo‘l qo‘ymaslik bo‘yicha ilovaga muvofiq ariza",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY",
+   "alt_quotes": [
+    "Коррупция кўринишларига йўл қўймаслик бўйича ариза."
+   ]
+  },
+  {
+   "id": "uz-uzex-519973#09",
+   "quote": "Шартномани бажариш учун зарур техник, молиявий, моддий, кадрлар ресурсларининг ҳамда бошқа ресурсларнинг мавжудлиги.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519973#10",
+   "quote": "Шартнома тузиш учун қонуний ҳуқуққа эгалик.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519973#11",
+   "quote": "Солиқлар ва йиғимларни тўлаш бўйича муддати ўтган қарздорликнинг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519973#12",
+   "quote": "Ўзига нисбатан жорий этилган банкротлик тартиб-таомилларининг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519973#13",
+   "quote": "Инсофсиз ижрочиларнинг ягона реестрида қайд этилмаганлиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519973#14",
+   "quote": "O‘zbekiston Respublikasi Bosh prokuraturasi huzuridagi Majburiy ijro byurosining ma’lumotlar bazalarida ishtirokchining sud qarorlari bo‘yicha bajarilmagan majburiyatlari mavjud emasligi",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519973#15",
+   "quote": "Таъсис хужжатлари ва фаолиятининг қонуний асослари ҳамда давлат рўйхатидан ўтказилганлиги тўғрисидаги гувоҳнома мавжудлиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-519973#16",
+   "quote": "Закалат киритилганлигини тасдиқловчи ҳужжат ёки банк кафолатининг асл нусхаси (харид қилиш ҳужжатларига мувофиқ талаб қилинганда).",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  }
+ ]
+}

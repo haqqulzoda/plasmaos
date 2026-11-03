@@ -1,0 +1,118 @@
+{
+ "doc_id": "uz-uzex-521156",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "uz-uzex-521156#01",
+   "quote": "Elektron tenderda ishtirok etish uchun Xarid komissiyasi nomiga ariza",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521156#02",
+   "quote": "Kafolat xati",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521156#03",
+   "quote": "Elektron tender ishtirokchisi haqida umumiy ma’lumot.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521156#04",
+   "quote": "Ishtirokchining moliyaviy ahvoli haqida ma’lumot.",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521156#05",
+   "quote": "Baholash TIYning 2-ilovasi IV bo'limi \"tender ishtirokchilarini moliyaviy baholash metodikasi\"da keltirilgan mezonlar asosida amalga oshiriladi.",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  },
+  {
+   "id": "uz-uzex-521156#06",
+   "quote": "Korrupsiyaning oldini olish bo‘yicha ariza",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521156#07",
+   "quote": "Agar tender ishtirokchisi ishlab chiqaruvchi zavod (ijrochi) bo‘lmasa, bevosita ishlab chiqaruvchi zavoddan (ijrochidan) ishonchnoma yoki avtorizatsiya (vakolatnoma) taqdim etilishi zarur",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521156#08",
+   "quote": "Elektron tender bo‘yicha texnik taklif",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521156#09",
+   "quote": "Tashkilotning davlat ro‘yxatidan o‘tkazilganligini tasdiqlovchi hujjat (guvohnoma), tovarlarni yetkazib berish (ishlarni bajarish va xizmatlar ko‘rsatish) uchun zarur bo‘lgan sertifikatlar, litsenziyalar, ruxsatnomalar va boshqalar.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "alt_quotes": [
+    "Ushbu elektron tender bo‘yicha talab qilinadigan faoliyatni amalga oshirish uchun tender ishtirokchisining huquqini tasdiqlovchi hujjatlar."
+   ]
+  },
+  {
+   "id": "uz-uzex-521156#10",
+   "quote": "Tasdiqlash xati",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521156#11",
+   "quote": "Tender hujjatlarining texnik qismi Buyurtmachining texnik topshirig‘iga muvofiqligi.",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "uz-uzex-521156#12",
+   "quote": "Шартномани бажариш учун зарур техник, молиявий, моддий, кадрлар ресурсларининг ҳамда бошқа ресурсларнинг мавжудлиги.",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-521156#13",
+   "quote": "Шартнома тузиш учун қонуний ҳуқуққа эгалик.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-521156#14",
+   "quote": "Солиқлар ва йиғимларни тўлаш бўйича муддати ўтган қарздорликнинг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-521156#15",
+   "quote": "Ўзига нисбатан жорий этилган банкротлик тартиб-таомилларининг мавжуд эмаслиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-521156#16",
+   "quote": "Инсофсиз ижрочиларнинг ягона реестрида қайд этилмаганлиги.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  },
+  {
+   "id": "uz-uzex-521156#17",
+   "quote": "O‘zbekiston Respublikasi Bosh prokuraturasi huzuridagi Majburiy ijro byurosining ma’lumotlar bazalarida ishtirokchining sud qarorlari bo‘yicha bajarilmagan majburiyatlari mavjud emasligi",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY",
+   "note": "Standard UzEx qualification-field sentence; labelled once and applied wherever it appears verbatim."
+  }
+ ]
+}

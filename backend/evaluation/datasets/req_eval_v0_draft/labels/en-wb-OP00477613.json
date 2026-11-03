@@ -1,0 +1,72 @@
+{
+ "doc_id": "en-wb-OP00477613",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "en-wb-OP00477613#01",
+   "quote": "Interested Consultants should provide information demonstrating that they have the required qualifications and relevant experience to perform the Services.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477613#02",
+   "quote": "Relevant experience in similar assignments (including in the audit of companies);",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00477613#03",
+   "quote": "Technical and managerial capabilities of firm;",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00477613#04",
+   "quote": "Company profile;",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00477613#05",
+   "quote": "Financial capabilities of firm.",
+   "type": "FINANCIAL",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00477613#06",
+   "quote": "The Consultants shall have a valid license from Ministry of Finance of Republic of Tajikistan for u undertaking the Services.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477613#07",
+   "quote": "setting forth the World Bank’s policy on conflict of interest and eligibility",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477613#08",
+   "quote": "Consultants may associate with other firms to enhance their qualifications, but should indicate clearly whether the association is in the form of a joint venture and/or a sub-consultancy.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477613#09",
+   "quote": "In the case of a joint venture, all the partners in the joint venture shall be jointly and severally liable for the entire contract, if selected.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00477613#10",
+   "quote": "A Consultant will be selected in accordance with the Least Cost Selection (LCS) procedures",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00477613#11",
+   "quote": "Expressions of interest must be submitted to the emails below by December 9th, 2025.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  }
+ ]
+}

@@ -1,0 +1,127 @@
+{
+ "doc_id": "en-wb-OP00476134",
+ "status": "DRAFT",
+ "items": [
+  {
+   "id": "en-wb-OP00476134#01",
+   "quote": "Interested Consultants should provide information demonstrating that they have the required qualifications and relevant experience to perform the Services.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#02",
+   "quote": "The Consultant shall have completed at least one (1) assignment in passenger railway and/or multimodal transport modeling financed by an International Financial Institution, and at least one (1) assignment in a Central Asian country.",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00476134#03",
+   "quote": "Client references and completion certificates are required.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#04",
+   "quote": "The Consultant shall have completed a minimum of two (2) assignments in transport sector reform and/or regulatory reform of state-owned enterprises (SOEs) in Central Asia, with at least one (1) such assignment in Uzbekistan.",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00476134#05",
+   "quote": "Client references are required.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#06",
+   "quote": "The Consultant shall demonstrate experience in financial and economic analysis of public services, including operational efficiency assessment.",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00476134#07",
+   "quote": "Experience in socioeconomic impact assessment in the transport sector will be considered an advantage.",
+   "type": "QUALIFICATION",
+   "obligation": "PREFERRED"
+  },
+  {
+   "id": "en-wb-OP00476134#08",
+   "quote": "The Consultant shall demonstrate prior work experience in Central Asia's transport sector (with preference for experience in Uzbekistan)",
+   "type": "QUALIFICATION",
+   "obligation": "SCORED"
+  },
+  {
+   "id": "en-wb-OP00476134#09",
+   "quote": "maintain a minimum of one (1) professional staff physically based in Uzbekistan for the duration of the Assignment",
+   "type": "QUALIFICATION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#10",
+   "quote": "Working materials shall be in Russian and/or Uzbek, final deliverables in English and Russian, with executive summaries also in Uzbek.",
+   "type": "TECHNICAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#11",
+   "quote": "The Consultant is responsible for any translation costs.",
+   "type": "FINANCIAL",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#12",
+   "quote": "Consultants shall clearly describe relevant assignments, indicating the client, country, duration, scope of services, financing source, and role of the firm, supported by verifiable client references.",
+   "type": "DOCUMENT",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#13",
+   "quote": "Key Experts will not be evaluated at the shortlisting stage.",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00476134#14",
+   "quote": "The shortlist will contain 5 to 8 firms.",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL",
+   "optional": true
+  },
+  {
+   "id": "en-wb-OP00476134#15",
+   "quote": "setting forth the World Bank's policy on conflict of interest",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#16",
+   "quote": "Consultants may associate with other firms to enhance their qualifications, but should indicate clearly whether the association is in the form of a joint venture and/or a sub-consultancy.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#17",
+   "quote": "In the case of a joint venture, all the partners in the joint venture shall be jointly and severally liable for the entire contract, if selected.",
+   "type": "ELIGIBILITY",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#18",
+   "quote": "A Consultant will be selected in accordance with the Quality and Cost-Based Selection (QCBS) method",
+   "type": "EVALUATION",
+   "obligation": "INFORMATIONAL"
+  },
+  {
+   "id": "en-wb-OP00476134#19",
+   "quote": "Expressions of interest must be delivered in a written form to the address below (in person, or by mail, or by e-mail) by November 2, 2026, 8 p.m. (Tashkent time).",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  },
+  {
+   "id": "en-wb-OP00476134#20",
+   "quote": "Late expressions of interest will be rejected.",
+   "type": "SUBMISSION",
+   "obligation": "MANDATORY"
+  }
+ ]
+}
