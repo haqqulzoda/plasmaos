@@ -46,7 +46,8 @@ def test_repository_graph_extends_b3_with_compliance_ownership() -> None:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20261025_0001_b1_billing"]
+    assert script.get_heads() == ["20261103_0001_tender_change_alerts"]
+    assert script.get_revision("20261103_0001_tender_change_alerts").down_revision == "20261025_0001_b1_billing"
     assert script.get_revision("20261025_0001_b1_billing").down_revision == "20261024_0001_p3_plans_limits"
     assert script.get_revision("20261024_0001_p3_plans_limits").down_revision == "20261023_0001_p2_partner_finder"
     assert script.get_revision("20261023_0001_p2_partner_finder").down_revision == "20261016_0002_p1_organization_access"

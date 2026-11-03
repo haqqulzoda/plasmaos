@@ -70,7 +70,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _digest, _seed_w1
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
 P0_HEAD = "20261002_0001_p0_extraction_trust_gate"
-HEAD = "20261025_0001_b1_billing"
+HEAD = "20261103_0001_tender_change_alerts"
 
 
 def _tender(**overrides) -> Tender:

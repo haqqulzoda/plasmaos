@@ -17,6 +17,7 @@ from app.models.all_models import Tender, TenderDocument, TenderStatus
 from app.services.competitor_cache import COMPETITOR_CACHE_METADATA_KEY
 from app.services.official_notice import not_official_notice, sync_official_notices
 from app.services.source_refresh_progress import record_persisted
+from app.services.tender_changes import change_kinds_for_fields, record_tender_changes
 from app.services.tender_sources.keys import (
     canonical_source_key,
     normalize_source_system,
@@ -533,6 +534,8 @@ async def persist_tender_batch(
         return TenderBatchPersistenceResult(items=(), duplicate_count=duplicate_count)
 
     items: list[TenderPersistenceItem] = []
+    # Tender-change alerts: deadline/amendment changes of existing rows, by tender id.
+    material_changes: dict[Any, set[str]] = {}
     for chunk in _chunks(ordered, batch_size):
         chunk_start = len(items)
         existing = await _lookup_tenders(db, chunk)
@@ -602,6 +605,9 @@ async def persist_tender_batch(
                 )
                 continue
 
+            kinds = change_kinds_for_fields(changed_fields)
+            if kinds:
+                material_changes.setdefault(tender.id, set()).update(kinds)
             for field_name in changed_fields:
                 setattr(tender, field_name, source_values[field_name])
             tender.last_synced_at = _utc_datetime(
@@ -628,6 +634,9 @@ async def persist_tender_batch(
             await sync_official_notices(
                 db, [item.tender for item in items[chunk_start:]]
             )
+
+    if material_changes and isinstance(db, AsyncSession):
+        await record_tender_changes(db, material_changes)
 
     logger.info(
         "tender_source_batch persisted=%s created=%s updated=%s unchanged=%s duplicates=%s",
@@ -795,6 +804,7 @@ async def persist_document_descriptors(
     by_url = {str(row.source_document_url or row.file_url): row for row in rows}
     by_external = {str(row.external_file_id): row for row in rows if row.external_file_id}
     items: list[DocumentPersistenceItem] = []
+    document_changed = False
     for descriptor in descriptors:
         url = str(descriptor.source_document_url).strip()
         external_id = str(descriptor.external_file_id or "").strip()
@@ -840,6 +850,8 @@ async def persist_document_descriptors(
             "sha256": descriptor.sha256 or existing.sha256,
         }
         changed = [name for name, value in desired.items() if getattr(existing, name) != value]
+        if "sha256" in changed and existing.sha256:
+            document_changed = True
         for name in changed:
             setattr(existing, name, desired[name])
         items.append(
@@ -849,6 +861,9 @@ async def persist_document_descriptors(
             )
         )
     await db.flush()
+    # Tender-change alerts: a new document, or new content behind a known one.
+    if document_changed or any(item.outcome is DocumentPersistenceOutcome.CREATED for item in items):
+        await record_tender_changes(db, {tender.id: {"DOCUMENT"}})
     return DocumentBatchPersistenceResult(
         tuple(items),
         input_count - len(descriptors),

@@ -32,6 +32,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "analysis_failed_subject": "Your analysis could not be completed",
         "analysis_failed_body": "The analysis you started could not be completed. Open the pursuit to try again.",
         "open_pursuit": "Open the pursuit: {url}",
+        "tender_changed_subject": "A tender you are pursuing changed",
+        "tender_changed_body": "The tender changed after your analysis ({changes}). Your analysis may be out of date: review the change and re-run it.",
+        "tender_change_DEADLINE": "new deadline", "tender_change_AMENDMENT": "amended notice", "tender_change_DOCUMENT": "new document",
         "eoi_subject": "Expression of Interest draft {version} is ready",
         "eoi_body": "Expression of Interest draft {version} (DOCX and PDF) is ready to download.",
         "digest_subject": "{count} new open opportunities match your profile",
@@ -83,6 +86,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "analysis_failed_subject": "Не удалось завершить анализ",
         "analysis_failed_body": "Запущенный вами анализ не удалось завершить. Откройте тендер, чтобы повторить попытку.",
         "open_pursuit": "Открыть тендер: {url}",
+        "tender_changed_subject": "Тендер, в котором вы участвуете, изменился",
+        "tender_changed_body": "Тендер изменился после вашего анализа ({changes}). Анализ может быть устаревшим: проверьте изменения и запустите его заново.",
+        "tender_change_DEADLINE": "новый срок", "tender_change_AMENDMENT": "изменённое объявление", "tender_change_DOCUMENT": "новый документ",
         "eoi_subject": "Черновик заявления о заинтересованности {version} готов",
         "eoi_body": "Черновик заявления о заинтересованности {version} (DOCX и PDF) готов к скачиванию.",
         "digest_subject": "Новые открытые возможности по вашему профилю: {count}",
@@ -134,6 +140,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "analysis_failed_subject": "Tahlilni yakunlab bo‘lmadi",
         "analysis_failed_body": "Siz boshlagan tahlilni yakunlab bo‘lmadi. Qayta urinish uchun tenderni oching.",
         "open_pursuit": "Tenderni ochish: {url}",
+        "tender_changed_subject": "Siz ishtirok etayotgan tender o‘zgardi",
+        "tender_changed_body": "Tender tahlilingizdan keyin o‘zgardi ({changes}). Tahlil eskirgan bo‘lishi mumkin: o‘zgarishni ko‘rib chiqing va tahlilni qayta ishga tushiring.",
+        "tender_change_DEADLINE": "yangi muddat", "tender_change_AMENDMENT": "o‘zgartirilgan e’lon", "tender_change_DOCUMENT": "yangi hujjat",
         "eoi_subject": "Qiziqish bildirish xati loyihasi {version} tayyor",
         "eoi_body": "Qiziqish bildirish xati loyihasi {version} (DOCX va PDF) yuklab olishga tayyor.",
         "digest_subject": "Profilingizga mos {count} ta yangi ochiq imkoniyat",
@@ -185,6 +194,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "analysis_failed_subject": "تعذّر إكمال تحليلك",
         "analysis_failed_body": "تعذّر إكمال التحليل الذي بدأته. افتح الفرصة للمحاولة مجددًا.",
         "open_pursuit": "افتح الفرصة: {url}",
+        "tender_changed_subject": "تغيّرت مناقصة تتابعها",
+        "tender_changed_body": "تغيّرت المناقصة بعد تحليلك ({changes}). قد يكون تحليلك قديمًا: راجع التغيير وأعد تشغيل التحليل.",
+        "tender_change_DEADLINE": "موعد نهائي جديد", "tender_change_AMENDMENT": "إعلان معدّل", "tender_change_DOCUMENT": "مستند جديد",
         "eoi_subject": "مسودة إبداء الاهتمام {version} جاهزة",
         "eoi_body": "مسودة إبداء الاهتمام {version} (DOCX وPDF) جاهزة للتنزيل.",
         "digest_subject": "{count} فرص جديدة مفتوحة تطابق ملفك",
@@ -302,6 +314,14 @@ def render_email(kind: str, locale: str, context: dict[str, Any], *, app_url: st
         version = context.get("version_number", 1)
         lines = [(_t(locale, "eoi_body", version=version), None), (_t(locale, "open_pursuit", url=link), link)]
         return _compose(locale, _t(locale, "eoi_subject", version=version), lines, footer)
+    if kind == "TENDER_CHANGED":
+        link = _url(app_url, f"/dashboard/pursuits/{context['pursuit_id']}?tab=requirements")
+        changes = ", ".join(
+            _t(locale, f"tender_change_{item}") for item in context.get("change_kinds") or []
+            if item in {"DEADLINE", "AMENDMENT", "DOCUMENT"}
+        )
+        lines = [(_t(locale, "tender_changed_body", changes=changes), None), (_t(locale, "open_pursuit", url=link), link)]
+        return _compose(locale, _t(locale, "tender_changed_subject"), lines, footer)
     if kind == "DAILY_DIGEST":
         items = list(context.get("items") or [])[:10]
         total = int(context.get("total") or len(items))

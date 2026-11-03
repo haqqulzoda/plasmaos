@@ -13,7 +13,7 @@ from app.services.my_tenders import MyTendersQuery, _base_list_statement, _order
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT = BACKEND_DIR.parent
-HEAD = "20261025_0001_b1_billing"
+HEAD = "20261103_0001_tender_change_alerts"
 
 
 def source(relative: str) -> str:

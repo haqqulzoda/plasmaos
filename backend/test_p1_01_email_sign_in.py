@@ -42,7 +42,7 @@ from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 PREVIOUS_HEAD = "20261012_0002_s1_product_analytics"
 REVISION = "20261016_0001_p1_email_sign_in"
-HEAD = "20261025_0001_b1_billing"
+HEAD = "20261103_0001_tender_change_alerts"
 SECRET = "b" * 40
 
 

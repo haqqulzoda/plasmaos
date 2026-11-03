@@ -452,6 +452,10 @@ class PursuitAnalysisResponse(BaseModel):
     company_evidence_changed: bool = False
     company_evidence_change_reason: str | None = None
     company_evidence_changed_sections: list[str] = Field(default_factory=list)
+    # Tender-change alerts: the pursued tender's source changed (DEADLINE, AMENDMENT,
+    # DOCUMENT) after this run sealed its inputs; a re-run analyzes the current tender.
+    tender_changed: bool = False
+    tender_change_kinds: list[str] = Field(default_factory=list)
     page_count_known: bool
     limit_disclosure: str
     pack_items: list[PursuitAnalysisPackItemResponse] = Field(default_factory=list)

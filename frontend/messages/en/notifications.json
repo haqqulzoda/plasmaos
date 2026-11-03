@@ -81,6 +81,10 @@
     "eoiDraftReady": {
       "title": "Expression of Interest draft ready",
       "body": "Draft {versionNumber} (DOCX and PDF) is ready to download."
+    },
+    "tenderChanged": {
+      "title": "Tender changed",
+      "body": "A tender you are pursuing changed after your analysis (new deadline, amendment or new document). Review the change and re-run the analysis."
     }
   },
   "fallback": {

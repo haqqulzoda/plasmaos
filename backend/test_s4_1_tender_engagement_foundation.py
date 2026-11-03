@@ -24,7 +24,7 @@ MIGRATION = (
     / "alembic/versions/20260828_0003_s4_1_tender_engagement_foundation.py"
 )
 SERVICE = BACKEND_DIR / "app/services/tender_engagements.py"
-HEAD = "20261025_0001_b1_billing"
+HEAD = "20261103_0001_tender_change_alerts"
 
 
 def source(relative: str) -> str:

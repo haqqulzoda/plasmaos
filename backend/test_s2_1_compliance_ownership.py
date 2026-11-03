@@ -71,7 +71,7 @@ def test_migration_is_single_additive_head_and_never_guesses_names() -> None:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["20261025_0001_b1_billing"]
+    assert script.get_heads() == ["20261103_0001_tender_change_alerts"]
     migration = source(
         "alembic/versions/20260827_0001_s2_1_compliance_ownership.py"
     )

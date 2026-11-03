@@ -264,6 +264,13 @@
     "emptyHelp": "Choose documents and analyze the tender to identify requirements and gaps.",
     "staleTitle": "Documents changed — analysis may be out of date",
     "staleHelp": "The previous result remains available. Choose documents and run a new analysis to use the latest inputs.",
+    "tenderChangedTitle": "The tender changed after this analysis — it may be out of date",
+    "tenderChangedHelp": "Changed: {changes}. The previous result remains available. Re-run the analysis to use the current tender.",
+    "tenderChangeKinds": {
+      "DEADLINE": "new deadline",
+      "AMENDMENT": "amended notice",
+      "DOCUMENT": "new document"
+    },
     "summary": "Analysis summary",
     "processingStatus": "Processing",
     "qualityStatus": "Extraction quality",

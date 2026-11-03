@@ -86,6 +86,12 @@ SYSTEM_TEMPLATES = {
         "notifications.eoi_draft_ready",
         {"organization_id", "pursuit_id", "eoi_draft_id", "version_number"},
     ),
+    # Tender-change alerts (app.services.tender_changes): inbox and, by preference, e-mail.
+    "TENDER_CHANGED": (
+        "TENDER_ALERT",
+        "notifications.tender_changed",
+        {"organization_id", "pursuit_id", "tender_id", "tender_change_id", "change_kinds"},
+    ),
 }
 
 
@@ -139,6 +145,9 @@ def validate_system_event(*, event_type, category, template_key, payload, dedupe
                 UUID(str(value))
             elif key == "version_number":
                 if type(value) is not int or value < 1:
+                    raise ValueError()
+            elif key == "change_kinds":
+                if not isinstance(value, list) or not value or not set(value) <= {"DEADLINE", "AMENDMENT", "DOCUMENT"}:
                     raise ValueError()
             elif key == "analysis_language":
                 if value not in ("en", "uz", "ru", "ar", None):

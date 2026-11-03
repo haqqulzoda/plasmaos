@@ -52,6 +52,7 @@ from app.services.own_experience import (
 )
 from app.services.private_documents import build_analysis_pack_candidate
 from app.services.product_analytics import stage_ai_costs, stage_product_event
+from app.services.tender_changes import tender_changes_since
 
 
 PACK_SCHEMA_VERSION = "pursuit_analysis_pack_w4_v1"
@@ -1153,7 +1154,9 @@ async def get_analysis_run(
         await company_evidence_state(db, organization_id=organization_id, run_id=run.id)
         if include_company_evidence else CompanyEvidenceState(changed=False)
     )
+    tender_change_kinds = await tender_changes_since(db, pursuit_id=pursuit_id, since=run.created_at)
     return PursuitAnalysisResponse(
+        tender_changed=bool(tender_change_kinds), tender_change_kinds=tender_change_kinds,
         company_evidence_changed=evidence.changed,
         company_evidence_change_reason=evidence.reason,
         company_evidence_changed_sections=list(evidence.sections),

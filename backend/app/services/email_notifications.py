@@ -57,6 +57,8 @@ EVENT_EMAILS: dict[str, tuple[str, str, str]] = {
     "PURSUIT_ANALYSIS_COMPLETED": ("ANALYSIS_COMPLETED", "ANALYSIS", "analysis_enabled"),
     "PURSUIT_ANALYSIS_FAILED": ("ANALYSIS_FAILED", "ANALYSIS", "analysis_enabled"),
     "EOI_DRAFT_READY": ("EOI_DRAFT_READY", "EOI", "eoi_enabled"),
+    # A pursued tender changed after its analysis: the analysis e-mail switch covers it.
+    "TENDER_CHANGED": ("TENDER_CHANGED", "ANALYSIS", "analysis_enabled"),
 }
 PREFERENCE_FIELDS = ("analysis_enabled", "eoi_enabled", "digest_enabled")
 

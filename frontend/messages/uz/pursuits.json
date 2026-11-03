@@ -264,6 +264,13 @@
     "emptyHelp": "Talab va kamchiliklarni aniqlash uchun hujjatlarni tanlang va tenderni tahlil qiling.",
     "staleTitle": "Hujjatlar o‘zgardi — tahlil eskirgan bo‘lishi mumkin",
     "staleHelp": "Avvalgi natija mavjud qoladi. Eng so‘nggi ma’lumotlardan foydalanish uchun hujjatlarni tanlab, yangi tahlilni boshlang.",
+    "tenderChangedTitle": "Tender ushbu tahlildan keyin o‘zgardi — tahlil eskirgan bo‘lishi mumkin",
+    "tenderChangedHelp": "O‘zgardi: {changes}. Oldingi natija saqlanib qoladi. Joriy tenderdan foydalanish uchun tahlilni qayta ishga tushiring.",
+    "tenderChangeKinds": {
+      "DEADLINE": "yangi muddat",
+      "AMENDMENT": "o‘zgartirilgan e’lon",
+      "DOCUMENT": "yangi hujjat"
+    },
     "summary": "Tahlil xulosasi",
     "processingStatus": "Qayta ishlash",
     "qualityStatus": "Ajratib olish sifati",

@@ -324,6 +324,9 @@ export type PursuitAnalysis = {
   company_evidence_changed?: boolean;
   company_evidence_change_reason?: string | null;
   company_evidence_changed_sections?: string[];
+  /** The pursued tender changed at its source (DEADLINE, AMENDMENT, DOCUMENT) after this run. */
+  tender_changed?: boolean;
+  tender_change_kinds?: string[];
   page_count_known: boolean;
   limit_disclosure: string;
   pack_items: AnalysisPackItem[];

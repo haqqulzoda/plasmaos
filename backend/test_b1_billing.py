@@ -27,7 +27,7 @@ from app.core.plans import PILOT_CREDIT_CENTS, PRICES, PRODUCTS, PRODUCTS_FOR_SA
 from app.services import billing_polar
 from app.services.billing import add_months, billing_today, terms
 
-HEAD = "20261025_0001_b1_billing"
+HEAD = "20261103_0001_tender_change_alerts"
 P3_HEAD = "20261024_0001_p3_plans_limits"
 SECRET = "whsec_" + "c2VjcmV0LWZvci1iMS10ZXN0cy1vbmx5LW5vdC1yZWFs"  # base64 of a test-only key
 

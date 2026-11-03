@@ -58,9 +58,10 @@ export function notificationDestination(item: NotificationItem): NotificationDes
       labelKey: 'openWorkspace',
     };
   }
-  // R3: pursuit analysis outcomes and EOI drafts open the pursuit on the right tab.
+  // R3: pursuit analysis outcomes and EOI drafts open the pursuit on the right tab; a changed
+  // tender opens the analysis it made out of date.
   if (
-    ['PURSUIT_ANALYSIS_COMPLETED', 'PURSUIT_ANALYSIS_FAILED', 'EOI_DRAFT_READY'].includes(item.event_type) &&
+    ['PURSUIT_ANALYSIS_COMPLETED', 'PURSUIT_ANALYSIS_FAILED', 'EOI_DRAFT_READY', 'TENDER_CHANGED'].includes(item.event_type) &&
     uuid(item.payload.pursuit_id) && uuid(item.payload.organization_id)
   ) {
     const tab = item.event_type === 'EOI_DRAFT_READY' ? 'eoi' : 'requirements';
@@ -93,6 +94,7 @@ export const SYSTEM_TEMPLATE_KEYS = {
   'notifications.pursuit_analysis_completed': 'pursuitAnalysisCompleted',
   'notifications.pursuit_analysis_failed': 'pursuitAnalysisFailed',
   'notifications.eoi_draft_ready': 'eoiDraftReady',
+  'notifications.tender_changed': 'tenderChanged',
 } as const;
 
 export type SystemTemplateKey = keyof typeof SYSTEM_TEMPLATE_KEYS;

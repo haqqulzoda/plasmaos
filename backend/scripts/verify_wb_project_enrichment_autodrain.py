@@ -32,7 +32,7 @@ from app.workers import project_enrichment_tasks
 from scripts import test_s0_5b4_baseline as support
 
 
-HEAD = "20261025_0001_b1_billing"
+HEAD = "20261103_0001_tender_change_alerts"
 BATCH_SIZE = 25
 
 

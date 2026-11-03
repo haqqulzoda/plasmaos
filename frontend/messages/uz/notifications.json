@@ -81,6 +81,10 @@
     "eoiDraftReady": {
       "title": "Qiziqish bildirish xati loyihasi tayyor",
       "body": "{versionNumber}-loyiha (DOCX va PDF) yuklab olishga tayyor."
+    },
+    "tenderChanged": {
+      "title": "Tender o‘zgardi",
+      "body": "Siz ishtirok etayotgan tender tahlilingizdan keyin o‘zgardi (yangi muddat, e’lon o‘zgarishi yoki yangi hujjat). O‘zgarishni ko‘rib chiqing va tahlilni qayta ishga tushiring."
     }
   },
   "fallback": {

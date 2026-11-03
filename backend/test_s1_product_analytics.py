@@ -47,7 +47,7 @@ from test_d2_01_own_experience import SUBSTATION, _fact
 from test_w2_organization_pursuit_foundation import W1_HEAD, _seed_w1
 
 
-HEAD = "20261025_0001_b1_billing"
+HEAD = "20261103_0001_tender_change_alerts"
 
 
 # ---- units --------------------------------------------------------------------------------------------

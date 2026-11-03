@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { BidiText, TechnicalText } from '@/components/i18n/BidiText';
 import { ExperienceChangedBanner } from '@/components/pursuits/ExperienceChangedBanner';
+import { tenderChangeKinds } from '@/lib/tenderChanged';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Forms';
 import { EmptyState, StatusBadge, Surface } from '@/components/ui/Display';
@@ -325,6 +326,7 @@ export function PursuitRequirements({ pursuitId, headers, initialReviewableAnaly
 
     {!analysis ? <EmptyState icon={<FileSearch aria-hidden />} title={t('empty')} description={t('emptyHelp')} /> : <>
       {analysis.inputs_changed && <div className="analysis-stale" role="status"><AlertTriangle aria-hidden /><div><strong>{t('staleTitle')}</strong><p>{t('staleHelp')}</p></div></div>}
+      {analysis.status === 'COMPLETED' && analysis.tender_changed && <div className="analysis-stale" role="status" data-tender-changed><AlertTriangle aria-hidden /><div><strong>{t('tenderChangedTitle')}</strong><p>{t('tenderChangedHelp', { changes: tenderChangeKinds(analysis.tender_change_kinds).map((kind) => t(`tenderChangeKinds.${kind}`)).join(', ') })}</p></div></div>}
       {analysis.status === 'COMPLETED' && analysis.company_evidence_changed && <ExperienceChangedBanner pursuitId={pursuitId} headers={headers} runId={analysis.analysis_run_id} sections={analysis.company_evidence_changed_sections} onStarted={() => void load(false)} />}
       <Surface className="analysis-run-summary"><header><div><h3>{t('summary')}</h3></div><StatusBadge tone={analysis.quality_state === 'READY_FOR_REVIEW' ? 'success' : analysis.quality_state === 'FAILED' ? 'danger' : 'warning'}>{t(`quality.${analysis.quality_state}`)}</StatusBadge></header>
         {resultAnalysis && <dl data-group-counts>{REQUIREMENT_GROUPS.filter((group) => group !== 'settled').map((group) => <div key={group}><dt>{tl(`review.groups.${group}`)}</dt><dd>{groups[group].length}</dd></div>)}<div><dt>{t('positionsCount')}</dt><dd>{resultAnalysis.positions.length}</dd></div></dl>}
